@@ -121,13 +121,14 @@ with one command.
 Milestones M0 through M8 are complete and committed: repository and tooling, core
 cross-cutting infrastructure, the User vertical slice, authentication and sessions,
 tenants, staff administration, the permission model as data, devices, and the versioned
-migration baseline. M9 is under way: categories are complete, and products exist as an
-entity, a transport contract and a table with decimal money, per-tenant codes and the
-composite cross-tenant anchors the specification calls for. 1199 tests pass, the
-nine-stage build gate is green, and the service serves a real flow: create an account,
-sign in, create a business, invite a worker, have that worker accept the invitation with
-the role they were given, inspect what that role can do, group the catalogue into
-categories, and revoke a lost phone - which ends the sessions bound to it.
+migration baseline. M9 is under way: categories are complete, and products are complete
+end to end - entity, contract, table, use cases and endpoints - with decimal money,
+per-tenant codes and the composite cross-tenant anchors the specification calls for.
+1248 tests pass, the nine-stage build gate is green, and the service serves a real flow:
+create an account, sign in, create a business, invite a worker, have that worker accept
+the invitation with the role they were given, inspect what that role can do, group the
+catalogue into categories, add a product and publish it at an address a customer can
+share, and revoke a lost phone - which ends the sessions bound to it.
 
 Cross-tenant integrity is enforced by the database, not only by services: `products`
 references `categories(id, tenant_id)` as a composite key, so a product in one business
@@ -148,6 +149,6 @@ that is safe under concurrent uploads, and authentication whose failures are
 indistinguishable across an unknown account, a wrong password and a deactivated
 account.
 
-Next in M9: the product use cases and their endpoints - create, edit, publish,
-unpublish, deactivate - then product images against R2 or Cloudinary. Progress is
-tracked in `TASKS.md`.
+Next in M9: product images - provider-neutral metadata, the server-side upload pipeline
+against R2 or Cloudinary, tenant quota accounting and deletion - then the catalogue's
+cross-tenant tests. Progress is tracked in `TASKS.md`.
