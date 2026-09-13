@@ -1,0 +1,252 @@
+#!/usr/bin/env python3
+"""Fail on emoji, decorative symbols or any non-ASCII character in engineering
+artifacts.
+
+Rule (docs/ARCHITECTURE.md, ADR-0006): source, comments, docstrings, log
+messages, error strings, test names, configuration, CLI output and commit
+messages are ASCII only. Runtime user data is explicitly out of scope - a
+trader may type Igbo names, currency symbols or emoji into the product and the
+system must store and return them faithfully.
+
+The guard therefore checks *files in the repository*, not values at runtime, and
+it honours a narrow, explicit allowlist for fixtures that intentionally contain
+Unicode.
+
+Usage:
+    python scripts/check_ascii.py [paths...]
+
+Exit codes:
+    0  no violations
+    1  violations found
+    2  usage error
+"""
+
+from __future__ import annotations
+
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+# Directories that never contain engineering artifacts to check.
+SKIPPED_DIRECTORY_NAMES: frozenset[str] = frozenset(
+    {
+        ".git",
+        ".venv",
+        "venv",
+        "node_modules",
+        "__pycache__",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".pytest_cache",
+        ".tools",
+        "dist",
+        "build",
+        ".next",
+        ".expo",
+        "htmlcov",
+    }
+)
+
+# Only text artifacts are inspected. A binary would otherwise report every byte.
+CHECKED_SUFFIXES: frozenset[str] = frozenset(
+    {
+        ".py",
+        ".pyi",
+        ".ts",
+        ".tsx",
+        ".js",
+        ".jsx",
+        ".json",
+        ".jsonc",
+        ".md",
+        ".markdown",
+        ".txt",
+        ".toml",
+        ".ini",
+        ".cfg",
+        ".yaml",
+        ".yml",
+        ".sh",
+        ".bash",
+        ".sql",
+        ".env",
+        ".example",
+        ".mako",
+        ".css",
+        ".scss",
+        ".html",
+        ".xml",
+        ".properties",
+    }
+)
+
+CHECKED_FILENAMES: frozenset[str] = frozenset(
+    {
+        "Makefile",
+        "Dockerfile",
+        ".gitignore",
+        ".gitattributes",
+        ".editorconfig",
+        ".dockerignore",
+        ".pre-commit-config.yaml",
+        ".env.example",
+        "requirements.lock",
+    }
+)
+
+# Paths that may legitimately contain Unicode user data. Each entry is a
+# repository-relative prefix and must be justified here in one line.
+UNICODE_ALLOWED_PREFIXES: tuple[str, ...] = (
+    # Source specifications supplied by the product owner and kept verbatim.
+    # They contain the dotted product name and box-drawing diagrams. They are
+    # inputs to engineering, not engineering artifacts we author, and are never
+    # edited to satisfy a lint rule.
+    "PRODUCT_INITIAL_DEFINITION/",
+    # Test fixtures that prove the product handles Unicode business data
+    # (Igbo names, the dotted product name, emoji in a customer note).
+    "backend/tests/fixtures/unicode_data/",
+    "mobile/tests/fixtures/unicode_data/",
+    "web/tests/fixtures/unicode_data/",
+)
+
+
+@dataclass(frozen=True)
+class AsciiViolation:
+    """One non-ASCII character found in one artifact."""
+
+    path: str
+    line_number: int
+    column_number: int
+    character: str
+    codepoint: str
+    category: str
+
+    def describe(self) -> str:
+        return (
+            f"{self.path}:{self.line_number}:{self.column_number}: "
+            f"{self.category} U+{self.codepoint} ({self.character!r})"
+        )
+
+
+def classify(codepoint: int) -> str:
+    """Return a short human category for a non-ASCII codepoint."""
+    if 0x1F300 <= codepoint <= 0x1FAFF or 0x2600 <= codepoint <= 0x27BF:
+        return "emoji-or-symbol"
+    if 0x2500 <= codepoint <= 0x257F:
+        return "box-drawing"
+    if codepoint in (0x200B, 0x200C, 0x200D, 0xFEFF):
+        return "zero-width-or-bom"
+    if 0x2018 <= codepoint <= 0x201F or codepoint in (0x2013, 0x2014, 0x2026):
+        return "typographic-punctuation"
+    return "non-ascii"
+
+
+def is_checked_file(path: Path) -> bool:
+    """Return True when the path is a text artifact this guard should inspect.
+
+    Known filenames (Makefile, Dockerfile, dotfiles) are matched by name;
+    everything else is matched by suffix. A file that matches neither is treated
+    as a binary or an unknown artifact and left alone.
+    """
+    return path.name in CHECKED_FILENAMES or path.suffix in CHECKED_SUFFIXES
+
+
+def is_allowed_unicode_path(relative_path: str) -> bool:
+    return any(relative_path.startswith(prefix) for prefix in UNICODE_ALLOWED_PREFIXES)
+
+
+def iter_candidate_files(roots: list[Path]) -> list[Path]:
+    candidates: list[Path] = []
+    for root in roots:
+        if root.is_file():
+            candidates.append(root)
+            continue
+        for path in sorted(root.rglob("*")):
+            if not path.is_file():
+                continue
+            if any(part in SKIPPED_DIRECTORY_NAMES for part in path.parts):
+                continue
+            if not is_checked_file(path):
+                continue
+            candidates.append(path)
+    return candidates
+
+
+def scan_file(path: Path, repository_root: Path) -> list[AsciiViolation]:
+    try:
+        relative_path = path.relative_to(repository_root).as_posix()
+    except ValueError:
+        relative_path = path.as_posix()
+
+    if is_allowed_unicode_path(relative_path):
+        return []
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        # A file that is not valid UTF-8 is either binary or corrupt. Binary
+        # artifacts are out of scope; a corrupt UTF-8 text file is caught by the
+        # editorconfig and pre-commit hooks instead.
+        return []
+    except OSError as error:
+        print(f"[WARN] could not read {relative_path}: {error}", file=sys.stderr)
+        return []
+
+    violations: list[AsciiViolation] = []
+    for line_index, line in enumerate(content.splitlines(), start=1):
+        for column_index, character in enumerate(line, start=1):
+            codepoint = ord(character)
+            if codepoint < 128:
+                continue
+            violations.append(
+                AsciiViolation(
+                    path=relative_path,
+                    line_number=line_index,
+                    column_number=column_index,
+                    character=character,
+                    codepoint=f"{codepoint:04X}",
+                    category=classify(codepoint),
+                )
+            )
+    return violations
+
+
+def determine_repository_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def main(argv: list[str]) -> int:
+    repository_root = determine_repository_root()
+
+    if argv:
+        roots = [Path(argument).resolve() for argument in argv]
+        for root in roots:
+            if not root.exists():
+                print(f"[FAIL] path does not exist: {root}", file=sys.stderr)
+                return 2
+    else:
+        roots = [repository_root]
+
+    violations: list[AsciiViolation] = []
+    checked_count = 0
+    for path in iter_candidate_files(roots):
+        checked_count += 1
+        violations.extend(scan_file(path, repository_root))
+
+    if violations:
+        print(f"[FAIL] {len(violations)} non-ASCII character(s) in engineering artifacts")
+        for violation in violations:
+            print(f"  {violation.describe()}")
+        print()
+        print("Engineering artifacts must be ASCII only (ADR-0006).")
+        print("For status output use [OK], [FAIL], [WARN], [SKIP].")
+        print("Unicode is allowed only in runtime user data and in fixtures")
+        print("listed in UNICODE_ALLOWED_PREFIXES with a justification.")
+        return 1
+
+    print(f"[OK] ascii guard: {checked_count} artifact(s) checked, no violations")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

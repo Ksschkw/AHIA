@@ -99,7 +99,19 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S105", "S106", "PLR2004", "SLF001"]
+"tests/**" = [
+  "S101",    # assert: the test assertion mechanism
+  "S105",
+  "S106",
+  "S603",    # subprocess: the repository tests deliberately run the git binary
+  "S607",    # partial executable path: git is resolved from PATH on purpose
+  "PLR2004", # magic value comparison: expected values are the point of a test
+  "SLF001",  # private member access: guards are tested at their internals
+]
+# The developer guards are command-line tools. Plain stdout status lines are
+# their contract; the structured logger is for the application, not for a script
+# a developer runs by hand in a terminal.
+"scripts/**" = ["T201"]
 "alembic/versions/**" = ["E501"]
 
 [tool.ruff.lint.flake8-tidy-imports]

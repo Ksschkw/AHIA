@@ -156,7 +156,7 @@ lint error and a failing test. CI runs the same command.
 
 ### M0.4 Code hygiene enforcement
 
-- [ ] M0.4.1 `backend/scripts/check_ascii.py`: fails on emoji, box drawing,
+- [x] M0.4.1 `backend/scripts/check_ascii.py`: fails on emoji, box drawing,
       decorative symbols and any non-ASCII character in engineering artifacts,
       with a scoped, explicit allowlist for test fixtures that intentionally
       contain Unicode user data.
