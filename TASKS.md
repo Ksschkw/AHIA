@@ -560,10 +560,10 @@ layer-appropriate tests.
 
 ### M2.6 Wiring and smoke
 
-- [ ] M2.6.1 Wire the User slice into the composition root and register the
+- [x] M2.6.1 Wire the User slice into the composition root and register the
       router; add a smoke test that starts the application against the test
       database.
-- [ ] M2.6.2 `docs/` endpoint reference for the slice, including the error
+- [x] M2.6.2 `docs/` endpoint reference for the slice, including the error
       envelope and the correlation ID header.
 
 ### M2.7 Cross-cutting verification
