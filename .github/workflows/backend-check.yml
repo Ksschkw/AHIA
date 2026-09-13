@@ -1,0 +1,109 @@
+name: backend-check
+
+# One pipeline, one command. CI runs the same script a developer runs locally,
+# so a green local build and a green pipeline mean the same thing.
+#
+# The dependency audit runs here too: a critical finding fails the build, which
+# is the policy recorded in docs/PREREQUISITES.md.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "Makefile"
+      - ".github/workflows/backend-check.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "Makefile"
+      - ".github/workflows/backend-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: build gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        # The same major version used locally and in the deployed environment.
+        # SQLite is never a substitute: the schema depends on PostgreSQL
+        # constraints, composite foreign keys and NUMERIC semantics.
+        image: postgres:16
+        env:
+          POSTGRES_USER: ahia
+          POSTGRES_PASSWORD: ahia_ci_only
+          POSTGRES_DB: ahia_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ahia -d ahia_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      APP_ENV: test
+      LOG_FORMAT: json
+      # CI-only placeholder values. Real secrets are injected by the platform
+      # from its secret store; these exist so configuration validation can run
+      # in test profile. They are not valid outside this job.
+      DATABASE_URL: postgresql+asyncpg://ahia:ahia_ci_only@127.0.0.1:5432/ahia_test
+      TEST_DATABASE_URL: postgresql+asyncpg://ahia:ahia_ci_only@127.0.0.1:5432/ahia_test
+      DATABASE_REQUIRE_SSL: "false"
+      JWT_SECRET: ci-placeholder-jwt-secret-value-not-real
+      JWT_ISSUER: ahia-api
+      JWT_AUDIENCE: ahia-clients
+      REFRESH_TOKEN_PEPPER: ci-placeholder-refresh-pepper-not-real
+      CORS_ALLOWED_ORIGINS: http://localhost:3000
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore the virtual environment cache
+        uses: actions/cache@v4
+        with:
+          path: backend/.venv
+          key: backend-venv-${{ runner.os }}-${{ hashFiles('backend/requirements.lock') }}
+          restore-keys: |
+            backend-venv-${{ runner.os }}-
+
+      - name: Bootstrap the backend environment from the lockfile
+        run: bash backend/scripts/bootstrap_backend.sh
+
+      - name: Install the checksum-verified workspace tools
+        run: bash backend/scripts/install_workspace_tools.sh
+
+      - name: Run the build gate
+        run: bash backend/scripts/dev_check.sh
+
+      - name: Scan the full git history for secrets
+        if: github.event_name == 'pull_request'
+        run: bash backend/scripts/scan_secrets.sh --history
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+          if-no-files-found: ignore
+          retention-days: 7

@@ -211,7 +211,7 @@ lint error and a failing test. CI runs the same command.
 
 ### M0.9 Continuous integration
 
-- [ ] M0.9.1 `.github/workflows/backend-check.yml`: PostgreSQL service
+- [x] M0.9.1 `.github/workflows/backend-check.yml`: PostgreSQL service
       container, Python 3.12, locked install, `make check`, with a critical
       dependency-audit finding failing the build.
 
