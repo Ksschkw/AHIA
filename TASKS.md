@@ -542,11 +542,11 @@ layer-appropriate tests.
 
 ### M2.4 Service
 
-- [ ] M2.4.1 `services/user_service.py`: `get_authenticated_user`,
+- [x] M2.4.1 `services/user_service.py`: `get_authenticated_user`,
       `update_user_profile`, `deactivate_user` with authorization checks at the
       service layer, unit-of-work usage, and structured logging with
       correlation ID.
-- [ ] M2.4.2 Service tests with the CRUD layer mocked: authorization denial,
+- [x] M2.4.2 Service tests with the CRUD layer mocked: authorization denial,
       not-found mapping, successful profile update, and audit logging.
 
 ### M2.5 Transport
