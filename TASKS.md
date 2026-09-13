@@ -745,9 +745,14 @@ Goal: a business exists as a tenant with a globally unique public slug.
       reference products, and `categories(id, tenant_id)` so that a product's
       category reference is composite and a cross-tenant reference is refused by
       the database itself. This closes the item M8.1.4 deferred.
-- [ ] M9.1.5 `product_service.py`: `create_product`, `update_product`,
-      `deactivate_product`, `publish_product`, `unpublish_product`.
-- [ ] M9.1.6 `product_router.py` and `category_router.py`.
+- [x] M9.1.5 `product_service.py`: `create_product`, `update_product`,
+      `deactivate_product`, `publish_product`, `unpublish_product`, plus
+      `activate_product`. Each use case takes exactly one catalogue permission:
+      deactivation takes `products.delete`, which MANAGER does not hold, while
+      reactivation takes `products.update`.
+- [x] M9.1.6 `product_router.py` and `category_router.py`. Publication has its own
+      endpoints rather than a boolean on the update contract, and DELETE withdraws a
+      product from sale instead of deleting a row that sales will reference.
 - [ ] M9.1.7 `product_image_model.py`, `product_image_crud.py`,
       `product_image_schema.py`, `product_image_service.py`,
       `product_image_router.py`.
@@ -781,6 +786,22 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ### M9 - progress log
 
+- M9.1.6 complete. The catalogue is now reachable end to end: a business can add
+  products, edit them, file them under categories, publish them at a public address,
+  withdraw them from the storefront and bring them back.
+- M9.1.5 complete, and it found a defect worth recording. The entity promised that
+  withdrawing a product and republishing it keeps the public address, and the service
+  minted a fresh token on every publish - so a link already printed on a QR code would
+  have stopped working after a pause in the listing. The fix keeps the existing token in
+  the entity (so no caller can break an address by passing a new one) and only generates
+  one when there is none. The test that caught it asserts the promise, not the
+  implementation.
+- M9.1.3 needed a correction after M9.1.6 exercised it: the response declared prices as
+  `Decimal`, which reads well and is wrong, because FastAPI encodes a Decimal into a JSON
+  *number*. The test that "proved" money leaves as a string asserted a Pydantic dump, and
+  the framework sits between a Pydantic dump and an HTTP response. The fields are now
+  declared `str` with an explicit conversion, the OpenAPI document advertises a string,
+  and the endpoint test asserts the rendered JSON. The lesson is in the module docstring.
 - M9.1.4 complete, and it closed M8.1.4. Writing the persistence test for "a product
   cannot reference another business's category" exposed that a plain foreign key does
   not express that rule at all: the category identifier is unique, so it is valid in
