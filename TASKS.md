@@ -359,21 +359,21 @@ server-side and configuration-driven, not provider features.
 
 ### M1.9 Middleware
 
-- [ ] M1.9.1 `middleware/correlation_middleware.py`: read or generate the
+- [x] M1.9.1 `middleware/correlation_middleware.py`: read or generate the
       correlation ID, validate inbound format, expose it on the request state
       and the response, and bind it into the logger.
-- [ ] M1.9.2 `middleware/security_headers_middleware.py`: HSTS, CSP,
+- [x] M1.9.2 `middleware/security_headers_middleware.py`: HSTS, CSP,
       `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` on every
       response, including error responses.
-- [ ] M1.9.3 `middleware/rate_limit_middleware.py`: per-identity and per-route
+- [x] M1.9.3 `middleware/rate_limit_middleware.py`: per-identity and per-route
       limits for authentication, password reset, writes and expensive
       endpoints; never disabled by a flag; returns a typed 429 through the
       standard envelope.
-- [ ] M1.9.4 `middleware/error_handler_middleware.py`: one place mapping typed
+- [x] M1.9.4 `middleware/error_handler_middleware.py`: one place mapping typed
       errors to status and envelope, logging full internal context, returning
       nothing internal to the client, and handling unexpected exceptions
       without leaking.
-- [ ] M1.9.5 Tests: header presence on success and failure, correlation ID
+- [x] M1.9.5 Tests: header presence on success and failure, correlation ID
       round trip, rate limit trips and recovers, and error mapping for every
       typed error.
 
