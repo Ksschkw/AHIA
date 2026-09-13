@@ -611,9 +611,9 @@ an account exists.
 Goal: a business exists as a tenant with a globally unique public slug.
 
 - [x] M4.1.1 `tenant_model.py` with slug invariants and lifecycle rules.
-- [ ] M4.1.2 `tenant_schema.py` with slug format validation and reserved-word
+- [x] M4.1.2 `tenant_schema.py` with slug format validation and reserved-word
       rejection.
-- [ ] M4.1.3 `tenant_crud.py`: persistence with global slug uniqueness.
+- [x] M4.1.3 `tenant_crud.py`: persistence with global slug uniqueness.
 - [ ] M4.1.4 `tenant_service.py`: `create_tenant`, `update_tenant_profile`,
       `get_tenant`, `deactivate_tenant`, with slug allocation and conflict
       handling.
@@ -631,7 +631,7 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - [x] M5.1.1 `tenant_membership_model.py` with status lifecycle (`invited`,
       `active`, `suspended`, `removed`) and uniqueness invariant.
 - [ ] M5.1.2 `tenant_membership_schema.py`.
-- [ ] M5.1.3 `tenant_membership_crud.py`.
+- [x] M5.1.3 `tenant_membership_crud.py`.
 - [ ] M5.1.4 `tenant_membership_service.py`: `invite_tenant_member`,
       `activate_membership`, `change_member_role`, `suspend_member`,
       `remove_member`, each authorizing `staff.*` permissions.
