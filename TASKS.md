@@ -86,7 +86,7 @@ assertion in a commit message.
 | M8 | Alembic migration baseline (M8.1.4 delivered in M9) | `[x]` | M6 |
 | M9 | Catalog: categories, products, images, storage | `[x]` | M8 |
 | M10 | Inventory ledger and projections | `[x]` | M9 |
-| M11 | Customers | `[ ]` | M9 |
+| M11 | Customers | `[x]` | M9 |
 | M12 | Sales, payments, ledger, transactional integrity | `[ ]` | M10, M11 |
 | M13 | Expenses | `[ ]` | M12 |
 | M14 | Audit trail | `[ ]` | M6 |
@@ -1030,6 +1030,9 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ### M11 - progress log
 
+- The consent field is the one boolean this API parses strictly, and it is strict in both
+  contracts rather than only in the update one - the first version made only the update
+  field strict, and the schema test caught the create path still accepting `"yes"`.
 - M11.1.1 and M11.1.4 complete, which closes M11 apart from its progress notes. Two
   behaviours were corrected while testing rather than after: a local phone number was
   being checked for plausibility *before* country completion, so `0803 123 4567` was

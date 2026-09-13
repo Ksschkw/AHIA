@@ -51,6 +51,11 @@ CustomerNotes = Annotated[
 #: entity starts counting.
 CustomerVersion = Annotated[int, Field(ge=1)]
 
+#: A consent flag, parsed strictly. Pydantic accepts `"yes"`, `"1"` and `"on"` for a
+#: boolean, which is convenient everywhere except here: consent is the field where
+#: guessing is least welcome, and a client that means yes sends `true`.
+MarketingConsent = Annotated[bool, Field(strict=True)]
+
 
 class CustomerCreateSchema(BaseModel):
     """A customer a business is recording."""
@@ -63,7 +68,7 @@ class CustomerCreateSchema(BaseModel):
     address: CustomerAddress | None = None
     notes: CustomerNotes | None = None
     # Absent means no consent, never "consent by default".
-    marketing_opt_in: bool = False
+    marketing_opt_in: MarketingConsent = False
 
 
 class CustomerUpdateSchema(BaseModel):
@@ -82,10 +87,7 @@ class CustomerUpdateSchema(BaseModel):
     email: CustomerEmail | None = None
     address: CustomerAddress | None = None
     notes: CustomerNotes | None = None
-    # Strict, unlike the other booleans: Pydantic accepts "yes", "1" and "on" for a bool,
-    # and consent is the one field where guessing is unwelcome. A client that means true
-    # sends true.
-    marketing_opt_in: Annotated[bool, Field(strict=True)] | None = None
+    marketing_opt_in: MarketingConsent | None = None
     version: CustomerVersion | None = None
 
     def to_entity_changes(self) -> dict[str, object]:
