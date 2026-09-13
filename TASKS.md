@@ -391,18 +391,18 @@ server-side and configuration-driven, not provider features.
 
 ### M1.11 Storage port and provider configuration
 
-- [ ] M1.11.1 `core/ports/storage_port.py`: the provider-neutral capability.
+- [x] M1.11.1 `core/ports/storage_port.py`: the provider-neutral capability.
       Operations AHIA actually needs - upload, delete, exists, delivery URL,
       image upload - over provider-neutral value objects carrying storage key,
       delivery reference, MIME type, size in bytes, width, height and checksum.
       No Cloudinary public identifier and no bucket name appears in the
       contract.
-- [ ] M1.11.2 Storage configuration in `core/config.py`: `STORAGE_PROVIDER`
+- [x] M1.11.2 Storage configuration in `core/config.py`: `STORAGE_PROVIDER`
       (`r2` or `cloudinary`), the shared media limits, the per-tenant quota, and
       the provider-specific credential blocks. Credentials for the inactive
       provider are neither required nor validated, and an unsupported provider
       value fails startup with a message naming the accepted values.
-- [ ] M1.11.3 Tests: both providers selectable from configuration, unknown
+- [x] M1.11.3 Tests: both providers selectable from configuration, unknown
       provider rejected, inactive provider credentials absent without error,
       active provider credentials missing fails loudly, and no provider secret
       ever appears in a configuration representation or a log record.
