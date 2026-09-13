@@ -141,7 +141,11 @@ ignore = [
 # their contract; the structured logger is for the application, not for a script
 # a developer runs by hand in a terminal.
 "scripts/**" = ["T201"]
-"alembic/versions/**" = ["E501"]
+# Generated migrations. E501 is exempt because the generator emits one column per
+# long line and reflowing it by hand would make the next autogenerate run produce a
+# large no-op diff. F401 is exempt because a migration that finds nothing to do
+# legitimately imports `sa` and `op` without using them.
+"alembic/versions/**" = ["E501", "F401"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "parents"

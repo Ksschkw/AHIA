@@ -33,6 +33,13 @@ import pytest
 os.environ["AHIA_ENV_FILE"] = str(Path(tempfile.gettempdir()) / "ahia-tests-no-env-file")
 
 from ahia.core.errors import clear_correlation_id
+from ahia.crud.table_registry import import_all_record_modules
+
+# Register every persistence module, so the metadata is complete before any test
+# builds a schema. A table whose foreign keys reference tables that were never
+# imported cannot be created, and the failure looks like a broken model rather
+# than a missing import.
+import_all_record_modules()
 
 BACKEND_DIRECTORY = Path(__file__).resolve().parents[1]
 REPOSITORY_ROOT = BACKEND_DIRECTORY.parent
