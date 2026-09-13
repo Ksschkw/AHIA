@@ -121,11 +121,12 @@ with one command.
 Milestones M0 through M8 are complete and committed: repository and tooling, core
 cross-cutting infrastructure, the User vertical slice, authentication and sessions,
 tenants, staff administration, the permission model as data, devices, and the versioned
-migration baseline. M9 has begun: the category slice is in. 1077 tests pass, the
-nine-stage build gate is green, and the service serves a real flow: create an account,
-sign in, create a business, invite a worker, have that worker accept the invitation with
-the role they were given, inspect what that role can do, group the catalogue into
-categories, and revoke a lost phone - which ends the sessions bound to it.
+migration baseline. M9 is under way: the category slice is complete and the product
+entity - decimal money, publication rules - is in. 1135 tests pass, the nine-stage build
+gate is green, and the service serves a real flow: create an account, sign in, create a
+business, invite a worker, have that worker accept the invitation with the role they
+were given, inspect what that role can do, group the catalogue into categories, and
+revoke a lost phone - which ends the sessions bound to it.
 
 The schema is versioned: `alembic upgrade head` builds every table from an empty
 database, `alembic downgrade base` takes it back, and a test asserts that an
@@ -141,6 +142,6 @@ that is safe under concurrent uploads, and authentication whose failures are
 indistinguishable across an unknown account, a wrong password and a deactivated
 account.
 
-Next in M9: products with decimal pricing, then product images against R2 or
-Cloudinary and the composite cross-tenant keys the specification calls for.
-Progress is tracked in `TASKS.md`.
+Next in M9: the product transport contract and persistence, including the composite
+`(id, tenant_id)` anchor the specification's cross-tenant keys depend on, then product
+images against R2 or Cloudinary. Progress is tracked in `TASKS.md`.
