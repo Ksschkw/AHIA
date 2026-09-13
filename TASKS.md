@@ -184,7 +184,7 @@ lint error and a failing test. CI runs the same command.
 - [x] M0.6.2 `.gitleaks.toml`: default rule set plus an explicit allowlist for
       the placeholder values in `.env.example` and the local-only development
       password documented in `docs/PREREQUISITES.md`.
-- [ ] M0.6.3 `backend/scripts/scan_secrets.sh`: scans the working tree and,
+- [x] M0.6.3 `backend/scripts/scan_secrets.sh`: scans the working tree and,
       when asked, the full git history; exits non-zero on any finding.
 - [ ] M0.6.4 Dependency audit: `pip-audit` wired into the check command, with a
       committed ignore file for findings that have a documented, time-boxed
