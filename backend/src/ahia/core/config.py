@@ -592,8 +592,45 @@ class Settings(BaseSettings):
             allowed_content_types=self.allowed_media_content_types,
         )
 
+    def storage_configuration_for(
+        self, provider: StorageProviderName
+    ) -> R2Configuration | CloudinaryConfiguration | None:
+        """Return a provider's configuration, or None when it is incomplete.
+
+        Used by the composition root to build an adapter for *every* provider whose
+        credentials are present, not only the active one: an object written before a
+        provider switch stays resolvable to the provider that holds it, and answering
+        that request needs that provider's adapter.
+
+        Returning None rather than raising is deliberate. A deployment that has always
+        used one provider has no credentials for the other, and that is a normal
+        configuration rather than a fault; while a *missing* configuration for the
+        active provider is a fault, and the caller that selects the active adapter
+        raises for it.
+        """
+        if provider is StorageProviderName.R2:
+            return self._r2_configuration() if self._r2_credentials_are_present() else None
+        return (
+            self._cloudinary_configuration() if self._cloudinary_credentials_are_present() else None
+        )
+
+    def _r2_credentials_are_present(self) -> bool:
+        """Return True when every value an R2 adapter needs is configured."""
+        return bool(
+            self.r2_endpoint
+            and self.r2_access_key_id
+            and self.r2_secret_access_key
+            and self.r2_bucket
+        )
+
+    def _cloudinary_credentials_are_present(self) -> bool:
+        """Return True when every value a Cloudinary adapter needs is configured."""
+        return bool(
+            self.cloudinary_cloud_name and self.cloudinary_api_key and self.cloudinary_api_secret
+        )
+
     def r2_configuration(self) -> R2Configuration:
-        """Return the R2 configuration.
+        """Return the R2 configuration for the active provider.
 
         Raises when called while R2 is not the active provider, because that is a
         composition-root defect rather than a runtime condition.
@@ -604,47 +641,76 @@ class Settings(BaseSettings):
                 entity="storage_provider",
                 detail="requested the R2 configuration while another provider is active",
             )
-        if not (
-            self.r2_endpoint
-            and self.r2_access_key_id
-            and self.r2_secret_access_key
-            and self.r2_bucket
-        ):
+        if not self._r2_credentials_are_present():
+            raise ConfigurationError(
+                operation="build_storage_adapter",
+                entity="storage_provider",
+                detail="R2 configuration is incomplete",
+            )
+        return self._r2_configuration()
+
+    def _r2_configuration(self) -> R2Configuration:
+        """Build the R2 configuration.
+
+        Narrows the optional fields with a local guard rather than trusting the caller's
+        check: a builder that assumed its inputs were present would raise a bare
+        TypeError the day somebody called it directly, and that failure names no
+        setting.
+        """
+        endpoint = self.r2_endpoint
+        access_key_id = self.r2_access_key_id
+        secret_access_key = self.r2_secret_access_key
+        bucket = self.r2_bucket
+        if not (endpoint and access_key_id and secret_access_key and bucket):
             raise ConfigurationError(
                 operation="build_storage_adapter",
                 entity="storage_provider",
                 detail="R2 configuration is incomplete",
             )
         return R2Configuration(
-            endpoint=self.r2_endpoint,
-            access_key_id=self.r2_access_key_id,
-            secret_access_key=self.r2_secret_access_key,
-            bucket=self.r2_bucket,
+            endpoint=endpoint,
+            access_key_id=access_key_id,
+            secret_access_key=secret_access_key,
+            bucket=bucket,
             region=self.r2_region,
             public_base_url=self.r2_public_base_url or None,
             request_timeout_seconds=self.r2_request_timeout_seconds,
         )
 
     def cloudinary_configuration(self) -> CloudinaryConfiguration:
-        """Return the Cloudinary configuration. Raises when it is not active."""
+        """Return the Cloudinary configuration for the active provider.
+
+        Raises when it is not active, or when its credentials are missing.
+        """
         if self.storage_provider is not StorageProviderName.CLOUDINARY:
             raise ConfigurationError(
                 operation="build_storage_adapter",
                 entity="storage_provider",
                 detail="requested the Cloudinary configuration while another provider is active",
             )
-        if not (
-            self.cloudinary_cloud_name and self.cloudinary_api_key and self.cloudinary_api_secret
-        ):
+        if not self._cloudinary_credentials_are_present():
+            raise ConfigurationError(
+                operation="build_storage_adapter",
+                entity="storage_provider",
+                detail="Cloudinary configuration is incomplete",
+            )
+        return self._cloudinary_configuration()
+
+    def _cloudinary_configuration(self) -> CloudinaryConfiguration:
+        """Build the Cloudinary configuration, narrowing the optional fields locally."""
+        cloud_name = self.cloudinary_cloud_name
+        api_key = self.cloudinary_api_key
+        api_secret = self.cloudinary_api_secret
+        if not (cloud_name and api_key and api_secret):
             raise ConfigurationError(
                 operation="build_storage_adapter",
                 entity="storage_provider",
                 detail="Cloudinary configuration is incomplete",
             )
         return CloudinaryConfiguration(
-            cloud_name=self.cloudinary_cloud_name,
-            api_key=self.cloudinary_api_key,
-            api_secret=self.cloudinary_api_secret,
+            cloud_name=cloud_name,
+            api_key=api_key,
+            api_secret=api_secret,
             upload_folder=self.cloudinary_upload_folder,
             secure_delivery=self.cloudinary_secure_delivery,
             request_timeout_seconds=self.cloudinary_request_timeout_seconds,

@@ -84,7 +84,7 @@ assertion in a commit message.
 | M6 | Roles, permissions and deny-by-default authorization | `[x]` | M5 |
 | M7 | Devices and session management | `[x]` | M6 |
 | M8 | Alembic migration baseline (M8.1.4 deferred to M9) | `[~]` | M6 |
-| M9 | Catalog: categories, products, images, R2 storage | `[ ]` | M8 |
+| M9 | Catalog: categories, products, images, storage | `[x]` | M8 |
 | M10 | Inventory ledger and projections | `[ ]` | M9 |
 | M11 | Customers | `[ ]` | M9 |
 | M12 | Sales, payments, ledger, transactional integrity | `[ ]` | M10, M11 |
@@ -786,18 +786,49 @@ Goal: a business exists as a tenant with a globally unique public slug.
       marked for reconciliation with the quota still committed, because the bytes are
       still there, and a reconciliation pass retries it and releases the bytes when it
       succeeds.
-- [ ] M9.1.13 Catalog migration and tests, including cross-tenant product
-      access denial, cross-tenant image access denial and price precision tests.
-- [ ] M9.1.14 Storage failure test: with the active provider unavailable,
+- [x] M9.1.13 Catalog migration and tests. Each catalogue table carries its own
+      revision (categories, products, product_images), each verified against a live
+      database and against the models by the drift check in `tests/migrations`.
+      Cross-tenant product denial is asserted at the service and endpoint layers,
+      cross-tenant image denial likewise, price precision at the entity, contract and
+      persistence layers (including a Decimal round trip through NUMERIC(18,2)).
+- [x] M9.1.14 Storage failure test: with the active provider unavailable,
       catalog reads and product writes still work and image upload returns a
       typed degraded result. Run against both providers through the shared
       contract suite.
-- [ ] M9.1.15 Provider switch test: switching `STORAGE_PROVIDER` changes the
-      adapter and leaves every product, storefront and image service untouched,
-      with existing rows still resolvable to the provider that holds them.
+- [x] M9.1.15 Provider switch test: switching `STORAGE_PROVIDER` changes the active
+      adapter and leaves the pipeline untouched, and a row written before the switch
+      still resolves to the provider holding its bytes. The composition root now builds
+      an adapter for *every* provider whose credentials are configured, and the image
+      service routes delivery URLs and deletions through the provider recorded on the
+      row - asking the new provider to sign an old key would produce a link that does
+      not resolve.
 
 ### M9 - progress log
 
+- M9.1.13, M9.1.14 and M9.1.15 complete, which closes M9. The provider switch needed a
+  real change rather than a test: the image service built every delivery URL with the
+  *active* adapter, so after a switch an old row would have been signed against the new
+  provider's bucket - a link that does not resolve, which a client can only report as a
+  broken picture. The composition root now builds an adapter for every provider whose
+  credentials are present (`build_storage_adapters`), and the service routes URLs and
+  deletions by the `storage_provider` recorded on the row. A row whose provider is no
+  longer configured gets no URL and a warning rather than a wrong one, and its deletion
+  is refused in a way that leaves it marked for reconciliation instead of pretending it
+  succeeded.
+- Each provider also gets its own resilience policy, so an unhealthy endpoint on one
+  cannot trip calls to the other - a breaker belongs to a dependency, and the two
+  providers are two dependencies.
+- Two layers refuse an active provider with no credentials, and both are tested: settings
+  validation names the missing variables, and the registry refuses to start with no way
+  to store anything even if a settings object bypassed validation. The second is defence
+  in depth, tested with `model_construct` because that is the shape a future enum member
+  would take.
+- The storage-failure tests run for both provider names, because a deployment must
+  notice an outage the same way whichever provider is active. The contract suite in
+  `tests/integrations/test_storage_contract.py` proves the adapters themselves;
+  `tests/services/test_storage_provider_switch.py` proves what the catalogue does when
+  one is down: a typed failure, no row, and nothing charged.
 - M9.1.7 and M9.1.8 complete. The upload endpoint takes the raw body: a browser sends a
   file that way natively, and multipart would exist only to carry a filename that is
   never used - the object key is built from server-side identifiers. The body is read

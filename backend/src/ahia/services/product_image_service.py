@@ -34,7 +34,7 @@ nobody references is exactly the leak the reconciliation path exists to find.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final
@@ -110,10 +110,17 @@ class ProductImageService:
         media: MediaProcessingPort,
         storage_quota_service: StorageQuotaService,
         limits: StorageLimits,
+        storage_readers: Mapping[str, StoragePort] | None = None,
         logger: StructuredLogger | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
+        # Writes go to the active adapter.
         self._storage = storage
+        # Reads and deletes go to the adapter that holds the object, which after a
+        # provider switch is not necessarily the active one. The active adapter is
+        # always able to read its own rows.
+        self._storage_readers: dict[str, StoragePort] = dict(storage_readers or {})
+        self._storage_readers.setdefault(storage.provider_name, storage)
         self._media = media
         self._quota = storage_quota_service
         self._limits = limits
@@ -331,13 +338,28 @@ class ProductImageService:
             )
 
     async def build_delivery_url(self, image: ProductImageModel) -> str | None:
-        """Return a URL for the image, built now rather than stored.
+        """Return a URL for the image, built by the provider that holds it.
 
-        The URL depends on the active provider and on whether the object is public, so
-        storing one would be storing a fact that changes. The key and the provider are
-        the durable facts; this is derived from them on every read.
+        Not the active provider: the row records who stored the object, and after a
+        switch those differ. Asking the new provider to sign a key in the old one's
+        bucket would produce a link that does not resolve, which looks like a broken
+        image rather than a configuration fact.
+
+        Returns None when the holding provider is no longer configured, and says so in
+        a log line. A wrong URL is worse than no URL: a client can show a placeholder
+        for a missing link, but cannot tell a mis-signed one from a deleted object.
         """
-        return await self._storage.build_delivery_url(
+        adapter = self._storage_readers.get(image.storage_provider)
+        if adapter is None:
+            self._logger.warning(
+                "product_image_provider_not_configured",
+                tenant_id=str(image.tenant_id),
+                image_id=str(image.id),
+                storage_provider=image.storage_provider,
+                active_provider=self._storage.provider_name,
+            )
+            return None
+        return await adapter.build_delivery_url(
             key=image.storage_key,
             presentation_width=self._limits.max_image_width,
             is_public=True,
@@ -626,6 +648,23 @@ class ProductImageService:
         operation: str,
     ) -> bool:
         """Delete the stored object, reporting whether the provider confirmed it."""
+        adapter = self._storage_readers.get(image.storage_provider)
+        if adapter is None:
+            # The object lives in a provider this deployment no longer configures, so it
+            # cannot be deleted here. Saying so is what keeps the leak discoverable: the
+            # caller marks the row for reconciliation instead of believing it is gone.
+            self._logger.error(
+                "product_image_delete_provider_unavailable",
+                tenant_id=str(tenant_context.tenant_id),
+                image_id=str(image.id),
+                storage_provider=image.storage_provider,
+                storage_key=image.storage_key,
+                active_provider=self._storage.provider_name,
+                operation=operation,
+                security_event="storage_leak_prevented",
+            )
+            return False
+
         self._logger.info(
             "product_image_delete_attempted",
             tenant_id=str(tenant_context.tenant_id),
@@ -635,9 +674,7 @@ class ProductImageService:
             operation=operation,
         )
         try:
-            await self._storage.delete(
-                key=image.storage_key, tenant_id=str(tenant_context.tenant_id)
-            )
+            await adapter.delete(key=image.storage_key, tenant_id=str(tenant_context.tenant_id))
         except Exception as error:  # noqa: BLE001 - any provider failure means "still stored"
             self._logger.error(
                 "product_image_delete_failed",

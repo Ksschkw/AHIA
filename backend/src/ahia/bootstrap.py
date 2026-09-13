@@ -24,6 +24,7 @@ Why this matters beyond tidiness:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Final
 
@@ -41,7 +42,7 @@ from ahia.core.resilience import ResiliencePolicy
 from ahia.core.security import PasswordHasher, TokenService
 from ahia.integrations.media.image_processor import PillowImageProcessor
 from ahia.integrations.storage.storage_factory import (
-    build_storage_adapter,
+    build_storage_adapters,
     build_storage_policy,
 )
 from ahia.services.auth_service import AuthService
@@ -70,6 +71,10 @@ class ApplicationContainer:
     settings: Settings
     database: Database
     storage: StoragePort
+    # Every provider whose credentials are configured, keyed by provider name. Writes go
+    # to `storage`; reads of an image written before a provider switch go to the adapter
+    # that actually holds its bytes.
+    storage_readers: Mapping[str, StoragePort]
     media: MediaProcessingPort
     storage_policy: ResiliencePolicy
     storage_quota_service: StorageQuotaService
@@ -106,7 +111,8 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
     database = Database(settings, logger=logger)
 
     storage_policy = build_storage_policy(settings, logger=logger)
-    storage = build_storage_adapter(settings, logger=logger)
+    storage_readers = build_storage_adapters(settings, logger=logger)
+    storage = storage_readers[settings.storage_provider.value]
 
     media = PillowImageProcessor(settings.storage_limits(), logger=logger)
     # A target format this runtime cannot encode is a misconfiguration, not a
@@ -187,6 +193,7 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
     product_image_service = ProductImageService(
         unit_of_work_factory=database.unit_of_work_factory(),
         storage=storage,
+        storage_readers=storage_readers,
         media=media,
         storage_quota_service=storage_quota_service,
         limits=settings.storage_limits(),
@@ -197,6 +204,7 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         settings=settings,
         database=database,
         storage=storage,
+        storage_readers=storage_readers,
         media=media,
         storage_policy=storage_policy,
         storage_quota_service=storage_quota_service,
