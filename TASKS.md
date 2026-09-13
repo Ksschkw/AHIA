@@ -172,7 +172,7 @@ lint error and a failing test. CI runs the same command.
 - [x] M0.5.1 `backend/import-linter.ini`: layered contracts for entities,
       schemas, crud, services, routers, core, middleware and integrations,
       forbidding every outward import listed in the scaffold specification.
-- [ ] M0.5.2 `backend/tests/architecture/test_layer_contracts.py`: runs the
+- [x] M0.5.2 `backend/tests/architecture/test_layer_contracts.py`: runs the
       contracts inside pytest so an architecture violation fails the ordinary
       test command, not only a separate tool invocation.
 
