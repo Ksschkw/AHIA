@@ -645,7 +645,7 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ## M6 - Roles, permissions and authorization
 
-- [ ] M6.1.1 `permission_model.py`, `role_model.py`, `role_permission_model.py`
+- [x] M6.1.1 `permission_model.py`, `role_model.py`, `role_permission_model.py`
       as pure entities.
 - [ ] M6.1.2 Persistence for the three entities, one file each.
 - [ ] M6.1.3 Permission registry seeding: system permissions from
