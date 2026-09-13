@@ -194,6 +194,27 @@ The earlier form of this record named R2 as the single object store. It is
 revised here rather than deleted, because the reasoning about egress cost still
 holds and still explains the default.
 
+### ADR-0010 - Entities may import the error hierarchy, nothing else from core
+
+Decision: the entity layer's dependency contract forbids every application layer,
+every framework and every vendor SDK, and forbids each ``core`` module except
+``core.errors``.
+
+Reasoning: the preset allows any layer to import cross-cutting core, and the
+scaffold specification's prohibited list for entities is frameworks, ORMs,
+drivers and HTTP clients - not the error hierarchy. An entity that detects a
+violated invariant must be able to raise a typed error, otherwise it either
+raises a bare exception the transport layer cannot map or it stops enforcing its
+own invariants and pushes them into services, which is worse.
+
+The carve-out is written as an explicit list of forbidden ``core`` modules rather
+than as a blanket allowance, so an entity still cannot read configuration, open a
+connection, write a log line or resolve a permission. Those are the imports that
+would turn a domain object into an application object.
+
+Consequence: adding a new ``core`` module means deciding, on purpose, whether
+entities may import it. The default in the contract file is that they may not.
+
 ### ADR-0008 - Server-side media optimization is mandatory and configurable
 
 Decision: every uploaded image is validated and optimized on the server before

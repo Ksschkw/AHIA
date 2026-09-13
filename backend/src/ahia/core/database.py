@@ -191,7 +191,20 @@ class UnitOfWork(Protocol):
     A service may commit, roll back, and pass ``session_handle`` to CRUD
     functions. It may not inspect the handle: doing so would make the service
     depend on the database, which is the rule this port exists to preserve.
+
+    The context manager methods are part of the port because entering the scope
+    is what opens the session. Exiting without committing rolls back, so an
+    unfinished use case leaves no trace.
     """
+
+    async def __aenter__(self) -> UnitOfWork: ...
+
+    async def __aexit__(
+        self,
+        exception_type: type[BaseException] | None,
+        exception: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None: ...
 
     async def commit(self) -> None: ...
 

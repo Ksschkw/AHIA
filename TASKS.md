@@ -488,16 +488,16 @@ server-side and configuration-driven, not provider features.
 
 ### M1.17 Tenant storage quota accounting
 
-- [ ] M1.17.1 `tenant_storage_usage` entity and persistence: bytes used, a
+- [x] M1.17.1 `tenant_storage_usage` entity and persistence: bytes used, a
       monotonic version and an update timestamp, one row per tenant.
-- [ ] M1.17.2 `services/storage_quota_service.py`: reserve, commit and release
+- [x] M1.17.2 `services/storage_quota_service.py`: reserve, commit and release
       operations that are safe under concurrency. Reservation takes a row lock
       so two simultaneous uploads from two devices cannot both pass the check
       and over-allocate.
-- [ ] M1.17.3 Quota policy: the ceiling is configuration, the check happens
+- [x] M1.17.3 Quota policy: the ceiling is configuration, the check happens
       before the bytes are persisted, and the accounting is updated only after
       successful persistence. A failed upload releases its reservation.
-- [ ] M1.17.4 Tests: a reservation that would exceed the quota is rejected with
+- [x] M1.17.4 Tests: a reservation that would exceed the quota is rejected with
       a typed error, concurrent reservations cannot both succeed when only one
       fits, a failed upload releases the reservation, and the accounting
       converges to the real stored total.
