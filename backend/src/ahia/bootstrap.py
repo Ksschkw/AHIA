@@ -48,6 +48,7 @@ from ahia.services.auth_service import AuthService
 from ahia.services.category_service import CategoryService
 from ahia.services.device_service import DeviceService
 from ahia.services.permission_service import PermissionService
+from ahia.services.product_service import ProductService
 from ahia.services.storage_quota_service import StorageQuotaService
 from ahia.services.tenant_membership_service import TenantMembershipService
 from ahia.services.tenant_service import TenantService
@@ -78,6 +79,7 @@ class ApplicationContainer:
     permission_service: PermissionService
     device_service: DeviceService
     category_service: CategoryService
+    product_service: ProductService
     token_service: TokenService
     password_hasher: PasswordHasher
     logger: StructuredLogger
@@ -174,6 +176,12 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         logger=logger,
     )
 
+    product_service = ProductService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        token_service=token_service,
+        logger=logger,
+    )
+
     container = ApplicationContainer(
         settings=settings,
         database=database,
@@ -188,6 +196,7 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         permission_service=permission_service,
         device_service=device_service,
         category_service=category_service,
+        product_service=product_service,
         token_service=token_service,
         password_hasher=password_hasher,
         logger=logger,
