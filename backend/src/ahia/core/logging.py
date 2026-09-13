@@ -34,6 +34,9 @@ REDACTED_PLACEHOLDER: Final[str] = "[REDACTED]"
 #: A key is sensitive when its lowercase name contains one of these fragments.
 #: Fragments rather than exact names, because `db_password`, `password_hash`,
 #: `X-Api-Key` and `refresh_token` must all be caught.
+#: A digest in a log line is either a credential digest, which must not be
+#: published, or a content checksum, which is already named `checksum` or
+#: `checksum_sha256` and is not redacted by this rule.
 SENSITIVE_KEY_FRAGMENTS: Final[tuple[str, ...]] = (
     "password",
     "passwd",
@@ -51,6 +54,7 @@ SENSITIVE_KEY_FRAGMENTS: Final[tuple[str, ...]] = (
     "signature",
     "access_key",
     "connection_string",
+    "hash",
     "dsn",
     "otp",
     "pin",

@@ -304,13 +304,13 @@ server-side and configuration-driven, not provider features.
 
 ### M1.5 Security primitives
 
-- [ ] M1.5.1 Argon2id password hashing and verification with configured cost
+- [x] M1.5.1 Argon2id password hashing and verification with configured cost
       parameters and constant-time comparison.
-- [ ] M1.5.2 JWT access token encode and decode with issuer, audience,
+- [x] M1.5.2 JWT access token encode and decode with issuer, audience,
       expiry, algorithm allowlist and clock-skew handling.
-- [ ] M1.5.3 Refresh token generation, hashing with a pepper, and constant-time
+- [x] M1.5.3 Refresh token generation, hashing with a pepper, and constant-time
       verification; cryptographically secure public token generator.
-- [ ] M1.5.4 Tests: wrong password, unknown user timing behavior, expired,
+- [x] M1.5.4 Tests: wrong password, unknown user timing behavior, expired,
       tampered, wrong-issuer and wrong-audience tokens are all rejected.
 
 ### M1.6 Database lifecycle
