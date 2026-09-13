@@ -133,7 +133,7 @@ lint error and a failing test. CI runs the same command.
 - [x] M0.2.1 `backend/pyproject.toml`: project metadata, `src` layout, pinned
       dependency floors, and tool configuration for ruff, mypy, pytest and
       coverage in one file.
-- [ ] M0.2.2 `backend/scripts/bootstrap_backend.sh`: creates `backend/.venv`,
+- [x] M0.2.2 `backend/scripts/bootstrap_backend.sh`: creates `backend/.venv`,
       upgrades pip, installs the lockfile, installs the package in editable
       mode, and is safe to re-run.
 - [ ] M0.2.3 Lockfile: exact pins for runtime and development dependencies,
