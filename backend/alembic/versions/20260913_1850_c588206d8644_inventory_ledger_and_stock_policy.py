@@ -176,7 +176,9 @@ def downgrade() -> None:
         table_name="inventory_movements",
         postgresql_where=sa.text("operation_id IS NOT NULL"),
     )
-    op.drop_index("ix_inventory_movements_tenant_product_occurred", table_name="inventory_movements")
+    op.drop_index(
+        "ix_inventory_movements_tenant_product_occurred", table_name="inventory_movements"
+    )
     op.drop_index("ix_inventory_movements_tenant_occurred", table_name="inventory_movements")
     op.drop_table("inventory_movements")
     op.drop_table("inventory")

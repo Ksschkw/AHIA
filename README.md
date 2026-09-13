@@ -121,10 +121,11 @@ with one command.
 Milestones M0 through M8 are complete and committed: repository and tooling, core
 cross-cutting infrastructure, the User vertical slice, authentication and sessions,
 tenants, staff administration, the permission model as data, devices, and the versioned
-migration baseline, and M9 the catalogue is complete: categories, products and product
-images end to end - validated, optimized, charged against the tenant's quota, stored
-under a server-built key, and resolvable through whichever provider holds the bytes.
-1324 tests pass, the nine-stage build gate is green, and the service serves a real flow:
+migration baseline, M9 the catalogue is complete - categories, products and product
+images end to end, validated, optimized, charged against the tenant's quota, stored under
+a server-built key, and resolvable through whichever provider holds the bytes - and M10
+the inventory ledger is complete: an append-only movement history, a stock projection
+derived from it, and a per-business rule about stock going negative. 1437 tests pass, the nine-stage build gate is green, and the service serves a real flow:
 create an account, sign in, create a business, invite a worker, have that worker accept
 the invitation with the role they were given, inspect what that role can do, group the
 catalogue into categories, add a product, upload its pictures, publish it at an address
@@ -155,6 +156,5 @@ that is safe under concurrent uploads, and authentication whose failures are
 indistinguishable across an unknown account, a wrong password and a deactivated
 account.
 
-Next: M10, the inventory ledger - an append-only movement history with the quantity on
-hand as a projection, and negative-stock policy handled explicitly. Progress is tracked
-in `TASKS.md`.
+Next: M11, customers - the people a business sells to, with the same tenant isolation and
+the same ledger discipline at the boundaries. Progress is tracked in `TASKS.md`.

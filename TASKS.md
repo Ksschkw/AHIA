@@ -85,7 +85,7 @@ assertion in a commit message.
 | M7 | Devices and session management | `[x]` | M6 |
 | M8 | Alembic migration baseline (M8.1.4 delivered in M9) | `[x]` | M6 |
 | M9 | Catalog: categories, products, images, storage | `[x]` | M8 |
-| M10 | Inventory ledger and projections | `[ ]` | M9 |
+| M10 | Inventory ledger and projections | `[x]` | M9 |
 | M11 | Customers | `[ ]` | M9 |
 | M12 | Sales, payments, ledger, transactional integrity | `[ ]` | M10, M11 |
 | M13 | Expenses | `[ ]` | M12 |
