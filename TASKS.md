@@ -75,8 +75,8 @@ assertion in a commit message.
 
 | Milestone | Title | Status | Depends on |
 |---|---|---|---|
-| M0 | Repository and developer tooling foundation | `[~]` | - |
-| M1 | Core cross-cutting infrastructure | `[ ]` | M0 |
+| M0 | Repository and developer tooling foundation | `[x]` | - |
+| M1 | Core cross-cutting infrastructure | `[~]` | M0 |
 | M2 | User demonstrative vertical slice | `[ ]` | M1 |
 | M3 | Authentication and sessions | `[ ]` | M2 |
 | M4 | Tenant slice | `[ ]` | M3 |
@@ -237,6 +237,13 @@ structured logs with a correlation ID, redacts secrets, centralizes feature flag
 declarations, exposes resilience primitives and a composition root, and every
 core module has tests.
 
+M1 also delivers the storage and media capability (M1.11 through M1.17), because
+that is where the ports, the configuration and the composition root live. The
+capability is provider-neutral: Cloudflare R2 and Cloudinary both implement one
+storage port, the active provider is a configuration value, and no business
+service branches on it. Media optimization and tenant quota enforcement are
+server-side and configuration-driven, not provider features.
+
 ### M1.1 Configuration
 
 - [ ] M1.1.1 `core/config.py`: typed settings object built from environment
@@ -381,6 +388,119 @@ core module has tests.
 - [ ] M1.10.4 Tests: app imports without side effects, health and ready
       answer, unknown route returns the standard error envelope, and no
       configuration is read outside `core/config.py` (enforced by an AST test).
+
+### M1.11 Storage port and provider configuration
+
+- [ ] M1.11.1 `core/ports/storage_port.py`: the provider-neutral capability.
+      Operations AHIA actually needs - upload, delete, exists, delivery URL,
+      image upload - over provider-neutral value objects carrying storage key,
+      delivery reference, MIME type, size in bytes, width, height and checksum.
+      No Cloudinary public identifier and no bucket name appears in the
+      contract.
+- [ ] M1.11.2 Storage configuration in `core/config.py`: `STORAGE_PROVIDER`
+      (`r2` or `cloudinary`), the shared media limits, the per-tenant quota, and
+      the provider-specific credential blocks. Credentials for the inactive
+      provider are neither required nor validated, and an unsupported provider
+      value fails startup with a message naming the accepted values.
+- [ ] M1.11.3 Tests: both providers selectable from configuration, unknown
+      provider rejected, inactive provider credentials absent without error,
+      active provider credentials missing fails loudly, and no provider secret
+      ever appears in a configuration representation or a log record.
+
+### M1.12 Media processing capability
+
+- [ ] M1.12.1 `core/ports/media_port.py`: the provider-neutral processing
+      capability - inspect and optimize - returning the processed bytes, the
+      detected MIME type, the final dimensions, the byte size and a checksum.
+- [ ] M1.12.2 `integrations/media/image_processor.py`: server-side validation
+      and optimization. Rejects a content type outside the allowlist, rejects a
+      declared type that does not match the decoded image, rejects an oversized
+      byte length, rejects a decompression bomb, resizes images larger than the
+      configured maximum without ever upscaling, re-encodes to the configured
+      target format at the configured quality, and strips EXIF, GPS and device
+      metadata.
+- [ ] M1.12.3 Startup validation that the configured target encoder is actually
+      available in the runtime. A configuration that cannot be honoured fails
+      loudly rather than silently producing a different format.
+- [ ] M1.12.4 Tests: oversized bytes rejected, oversized dimensions resized to
+      the configured bound with the aspect ratio preserved, small images never
+      upscaled, disallowed content types rejected, a file whose bytes disagree
+      with its declared type rejected, metadata absent from the output, output
+      format honoured, and the byte size measured after processing is the size
+      used for quota accounting.
+
+### M1.13 Cloudflare R2 adapter
+
+- [ ] M1.13.1 `integrations/storage/r2_client.py` implementing the storage
+      port against the S3-compatible API, with the object key constructed from
+      server-side identifiers under the documented
+      `tenants/{tenant_id}/...` hierarchy.
+- [ ] M1.13.2 Resilience at the outbound boundary: explicit timeout, a circuit
+      breaker dedicated to R2, a concurrency bulkhead, bounded retry for
+      idempotent operations only, a typed degraded result, and observability on
+      breaker state change.
+- [ ] M1.13.3 Delivery URL construction: public base URL when configured,
+      short-lived signed URL otherwise, never a permanent public URL for a
+      private asset.
+- [ ] M1.13.4 Tests against a stubbed S3 client: upload returns
+      provider-neutral metadata, delete is idempotent, exists reports correctly,
+      a provider failure produces a typed application error and not a raw
+      provider exception, and the breaker opens and recovers.
+
+### M1.14 Cloudinary adapter
+
+- [ ] M1.14.1 `integrations/storage/cloudinary_client.py` implementing the same
+      port, translating the neutral storage key to a Cloudinary public ID
+      entirely inside the adapter and translating Cloudinary errors to the
+      shared error hierarchy.
+- [ ] M1.14.2 `core/ports/storage_port.py` delivery contract extended so a
+      provider may honour a requested presentation width. The Cloudinary
+      adapter encodes that as a transformation; the R2 adapter returns the
+      stored object. Services pass a width, not a transformation.
+- [ ] M1.14.3 Same resilience policy and the same error translation as the R2
+      adapter.
+- [ ] M1.14.4 Tests: the shared contract suite passes for Cloudinary, a
+      Cloudinary failure produces a typed application error, and no Cloudinary
+      identifier or transformation string appears outside the adapter.
+
+### M1.15 Storage factory and composition wiring
+
+- [ ] M1.15.1 `integrations/storage/storage_factory.py`: builds the adapter for
+      the configured provider. The selection is the only place in the codebase
+      that branches on the provider value.
+- [ ] M1.15.2 Composition root wiring: the storage capability, the media
+      processing capability and their resilience policies are constructed once
+      and injected where needed.
+- [ ] M1.15.3 Tests: switching `STORAGE_PROVIDER` returns a different adapter
+      type with no change to any service, the factory rejects an unknown
+      provider, and no service module imports a provider adapter (asserted by
+      the architecture contracts, not by convention).
+
+### M1.16 Storage contract test suite
+
+- [ ] M1.16.1 One shared, provider-agnostic behavioural suite executed against
+      both adapters, so a divergence between providers is a test failure rather
+      than a production surprise.
+- [ ] M1.16.2 Security assertions: another tenant's storage key is never
+      reachable through the port's public operations, and a storage failure
+      surfaces as a safe external error with the internal detail confined to the
+      log.
+
+### M1.17 Tenant storage quota accounting
+
+- [ ] M1.17.1 `tenant_storage_usage` entity and persistence: bytes used, a
+      monotonic version and an update timestamp, one row per tenant.
+- [ ] M1.17.2 `services/storage_quota_service.py`: reserve, commit and release
+      operations that are safe under concurrency. Reservation takes a row lock
+      so two simultaneous uploads from two devices cannot both pass the check
+      and over-allocate.
+- [ ] M1.17.3 Quota policy: the ceiling is configuration, the check happens
+      before the bytes are persisted, and the accounting is updated only after
+      successful persistence. A failed upload releases its reservation.
+- [ ] M1.17.4 Tests: a reservation that would exceed the quota is rejected with
+      a typed error, concurrent reservations cannot both succeed when only one
+      fits, a failed upload releases the reservation, and the accounting
+      converges to the real stored total.
 
 ---
 
@@ -586,18 +706,33 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - [ ] M9.1.7 `product_image_model.py`, `product_image_crud.py`,
       `product_image_schema.py`, `product_image_service.py`,
       `product_image_router.py`.
-- [ ] M9.1.8 Storage capability port plus the R2 adapter in
-      `integrations/storage/`, with timeout, circuit breaker, bulkhead,
-      bounded retry and typed degradation.
-- [ ] M9.1.9 Signed upload flow: server issues scoped, short-lived upload URLs;
-      client-supplied object keys are never trusted.
-- [ ] M9.1.10 Upload validation: size, MIME type, extension, ownership and
-      tenant, all enforced server-side.
-- [ ] M9.1.11 Catalog migration and tests, including cross-tenant product
-      access denial and price precision tests.
-- [ ] M9.1.12 Storage failure test: with R2 unavailable, catalog reads and
-      product writes still work and image upload returns a typed degraded
-      result.
+- [ ] M9.1.8 Storage and media capabilities: delivered in M1.11 through M1.17.
+      M9 consumes them through the port; it does not construct a provider.
+- [ ] M9.1.9 Server-side upload pipeline: authorize `products.update`, validate
+      the request, decode and optimize the image through the media capability,
+      reserve tenant quota, upload through the storage capability under a
+      server-generated key, then persist the metadata and commit the quota in
+      one transaction. A client-supplied object key or storage provider is never
+      trusted or accepted.
+- [ ] M9.1.10 Provider-neutral image metadata persistence: `storage_provider`,
+      `storage_key`, `mime_type`, `size_bytes`, `width`, `height`, `checksum`,
+      `sort_order`, `is_primary`. No column is named after a provider.
+- [ ] M9.1.11 Product image limits: maximum count per product and maximum
+      stored bytes per tenant, both configuration-driven, both enforced before
+      persistence, with the error naming the limit that was hit.
+- [ ] M9.1.12 Deletion and replacement: removing an image deletes the stored
+      object and releases its quota allocation; a failed provider delete leaves
+      the metadata row marked for reconciliation rather than silently leaking
+      storage.
+- [ ] M9.1.13 Catalog migration and tests, including cross-tenant product
+      access denial, cross-tenant image access denial and price precision tests.
+- [ ] M9.1.14 Storage failure test: with the active provider unavailable,
+      catalog reads and product writes still work and image upload returns a
+      typed degraded result. Run against both providers through the shared
+      contract suite.
+- [ ] M9.1.15 Provider switch test: switching `STORAGE_PROVIDER` changes the
+      adapter and leaves every product, storefront and image service untouched,
+      with existing rows still resolvable to the provider that holds them.
 
 ---
 

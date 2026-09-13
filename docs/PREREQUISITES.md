@@ -116,22 +116,28 @@ credential material it produces. Items marked "required" block their milestone.
 - Least privilege note: the application role must not be able to drop tables or
   alter schema in production. Alembic runs with a separate migration role.
 
-### 2.3 Cloudflare R2 - required from M7
+### 2.3 Object storage: Cloudflare R2 (default) and Cloudinary (supported) - required from M1/M9
 
-- Why: object storage for product images, store logos and banners, receipt
-  images, generated invoices, reports and shipment documents. PostgreSQL stores
-  metadata and object keys only.
-- Provision: create a bucket per environment
-  (`ahia-dev`, `ahia-staging`, `ahia-production`), create an R2 API token scoped
-  to that bucket with object read/write, and decide whether the bucket is served
-  through a custom domain.
-- Credential: account ID, S3-compatible endpoint
+- Why: product images, store logos and banners, receipt images, generated
+  invoices, reports and shipment documents. PostgreSQL stores metadata and
+  storage keys only; it never stores binaries.
+- Both providers are implemented behind one provider-neutral port and are
+  selected with `STORAGE_PROVIDER`. The inactive provider's credentials are not
+  required.
+- R2 provisioning: create a bucket per environment (`ahia-dev`, `ahia-staging`,
+  `ahia-production`), create an R2 API token scoped to that bucket with object
+  read/write, and decide whether the bucket is served through a custom domain.
+- R2 credential: account ID, S3-compatible endpoint
   `https://<account_id>.r2.cloudflarestorage.com`, access key ID, secret access
   key, bucket name.
-- Produces: `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
-  `R2_BUCKET`, `R2_PUBLIC_BASE_URL` (optional).
-- Rotation: R2 tokens can be rotated by creating a second token, deploying it,
-  then revoking the first. Documented rotation path, no downtime.
+- Cloudinary provisioning: one cloud per environment, an API key and secret
+  from the console, and a decision on whether delivery is restricted.
+- Cloudinary credential: cloud name, API key, API secret.
+- Rotation: R2 tokens rotate by creating a second token, deploying it, then
+  revoking the first. Cloudinary keys rotate the same way. Both are documented
+  rotation paths with no downtime.
+- Cost note: neither free tier is a hard billing cap. AHIA enforces its own
+  upload limits and per-tenant quota; see section 3.5.
 
 ### 2.4 Northflank - required from M17
 
@@ -239,22 +245,57 @@ Rate limiting is always on. Limits are configuration, not flags.
 | `RATE_LIMIT_WRITE_PER_MINUTE` | D | `120` | authenticated writes |
 | `RATE_LIMIT_GLOBAL_PER_MINUTE` | D | `600` | per client identity |
 
-### 3.5 Object storage (milestone M7)
+### 3.5 Storage and media (from milestone M1, used by M9)
+
+Storage is a provider-neutral capability. `STORAGE_PROVIDER` selects the active
+adapter; credentials for the inactive provider are not required and are not
+validated.
+
+Selection and shared limits:
 
 | Variable | Req | Default | Notes |
 |---|---|---|---|
-| `R2_ENDPOINT` | when storage is on | none | S3-compatible endpoint |
-| `R2_ACCESS_KEY_ID` | when storage is on | none | S |
-| `R2_SECRET_ACCESS_KEY` | when storage is on | none | S |
-| `R2_BUCKET` | when storage is on | none | |
+| `STORAGE_PROVIDER` | D | `r2` | `r2` or `cloudinary`; the only switch between providers |
+| `STORAGE_SIGNED_URL_TTL_SECONDS` | D | `900` | lifetime of a signed private-asset URL |
+| `MAX_UPLOAD_SIZE_MB` | D | `5` | absolute ceiling for any upload |
+| `MAX_PRODUCT_IMAGE_SIZE_MB` | D | `5` | product image ceiling, never above the absolute ceiling |
+| `MAX_PRODUCT_IMAGE_WIDTH` | D | `2000` | larger images are resized down; never upscaled |
+| `MAX_PRODUCT_IMAGE_HEIGHT` | D | `2000` | as above |
+| `MAX_PRODUCT_IMAGES_PER_PRODUCT` | D | `10` | count limit per product |
+| `MAX_TENANT_STORAGE_MB` | D | `500` | per-tenant quota enforced by AHIA itself |
+| `MEDIA_TARGET_FORMAT` | D | `webp` | `webp`, `jpeg`, `png` or `avif`; validated at startup |
+| `MEDIA_IMAGE_QUALITY` | D | `82` | encoder quality for lossy targets |
+| `MEDIA_STRIP_METADATA` | D | `true` | removes EXIF, GPS and device metadata |
+| `MEDIA_ALLOWED_CONTENT_TYPES` | D | `image/jpeg,image/png,image/webp,image/avif` | allowlist, never a denylist |
+
+Cloudflare R2 (active when `STORAGE_PROVIDER=r2`):
+
+| Variable | Req | Default | Notes |
+|---|---|---|---|
+| `R2_ENDPOINT` | when active | none | S3-compatible endpoint |
+| `R2_ACCESS_KEY_ID` | when active | none | S |
+| `R2_SECRET_ACCESS_KEY` | when active | none | S |
+| `R2_BUCKET` | when active | none | |
 | `R2_REGION` | D | `auto` | R2 convention |
 | `R2_PUBLIC_BASE_URL` | D | empty | only for intentionally public assets |
-| `R2_SIGNED_URL_TTL_SECONDS` | D | `900` | private asset access window |
-| `R2_MAX_UPLOAD_BYTES` | D | `5242880` | 5 MiB per image |
-| `R2_ALLOWED_CONTENT_TYPES` | D | `image/jpeg,image/png,image/webp` | allowlist, never a denylist |
 | `R2_REQUEST_TIMEOUT_SECONDS` | D | `10` | outbound call timeout |
 | `R2_CIRCUIT_FAILURE_THRESHOLD` | D | `5` | breaker trips after N consecutive failures |
 | `R2_CIRCUIT_RESET_SECONDS` | D | `60` | open-state duration before a probe |
+
+Cloudinary (active when `STORAGE_PROVIDER=cloudinary`):
+
+| Variable | Req | Default | Notes |
+|---|---|---|---|
+| `CLOUDINARY_CLOUD_NAME` | when active | none | |
+| `CLOUDINARY_API_KEY` | when active | none | S |
+| `CLOUDINARY_API_SECRET` | when active | none | S |
+| `CLOUDINARY_UPLOAD_FOLDER` | D | `ahia` | prefix applied to every public ID |
+| `CLOUDINARY_SECURE_DELIVERY` | D | `true` | HTTPS delivery URLs only |
+| `CLOUDINARY_REQUEST_TIMEOUT_SECONDS` | D | `15` | outbound call timeout |
+
+Operational note: the R2 free allowance is not a billing cap. AHIA enforces its
+own upload limits and per-tenant quota, because a provider will happily serve
+requests that cost money. The same reasoning applies to Cloudinary's free tier.
 
 ### 3.6 Public sharing and messaging (milestone M14)
 
@@ -365,6 +406,7 @@ command, and a custom guard rejects any secret-shaped value in `.env.example`.
 | `REFRESH_TOKEN_PEPPER` | requires forced re-authentication of all users; rotate only with a maintenance notice | replay of stolen refresh tokens |
 | `DATABASE_URL` password | rotate in the provider, update the platform secret, restart; pooled connections drain | full tenant data access |
 | R2 access key | create a second token, deploy, revoke the first | object read/write in one bucket |
+| Cloudinary API key | generate a second key in the console, deploy, disable the first | media upload/delete in one cloud |
 | Provider API tokens | revoke and reissue in the provider console | depends on the provider scope |
 
 Every rotation is recorded as an operational event with date, operator and
@@ -372,47 +414,49 @@ reason.
 
 ---
 
-## 8. Decision record: object storage (R2 rather than Cloudinary)
+## 8. Decision record: object storage (provider-neutral, R2 by default)
 
 Question raised: Cloudinary or Cloudflare R2 for project storage.
 
-Decision: Cloudflare R2, matching the product specification.
+Decision: support both behind one provider-neutral port, and default to R2.
 
 Reasoning.
 
-1. The product specification already locks R2, and the database specification
-   defines an explicit object-key hierarchy under `tenants/{tenant_id}/...`.
-   Choosing Cloudinary would require revising two baseline documents and the
-   `ProductImage` model, for no functional gain in the first release.
-2. Cost shape. R2 charges for storage and operations with zero egress fees.
-   Storefront images are public and read many times by many customers; egress is
-   the dominant cost term for that traffic pattern. Cloudinary pricing is
-   generous at small scale but is driven by transformations and bandwidth.
-3. Provider separation. The database runs on Neon, the API on Northflank, the
-   web on Vercel. Cloudflare as the storage provider keeps the data plane from
-   concentrating in the same vendor as the application, and R2 speaks the S3
-   API, so the adapter is replaceable.
-4. The mobile and web clients need only signed upload/download URLs plus a
-   public base URL, which R2 provides directly.
+1. Egress cost shape. Storefront images are public and read many times by many
+   customers, so bandwidth dominates the cost model. R2 charges no egress;
+   Cloudinary's value is transformation and delivery rather than cheap bulk
+   egress. R2 is therefore the default.
+2. No structural dependency on either provider. The domain depends on a storage
+   capability, not on a vendor. If a provider changes its pricing, availability
+   or terms, the response is a configuration change plus an adapter, not a
+   rewrite.
+3. Switching is a configuration change. `STORAGE_PROVIDER=r2` and
+   `STORAGE_PROVIDER=cloudinary` select different adapters with the same
+   contract and the same tests. Product, Storefront and ProductImage services do
+   not change.
+4. Existing assets survive a switch. Persisted metadata records which provider
+   holds each object, so an object written under R2 remains readable after the
+   active provider changes. A migration is a deliberate backfill, not a
+   prerequisite for switching new uploads.
+5. Provider separation. The database runs on Neon, the API on Northflank, the
+   web on Vercel. Object storage as a separate, S3-compatible concern keeps the
+   data plane from concentrating in one vendor.
 
-What we knowingly give up, and how it is covered.
+What this costs us.
 
-- Cloudinary's automatic image transformations (resize, format negotiation,
-  quality optimization) do not exist in R2 on their own. The plan is to
-  generate the derived variants the storefront needs at upload time and store
-  them as separate objects (`.../{image_id}/w480.webp` and similar), which keeps
-  the read path free of a third-party dependency. If the derived-variant work
-  proves more expensive than expected, a transformation CDN can be placed in
-  front of the bucket without changing the domain model, because services depend
-  on a storage capability port rather than on R2 specifics.
-- Every upload is validated for size, MIME type, extension, tenant ownership and
-  authorization before a signed URL is issued. Client-supplied object keys are
-  never trusted.
+- Two adapters to maintain instead of one. The mitigation is a shared contract
+  test suite that runs against both, so a behavioural difference is a test
+  failure rather than a production surprise.
+- Cloudinary's transformation features are available on the Cloudinary path
+  only. Delivery URL construction therefore goes through the port, and the
+  provider-specific encoding stays inside the adapter.
+- Images are optimized before storage regardless of provider, so we do not
+  depend on Cloudinary's automatic transformations for correctness. Those
+  transformations are a delivery optimization where they exist.
 
-Reversibility: the storage adapter lives in
-`backend/src/ahia/integrations/storage/` and is injected into services as a
-capability. Replacing R2 means writing one new adapter and one migration of
-object keys. No domain code changes.
+Reversibility: the port lives in `core/ports/storage_port.py`, the adapters in
+`integrations/storage/`, and the selection happens in the composition root.
+Adding a third provider means one new adapter and one enum value.
 
 ---
 

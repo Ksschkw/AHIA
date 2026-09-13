@@ -153,18 +153,92 @@ Consequence: every entity pays a small mapping cost. In exchange, domain rules
 are testable without a database, and the persistence representation can change
 without touching business logic.
 
-### ADR-0002 - Cloudflare R2 for object storage, behind a storage port
+### ADR-0002 - Provider-neutral storage port, R2 by default, Cloudinary selectable
 
-Decision: R2 is the object store. Services depend on an injected storage
-capability; only `integrations/storage/r2_client.py` knows R2 specifics.
+Decision: storage is an infrastructure capability behind one provider-neutral
+port. Two adapters implement it from day one, Cloudflare R2 and Cloudinary, and
+the active provider is chosen entirely by configuration
+(`STORAGE_PROVIDER=r2|cloudinary`) in the composition root. No service, entity,
+schema or router may branch on the provider.
 
-Reasoning: recorded in `docs/PREREQUISITES.md` section 8, including the
-Cloudinary comparison, the egress cost shape for public storefront images and
-the S3-compatible exit path.
+Where the port lives: `backend/src/ahia/core/ports/storage_port.py`. The adapters
+live in `backend/src/ahia/integrations/storage/`. This placement is deliberate
+and is the one deviation from the folder sketch in the storage request: services
+may import `core` (a cross-cutting package any layer may depend on) but must not
+import `integrations`, which the architecture contracts forbid and which would
+put a provider-adjacent package on the service's dependency list. The dependency
+direction stays inward: `services -> core.ports <- integrations`.
 
-Consequence: image transformation features Cloudinary provides for free must be
-produced as derived variants at upload time. The read path never depends on a
-third-party transformation service.
+Reasoning:
+- public storefront images are read far more often than they are written, so
+  egress cost dominates. R2 charges no egress; Cloudinary's strengths are
+  transformations and delivery, not cheap bulk egress. R2 is therefore the
+  default.
+- the product must not become structurally dependent on either provider. A
+  provider that changes pricing, availability or terms is an operational event,
+  not an architectural one.
+- assets already stored with one provider stay associated with it, because the
+  persisted metadata records which provider holds the object. Switching the
+  active provider affects new uploads, not existing ones.
+
+Consequences:
+- the domain thinks in terms of a storage key, a delivery reference, a MIME
+  type, a size, dimensions and a checksum. Cloudinary public IDs and R2 bucket
+  names never appear in a service signature.
+- provider credentials are validated only for the active provider, so an
+  inactive provider's configuration is not required to boot.
+- both adapters must satisfy the same behavioural contract, and a shared
+  contract test suite runs against both.
+
+The earlier form of this record named R2 as the single object store. It is
+revised here rather than deleted, because the reasoning about egress cost still
+holds and still explains the default.
+
+### ADR-0008 - Server-side media optimization is mandatory and configurable
+
+Decision: every uploaded image is validated and optimized on the server before
+it is persisted, and no limit is hard-coded in the codebase. MIME type,
+extension, byte size, pixel dimensions, image count per product and per-tenant
+storage quota are all validated server-side and all configured through
+environment variables.
+
+Reasoning:
+- the product operates on a zero-cost budget. An unbounded upload path is a
+  denial-of-service and a bill, in that order.
+- a client can be modified. Client-side resizing improves perceived speed and
+  saves data, but it is a user-experience optimization, not a control.
+- metadata (EXIF, GPS, device identifiers) in a trader's photo of a customer or
+  a shop is a privacy leak that nobody asked for. It is stripped.
+
+Consequences:
+- the optimized form is the canonical stored object. A multi-megabyte original
+  is not retained unless a product requirement explicitly calls for it.
+- exactly one stored variant per upload is produced, at the configured maximum
+  dimension, in the configured target format. Presentation sizes are the
+  client's job (ADR-0009).
+- a configuration whose target encoder is unavailable in the runtime fails
+  loudly at startup rather than silently producing another format.
+
+### ADR-0009 - Store few optimized assets, deliver only what the UI needs
+
+Decision: the system stores one optimized asset per image and does not
+pre-generate a ladder of presentation variants. Clients request an appropriately
+sized rendition through the provider's delivery mechanism where the provider
+supports it (Cloudinary transformations) and otherwise receive the single stored
+asset and handle presentation locally (R2 path).
+
+Reasoning: generating dozens of stored variants multiplies storage cost, cache
+invalidation work and migration surface, for no benefit the browser or the phone
+cannot produce itself.
+
+Consequences:
+- delivery URLs are built through the storage port, which may encode a
+  provider-specific transformation. That encoding stays inside the adapter.
+- the web client uses responsive image selection and the mobile client requests
+  a size appropriate to the screen, so the largest stored asset is not sent to
+  a small device.
+- the client-side work is presentation only. Authorization, validation, quota
+  accounting and canonical business data remain server-side.
 
 ### ADR-0003 - No generic repository, no generic utility module
 
