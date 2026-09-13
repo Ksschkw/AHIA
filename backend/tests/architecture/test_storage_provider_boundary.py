@@ -54,11 +54,7 @@ PROVIDER_UNAWARE_LAYERS = ("services", "routers", "models", "schemas", "crud", "
 
 
 def relative_source_paths() -> list[Path]:
-    return sorted(
-        path
-        for path in SOURCE_ROOT.rglob("*.py")
-        if "__pycache__" not in path.parts
-    )
+    return sorted(path for path in SOURCE_ROOT.rglob("*.py") if "__pycache__" not in path.parts)
 
 
 def relative_name(path: Path) -> str:
@@ -78,8 +74,8 @@ def test_provider_vocabulary_confined_to_the_boundary() -> None:
             if identifier in content:
                 offenders.append(f"{name} contains {identifier!r}")
 
-    assert not offenders, (
-        "a provider identifier escaped the storage boundary:\n  " + "\n  ".join(offenders)
+    assert not offenders, "a provider identifier escaped the storage boundary:\n  " + "\n  ".join(
+        offenders
     )
 
 

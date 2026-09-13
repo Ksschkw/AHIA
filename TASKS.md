@@ -347,13 +347,13 @@ server-side and configuration-driven, not provider features.
 
 ### M1.8 Composition root
 
-- [ ] M1.8.1 `core/container.py`: constructs configuration, engine, session
+- [x] M1.8.1 `core/container.py`: constructs configuration, engine, session
       factory, unit of work, repositories, services, integrations and
       resilience policies in one place.
-- [ ] M1.8.2 Lifespan resource management: create on startup, dispose on
+- [x] M1.8.2 Lifespan resource management: create on startup, dispose on
       shutdown, expose readiness state, and fail startup loudly if a required
       resource is unavailable.
-- [ ] M1.8.3 Tests: container builds in test profile, no module-level
+- [x] M1.8.3 Tests: container builds in test profile, no module-level
       singleton state, resources are disposed, and a missing dependency fails
       at startup rather than at first request.
 

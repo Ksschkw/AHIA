@@ -26,6 +26,4 @@ Modules and their single responsibilities:
 ``tenant_context``
     The authorized tenant context: user, tenant, membership, role, permissions
     and device.
-``container``
-    The composition root. Every dependency is constructed here once.
 """

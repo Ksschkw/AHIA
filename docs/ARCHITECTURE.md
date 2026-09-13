@@ -80,7 +80,7 @@ happens to store it. The mapping boundary is the CRUD file and nowhere else.
 | `core/database.py` | async engine, session lifecycle, unit of work port | the only place a database driver is constructed |
 | `core/tenant_context.py` | authorized tenant context | requested tenant is a hint, membership is proof |
 | `core/permissions/` | permission registry and role bundles | data-driven, one module per domain |
-| `core/container.py` | composition root | constructs every dependency once |
+| `bootstrap.py` | composition root | constructs every dependency once; lives at the package root so the `core` contract stays absolute |
 | `middleware/` | correlation, security headers, rate limit, error handling | registered on the application, not in routers |
 | `integrations/` | provider adapters (R2, WhatsApp) | services depend on capability ports, not providers |
 
@@ -193,6 +193,22 @@ Consequences:
 The earlier form of this record named R2 as the single object store. It is
 revised here rather than deleted, because the reasoning about egress cost still
 holds and still explains the default.
+
+### ADR-0011 - The composition root lives at the package root, not inside core
+
+Decision: the composition root is `ahia.bootstrap`, at the package root, rather
+than `core/container.py` as the scaffold specification's layout sketch shows.
+
+Reasoning: a composition root must import every layer - configuration, database,
+adapters, services. The architecture contract says `core` may not import an
+application layer, and that rule exists so a core module pulled in by an entity
+or a service cannot drag a service, a router or an adapter along with it. The
+composition root is the one module that legitimately does the opposite, so
+placing it inside `core` would force a carve-out into a rule that is currently
+absolute. Moving one file is cheaper than weakening the contract.
+
+Consequence: `main` imports `ahia.bootstrap`, and the `core` contract continues to
+forbid every application import without exception.
 
 ### ADR-0010 - Entities may import the error hierarchy, nothing else from core
 
