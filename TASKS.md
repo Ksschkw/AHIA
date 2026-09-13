@@ -130,7 +130,7 @@ lint error and a failing test. CI runs the same command.
 
 ### M0.2 Backend Python project
 
-- [ ] M0.2.1 `backend/pyproject.toml`: project metadata, `src` layout, pinned
+- [x] M0.2.1 `backend/pyproject.toml`: project metadata, `src` layout, pinned
       dependency floors, and tool configuration for ruff, mypy, pytest and
       coverage in one file.
 - [ ] M0.2.2 `backend/scripts/bootstrap_backend.sh`: creates `backend/.venv`,
