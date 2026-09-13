@@ -117,7 +117,7 @@ lint error and a failing test. CI runs the same command.
 - [x] M0.1.1 Root `.gitignore` covering Python, virtualenvs, env files, Node,
       Expo, build output, coverage and editor state. Committed with the backend
       scaffold so that no generated file can be staged accidentally.
-- [ ] M0.1.2 Root `README.md`: what AHIA is, the repository layout, the five
+- [x] M0.1.2 Root `README.md`: what AHIA is, the repository layout, the five
       layers in one table, the command index, and a pointer to the
       specification documents and this file.
 - [ ] M0.1.3 `.editorconfig` and `.gitattributes` so line endings, encoding and
