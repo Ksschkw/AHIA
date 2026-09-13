@@ -1,0 +1,89 @@
+# Pre-commit hooks for the AHIA repository.
+#
+# Install once per clone:
+#     make hooks            (from the repository root)
+#
+# The hook set is deliberately the same set `make check` runs, minus the slow
+# integration and audit steps. A developer should not be able to commit
+# something the build gate will reject, and the fix should be available locally
+# rather than only in CI.
+#
+# Notes:
+#   * PRE_COMMIT_HOME is redirected into <repository>/.tools/pre-commit because
+#     the default user cache directory is not writable on this workstation.
+#     backend/scripts/install_git_hooks.sh sets it.
+#   * `files` patterns are relative to the git project root, not to this file.
+
+default_stages: [pre-commit]
+fail_fast: false
+
+repos:
+  # ---------------------------------------------------------------------------
+  # File hygiene
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: \.md$
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=512]
+      - id: check-case-conflict
+      - id: detect-private-key
+      - id: forbid-submodules
+      - id: destroyed-symlinks
+
+  # ---------------------------------------------------------------------------
+  # Python lint and format, pinned to the same ruff version as the lockfile
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.7
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+        files: ^backend/.*\.py$
+      - id: ruff-format
+        files: ^backend/.*\.py$
+
+  # ---------------------------------------------------------------------------
+  # Repository-specific gates
+  #
+  # These run the same scripts as `make check`, so a pre-commit failure and a
+  # build failure are the same failure with the same message.
+  # ---------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: ascii-guard
+        name: ascii guard (no emoji or non-ASCII in engineering artifacts)
+        entry: backend/.venv/bin/python backend/scripts/check_ascii.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: banned-names
+        name: banned standalone names
+        entry: backend/.venv/bin/python backend/scripts/check_banned_names.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: architecture-contracts
+        name: architecture contracts
+        entry: bash -c 'cd backend && .venv/bin/lint-imports --config import-linter.ini --no-cache'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: secret-scan
+        name: secret scan (staged content)
+        entry: bash backend/scripts/scan_secrets.sh --staged
+        language: system
+        pass_filenames: false
+        always_run: true

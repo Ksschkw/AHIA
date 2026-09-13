@@ -98,10 +98,11 @@ storage-local/
 uploads-local/
 
 # ---------------------------------------------------------------------------
-# Workspace tooling installed by scripts (checksum-verified binaries)
+# Workspace tooling installed by scripts: checksum-verified binaries and the
+# pre-commit hook environment cache. Both live inside the repository so they are
+# auditable and removable, and neither is ever committed.
 # ---------------------------------------------------------------------------
-.tools/bin/
-.tools/tmp/
+.tools/
 
 # ---------------------------------------------------------------------------
 # Editors and operating systems

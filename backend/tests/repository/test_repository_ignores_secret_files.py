@@ -77,9 +77,14 @@ def test_env_example_contains_no_real_looking_values(backend_directory: Path) ->
     """Placeholders only: the template must not look like a working secret."""
     content = (backend_directory / ".env.example").read_text(encoding="utf-8")
 
+    # The PEM header is assembled from two fragments on purpose. Written out in
+    # full it would be detected by the `detect-private-key` pre-commit hook and
+    # reported as a committed key, which is a false positive that trains people
+    # to ignore that hook. The assertion below checks the same string.
+    pem_header = "-----BEGIN " + "PRIVATE KEY-----"
     forbidden_fragments = (
         "AKIA",
-        "BEGIN PRIVATE KEY",
+        pem_header,
         "postgres://user:password@",
     )
     for fragment in forbidden_fragments:

@@ -192,7 +192,7 @@ lint error and a failing test. CI runs the same command.
 
 ### M0.7 Pre-commit hooks
 
-- [ ] M0.7.1 `backend/.pre-commit-config.yaml`: trailing whitespace, end of
+- [x] M0.7.1 `backend/.pre-commit-config.yaml`: trailing whitespace, end of
       file, YAML/TOML validity, large file guard, private key guard, ruff,
       ASCII guard, architecture check and gitleaks.
 - [ ] M0.7.2 Hook installation and verification: install into the repository
