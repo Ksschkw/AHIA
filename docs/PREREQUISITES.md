@@ -336,7 +336,7 @@ startup, at INFO level.
 |---|---|---|---|---|---|
 | `FEATURE_OFFLINE_SYNC` | bool | `false` | server-side sync push/pull endpoints | M0 | remove when the mobile client sync engine ships to all tenants |
 | `FEATURE_STOREFRONT_PUBLIC_PUBLISHING` | bool | `false` | whether a tenant may publish a public storefront | M0 | remove when public storefronts are generally available |
-| `FEATURE_R2_STORAGE` | bool | `false` | whether uploads are written to R2 at all | M0 | remove when image upload is enabled for every tenant |
+| `FEATURE_MEDIA_UPLOAD` | bool | `false` | whether tenants may upload product images and storefront media | M1 | remove when media upload is enabled for every tenant |
 | `FEATURE_WHATSAPP_CLICK_TO_CHAT` | bool | `false` | WhatsApp inquiry link generation | M14 | remove once verified in production on both clients |
 | `FEATURE_AI_INSIGHTS` | bool | `false` | AI-generated insights and forecasts | M0 | remove when AI insights are either adopted or dropped |
 | `FEATURE_SUPPLIER_MODULE` | bool | `false` | supplier and procurement endpoints | M0 | remove when procurement reaches general availability |

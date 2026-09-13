@@ -246,15 +246,15 @@ server-side and configuration-driven, not provider features.
 
 ### M1.1 Configuration
 
-- [ ] M1.1.1 `core/config.py`: typed settings object built from environment
+- [x] M1.1.1 `core/config.py`: typed settings object built from environment
       variables, with validation, environment profiles (`development`, `test`,
       `production`) and no module-level mutable global.
-- [ ] M1.1.2 Feature flag registry in `core/config.py`: name, type, default,
+- [x] M1.1.2 Feature flag registry in `core/config.py`: name, type, default,
       description, date added and removal condition for each flag declared in
       `docs/PREREQUISITES.md` section 4.
-- [ ] M1.1.3 Startup flag logging: exactly one INFO line per flag at
+- [x] M1.1.3 Startup flag logging: exactly one INFO line per flag at
       application start, and a check that no security control is flag-gated.
-- [ ] M1.1.4 Tests: missing required variable fails loudly, defaults are safe,
+- [x] M1.1.4 Tests: missing required variable fails loudly, defaults are safe,
       production rejects console log format and disabled TLS, and the flag
       registry is internally consistent.
 

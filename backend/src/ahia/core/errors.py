@@ -90,6 +90,16 @@ def set_correlation_id(correlation_id: str) -> None:
     _correlation_id_context.set(correlation_id)
 
 
+def clear_correlation_id() -> None:
+    """Unbind the correlation ID from the current context.
+
+    Used by worker wrappers and by test isolation. A stale identifier is worse
+    than no identifier, because it makes two unrelated events look related in
+    the logs.
+    """
+    _correlation_id_context.set(None)
+
+
 def get_correlation_id() -> str | None:
     """Return the correlation ID bound to the current context, if any."""
     return _correlation_id_context.get()

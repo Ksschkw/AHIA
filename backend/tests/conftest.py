@@ -20,6 +20,8 @@ from pathlib import Path
 
 import pytest
 
+from ahia.core.errors import clear_correlation_id
+
 BACKEND_DIRECTORY = Path(__file__).resolve().parents[1]
 REPOSITORY_ROOT = BACKEND_DIRECTORY.parent
 SCRIPTS_DIRECTORY = BACKEND_DIRECTORY / "scripts"
@@ -27,6 +29,20 @@ FIXTURES_DIRECTORY = Path(__file__).resolve().parent / "fixtures"
 
 if str(SCRIPTS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIRECTORY))
+
+
+@pytest.fixture(autouse=True)
+def isolate_correlation_context() -> None:
+    """Clear the request correlation ID around every test.
+
+    The correlation ID lives in a context variable, which is process-wide for
+    the test thread. Without this, a test that binds an identifier leaks it into
+    every later test in the same worker, which produces order-dependent
+    failures that look like product defects.
+    """
+    clear_correlation_id()
+    yield
+    clear_correlation_id()
 
 
 @pytest.fixture(scope="session")
