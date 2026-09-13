@@ -15,10 +15,22 @@ Two jobs live here.
 
 from __future__ import annotations
 
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
+
+# Point configuration at a path that does not exist, before any test module
+# imports the configuration module.
+#
+# A developer's .env is their real environment: it may hold a production database
+# URL and live credentials. Test results must not depend on it, and a test that
+# accidentally connects to a cloud database is a much worse outcome than a failed
+# assertion. Individual test helpers also pass _env_file=None; this makes the
+# isolation hold for code that constructs settings itself.
+os.environ["AHIA_ENV_FILE"] = str(Path(tempfile.gettempdir()) / "ahia-tests-no-env-file")
 
 from ahia.core.errors import clear_correlation_id
 

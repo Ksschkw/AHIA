@@ -76,8 +76,8 @@ assertion in a commit message.
 | Milestone | Title | Status | Depends on |
 |---|---|---|---|
 | M0 | Repository and developer tooling foundation | `[x]` | - |
-| M1 | Core cross-cutting infrastructure | `[~]` | M0 |
-| M2 | User demonstrative vertical slice | `[ ]` | M1 |
+| M1 | Core cross-cutting infrastructure | `[x]` | M0 |
+| M2 | User demonstrative vertical slice | `[~]` | M1 |
 | M3 | Authentication and sessions | `[ ]` | M2 |
 | M4 | Tenant slice | `[ ]` | M3 |
 | M5 | Membership and staff administration | `[ ]` | M4 |
@@ -379,13 +379,13 @@ server-side and configuration-driven, not provider features.
 
 ### M1.10 Application assembly
 
-- [ ] M1.10.1 `main.py` app factory: settings, container, middleware
+- [x] M1.10.1 `main.py` app factory: settings, container, middleware
       registration, router registration under `/api/v1`, exception handlers.
-- [ ] M1.10.2 Lifespan wiring: startup logging of environment, version and
+- [x] M1.10.2 Lifespan wiring: startup logging of environment, version and
       flags; clean shutdown.
-- [ ] M1.10.3 Health endpoints: `GET /health` for liveness and `GET /ready`
+- [x] M1.10.3 Health endpoints: `GET /health` for liveness and `GET /ready`
       for critical dependency readiness, exposing no internals.
-- [ ] M1.10.4 Tests: app imports without side effects, health and ready
+- [x] M1.10.4 Tests: app imports without side effects, health and ready
       answer, unknown route returns the standard error envelope, and no
       configuration is read outside `core/config.py` (enforced by an AST test).
 
