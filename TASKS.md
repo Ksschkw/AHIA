@@ -949,6 +949,21 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ### M10 - progress log
 
+- M10.1.3, M10.1.6 and M10.1.7 complete, which leaves only the transport layer for M10.
+  The concurrency test is the one worth reading: two `asyncio.gather`ed transactions
+  selling three and four of ten end at three, with both movements present and the ledger
+  forming a single chain from the empty shelf to the current quantity. Without the row
+  lock one sale would vanish from the projection while its movement stayed in the
+  ledger - the ledger right, the screen wrong, and nothing to indicate which.
+- A test assumption was corrected rather than worked around: an INVENTORY worker holds
+  `inventory.adjust` as well as `inventory.stock_in`, so the useful contrast is with
+  SALES, who can read stock and change nothing. The distinction the registry draws is
+  between counting stock and selling it, and the ledger's actor column is what makes that
+  distinction answerable afterwards.
+- Movement timestamps are computed before the row lock, so two serialized writes can
+  carry timestamps in the other order. Nothing depends on that ordering - the ledger's
+  correctness is that the quantities connect - but a test that assumed timestamp order
+  would have flaked, so the chain is walked by value.
 - M10.1.1, M10.1.2 and M10.1.4 complete. The append-only rule is a trigger rather than a
   convention: `crud/inventory_movement_crud.py` has no update or delete function, and a
   unit test asserts that mechanically, but the database refuses both anyway - including
@@ -969,18 +984,24 @@ Goal: a business exists as a tenant with a globally unique public slug.
       by a database trigger, not only by the absence of an update function, and with
       `operation_id` unique per tenant so a replayed offline operation is recognised
       rather than applied twice.
-- [ ] M10.1.3 `inventory_service.py`: `receive_stock`, `adjust_stock`,
+- [x] M10.1.3 `inventory_service.py`: `receive_stock`, `adjust_stock`,
       `record_damage`, `transfer_stock`, `get_inventory_for_product`,
       `list_movements`, each writing a movement and updating the projection in
-      one transaction.
+      one transaction. Every operation ends in one private `_apply_movement`, so
+      there is no second path that could change stock without a ledger entry.
 - [x] M10.1.4 Negative-stock policy handling with an explicit tenant configuration
       point: `tenants.negative_stock_policy`, defaulting to `BLOCK_NEGATIVE_STOCK`,
       read back through the enum so a value this version does not know fails loudly
       rather than becoming the default.
 - [ ] M10.1.5 `inventory_schema.py` and `inventory_router.py`.
-- [ ] M10.1.6 Concurrency test: two concurrent offline sales produce two
-      movements and a deterministic projection.
-- [ ] M10.1.7 Invariant test: a quantity cannot change without a movement.
+- [x] M10.1.6 Concurrency test: two concurrent offline sales produce two movements
+      and a deterministic projection, run as genuinely concurrent transactions
+      against real PostgreSQL using `asyncio.gather`. Two simultaneous overdraws with
+      one item left are both refused and leave the stock untouched.
+- [x] M10.1.7 Invariant test: a quantity cannot change without a movement. After five
+      concurrent sales the movements sum exactly to the projection, and the movements
+      form one chain of quantities - checked by value rather than by timestamp, because
+      concurrent writes compute their timestamps before the row lock serializes them.
 
 ---
 
