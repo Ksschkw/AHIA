@@ -123,6 +123,12 @@ ignore = [
   "PLR2004", # magic value comparison: expected values are the point of a test
   "SLF001",  # private member access: guards are tested at their internals
 ]
+# The R2 adapter and its test double must match boto3's S3 client surface,
+# which uses keyword names that are not PEP 8. The exception is narrow and
+# applies only to those two files.
+"src/ahia/integrations/storage/r2_client.py" = ["N803"]
+"tests/integrations/test_r2_storage.py" = ["N803"]
+
 # The developer guards are command-line tools. Plain stdout status lines are
 # their contract; the structured logger is for the application, not for a script
 # a developer runs by hand in a terminal.
@@ -163,6 +169,12 @@ plugins = ["pydantic.mypy"]
 module = ["tests.*"]
 disallow_untyped_defs = false
 warn_return_any = false
+
+# Vendor SDKs without type information. They are confined to adapter modules by
+# the architecture contracts, so the untyped surface is small and deliberate.
+[[tool.mypy.overrides]]
+module = ["boto3.*", "botocore.*", "cloudinary.*"]
+ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------
 # Pytest

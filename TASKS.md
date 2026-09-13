@@ -431,18 +431,18 @@ server-side and configuration-driven, not provider features.
 
 ### M1.13 Cloudflare R2 adapter
 
-- [ ] M1.13.1 `integrations/storage/r2_client.py` implementing the storage
+- [x] M1.13.1 `integrations/storage/r2_client.py` implementing the storage
       port against the S3-compatible API, with the object key constructed from
       server-side identifiers under the documented
       `tenants/{tenant_id}/...` hierarchy.
-- [ ] M1.13.2 Resilience at the outbound boundary: explicit timeout, a circuit
+- [x] M1.13.2 Resilience at the outbound boundary: explicit timeout, a circuit
       breaker dedicated to R2, a concurrency bulkhead, bounded retry for
       idempotent operations only, a typed degraded result, and observability on
       breaker state change.
-- [ ] M1.13.3 Delivery URL construction: public base URL when configured,
+- [x] M1.13.3 Delivery URL construction: public base URL when configured,
       short-lived signed URL otherwise, never a permanent public URL for a
       private asset.
-- [ ] M1.13.4 Tests against a stubbed S3 client: upload returns
+- [x] M1.13.4 Tests against a stubbed S3 client: upload returns
       provider-neutral metadata, delete is idempotent, exists reports correctly,
       a provider failure produces a typed application error and not a raw
       provider exception, and the breaker opens and recovers.
