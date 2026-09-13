@@ -298,14 +298,15 @@ class TokenService:
         persisted, so a database disclosure does not hand out live sessions.
         """
         plaintext = secrets.token_urlsafe(_REFRESH_TOKEN_BYTES)
-        return plaintext, self.hash_refresh_token(plaintext)
+        return plaintext, self.hash_bearer_token(plaintext)
 
-    def hash_refresh_token(self, plaintext: str) -> str:
-        """Return the peppered digest stored for a refresh token.
+    def hash_bearer_token(self, plaintext: str) -> str:
+        """Return the peppered digest stored for a bearer credential.
 
-        A pepper is used as well as randomness because refresh tokens are
+        A pepper is used as well as randomness because these credentials are
         long-lived: if the database alone leaks, the hashes are still useless
-        without the pepper from the environment.
+        without the pepper from the environment. Used for refresh tokens and for
+        membership invitations alike.
         """
         return hmac.new(
             self._refresh_token_pepper,
@@ -314,8 +315,8 @@ class TokenService:
         ).hexdigest()
 
     def verify_refresh_token(self, plaintext: str, stored_hash: str) -> bool:
-        """Compare a presented refresh token with the stored digest."""
-        return hmac.compare_digest(self.hash_refresh_token(plaintext), stored_hash)
+        """Compare a presented bearer credential with the stored digest."""
+        return hmac.compare_digest(self.hash_bearer_token(plaintext), stored_hash)
 
     # ------------------------------------------------------------------
     # Public share tokens

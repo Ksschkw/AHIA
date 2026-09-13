@@ -630,9 +630,9 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 - [x] M5.1.1 `tenant_membership_model.py` with status lifecycle (`invited`,
       `active`, `suspended`, `removed`) and uniqueness invariant.
-- [ ] M5.1.2 `tenant_membership_schema.py`.
+- [x] M5.1.2 `tenant_membership_schema.py`.
 - [x] M5.1.3 `tenant_membership_crud.py`.
-- [ ] M5.1.4 `tenant_membership_service.py`: `invite_tenant_member`,
+- [x] M5.1.4 `tenant_membership_service.py`: `invite_tenant_member`,
       `activate_membership`, `change_member_role`, `suspend_member`,
       `remove_member`, each authorizing `staff.*` permissions.
 - [ ] M5.1.5 `tenant_membership_router.py` for the staff endpoints.

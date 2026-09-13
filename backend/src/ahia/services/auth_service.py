@@ -338,7 +338,7 @@ class AuthService:
         refresh token that can be used by a thief indefinitely.
         """
         now = datetime.now(UTC)
-        presented_hash = self._token_service.hash_refresh_token(refresh_token)
+        presented_hash = self._token_service.hash_bearer_token(refresh_token)
 
         unit_of_work = self._unit_of_work_factory()
         async with unit_of_work:
@@ -461,7 +461,7 @@ class AuthService:
         able to reach a signed-out state without an error in its logs.
         """
         now = datetime.now(UTC)
-        presented_hash = self._token_service.hash_refresh_token(refresh_token)
+        presented_hash = self._token_service.hash_bearer_token(refresh_token)
 
         unit_of_work = self._unit_of_work_factory()
         async with unit_of_work:
