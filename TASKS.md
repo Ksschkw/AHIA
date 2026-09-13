@@ -524,10 +524,10 @@ layer-appropriate tests.
 
 ### M2.2 Schema
 
-- [ ] M2.2.1 `schemas/user_schema.py`: `UserCreateSchema`,
+- [x] M2.2.1 `schemas/user_schema.py`: `UserCreateSchema`,
       `UserUpdateSchema`, `UserResponseSchema` with allowlist validation,
       field length limits and explicit serialization rules. No business rules.
-- [ ] M2.2.2 Schema tests: valid input, missing fields, oversized input,
+- [x] M2.2.2 Schema tests: valid input, missing fields, oversized input,
       malformed email and phone, unknown field rejection, and response shape.
 
 ### M2.3 Persistence
