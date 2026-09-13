@@ -81,8 +81,8 @@ assertion in a commit message.
 | M3 | Authentication and sessions | `[x]` | M2 |
 | M4 | Tenant slice | `[x]` | M3 |
 | M5 | Membership and staff administration | `[x]` | M4 |
-| M6 | Roles, permissions and deny-by-default authorization | `[~]` | M5 |
-| M7 | Devices and session management | `[ ]` | M6 |
+| M6 | Roles, permissions and deny-by-default authorization | `[x]` | M5 |
+| M7 | Devices and session management | `[~]` | M6 |
 | M8 | Alembic migration baseline | `[ ]` | M6 |
 | M9 | Catalog: categories, products, images, R2 storage | `[ ]` | M8 |
 | M10 | Inventory ledger and projections | `[ ]` | M9 |
@@ -654,7 +654,7 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - [x] M6.1.4 `permission_service.py`: `resolve_permissions_for_membership`,
       `list_roles`, `list_permissions`, `update_role_permissions` with
       server-authoritative decisions.
-- [ ] M6.1.5 `role_service.py` and `permission_router.py`.
+- [x] M6.1.5 `role_service.py` and `permission_router.py`.
 - [x] M6.1.6 Data migration/seeding path that installs the registry
       idempotently.
 - [x] M6.1.7 Tests: role bundle correctness, permission escalation attempt,

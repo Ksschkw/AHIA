@@ -45,6 +45,7 @@ from ahia.integrations.storage.storage_factory import (
     build_storage_policy,
 )
 from ahia.services.auth_service import AuthService
+from ahia.services.permission_service import PermissionService
 from ahia.services.storage_quota_service import StorageQuotaService
 from ahia.services.tenant_membership_service import TenantMembershipService
 from ahia.services.tenant_service import TenantService
@@ -72,6 +73,7 @@ class ApplicationContainer:
     auth_service: AuthService
     tenant_service: TenantService
     membership_service: TenantMembershipService
+    permission_service: PermissionService
     token_service: TokenService
     password_hasher: PasswordHasher
     logger: StructuredLogger
@@ -153,6 +155,11 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         logger=logger,
     )
 
+    permission_service = PermissionService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        logger=logger,
+    )
+
     container = ApplicationContainer(
         settings=settings,
         database=database,
@@ -164,6 +171,7 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         auth_service=auth_service,
         tenant_service=tenant_service,
         membership_service=membership_service,
+        permission_service=permission_service,
         token_service=token_service,
         password_hasher=password_hasher,
         logger=logger,
