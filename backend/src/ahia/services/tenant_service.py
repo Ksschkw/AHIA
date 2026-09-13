@@ -31,10 +31,11 @@ from ahia.core.permissions.tenant_permissions import (
     TENANTS_MANAGE,
     TENANTS_READ,
 )
+from ahia.core.slug import normalize_slug
 from ahia.core.tenant_context import TenantContext, build_tenant_context
 from ahia.crud import tenant_crud, tenant_membership_crud
 from ahia.models.entities.tenant_membership_model import TenantMembershipModel
-from ahia.models.entities.tenant_model import TenantModel, normalize_slug
+from ahia.models.entities.tenant_model import TenantModel
 
 _TENANT_SERVICE_LOGGER_NAME: Final[str] = "ahia.services.tenant"
 

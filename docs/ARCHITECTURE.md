@@ -261,14 +261,15 @@ absolute. Moving one file is cheaper than weakening the contract.
 Consequence: `main` imports `ahia.bootstrap`, and the `core` contract continues to
 forbid every application import without exception.
 
-### ADR-0010 - Entities may import the error hierarchy and the permission registry
+### ADR-0010 - Entities may import the error hierarchy, the permission registry and the slug rules
 
 Decision: the entity layer's dependency contract forbids every application layer,
 every framework and every vendor SDK, and forbids each ``core`` module except
-``core.errors`` and ``core.permissions``. Both exceptions are conditional on the
-module staying pure: standard library only, no configuration, no I/O, importable
-in a test with no setup. A test asserts that condition, so the carve-out cannot
-widen by accident.
+``core.errors``, ``core.permissions`` and ``core.slug``. All three exceptions are
+conditional on the module staying pure: standard library only, no configuration, no
+I/O, importable in a test with no setup. Tests assert that condition and that the
+list is closed - an entity importing any other ``core`` module fails the build - so
+the carve-out cannot widen by accident.
 
 Reasoning: the preset allows any layer to import cross-cutting core, and the
 scaffold specification's prohibited list for entities is frameworks, ORMs,
@@ -283,13 +284,22 @@ name, or resolves what a role grants, is consulting the domain. The alternative 
 duplicating the registry inside the entity layer - would create two definitions of
 one concept.
 
+``core.slug`` is included for the same reason as ``core.permissions``. A business
+publishes a slug at ``/shop/{slug}`` and a category is addressed by one; if each
+entity owned its own normaliser, one of them would eventually accept an underscore
+and the product would have two answers to "are these the same name". The shared
+module holds the shape and the normaliser, and deliberately not the length bounds:
+a published business slug must be at least three characters, while an internal
+category slug may be two.
+
 The carve-out is written as an explicit list of forbidden ``core`` modules rather
 than as a blanket allowance, so an entity still cannot read configuration, open a
 connection, write a log line or resolve a tenant. Those are the imports that would
 turn a domain object into an application object.
 
 Consequence: adding a new ``core`` module means deciding, on purpose, whether
-entities may import it. The default in the contract file is that they may not.
+entities may import it. The default in the contract file is that they may not, and a
+test enforces the closed list rather than only the named exclusions.
 
 ### ADR-0008 - Server-side media optimization is mandatory and configurable
 

@@ -18,11 +18,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
 
+from ahia.core.slug import MAXIMUM_SLUG_LENGTH, normalize_slug
 from ahia.models.entities.tenant_model import (
-    MAXIMUM_SLUG_LENGTH,
     MINIMUM_SLUG_LENGTH,
     TenantModel,
-    normalize_slug,
     validate_slug,
 )
 

@@ -17,6 +17,7 @@ import pytest
 
 import ahia.models.entities.tenant_model as tenant_model_module
 from ahia.core.errors import EntityInvariantError
+from ahia.core.slug import SLUG_PATTERN, normalize_slug
 from ahia.models.entities.tenant_model import (
     DEFAULT_COUNTRY,
     DEFAULT_CURRENCY,
@@ -24,7 +25,6 @@ from ahia.models.entities.tenant_model import (
     MAXIMUM_SLUG_LENGTH,
     RESERVED_SLUGS,
     TenantModel,
-    normalize_slug,
     validate_slug,
 )
 
@@ -181,7 +181,7 @@ def test_every_reserved_slug_is_valid_in_shape_but_refused() -> None:
 
 def validate_reserved_shape(slug: str) -> bool:
     """Return True when a slug matches the pattern, ignoring the reserved list."""
-    return bool(tenant_model_module.SLUG_PATTERN.match(slug))
+    return bool(SLUG_PATTERN.match(slug))
 
 
 @pytest.mark.unit

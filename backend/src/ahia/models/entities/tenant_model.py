@@ -27,21 +27,17 @@ Money and time are tenant properties
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Final
 from uuid import UUID
 
 from ahia.core.errors import EntityInvariantError
+from ahia.core.slug import MAXIMUM_SLUG_LENGTH, normalize_slug, require_slug_shape
 
-#: Lowercase letters, digits and single hyphens between them. This shape is safe
-#: in a URL path, safe in a subdomain, and cannot be confused with another slug by
-#: removing punctuation.
-SLUG_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-
+#: The minimum length a published business slug must have. Longer than the shared
+#: floor in `core.slug` because this one appears in a URL a customer reads aloud.
 MINIMUM_SLUG_LENGTH: Final[int] = 3
-MAXIMUM_SLUG_LENGTH: Final[int] = 63
 
 #: Names that would collide with infrastructure, with the brand, or with a
 #: plausible future route. Rejecting them here means a person sees "that name is
@@ -113,32 +109,18 @@ DEFAULT_CURRENCY: Final[str] = "NGN"
 DEFAULT_TIMEZONE: Final[str] = "Africa/Lagos"
 
 
-def normalize_slug(value: str) -> str:
-    """Return the canonical slug for a name or a typed slug.
-
-    Lowercases, replaces anything that is not a letter or a digit with a single
-    hyphen, and trims the hyphens from the ends. Doing this here rather than
-    trusting a client means "Obi Electronics" and "obi-electronics" are the same
-    business name rather than two.
-    """
-    lowered = value.strip().lower()
-    hyphenated = re.sub(r"[^a-z0-9]+", "-", lowered)
-    return hyphenated.strip("-")
-
-
 def validate_slug(slug: str) -> None:
     """Raise unless the slug is one this product can publish.
+
+    The shape and the length come from `core.slug`, which every slug in the product
+    uses; the reserved names below are this entity's own rule, because they are about
+    the public storefront namespace rather than about slugs in general.
 
     Shared with the schema layer so the edge and the domain cannot disagree about
     what is acceptable; the schema reports it as a 422 and the domain as an
     invariant violation, which is the difference between a bad request and a bug.
     """
-    if len(slug) < MINIMUM_SLUG_LENGTH or len(slug) > MAXIMUM_SLUG_LENGTH:
-        raise ValueError(
-            f"a slug must be between {MINIMUM_SLUG_LENGTH} and {MAXIMUM_SLUG_LENGTH} characters"
-        )
-    if not SLUG_PATTERN.match(slug):
-        raise ValueError("a slug may contain lowercase letters, digits and single hyphens")
+    require_slug_shape(slug, minimum_length=MINIMUM_SLUG_LENGTH, maximum_length=MAXIMUM_SLUG_LENGTH)
     if slug in RESERVED_SLUGS:
         raise ValueError(f"{slug} is reserved")
 
