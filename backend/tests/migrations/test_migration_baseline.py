@@ -56,6 +56,7 @@ EXPECTED_TABLES = frozenset(
         "tenant_storage_usage",
         "categories",
         "products",
+        "product_images",
     }
 )
 

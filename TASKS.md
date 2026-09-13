@@ -764,9 +764,13 @@ Goal: a business exists as a tenant with a globally unique public slug.
       server-generated key, then persist the metadata and commit the quota in
       one transaction. A client-supplied object key or storage provider is never
       trusted or accepted.
-- [ ] M9.1.10 Provider-neutral image metadata persistence: `storage_provider`,
-      `storage_key`, `mime_type`, `size_bytes`, `width`, `height`, `checksum`,
-      `sort_order`, `is_primary`. No column is named after a provider.
+- [x] M9.1.10 Provider-neutral image metadata persistence: `storage_provider`,
+      `storage_key`, `mime_type`, `size_bytes`, `width`, `height`,
+      `checksum_sha256`, `sort_order`, `is_primary`, plus `removed_at` and
+      `reconciliation_reason` so a failed provider delete stays findable. No column
+      is named after a provider, and an architecture test now asserts that over the
+      whole metadata: no table may have a column containing `r2`, `s3`, `bucket` or
+      the other vendor's name.
 - [ ] M9.1.11 Product image limits: maximum count per product and maximum
       stored bytes per tenant, both configuration-driven, both enforced before
       persistence, with the error naming the limit that was hit.
@@ -786,6 +790,16 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ### M9 - progress log
 
+- M9.1.10 complete, and the schema enforces two rules that a service could otherwise
+  only promise. At most one primary image per product is a partial unique index, so two
+  simultaneous requests cannot produce two covers; and "a removed image is never the
+  primary one" is a check constraint, because the index predicate merely excludes
+  removed rows rather than forbidding the flag on one - which a test discovered when it
+  expected an update to be refused and it was not.
+- The image table has no `(id, tenant_id)` anchor: nothing references an image yet, and
+  a composite key no foreign key uses is complexity bought for a hypothetical. Its
+  product reference *is* composite, so an image in one business cannot point at another
+  business's product.
 - M9.1.6 complete. The catalogue is now reachable end to end: a business can add
   products, edit them, file them under categories, publish them at a public address,
   withdraw them from the storefront and bring them back.

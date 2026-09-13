@@ -23,6 +23,9 @@ from pathlib import Path
 
 import pytest
 
+from ahia.core.database import Base
+from ahia.crud.table_registry import import_all_record_modules
+
 SOURCE_ROOT = Path(__file__).resolve().parents[2] / "src" / "ahia"
 
 #: Provider vocabulary that must not appear outside the boundary.
@@ -128,6 +131,32 @@ def test_storage_factory_is_the_only_selector() -> None:
     assert not selector_occurrences, (
         "provider selection leaked outside the factory and the configuration: "
         + ", ".join(selector_occurrences)
+    )
+
+
+@pytest.mark.architecture
+def test_no_database_column_is_named_after_a_provider() -> None:
+    """The schema records where bytes live without recording who is storing them.
+
+    A column named `r2_key` would make a provider change a migration, and every row
+    written before it would describe its location in terms of a provider that may no
+    longer be the one holding it. `storage_provider` and `storage_key` are the neutral
+    pair; this test is what stops the vendor's name reappearing in a column.
+    """
+    import_all_record_modules()
+
+    forbidden = ("r2", "cloudinary", "s3", "bucket")
+    offenders: list[str] = []
+
+    for table_name, table in sorted(Base.metadata.tables.items()):
+        for column in table.columns:
+            for term in forbidden:
+                if term in column.name.lower():
+                    offenders.append(f"{table_name}.{column.name}")
+
+    assert not offenders, (
+        "a database column is named after a storage provider or a vendor concept:\n  "
+        + "\n  ".join(offenders)
     )
 
 
