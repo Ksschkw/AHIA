@@ -376,9 +376,13 @@ class ProductModel:
     def publish(self, *, public_token: str, at: datetime) -> ProductModel:
         """Return the product published at its public address.
 
-        Idempotent: publishing what is already published keeps the token it has, so a
-        link that was shared still resolves. A product that is not active cannot be
-        published - the storefront would serve something the business stopped selling.
+        Idempotent, and stable across a withdrawal: a product that has been published
+        before keeps the token it already had. A caller publishing a withdrawn product
+        therefore does not have to know whether it had an address - passing a fresh
+        token cannot silently break a link that is already printed on a QR code.
+
+        A product that is not active cannot be published: the storefront would serve
+        something the business stopped selling.
         """
         if not self.is_active:
             raise EntityInvariantError(
@@ -389,7 +393,12 @@ class ProductModel:
             )
         if self.is_published:
             return self
-        return replace(self, is_published=True, public_token=public_token, updated_at=at)
+        return replace(
+            self,
+            is_published=True,
+            public_token=self.public_token or public_token,
+            updated_at=at,
+        )
 
     def unpublish(self, *, at: datetime) -> ProductModel:
         """Return the product withdrawn from the storefront.

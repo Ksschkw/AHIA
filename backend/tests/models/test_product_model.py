@@ -434,6 +434,18 @@ def test_publishing_twice_keeps_the_link_that_was_already_shared() -> None:
 
 
 @pytest.mark.unit
+def test_republishing_a_withdrawn_product_keeps_its_address() -> None:
+    """A link already printed on a QR code must not stop working because of a pause."""
+    published = build_product().publish(public_token="tok_abc", at=LATER)
+    hidden = published.unpublish(at=LATER)
+
+    republished = hidden.publish(public_token="tok_brand_new", at=LATER)
+
+    assert republished.public_token == "tok_abc"
+    assert republished.is_published is True
+
+
+@pytest.mark.unit
 def test_an_inactive_product_cannot_be_published() -> None:
     inactive = build_product().deactivate(at=LATER)
 
