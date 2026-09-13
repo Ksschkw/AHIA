@@ -753,11 +753,15 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - [x] M9.1.6 `product_router.py` and `category_router.py`. Publication has its own
       endpoints rather than a boolean on the update contract, and DELETE withdraws a
       product from sale instead of deleting a row that sales will reference.
-- [ ] M9.1.7 `product_image_model.py`, `product_image_crud.py`,
+- [x] M9.1.7 `product_image_model.py`, `product_image_crud.py`,
       `product_image_schema.py`, `product_image_service.py`,
-      `product_image_router.py`.
-- [ ] M9.1.8 Storage and media capabilities: delivered in M1.11 through M1.17.
-      M9 consumes them through the port; it does not construct a provider.
+      `product_image_router.py`. The upload takes the raw request body rather than a
+      multipart form, which is what a browser `fetch` sends natively and avoids a
+      dependency that would exist only to unpack a form nobody needs.
+- [x] M9.1.8 Storage and media capabilities: delivered in M1.11 through M1.17. M9
+      consumes them through the port and never constructs a provider; the composition
+      root is the only module that knows which adapter is active, and the architecture
+      test over provider vocabulary keeps it that way.
 - [x] M9.1.9 Server-side upload pipeline: authorize `products.update`, resolve the
       product in the tenant, check the per-product limit, decode and optimize through
       the media capability, reserve quota for the *optimized* size, upload through the
@@ -794,6 +798,17 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ### M9 - progress log
 
+- M9.1.7 and M9.1.8 complete. The upload endpoint takes the raw body: a browser sends a
+  file that way natively, and multipart would exist only to carry a filename that is
+  never used - the object key is built from server-side identifiers. The body is read
+  with a ceiling *as it streams*, so an oversized upload is stopped while it arrives
+  rather than after the server has already buffered it.
+- A trap worth recording, because it cost time and will cost it again: `Settings` uses
+  `extra="ignore"`, so a misspelled field name in a test's overrides is silently
+  dropped. A limit test written with `max_images_per_product` (a `StorageLimits` field
+  name) instead of `max_product_images_per_product` (the `Settings` field name) passed
+  its setup and then never applied a limit. The override now names the real field, and
+  the comment in that test file says why.
 - M9.1.12 and M9.1.11 complete. Quota is released only when the provider confirms the
   object is gone; a failed delete keeps the bytes committed and the row marked, because
   releasing quota for storage that still exists would understate usage and let it grow
