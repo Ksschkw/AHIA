@@ -23,6 +23,12 @@ Money and time are tenant properties
     Currency and timezone are set from the market at creation and are not free
     text. A business in Lagos records naira in Africa/Lagos; a report that mixed
     conventions would be wrong in a way nobody notices until a month-end.
+
+Stock policy is a tenant property too
+    Whether stock may go negative is a business decision, not a global setting: a shop
+    that orders to demand and one that keeps a shelf full need different answers. The
+    policy is stored here, so a business changes it once and every stock movement in
+    that business obeys it. See `negative_stock_policy`.
 """
 
 from __future__ import annotations
@@ -34,6 +40,10 @@ from uuid import UUID
 
 from ahia.core.errors import EntityInvariantError
 from ahia.core.slug import MAXIMUM_SLUG_LENGTH, normalize_slug, require_slug_shape
+from ahia.models.entities.negative_stock_policy import (
+    DEFAULT_NEGATIVE_STOCK_POLICY,
+    NegativeStockPolicy,
+)
 
 #: The minimum length a published business slug must have. Longer than the shared
 #: floor in `core.slug` because this one appears in a URL a customer reads aloud.
@@ -144,6 +154,7 @@ class TenantModel:
     country: str = DEFAULT_COUNTRY
     currency: str = DEFAULT_CURRENCY
     timezone: str = DEFAULT_TIMEZONE
+    negative_stock_policy: NegativeStockPolicy = DEFAULT_NEGATIVE_STOCK_POLICY
 
     def __post_init__(self) -> None:
         _require_aware(self.created_at, field_name="created_at", tenant_id=self.id)
@@ -203,6 +214,18 @@ class TenantModel:
                 identifier=str(self.id),
                 detail="timezone is required",
             )
+        if not isinstance(self.negative_stock_policy, NegativeStockPolicy):
+            # Stored as text in the database, so a value that no longer matches an enum
+            # member must fail loudly here rather than silently becoming the default.
+            raise EntityInvariantError(
+                operation="build_tenant",
+                entity="tenant",
+                identifier=str(self.id),
+                detail=(
+                    "negative_stock_policy must be a NegativeStockPolicy, not "
+                    f"{type(self.negative_stock_policy).__name__}"
+                ),
+            )
 
         if self.email is not None and len(self.email) > _MAXIMUM_EMAIL_LENGTH:
             raise EntityInvariantError(
@@ -248,6 +271,7 @@ class TenantModel:
         country: str = DEFAULT_COUNTRY,
         currency: str = DEFAULT_CURRENCY,
         timezone: str = DEFAULT_TIMEZONE,
+        negative_stock_policy: NegativeStockPolicy = DEFAULT_NEGATIVE_STOCK_POLICY,
     ) -> TenantModel:
         """Create a business, canonicalising the slug and the contact fields."""
         return cls(
@@ -264,6 +288,7 @@ class TenantModel:
             currency=currency.upper(),
             timezone=timezone.strip(),
             is_active=True,
+            negative_stock_policy=negative_stock_policy,
             created_at=now,
             updated_at=now,
         )
@@ -321,6 +346,18 @@ class TenantModel:
             state=state.strip() if state else self.state,
             updated_at=at,
         )
+
+    def with_negative_stock_policy(
+        self, *, policy: NegativeStockPolicy, at: datetime
+    ) -> TenantModel:
+        """Return the business with a different rule about stock going negative.
+
+        A deliberate operation rather than a profile field: a business that starts
+        permitting negative stock is changing what its own numbers mean, and the change
+        should be visible as its own act in a log rather than inside a form submission
+        that also fixed a phone number.
+        """
+        return replace(self, negative_stock_policy=policy, updated_at=at)
 
     def deactivate(self, *, at: datetime) -> TenantModel:
         """Return the business deactivated.
