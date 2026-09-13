@@ -978,6 +978,27 @@ put the error handler outside them, and a locally written phone number did not
 resolve to the same account as its international form, which is now canonicalised
 through a configured country code.
 
+**M4 - Tenant slice (7 micro-milestones).** Businesses: an entity whose public slug
+cannot change, contracts that reject a slug edit outright, persistence with a
+globally unique slug, a service whose creation writes the business and its owner
+membership in one transaction, and endpoints under `/api/v1/tenants`. Tenant
+context resolution landed here: the path identifier is a selection hint, membership
+is the evidence, and a caller with no membership receives the same 404 a stranger
+receives, so identifiers cannot be probed. 15 end-to-end tests.
+
+**M5 - Membership and staff administration (6 micro-milestones).** The membership
+entity with its lifecycle as declared data, an invitation entity whose token is
+stored only as a digest, and the staff use cases: invite, list, change role,
+suspend, reactivate, remove, plus acceptance for the invited person. The last-owner
+rule is enforced in the service and proven at its boundary. 16 end-to-end tests
+covering the whole onboarding journey and every way it must fail.
+
+Ordering note, recorded rather than hidden: M5's entity and persistence were built
+before M4's service, because a business created without its owner membership would
+be unreachable, and the product's own first-run journey requires both in one
+transaction. The task numbers are identifiers; the dependency direction is what the
+work has to respect.
+
 ## Cross-milestone obligations
 
 These apply continuously and are re-verified at each milestone boundary.

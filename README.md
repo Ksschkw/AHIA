@@ -118,11 +118,12 @@ with one command.
 
 ## Current status
 
-Milestones M0 (repository and tooling), M1 (core cross-cutting infrastructure),
-M2 (the User vertical slice) and M3 (authentication and sessions) are complete and
-committed. 757 tests pass, the nine-stage build gate is green, and the service
-serves a real flow: create an account, sign in, read and change your own profile,
-refresh, sign out, and change your password.
+Milestones M0 through M5 are complete and committed: repository and tooling, core
+cross-cutting infrastructure, the User vertical slice, authentication and sessions,
+tenants, and staff administration. 850 tests pass, the nine-stage build gate is
+green, and the service serves a real flow: create an account, sign in, create a
+business, invite a worker, and have that worker accept the invitation and arrive
+inside the business with the role they were given.
 
 Delivered beyond the core: a provider-neutral storage capability with both
 Cloudflare R2 and Cloudinary adapters selectable by configuration, mandatory
@@ -131,6 +132,6 @@ that is safe under concurrent uploads, and authentication whose failures are
 indistinguishable across an unknown account, a wrong password and a deactivated
 account.
 
-Next is M4 (tenant), then membership, roles and permissions, devices and the
+Next is M6 (roles and permissions as data, custom roles), then devices and the
 migration baseline, before the operational domain (catalog, inventory, customers,
 sales, sync, storefront). Progress is tracked in `TASKS.md`.
