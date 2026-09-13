@@ -169,7 +169,7 @@ lint error and a failing test. CI runs the same command.
 
 ### M0.5 Architecture enforcement
 
-- [ ] M0.5.1 `backend/import-linter.ini`: layered contracts for entities,
+- [x] M0.5.1 `backend/import-linter.ini`: layered contracts for entities,
       schemas, crud, services, routers, core, middleware and integrations,
       forbidding every outward import listed in the scaffold specification.
 - [ ] M0.5.2 `backend/tests/architecture/test_layer_contracts.py`: runs the
