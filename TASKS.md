@@ -409,20 +409,20 @@ server-side and configuration-driven, not provider features.
 
 ### M1.12 Media processing capability
 
-- [ ] M1.12.1 `core/ports/media_port.py`: the provider-neutral processing
+- [x] M1.12.1 `core/ports/media_port.py`: the provider-neutral processing
       capability - inspect and optimize - returning the processed bytes, the
       detected MIME type, the final dimensions, the byte size and a checksum.
-- [ ] M1.12.2 `integrations/media/image_processor.py`: server-side validation
+- [x] M1.12.2 `integrations/media/image_processor.py`: server-side validation
       and optimization. Rejects a content type outside the allowlist, rejects a
       declared type that does not match the decoded image, rejects an oversized
       byte length, rejects a decompression bomb, resizes images larger than the
       configured maximum without ever upscaling, re-encodes to the configured
       target format at the configured quality, and strips EXIF, GPS and device
       metadata.
-- [ ] M1.12.3 Startup validation that the configured target encoder is actually
+- [x] M1.12.3 Startup validation that the configured target encoder is actually
       available in the runtime. A configuration that cannot be honoured fails
       loudly rather than silently producing a different format.
-- [ ] M1.12.4 Tests: oversized bytes rejected, oversized dimensions resized to
+- [x] M1.12.4 Tests: oversized bytes rejected, oversized dimensions resized to
       the configured bound with the aspect ratio preserved, small images never
       upscaled, disallowed content types rejected, a file whose bytes disagree
       with its declared type rejected, metadata absent from the output, output
