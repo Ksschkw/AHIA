@@ -53,6 +53,14 @@ paths = [
 ]
 
 [[allowlists]]
+name = "workspace-tooling-and-hook-caches"
+description = "The .tools directory holds the checksum-verified scanner binary and the pre-commit hook environments. It is gitignored in full, so nothing in it can be committed, and the hook environments ship third-party test fixtures that deliberately contain fake private keys and example API keys. Scanning them produces findings that can never become a leaked credential while training people to ignore the scanner."
+paths = [
+  '''\.tools/.*''',
+  '''backend/\.venv/.*''',
+]
+
+[[allowlists]]
 name = "guard-rule-definitions"
 description = "The developer guards and the gitleaks configuration itself must name the patterns they reject, including the literal words 'password', 'secret' and 'token'."
 paths = [
