@@ -8,6 +8,12 @@ value this server refuses, or worse, one it rounds. A string is exact on both si
 Accepting a number is a concession to how most clients are written, and it is parsed
 through the value's own decimal text rather than its binary value.
 
+The response fields are declared `str`, not `Decimal`, and that is deliberate. Annotating
+them `Decimal` reads better and is wrong: FastAPI's encoder turns a Decimal into a JSON
+*number*, which is precisely what this contract forbids, and the OpenAPI schema would
+advertise a number as well. A declared string cannot be encoded into a float by
+accident, and the conversion is explicit and tested.
+
 **What a client may not send.** The slug (derived from the name), the tenant (from the
 authorized context), the public token (issued when a product is published), and the two
 lifecycle booleans: publishing and deactivating are explicit operations, because a
@@ -35,6 +41,8 @@ from ahia.models.entities.product_model import (
     MAXIMUM_DESCRIPTION_LENGTH,
     MAXIMUM_IDENTIFIER_LENGTH,
     MAXIMUM_NAME_LENGTH,
+    MONEY_PLACES,
+    QUANTITY_PLACES,
     ProductModel,
     coerce_money,
     coerce_quantity,
@@ -72,6 +80,21 @@ Money = Annotated[Decimal, BeforeValidator(_parse_money)]
 #: A stock quantity: at most three decimal places, because stock is counted in kilos
 #: and litres as well as in units.
 Quantity = Annotated[Decimal, BeforeValidator(_parse_quantity)]
+
+
+def money_text(value: Decimal) -> str:
+    """Render a price exactly as it is stored, for the wire.
+
+    Quantised to two places so `250` and `250.00` reach a client identically - the entity
+    accepts both from a caller, and the column stores two places, so a response that
+    echoed the shorter form would disagree with the next read.
+    """
+    return format(value.quantize(MONEY_PLACES), "f")
+
+
+def quantity_text(value: Decimal) -> str:
+    """Render a stock quantity exactly as it is stored, for the wire."""
+    return format(value.quantize(QUANTITY_PLACES), "f")
 
 
 class ProductCreateSchema(BaseModel):
@@ -146,9 +169,9 @@ class ProductResponseSchema(BaseModel):
     description: str | None
     sku: str | None
     barcode: str | None
-    selling_price: Decimal
-    cost_price: Decimal | None
-    low_stock_threshold: Decimal
+    selling_price: str
+    cost_price: str | None
+    low_stock_threshold: str
     is_active: bool
     is_published: bool
     is_visible_to_customers: bool
@@ -167,9 +190,9 @@ class ProductResponseSchema(BaseModel):
             description=product.description,
             sku=product.sku,
             barcode=product.barcode,
-            selling_price=product.selling_price,
-            cost_price=product.cost_price,
-            low_stock_threshold=product.low_stock_threshold,
+            selling_price=money_text(product.selling_price),
+            cost_price=(None if product.cost_price is None else money_text(product.cost_price)),
+            low_stock_threshold=quantity_text(product.low_stock_threshold),
             is_active=product.is_active,
             is_published=product.is_published,
             is_visible_to_customers=product.is_visible_to_customers(),
