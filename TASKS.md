@@ -465,13 +465,13 @@ server-side and configuration-driven, not provider features.
 
 ### M1.15 Storage factory and composition wiring
 
-- [ ] M1.15.1 `integrations/storage/storage_factory.py`: builds the adapter for
+- [x] M1.15.1 `integrations/storage/storage_factory.py`: builds the adapter for
       the configured provider. The selection is the only place in the codebase
       that branches on the provider value.
-- [ ] M1.15.2 Composition root wiring: the storage capability, the media
+- [x] M1.15.2 Composition root wiring: the storage capability, the media
       processing capability and their resilience policies are constructed once
       and injected where needed.
-- [ ] M1.15.3 Tests: switching `STORAGE_PROVIDER` returns a different adapter
+- [x] M1.15.3 Tests: switching `STORAGE_PROVIDER` returns a different adapter
       type with no change to any service, the factory rejects an unknown
       provider, and no service module imports a provider adapter (asserted by
       the architecture contracts, not by convention).

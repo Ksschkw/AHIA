@@ -128,6 +128,12 @@ ignore = [
 # applies only to those two files.
 "src/ahia/integrations/storage/r2_client.py" = ["N803"]
 "tests/integrations/test_r2_storage.py" = ["N803"]
+"tests/integrations/test_storage_contract.py" = ["N803"]
+
+# The storage factory imports a vendor SDK inside the branch that selects it,
+# so a deployment never loads a provider library it is not using. The deferred
+# import is the point, not an oversight.
+"src/ahia/integrations/storage/storage_factory.py" = ["PLC0415"]
 
 # The developer guards are command-line tools. Plain stdout status lines are
 # their contract; the structured logger is for the application, not for a script

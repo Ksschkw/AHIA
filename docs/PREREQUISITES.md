@@ -279,8 +279,6 @@ Cloudflare R2 (active when `STORAGE_PROVIDER=r2`):
 | `R2_REGION` | D | `auto` | R2 convention |
 | `R2_PUBLIC_BASE_URL` | D | empty | only for intentionally public assets |
 | `R2_REQUEST_TIMEOUT_SECONDS` | D | `10` | outbound call timeout |
-| `R2_CIRCUIT_FAILURE_THRESHOLD` | D | `5` | breaker trips after N consecutive failures |
-| `R2_CIRCUIT_RESET_SECONDS` | D | `60` | open-state duration before a probe |
 
 Cloudinary (active when `STORAGE_PROVIDER=cloudinary`):
 
@@ -292,6 +290,17 @@ Cloudinary (active when `STORAGE_PROVIDER=cloudinary`):
 | `CLOUDINARY_UPLOAD_FOLDER` | D | `ahia` | prefix applied to every public ID |
 | `CLOUDINARY_SECURE_DELIVERY` | D | `true` | HTTPS delivery URLs only |
 | `CLOUDINARY_REQUEST_TIMEOUT_SECONDS` | D | `15` | outbound call timeout |
+
+Storage resilience policy. One set applies to whichever provider is active,
+because a circuit breaker belongs to the dependency and switching providers must
+not silently change how forgiving the outbound boundary is.
+
+| Variable | Req | Default | Notes |
+|---|---|---|---|
+| `STORAGE_MAX_CONCURRENT_CALLS` | D | `8` | bulkhead limit per provider |
+| `STORAGE_RETRY_MAX_ATTEMPTS` | D | `3` | bounded retry for idempotent operations only |
+| `STORAGE_CIRCUIT_FAILURE_THRESHOLD` | D | `5` | breaker trips after N consecutive failures |
+| `STORAGE_CIRCUIT_RESET_SECONDS` | D | `60` | open-state duration before a probe |
 
 Operational note: the R2 free allowance is not a billing cap. AHIA enforces its
 own upload limits and per-tenant quota, because a provider will happily serve

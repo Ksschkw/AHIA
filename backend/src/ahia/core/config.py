@@ -241,8 +241,6 @@ class R2Configuration:
     region: str
     public_base_url: str | None
     request_timeout_seconds: float
-    circuit_failure_threshold: int
-    circuit_reset_seconds: float
 
     def describe(self) -> dict[str, str]:
         """Return non-secret fields for logs and diagnostics."""
@@ -379,8 +377,16 @@ class Settings(BaseSettings):
     r2_region: str = "auto"
     r2_public_base_url: str | None = None
     r2_request_timeout_seconds: float = Field(default=10.0, gt=0, le=120)
-    r2_circuit_failure_threshold: int = Field(default=5, ge=1, le=100)
-    r2_circuit_reset_seconds: float = Field(default=60.0, gt=0, le=3_600)
+
+    # -- Storage resilience policy (one set, applied per provider) ---------
+    #
+    # These belong to the dependency, not to a provider: a breaker is per
+    # dependency, and swapping the active provider must not silently change how
+    # forgiving the boundary is.
+    storage_max_concurrent_calls: int = Field(default=8, ge=1, le=200)
+    storage_retry_max_attempts: int = Field(default=3, ge=1, le=10)
+    storage_circuit_failure_threshold: int = Field(default=5, ge=1, le=100)
+    storage_circuit_reset_seconds: float = Field(default=60.0, gt=0, le=3_600)
 
     # -- Cloudinary (required only when it is the active provider) ---------
     cloudinary_cloud_name: str | None = None
@@ -604,8 +610,6 @@ class Settings(BaseSettings):
             region=self.r2_region,
             public_base_url=self.r2_public_base_url or None,
             request_timeout_seconds=self.r2_request_timeout_seconds,
-            circuit_failure_threshold=self.r2_circuit_failure_threshold,
-            circuit_reset_seconds=self.r2_circuit_reset_seconds,
         )
 
     def cloudinary_configuration(self) -> CloudinaryConfiguration:
