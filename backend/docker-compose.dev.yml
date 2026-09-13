@@ -1,0 +1,48 @@
+# Local PostgreSQL for development, for a developer who prefers a container to a
+# system database.
+#
+#   docker compose -f backend/docker-compose.dev.yml up -d
+#   DATABASE_URL=postgresql+asyncpg://ahia:ahia_local_dev@127.0.0.1:5433/ahia_dev make migrate
+#
+# Port note: the host port is 5433 by default, not 5432, because a developer may
+# already be running a system PostgreSQL on the default port. Override with
+# POSTGRES_PORT when 5433 is taken.
+#
+# This file is for local development only. Deployed environments use a managed
+# PostgreSQL provider; nothing here is a deployment artifact.
+
+name: ahia-dev
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: ahia-dev-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ahia
+      POSTGRES_PASSWORD: ahia_local_dev
+      POSTGRES_DB: ahia_dev
+      # Deterministic collation so ordering in tests matches CI and production.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - ahia-postgres-data:/var/lib/postgresql/data
+      - ./docker/init-dev-databases.sql:/docker-entrypoint-initdb.d/10-init-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ahia -d ahia_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    command:
+      # Development tuning only. Production sizing belongs to the provider.
+      - "postgres"
+      - "-c"
+      - "max_connections=100"
+      - "-c"
+      - "log_min_duration_statement=500"
+
+volumes:
+  ahia-postgres-data:
+    name: ahia-postgres-data
