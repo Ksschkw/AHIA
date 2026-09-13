@@ -19,7 +19,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
 from ahia.core.config import AppEnvironment, Settings, StorageProviderName
-from ahia.core.database import Database
+from ahia.core.database import Base, Database
 from ahia.crud import session_crud, tenant_membership_crud
 from ahia.crud.device_crud import DeviceRecord
 from ahia.crud.session_crud import SessionRecord
@@ -71,14 +71,16 @@ def build_settings(**overrides: Any) -> Settings:
 async def database() -> AsyncIterator[Database]:
     instance = Database(build_settings())
     async with instance.engine.begin() as connection:
-        for record in TABLE_RECORDS:
-            await connection.run_sync(
-                lambda sync_connection, table=record.__table__: table.create(
-                    sync_connection, checkfirst=True
-                )
-            )
+        # The whole schema, created from the models. A table's foreign keys require
+        # the tables they reference to exist first, and creating everything in
+        # dependency order is exactly what create_all does.
+        await connection.run_sync(
+            lambda sync_connection: Base.metadata.create_all(sync_connection, checkfirst=True)
+        )
         await connection.execute(
-            text("TRUNCATE TABLE devices, tenant_memberships, tenants, user_sessions, users")
+            text(
+                "TRUNCATE TABLE devices, tenant_memberships, tenants, user_sessions, users CASCADE"
+            )
         )
     try:
         yield instance

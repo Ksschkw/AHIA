@@ -8,16 +8,17 @@ invited and an invitee seeing what is waiting for them.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Final
+from typing import Final
 from uuid import UUID
 
-from sqlalchemy import DateTime, String, or_, select
+from sqlalchemy import DateTime, ForeignKey, String, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ahia.core.database import Base
-from ahia.core.errors import ConflictError, NotFoundError
+from ahia.core.errors import NotFoundError
+from ahia.crud.integrity_violations import translate_integrity_violation
 from ahia.models.entities.membership_invitation_model import MembershipInvitationModel
 
 _TABLE_NAME: Final[str] = "membership_invitations"
@@ -33,7 +34,7 @@ class MembershipInvitationRecord(Base):
     __tablename__ = _TABLE_NAME
 
     id: Mapped[UUID] = mapped_column(primary_key=True)
-    tenant_id: Mapped[UUID] = mapped_column(nullable=False, index=True)
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     role_name: Mapped[str] = mapped_column(String(_ROLE_NAME_LENGTH), nullable=False)
     token_hash: Mapped[str] = mapped_column(
         String(_TOKEN_HASH_LENGTH), nullable=False, unique=True, index=True
@@ -46,9 +47,9 @@ class MembershipInvitationRecord(Base):
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    created_by_user_id: Mapped[UUID] = mapped_column(nullable=False)
+    created_by_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    accepted_by_user_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    accepted_by_user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
@@ -93,12 +94,13 @@ async def create(
         await session.flush()
     except IntegrityError as conflict:
         await session.rollback()
-        raise ConflictError(
+        raise translate_integrity_violation(
+            conflict,
             operation="create_invitation",
             entity="membership_invitation",
             identifier=str(invitation.id),
-            detail=f"the invitation token collides: {_constraint_name(conflict)}",
-            cause=conflict,
+            conflict_detail="the invitation token collides",
+            missing_detail="the business or person this invitation names does not exist",
         ) from conflict
     return to_entity(record)
 
@@ -178,19 +180,3 @@ async def update(
     apply_entity(record, invitation)
     await session.flush()
     return to_entity(record)
-
-
-def _constraint_name(conflict: IntegrityError) -> str:
-    """Extract the violated index name for the internal detail. Never published."""
-    original: Any = getattr(conflict, "orig", None)
-    for candidate in (original, getattr(original, "__cause__", None)):
-        if candidate is None:
-            continue
-        direct = getattr(candidate, "constraint_name", None)
-        if direct:
-            return str(direct)
-        diagnostic = getattr(candidate, "diag", None)
-        named = getattr(diagnostic, "constraint_name", None)
-        if named:
-            return str(named)
-    return type(original).__name__ if original is not None else "unknown-constraint"

@@ -18,7 +18,7 @@ import pytest
 from sqlalchemy import text
 
 from ahia.core.config import AppEnvironment, Settings, StorageProviderName
-from ahia.core.database import Database
+from ahia.core.database import Base, Database
 from ahia.core.errors import AuthorizationError, ConflictError, DomainError, NotFoundError
 from ahia.core.permissions.permissions_registry import (
     ALL_PERMISSIONS,
@@ -27,11 +27,9 @@ from ahia.core.permissions.permissions_registry import (
     permission_codes_for_role,
 )
 from ahia.core.tenant_context import build_tenant_context
-from ahia.crud import permission_crud, role_crud, role_permission_crud
-from ahia.crud.permission_crud import PermissionRecord
-from ahia.crud.role_crud import RoleRecord
-from ahia.crud.role_permission_crud import RolePermissionRecord
+from ahia.crud import permission_crud, role_crud, role_permission_crud, tenant_crud
 from ahia.models.entities.role_model import RoleModel
+from ahia.models.entities.tenant_model import TenantModel
 from ahia.services.iam_seed_service import IamSeedService
 from ahia.services.permission_service import PermissionService
 
@@ -59,17 +57,47 @@ def build_settings() -> Settings:
 async def database() -> AsyncIterator[Database]:
     instance = Database(build_settings())
     async with instance.engine.begin() as connection:
-        for record in (RoleRecord, PermissionRecord, RolePermissionRecord):
-            await connection.run_sync(
-                lambda sync_connection, table=record.__table__: table.create(
-                    sync_connection, checkfirst=True
-                )
-            )
-        await connection.execute(text("TRUNCATE TABLE role_permissions, roles, permissions"))
+        # The whole schema, created from the models. A table's foreign keys require
+        # the tables they reference to exist first, and creating everything in
+        # dependency order is exactly what create_all does.
+        await connection.run_sync(
+            lambda sync_connection: Base.metadata.create_all(sync_connection, checkfirst=True)
+        )
+        await connection.execute(
+            text("TRUNCATE TABLE role_permissions, roles, permissions CASCADE")
+        )
     try:
         yield instance
     finally:
         await instance.dispose()
+
+
+async def insert_tenant(database: Database, tenant_id: UUID) -> None:
+    """Create the business a custom role will belong to.
+
+    A custom role carries a foreign key to the business that owns it, because a role
+    named SUPERVISOR in one business is a different role from SUPERVISOR in another.
+    A test that invents a tenant identifier therefore has to create the business
+    first, which is the order a real caller follows.
+    """
+    async with database.transaction_scope() as unit_of_work:
+        await tenant_crud.create(
+            unit_of_work.session_handle,
+            TenantModel.create(
+                tenant_id=tenant_id,
+                name=f"Tenant {tenant_id.hex[:6]}",
+                slug=f"tenant-{tenant_id.hex[:8]}",
+                now=datetime.now(UTC),
+            ),
+        )
+        await unit_of_work.commit()
+
+
+@pytest.fixture
+async def tenant_id(database: Database) -> UUID:
+    identifier = uuid4()
+    await insert_tenant(database, identifier)
+    return identifier
 
 
 @pytest.fixture
@@ -275,10 +303,9 @@ async def test_a_tenant_role_may_not_take_a_system_role_name(
 
 @pytest.mark.integration
 async def test_a_business_can_create_its_own_role(
-    seed_service: IamSeedService, permission_service: PermissionService
+    seed_service: IamSeedService, permission_service: PermissionService, tenant_id: UUID
 ) -> None:
     await seed_service.install_registry()
-    tenant_id = uuid4()
 
     view = await permission_service.create_custom_role(
         build_owner_context(tenant_id),
@@ -299,12 +326,16 @@ async def test_a_business_can_create_its_own_role(
 
 @pytest.mark.integration
 async def test_a_custom_role_is_invisible_to_another_business(
-    seed_service: IamSeedService, permission_service: PermissionService
+    database: Database,
+    seed_service: IamSeedService,
+    permission_service: PermissionService,
+    tenant_id: UUID,
 ) -> None:
     """Cross-tenant isolation for roles, not only for records."""
     await seed_service.install_registry()
-    first_tenant = uuid4()
+    first_tenant = tenant_id
     second_tenant = uuid4()
+    await insert_tenant(database, second_tenant)
 
     await permission_service.create_custom_role(
         build_owner_context(first_tenant),
@@ -395,10 +426,9 @@ async def test_a_custom_role_cannot_shadow_a_system_role_name(
 
 @pytest.mark.integration
 async def test_updating_a_businesss_own_role_replaces_its_permissions(
-    seed_service: IamSeedService, permission_service: PermissionService
+    seed_service: IamSeedService, permission_service: PermissionService, tenant_id: UUID
 ) -> None:
     await seed_service.install_registry()
-    tenant_id = uuid4()
     owner_context = build_owner_context(tenant_id)
     await permission_service.create_custom_role(
         owner_context,
@@ -452,10 +482,9 @@ async def test_the_catalogue_is_readable_by_a_salesperson(
 
 @pytest.mark.integration
 async def test_the_catalogue_lists_a_businesss_own_roles_too(
-    seed_service: IamSeedService, permission_service: PermissionService
+    seed_service: IamSeedService, permission_service: PermissionService, tenant_id: UUID
 ) -> None:
     await seed_service.install_registry()
-    tenant_id = uuid4()
     owner_context = build_owner_context(tenant_id)
     await permission_service.create_custom_role(
         owner_context,

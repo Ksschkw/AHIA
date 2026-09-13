@@ -11,16 +11,17 @@ is how a returning client is recognised as itself rather than as a new device.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Final
+from typing import Final
 from uuid import UUID
 
-from sqlalchemy import DateTime, Index, String, select
+from sqlalchemy import DateTime, ForeignKey, Index, String, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ahia.core.database import Base
-from ahia.core.errors import ConflictError, NotFoundError
+from ahia.core.errors import NotFoundError
+from ahia.crud.integrity_violations import translate_integrity_violation
 from ahia.models.entities.device_model import DeviceModel
 
 _TABLE_NAME: Final[str] = "devices"
@@ -36,8 +37,8 @@ class DeviceRecord(Base):
     __tablename__ = _TABLE_NAME
 
     id: Mapped[UUID] = mapped_column(primary_key=True)
-    tenant_id: Mapped[UUID] = mapped_column(nullable=False, index=True)
-    user_id: Mapped[UUID] = mapped_column(nullable=False, index=True)
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     device_identifier: Mapped[str] = mapped_column(String(_IDENTIFIER_LENGTH), nullable=False)
     device_name: Mapped[str | None] = mapped_column(String(_NAME_LENGTH), nullable=True)
     platform: Mapped[str] = mapped_column(String(_PLATFORM_LENGTH), nullable=False)
@@ -88,12 +89,13 @@ async def create(session: AsyncSession, device: DeviceModel) -> DeviceModel:
         await session.flush()
     except IntegrityError as conflict:
         await session.rollback()
-        raise ConflictError(
+        raise translate_integrity_violation(
+            conflict,
             operation="create_device",
             entity="device",
             identifier=str(device.id),
-            detail=f"this installation is already registered: {_constraint_name(conflict)}",
-            cause=conflict,
+            conflict_detail="this installation is already registered",
+            missing_detail="the business or person this device belongs to does not exist",
         ) from conflict
     return to_entity(record)
 
@@ -157,18 +159,3 @@ async def update(session: AsyncSession, device: DeviceModel) -> DeviceModel:
     apply_entity(record, device)
     await session.flush()
     return to_entity(record)
-
-
-def _constraint_name(conflict: IntegrityError) -> str:
-    original: Any = getattr(conflict, "orig", None)
-    for candidate in (original, getattr(original, "__cause__", None)):
-        if candidate is None:
-            continue
-        direct = getattr(candidate, "constraint_name", None)
-        if direct:
-            return str(direct)
-        diagnostic = getattr(candidate, "diag", None)
-        named = getattr(diagnostic, "constraint_name", None)
-        if named:
-            return str(named)
-    return type(original).__name__ if original is not None else "unknown-constraint"

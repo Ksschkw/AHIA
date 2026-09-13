@@ -10,17 +10,17 @@ from __future__ import annotations
 import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import text
 
 from ahia.core.config import AppEnvironment, Settings, StorageProviderName
-from ahia.core.database import Database
+from ahia.core.database import Base, Database
 from ahia.core.errors import EntityInvariantError, NotFoundError
-from ahia.crud import session_crud
-from ahia.crud.session_crud import SessionRecord
+from ahia.crud import session_crud, user_crud
 from ahia.models.entities.session_model import SessionModel
+from ahia.models.entities.user_model import UserModel
 
 DEFAULT_TEST_DATABASE_URL = (
     "postgresql+asyncpg://ksschkw:ahia_local_dev_only@127.0.0.1:5432/ahia_test"
@@ -59,14 +59,38 @@ def build_session(**overrides: Any) -> SessionModel:
 async def database() -> Any:
     instance = Database(build_settings())
     async with instance.engine.begin() as connection:
+        # The whole schema, created from the models. A table's foreign keys require
+        # the tables they reference to exist first, and creating everything in
+        # dependency order is exactly what create_all does.
         await connection.run_sync(
-            lambda sync_connection: SessionRecord.__table__.create(sync_connection, checkfirst=True)
+            lambda sync_connection: Base.metadata.create_all(sync_connection, checkfirst=True)
         )
-        await connection.execute(text("TRUNCATE TABLE user_sessions"))
+        await connection.execute(text("TRUNCATE TABLE user_sessions CASCADE"))
     try:
         yield instance
     finally:
         await instance.dispose()
+
+
+async def insert_user(database: Database, user_id: UUID) -> None:
+    """Create the person a session row will reference.
+
+    A session belongs to a user, so a test that invents a user identifier has to
+    create the user first - the order a real caller follows, because nobody holds a
+    session before they exist.
+    """
+    async with database.transaction_scope() as unit_of_work:
+        await user_crud.create(
+            unit_of_work.session_handle,
+            UserModel.create(
+                user_id=user_id,
+                first_name="Emeka",
+                last_name="Okonkwo",
+                email=f"emeka.{user_id.hex[:8]}@example.com",
+                now=NOW,
+            ),
+        )
+        await unit_of_work.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -208,6 +232,7 @@ def test_audit_description_carries_no_token_material() -> None:
 @pytest.mark.integration
 async def test_create_and_look_up_by_token_hash(database: Database) -> None:
     session = build_session(refresh_token_hash="b" * 64)
+    await insert_user(database, session.user_id)
 
     async with database.transaction_scope() as unit_of_work:
         created = await session_crud.create(unit_of_work.session_handle, session)
@@ -227,6 +252,7 @@ async def test_create_and_look_up_by_token_hash(database: Database) -> None:
 async def test_a_revoked_session_is_still_found_by_its_digest(database: Database) -> None:
     """The reuse detector needs the row, so filtering it out would hide a theft."""
     session = build_session(refresh_token_hash="d" * 64)
+    await insert_user(database, session.user_id)
     rotated = session.rotate(replacement_session_id=uuid4(), at=NOW + timedelta(days=1))
 
     async with database.transaction_scope() as unit_of_work:
@@ -243,6 +269,7 @@ async def test_a_revoked_session_is_still_found_by_its_digest(database: Database
 @pytest.mark.integration
 async def test_lookup_for_update_returns_the_session(database: Database) -> None:
     session = build_session(refresh_token_hash="e" * 64)
+    await insert_user(database, session.user_id)
 
     async with database.transaction_scope() as unit_of_work:
         await session_crud.create(unit_of_work.session_handle, session)
@@ -275,6 +302,8 @@ async def test_revoke_all_spares_the_named_session(database: Database) -> None:
     kept = build_session(user_id=user_id, refresh_token_hash="f" * 64)
     other = build_session(user_id=user_id, refresh_token_hash="g" * 64)
     unrelated = build_session(refresh_token_hash="h" * 64)
+    await insert_user(database, user_id)
+    await insert_user(database, unrelated.user_id)
 
     async with database.transaction_scope() as unit_of_work:
         session = unit_of_work.session_handle
@@ -318,6 +347,7 @@ async def test_listing_active_sessions_excludes_revoked_and_expired(database: Da
         refresh_token_hash="k" * 64,
         expires_at=NOW + timedelta(hours=1),
     )
+    await insert_user(database, user_id)
 
     async with database.transaction_scope() as unit_of_work:
         session = unit_of_work.session_handle
@@ -337,6 +367,8 @@ async def test_listing_active_sessions_excludes_revoked_and_expired(database: Da
 async def test_expired_sessions_can_be_pruned(database: Database) -> None:
     expired = build_session(refresh_token_hash="l" * 64, expires_at=NOW + timedelta(days=1))
     live = build_session(refresh_token_hash="m" * 64, expires_at=NOW + timedelta(days=60))
+    await insert_user(database, expired.user_id)
+    await insert_user(database, live.user_id)
 
     async with database.transaction_scope() as unit_of_work:
         session = unit_of_work.session_handle

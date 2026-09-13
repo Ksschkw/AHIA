@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import ForeignKey, delete, func, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
@@ -26,8 +26,10 @@ class RolePermissionRecord(Base):
 
     __tablename__ = _TABLE_NAME
 
-    role_id: Mapped[UUID] = mapped_column(primary_key=True, index=True)
-    permission_id: Mapped[UUID] = mapped_column(primary_key=True, index=True)
+    role_id: Mapped[UUID] = mapped_column(ForeignKey("roles.id"), primary_key=True, index=True)
+    permission_id: Mapped[UUID] = mapped_column(
+        ForeignKey("permissions.id"), primary_key=True, index=True
+    )
 
 
 def to_entity(record: RolePermissionRecord) -> RolePermissionModel:

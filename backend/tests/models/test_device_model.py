@@ -11,17 +11,18 @@ import os
 from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import text
 
 from ahia.core.config import AppEnvironment, Settings, StorageProviderName
-from ahia.core.database import Database
+from ahia.core.database import Base, Database
 from ahia.core.errors import ConflictError, EntityInvariantError, NotFoundError
-from ahia.crud import device_crud
-from ahia.crud.device_crud import DeviceRecord
+from ahia.crud import device_crud, tenant_crud, user_crud
 from ahia.models.entities.device_model import KNOWN_PLATFORMS, DeviceModel
+from ahia.models.entities.tenant_model import TenantModel
+from ahia.models.entities.user_model import UserModel
 
 DEFAULT_TEST_DATABASE_URL = (
     "postgresql+asyncpg://ksschkw:ahia_local_dev_only@127.0.0.1:5432/ahia_test"
@@ -63,14 +64,65 @@ def build_device(**overrides: object) -> DeviceModel:
 async def database() -> Any:
     instance = Database(build_settings())
     async with instance.engine.begin() as connection:
+        # The whole schema, created from the models. A table's foreign keys require
+        # the tables they reference to exist first, and creating everything in
+        # dependency order is exactly what create_all does.
         await connection.run_sync(
-            lambda sync_connection: DeviceRecord.__table__.create(sync_connection, checkfirst=True)
+            lambda sync_connection: Base.metadata.create_all(sync_connection, checkfirst=True)
         )
-        await connection.execute(text("TRUNCATE TABLE devices"))
+        await connection.execute(text("TRUNCATE TABLE devices CASCADE"))
     try:
         yield instance
     finally:
         await instance.dispose()
+
+
+async def insert_tenant(database: Database, tenant_id: UUID) -> None:
+    """Create the business a device row will reference.
+
+    A device carries foreign keys to the business and the person it belongs to, so a
+    test that invents identifiers has to create those rows first - which is the order
+    a real caller follows, because a device is registered by somebody who is already
+    a member of a business.
+    """
+    async with database.transaction_scope() as unit_of_work:
+        await tenant_crud.create(
+            unit_of_work.session_handle,
+            TenantModel.create(
+                tenant_id=tenant_id,
+                name=f"Tenant {tenant_id.hex[:6]}",
+                slug=f"tenant-{tenant_id.hex[:8]}",
+                now=NOW,
+            ),
+        )
+        await unit_of_work.commit()
+
+
+async def insert_user(database: Database, user_id: UUID) -> None:
+    """Create the person a device row will reference.
+
+    Each test that needs a device creates the rows it references, one call per
+    distinct identifier: creating the same business twice is a primary-key collision,
+    and swallowing that would hide a test that forgot to reuse an identifier.
+    """
+    async with database.transaction_scope() as unit_of_work:
+        await user_crud.create(
+            unit_of_work.session_handle,
+            UserModel.create(
+                user_id=user_id,
+                first_name="Emeka",
+                last_name="Okonkwo",
+                email=f"emeka.{user_id.hex[:8]}@example.com",
+                now=NOW,
+            ),
+        )
+        await unit_of_work.commit()
+
+
+async def insert_device_parents(database: Database, device: DeviceModel) -> None:
+    """Create both rows one device references, for tests that register one device."""
+    await insert_tenant(database, device.tenant_id)
+    await insert_user(database, device.user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -206,6 +258,7 @@ def test_belongs_to_requires_both_the_business_and_the_person() -> None:
 @pytest.mark.integration
 async def test_create_and_look_up_by_identifier(database: Database) -> None:
     device = build_device()
+    await insert_device_parents(database, device)
 
     async with database.transaction_scope() as unit_of_work:
         created = await device_crud.create(unit_of_work.session_handle, device)
@@ -230,12 +283,34 @@ async def test_create_and_look_up_by_identifier(database: Database) -> None:
 
 
 @pytest.mark.integration
+async def test_a_device_for_an_unknown_business_is_a_typed_not_found(
+    database: Database,
+) -> None:
+    """The database enforces the reference, and the error says what actually happened.
+
+    The person exists but the business does not, so the row is refused by the foreign
+    key. Reporting that as "already registered" would send whoever read the log
+    looking for a duplicate that was never there.
+    """
+    device = build_device()
+    await insert_user(database, device.user_id)
+
+    with pytest.raises(NotFoundError) as captured:
+        async with database.transaction_scope() as unit_of_work:
+            await device_crud.create(unit_of_work.session_handle, device)
+
+    assert "does not exist" in (captured.value.context.detail or "")
+    assert captured.value.__cause__ is not None, "the driver's failure is still reachable"
+
+
+@pytest.mark.integration
 async def test_the_same_installation_cannot_be_registered_twice_in_one_business(
     database: Database,
 ) -> None:
     tenant_id = uuid4()
     user_id = uuid4()
     first = build_device(tenant_id=tenant_id, user_id=user_id)
+    await insert_device_parents(database, first)
 
     async with database.transaction_scope() as unit_of_work:
         await device_crud.create(unit_of_work.session_handle, first)
@@ -257,14 +332,14 @@ async def test_the_same_installation_cannot_be_registered_twice_in_one_business(
 async def test_two_businesses_may_hold_the_same_identifier(database: Database) -> None:
     """Two businesses are two worlds; the same installation visits both."""
     identifier = "shared-installation"
+    visiting_first = build_device(device_identifier=identifier)
+    visiting_second = build_device(device_identifier=identifier)
+    await insert_device_parents(database, visiting_first)
+    await insert_device_parents(database, visiting_second)
 
     async with database.transaction_scope() as unit_of_work:
-        await device_crud.create(
-            unit_of_work.session_handle, build_device(device_identifier=identifier)
-        )
-        await device_crud.create(
-            unit_of_work.session_handle, build_device(device_identifier=identifier)
-        )
+        await device_crud.create(unit_of_work.session_handle, visiting_first)
+        await device_crud.create(unit_of_work.session_handle, visiting_second)
         await unit_of_work.commit()
 
         listed_first = await device_crud.list_for_tenant(unit_of_work.session_handle, uuid4())
@@ -275,6 +350,7 @@ async def test_two_businesses_may_hold_the_same_identifier(database: Database) -
 @pytest.mark.integration
 async def test_revocation_is_persisted(database: Database) -> None:
     device = build_device()
+    await insert_device_parents(database, device)
 
     async with database.transaction_scope() as unit_of_work:
         await device_crud.create(unit_of_work.session_handle, device)
@@ -314,6 +390,12 @@ async def test_listing_is_scoped_to_the_business_and_ordered_by_last_seen(
         tenant_id=tenant_id, device_name="Second", device_identifier="installation-second"
     )
     elsewhere = build_device(device_name="Elsewhere", device_identifier="installation-elsewhere")
+    # The two installations in the same business share one business and two people;
+    # the third lives somewhere else entirely.
+    await insert_tenant(database, tenant_id)
+    for user_id in (first.user_id, second.user_id):
+        await insert_user(database, user_id)
+    await insert_device_parents(database, elsewhere)
 
     async with database.transaction_scope() as unit_of_work:
         session = unit_of_work.session_handle

@@ -21,11 +21,12 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ahia.core.config import AppEnvironment, Settings, StorageProviderName
-from ahia.core.database import Database
+from ahia.core.database import Base, Database
 from ahia.core.errors import AuthorizationError, StorageQuotaExceededError
 from ahia.core.tenant_context import build_tenant_context
-from ahia.crud import tenant_storage_usage_crud
+from ahia.crud import tenant_crud, tenant_storage_usage_crud
 from ahia.crud.tenant_storage_usage_crud import TenantStorageUsageRecord
+from ahia.models.entities.tenant_model import TenantModel
 from ahia.models.entities.tenant_storage_usage_model import TenantStorageUsage
 from ahia.services.storage_quota_service import StorageQuotaService
 
@@ -54,10 +55,11 @@ def build_settings() -> Settings:
 async def database() -> Any:
     instance = Database(build_settings())
     async with instance.engine.begin() as connection:
+        # The whole schema, created from the models. A table's foreign keys require
+        # the tables they reference to exist first, and creating everything in
+        # dependency order is exactly what create_all does.
         await connection.run_sync(
-            lambda sync_connection: TenantStorageUsageRecord.__table__.create(
-                sync_connection, checkfirst=True
-            )
+            lambda sync_connection: Base.metadata.create_all(sync_connection, checkfirst=True)
         )
     try:
         yield instance
@@ -71,9 +73,31 @@ async def database() -> Any:
         await instance.dispose()
 
 
+async def insert_tenant(database: Database, tenant_id: UUID) -> None:
+    """Create the tenant a dependent row will reference.
+
+    Accounting rows carry a foreign key to the business they belong to, so a test
+    that invents an identifier has to create the business first - which is exactly
+    the ordering a real caller follows.
+    """
+    async with database.transaction_scope() as unit_of_work:
+        await tenant_crud.create(
+            unit_of_work.session_handle,
+            TenantModel.create(
+                tenant_id=tenant_id,
+                name=f"Tenant {tenant_id.hex[:6]}",
+                slug=f"tenant-{tenant_id.hex[:8]}",
+                now=datetime.now(UTC),
+            ),
+        )
+        await unit_of_work.commit()
+
+
 @pytest.fixture
-def tenant_id() -> UUID:
-    return uuid4()
+async def tenant_id(database: Database) -> UUID:
+    identifier = uuid4()
+    await insert_tenant(database, identifier)
+    return identifier
 
 
 @pytest.fixture
@@ -425,9 +449,14 @@ async def test_two_tenants_have_independent_accounting(database: Database) -> No
         unit_of_work_factory=database.unit_of_work_factory(),
         quota_bytes=5 * MEBIBYTE,
     )
+    first_tenant_id = uuid4()
+    second_tenant_id = uuid4()
+    await insert_tenant(database, first_tenant_id)
+    await insert_tenant(database, second_tenant_id)
+
     first_context = build_tenant_context(
         user_id=uuid4(),
-        tenant_id=uuid4(),
+        tenant_id=first_tenant_id,
         membership_id=uuid4(),
         role_id=uuid4(),
         permission_codes=frozenset({"products.update"}),
@@ -435,7 +464,7 @@ async def test_two_tenants_have_independent_accounting(database: Database) -> No
     )
     second_context = build_tenant_context(
         user_id=uuid4(),
-        tenant_id=uuid4(),
+        tenant_id=second_tenant_id,
         membership_id=uuid4(),
         role_id=uuid4(),
         permission_codes=frozenset({"products.update"}),

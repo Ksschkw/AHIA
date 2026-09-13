@@ -7,7 +7,7 @@ and nothing at runtime.
 
 from __future__ import annotations
 
-from typing import Any, Final
+from typing import Final
 from uuid import UUID
 
 from sqlalchemy import String, func, select
@@ -16,7 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ahia.core.database import Base
-from ahia.core.errors import ConflictError, NotFoundError
+from ahia.core.errors import NotFoundError
+from ahia.crud.integrity_violations import translate_integrity_violation
 from ahia.models.entities.permission_model import PermissionModel
 
 _TABLE_NAME: Final[str] = "permissions"
@@ -59,12 +60,12 @@ async def create(session: AsyncSession, permission: PermissionModel) -> Permissi
         await session.flush()
     except IntegrityError as conflict:
         await session.rollback()
-        raise ConflictError(
+        raise translate_integrity_violation(
+            conflict,
             operation="create_permission",
             entity="permission",
             identifier=str(permission.id),
-            detail=f"the permission code already exists: {_constraint_name(conflict)}",
-            cause=conflict,
+            conflict_detail="the permission code already exists",
         ) from conflict
     return to_entity(record)
 
@@ -113,18 +114,3 @@ async def update(session: AsyncSession, permission: PermissionModel) -> Permissi
 async def count_permissions(session: AsyncSession) -> int:
     result = await session.execute(select(func.count()).select_from(PermissionRecord))
     return int(result.scalar_one())
-
-
-def _constraint_name(conflict: IntegrityError) -> str:
-    original: Any = getattr(conflict, "orig", None)
-    for candidate in (original, getattr(original, "__cause__", None)):
-        if candidate is None:
-            continue
-        direct = getattr(candidate, "constraint_name", None)
-        if direct:
-            return str(direct)
-        diagnostic = getattr(candidate, "diag", None)
-        named = getattr(diagnostic, "constraint_name", None)
-        if named:
-            return str(named)
-    return type(original).__name__ if original is not None else "unknown-constraint"

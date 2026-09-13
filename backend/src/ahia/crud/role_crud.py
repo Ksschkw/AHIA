@@ -15,16 +15,27 @@ actually meant.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Final
+from typing import Final
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, Index, String, func, or_, select, text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    func,
+    or_,
+    select,
+    text,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ahia.core.database import Base
-from ahia.core.errors import ConflictError, NotFoundError
+from ahia.core.errors import NotFoundError
+from ahia.crud.integrity_violations import translate_integrity_violation
 from ahia.models.entities.role_model import RoleModel
 
 _TABLE_NAME: Final[str] = "roles"
@@ -39,7 +50,9 @@ class RoleRecord(Base):
 
     id: Mapped[UUID] = mapped_column(primary_key=True)
     # Null for a system role, set for a tenant's own role.
-    tenant_id: Mapped[UUID | None] = mapped_column(nullable=True, index=True)
+    tenant_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("tenants.id"), nullable=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(_NAME_LENGTH), nullable=False)
     description: Mapped[str] = mapped_column(String(_DESCRIPTION_LENGTH), nullable=False)
     is_system_role: Mapped[bool] = mapped_column(Boolean, nullable=False, index=True)
@@ -92,12 +105,13 @@ async def create(session: AsyncSession, role: RoleModel) -> RoleModel:
         await session.flush()
     except IntegrityError as conflict:
         await session.rollback()
-        raise ConflictError(
+        raise translate_integrity_violation(
+            conflict,
             operation="create_role",
             entity="role",
             identifier=str(role.id),
-            detail=f"a role with this name already exists here: {_constraint_name(conflict)}",
-            cause=conflict,
+            conflict_detail="a role with this name already exists here",
+            missing_detail="the business this role belongs to does not exist",
         ) from conflict
     return to_entity(record)
 
@@ -181,18 +195,3 @@ async def update(session: AsyncSession, role: RoleModel) -> RoleModel:
 async def count_roles(session: AsyncSession) -> int:
     result = await session.execute(select(func.count()).select_from(RoleRecord))
     return int(result.scalar_one())
-
-
-def _constraint_name(conflict: IntegrityError) -> str:
-    original: Any = getattr(conflict, "orig", None)
-    for candidate in (original, getattr(original, "__cause__", None)):
-        if candidate is None:
-            continue
-        direct = getattr(candidate, "constraint_name", None)
-        if direct:
-            return str(direct)
-        diagnostic = getattr(candidate, "diag", None)
-        named = getattr(diagnostic, "constraint_name", None)
-        if named:
-            return str(named)
-    return type(original).__name__ if original is not None else "unknown-constraint"

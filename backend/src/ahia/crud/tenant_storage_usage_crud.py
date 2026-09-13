@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import BigInteger, DateTime, select
+from sqlalchemy import BigInteger, DateTime, ForeignKey, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
@@ -38,7 +38,7 @@ class TenantStorageUsageRecord(Base):
 
     __tablename__ = _TABLE_NAME
 
-    tenant_id: Mapped[UUID] = mapped_column(primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), primary_key=True)
     used_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     reserved_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)

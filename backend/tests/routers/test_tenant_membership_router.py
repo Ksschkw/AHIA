@@ -24,13 +24,8 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
 from ahia.core.config import AppEnvironment, Settings, StorageProviderName
-from ahia.core.database import Database
+from ahia.core.database import Base, Database
 from ahia.crud import tenant_membership_crud, user_crud
-from ahia.crud.membership_invitation_crud import MembershipInvitationRecord
-from ahia.crud.session_crud import SessionRecord
-from ahia.crud.tenant_crud import TenantRecord
-from ahia.crud.tenant_membership_crud import TenantMembershipRecord
-from ahia.crud.user_crud import UserRecord
 from ahia.main import create_application
 from ahia.models.entities.tenant_membership_model import TenantMembershipModel
 
@@ -77,22 +72,16 @@ async def running_application(settings: Settings | None = None) -> AsyncIterator
 async def tables() -> AsyncIterator[None]:
     database = Database(build_settings())
     async with database.engine.begin() as connection:
-        for record in (
-            UserRecord,
-            SessionRecord,
-            TenantRecord,
-            TenantMembershipRecord,
-            MembershipInvitationRecord,
-        ):
-            await connection.run_sync(
-                lambda sync_connection, table=record.__table__: table.create(
-                    sync_connection, checkfirst=True
-                )
-            )
+        # The whole schema, created from the models. A table's foreign keys require
+        # the tables they reference to exist first, and creating everything in
+        # dependency order is exactly what create_all does.
+        await connection.run_sync(
+            lambda sync_connection: Base.metadata.create_all(sync_connection, checkfirst=True)
+        )
         await connection.execute(
             text(
                 "TRUNCATE TABLE membership_invitations, tenant_memberships, tenants, "
-                "user_sessions, users"
+                "user_sessions, users CASCADE"
             )
         )
     try:

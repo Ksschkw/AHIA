@@ -19,9 +19,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
 from ahia.core.config import AppEnvironment, Settings, StorageProviderName
-from ahia.core.database import Database
-from ahia.crud.session_crud import SessionRecord
-from ahia.crud.user_crud import UserRecord
+from ahia.core.database import Base, Database
 from ahia.main import create_application
 
 DEFAULT_TEST_DATABASE_URL = (
@@ -72,13 +70,19 @@ async def tables() -> AsyncIterator[None]:
     """Create both tables and empty them around each test."""
     database = Database(build_settings())
     async with database.engine.begin() as connection:
+        # The whole schema, created from the models. A table's foreign keys require
+        # the tables they reference to exist first, and creating everything in
+        # dependency order is exactly what create_all does.
         await connection.run_sync(
-            lambda sync_connection: UserRecord.__table__.create(sync_connection, checkfirst=True)
+            lambda sync_connection: Base.metadata.create_all(sync_connection, checkfirst=True)
         )
+        # The whole schema, created from the models. A table's foreign keys require
+        # the tables they reference to exist first, and creating everything in
+        # dependency order is exactly what create_all does.
         await connection.run_sync(
-            lambda sync_connection: SessionRecord.__table__.create(sync_connection, checkfirst=True)
+            lambda sync_connection: Base.metadata.create_all(sync_connection, checkfirst=True)
         )
-        await connection.execute(text("TRUNCATE TABLE user_sessions, users"))
+        await connection.execute(text("TRUNCATE TABLE user_sessions, users CASCADE"))
     try:
         yield
     finally:

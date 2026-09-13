@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Any, Final, cast
 from uuid import UUID
 
-from sqlalchemy import DateTime, String, delete, func, select
+from sqlalchemy import DateTime, ForeignKey, String, delete, func, select
 from sqlalchemy import update as sql_update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,7 +35,9 @@ class SessionRecord(Base):
     __tablename__ = _TABLE_NAME
 
     id: Mapped[UUID] = mapped_column(primary_key=True)
-    user_id: Mapped[UUID] = mapped_column(nullable=False, index=True)
+    # No cascade: history is never destroyed, and a user is deactivated rather
+    # than deleted. The foreign key exists so an orphan cannot be created.
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     refresh_token_hash: Mapped[str] = mapped_column(
         String(_TOKEN_HASH_LENGTH), nullable=False, unique=True, index=True
     )
@@ -47,7 +49,7 @@ class SessionRecord(Base):
         String(_REVOCATION_REASON_LENGTH), nullable=True
     )
     replaced_by_session_id: Mapped[UUID | None] = mapped_column(nullable=True)
-    device_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    device_id: Mapped[UUID | None] = mapped_column(ForeignKey("devices.id"), nullable=True)
 
 
 def to_entity(record: SessionRecord) -> SessionModel:

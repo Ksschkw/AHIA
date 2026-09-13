@@ -18,7 +18,7 @@ updates, and maps.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Final
+from typing import Final
 from uuid import UUID
 
 from sqlalchemy import Boolean, DateTime, String, func, select
@@ -27,7 +27,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ahia.core.database import Base
-from ahia.core.errors import ConflictError, NotFoundError
+from ahia.core.errors import NotFoundError
+from ahia.crud.integrity_violations import translate_integrity_violation
 from ahia.models.entities.user_model import UserModel
 
 _TABLE_NAME: Final[str] = "users"
@@ -111,6 +112,9 @@ async def create(session: AsyncSession, user: UserModel) -> UserModel:
     on either the email or the phone index, so the offending constraint name is
     reported internally and never externally: telling a caller which of the two
     collided would confirm that an account exists for a given address.
+
+    Any other integrity failure is translated by its own kind rather than folded into
+    that message, so a failure that is not a duplicate is never reported as one.
     """
     record = UserRecord(id=user.id)
     apply_entity(record, user)
@@ -119,12 +123,12 @@ async def create(session: AsyncSession, user: UserModel) -> UserModel:
         await session.flush()
     except IntegrityError as conflict:
         await session.rollback()
-        raise ConflictError(
+        raise translate_integrity_violation(
+            conflict,
             operation="create_user",
             entity="user",
             identifier=str(user.id),
-            detail=f"a user with this email or phone already exists: {_constraint_name(conflict)}",
-            cause=conflict,
+            conflict_detail="a user with this email or phone already exists",
         ) from conflict
     return to_entity(record)
 
@@ -178,12 +182,12 @@ async def update(session: AsyncSession, user: UserModel) -> UserModel:
         await session.flush()
     except IntegrityError as conflict:
         await session.rollback()
-        raise ConflictError(
+        raise translate_integrity_violation(
+            conflict,
             operation="update_user",
             entity="user",
             identifier=str(user.id),
-            detail=f"the update collides with an existing user: {_constraint_name(conflict)}",
-            cause=conflict,
+            conflict_detail="the update collides with an existing user",
         ) from conflict
     return to_entity(record)
 
@@ -196,32 +200,6 @@ async def count_users(session: AsyncSession) -> int:
     """
     result = await session.execute(select(func.count()).select_from(UserRecord))
     return int(result.scalar_one())
-
-
-def _constraint_name(conflict: IntegrityError) -> str:
-    """Extract the violated constraint name for the internal error detail.
-
-    Only for logs: the name is never returned to a client. The driver's exception
-    can sit at different depths depending on the dialect, so each known location
-    is checked before falling back to the exception type.
-    """
-    original: Any = getattr(conflict, "orig", None)
-    candidates = [
-        original,
-        getattr(original, "__cause__", None),
-        getattr(original, "__context__", None),
-    ]
-    for candidate in candidates:
-        if candidate is None:
-            continue
-        direct = getattr(candidate, "constraint_name", None)
-        if direct:
-            return str(direct)
-        diagnostic = getattr(candidate, "diag", None)
-        named = getattr(diagnostic, "constraint_name", None)
-        if named:
-            return str(named)
-    return type(original).__name__ if original is not None else "unknown-constraint"
 
 
 async def require_by_id(session: AsyncSession, user_id: UUID) -> UserModel:

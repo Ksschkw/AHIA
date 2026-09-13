@@ -10,16 +10,17 @@ file own two entities' storage.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Final
+from typing import Final
 from uuid import UUID
 
-from sqlalchemy import DateTime, String, func, select
+from sqlalchemy import DateTime, ForeignKey, String, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ahia.core.database import Base
-from ahia.core.errors import ConflictError, NotFoundError
+from ahia.core.errors import NotFoundError
+from ahia.crud.integrity_violations import translate_integrity_violation
 from ahia.models.entities.tenant_membership_model import (
     MembershipStatus,
     TenantMembershipModel,
@@ -38,14 +39,14 @@ class TenantMembershipRecord(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True)
     # Indexed individually as well as together: a tenant-scoped query filters on
     # tenant_id, and a person's own list filters on user_id.
-    tenant_id: Mapped[UUID] = mapped_column(nullable=False, index=True)
-    user_id: Mapped[UUID] = mapped_column(nullable=False, index=True)
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     role_name: Mapped[str] = mapped_column(String(_ROLE_NAME_LENGTH), nullable=False)
     status: Mapped[str] = mapped_column(String(_STATUS_LENGTH), nullable=False)
     invited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     joined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    invited_by_user_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    invited_by_user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -92,15 +93,13 @@ async def create(session: AsyncSession, membership: TenantMembershipModel) -> Te
         await session.flush()
     except IntegrityError as conflict:
         await session.rollback()
-        raise ConflictError(
+        raise translate_integrity_violation(
+            conflict,
             operation="create_membership",
             entity="tenant_membership",
             identifier=str(membership.id),
-            detail=(
-                "this person already has a membership in this business: "
-                f"{_constraint_name(conflict)}"
-            ),
-            cause=conflict,
+            conflict_detail="this person already has a membership in this business",
+            missing_detail="the business, person or inviter this membership names does not exist",
         ) from conflict
     return to_entity(record)
 
@@ -186,19 +185,3 @@ async def count_memberships(session: AsyncSession) -> int:
     """Return the number of membership rows. Used by tests and operational tooling."""
     result = await session.execute(select(func.count()).select_from(TenantMembershipRecord))
     return int(result.scalar_one())
-
-
-def _constraint_name(conflict: IntegrityError) -> str:
-    """Extract the violated index name for the internal detail. Never published."""
-    original: Any = getattr(conflict, "orig", None)
-    for candidate in (original, getattr(original, "__cause__", None)):
-        if candidate is None:
-            continue
-        direct = getattr(candidate, "constraint_name", None)
-        if direct:
-            return str(direct)
-        diagnostic = getattr(candidate, "diag", None)
-        named = getattr(diagnostic, "constraint_name", None)
-        if named:
-            return str(named)
-    return type(original).__name__ if original is not None else "unknown-constraint"

@@ -8,7 +8,7 @@ businesses cannot share one.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Final
+from typing import Final
 from uuid import UUID
 
 from sqlalchemy import Boolean, DateTime, String, func, select
@@ -17,7 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ahia.core.database import Base
-from ahia.core.errors import ConflictError, NotFoundError
+from ahia.core.errors import NotFoundError
+from ahia.crud.integrity_violations import translate_integrity_violation
 from ahia.models.entities.tenant_model import TenantModel
 
 _TABLE_NAME: Final[str] = "tenants"
@@ -51,6 +52,12 @@ class TenantRecord(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    # No composite-key anchor here: a tenant is not owned by a tenant, so there is no
+    # (id, tenant_id) pair to make unique. The specification's composite foreign keys
+    # - sale_items (product_id, tenant_id) referencing products (id, tenant_id) -
+    # anchor on the tenant-owned table that is actually referenced, and the constraint
+    # is added there when that table exists (M9).
 
 
 def to_entity(record: TenantRecord) -> TenantModel:
@@ -99,12 +106,12 @@ async def create(session: AsyncSession, tenant: TenantModel) -> TenantModel:
         await session.flush()
     except IntegrityError as conflict:
         await session.rollback()
-        raise ConflictError(
+        raise translate_integrity_violation(
+            conflict,
             operation="create_tenant",
             entity="tenant",
             identifier=str(tenant.id),
-            detail=f"the slug is already taken: {_constraint_name(conflict)}",
-            cause=conflict,
+            conflict_detail="the slug is already taken",
         ) from conflict
     return to_entity(record)
 
@@ -165,12 +172,12 @@ async def update(session: AsyncSession, tenant: TenantModel) -> TenantModel:
         await session.flush()
     except IntegrityError as conflict:
         await session.rollback()
-        raise ConflictError(
+        raise translate_integrity_violation(
+            conflict,
             operation="update_tenant",
             entity="tenant",
             identifier=str(tenant.id),
-            detail=f"the update collides with an existing business: {_constraint_name(conflict)}",
-            cause=conflict,
+            conflict_detail="the update collides with an existing business",
         ) from conflict
     return to_entity(record)
 
@@ -179,19 +186,3 @@ async def count_tenants(session: AsyncSession) -> int:
     """Return the number of businesses. Used by tests and operational tooling."""
     result = await session.execute(select(func.count()).select_from(TenantRecord))
     return int(result.scalar_one())
-
-
-def _constraint_name(conflict: IntegrityError) -> str:
-    """Extract the violated index name for the internal detail. Never published."""
-    original: Any = getattr(conflict, "orig", None)
-    for candidate in (original, getattr(original, "__cause__", None)):
-        if candidate is None:
-            continue
-        direct = getattr(candidate, "constraint_name", None)
-        if direct:
-            return str(direct)
-        diagnostic = getattr(candidate, "diag", None)
-        named = getattr(diagnostic, "constraint_name", None)
-        if named:
-            return str(named)
-    return type(original).__name__ if original is not None else "unknown-constraint"
