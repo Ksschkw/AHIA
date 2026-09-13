@@ -34,6 +34,7 @@ from ahia.core.permissions.tenant_permissions import (
 from ahia.core.slug import normalize_slug
 from ahia.core.tenant_context import TenantContext, build_tenant_context
 from ahia.crud import tenant_crud, tenant_membership_crud
+from ahia.models.entities.negative_stock_policy import NegativeStockPolicy
 from ahia.models.entities.tenant_membership_model import TenantMembershipModel
 from ahia.models.entities.tenant_model import TenantModel
 
@@ -361,6 +362,46 @@ class TenantService:
             security_event="tenant_deactivated",
         )
         return stored
+
+    async def update_negative_stock_policy(
+        self,
+        tenant_context: TenantContext,
+        *,
+        policy: NegativeStockPolicy,
+    ) -> TenantModel:
+        """Change what happens when a stock movement would take a product negative.
+
+        Requires `tenants.manage`: a business that allows negative stock is changing what
+        its own numbers mean, which is not a decision a worker counting a shelf makes.
+        """
+        tenant_context.require_permission(
+            TENANTS_MANAGE,
+            operation="update_negative_stock_policy",
+            resource_type="tenant",
+            resource_id=str(tenant_context.tenant_id),
+            logger=self._logger,
+        )
+
+        now = datetime.now(UTC)
+        unit_of_work = self._unit_of_work_factory()
+        async with unit_of_work:
+            session = unit_of_work.session_handle
+            tenant = await tenant_crud.require_by_id(session, tenant_context.tenant_id)
+            previous = tenant.negative_stock_policy
+            updated = await tenant_crud.update(
+                session, tenant.with_negative_stock_policy(policy=policy, at=now)
+            )
+            await unit_of_work.commit()
+
+        self._logger.warning(
+            "negative_stock_policy_changed",
+            tenant_id=str(tenant_context.tenant_id),
+            actor_id=str(tenant_context.user_id),
+            previous_policy=previous.value,
+            policy=updated.negative_stock_policy.value,
+            security_event="stock_policy_changed",
+        )
+        return updated
 
     # ------------------------------------------------------------------
     # Context resolution

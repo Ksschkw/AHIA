@@ -19,6 +19,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
 
 from ahia.core.slug import MAXIMUM_SLUG_LENGTH, normalize_slug
+from ahia.models.entities.negative_stock_policy import NegativeStockPolicy
 from ahia.models.entities.tenant_model import (
     MINIMUM_SLUG_LENGTH,
     TenantModel,
@@ -110,6 +111,19 @@ class TenantUpdateSchema(BaseModel):
         return self.model_dump(exclude_unset=True)
 
 
+class TenantStockPolicyUpdateSchema(BaseModel):
+    """The business's rule about stock going negative.
+
+    A deliberate operation rather than a profile field: a business that starts permitting
+    negative stock is changing what its own numbers mean, and the change should appear as
+    its own act rather than inside a form submission that also fixed a phone number.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    policy: NegativeStockPolicy
+
+
 class TenantResponseSchema(BaseModel):
     """A business as its members see it."""
 
@@ -128,6 +142,7 @@ class TenantResponseSchema(BaseModel):
     country: str
     currency: str
     timezone: str
+    negative_stock_policy: NegativeStockPolicy
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -148,6 +163,7 @@ class TenantResponseSchema(BaseModel):
             country=tenant.country,
             currency=tenant.currency,
             timezone=tenant.timezone,
+            negative_stock_policy=tenant.negative_stock_policy,
             is_active=tenant.is_active,
             created_at=tenant.created_at,
             updated_at=tenant.updated_at,

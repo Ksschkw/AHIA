@@ -23,6 +23,7 @@ from ahia.routers.user_router import require_principal
 from ahia.schemas.tenant_schema import (
     TenantCreateSchema,
     TenantResponseSchema,
+    TenantStockPolicyUpdateSchema,
     TenantSummarySchema,
     TenantUpdateSchema,
 )
@@ -140,6 +141,25 @@ async def update_tenant(
         tenant_context,
         changes=payload.to_entity_changes(),
     )
+    return TenantResponseSchema.from_entity(tenant)
+
+
+@router.put(
+    "/{tenant_id}/stock-policy",
+    response_model=TenantResponseSchema,
+    summary="Change what happens when stock would go negative",
+)
+async def update_stock_policy(
+    payload: TenantStockPolicyUpdateSchema,
+    tenant_context: TenantContextDependency,
+    service: TenantServiceDependency,
+) -> TenantResponseSchema:
+    """Set the business's negative-stock policy.
+
+    Its own operation rather than a profile field: allowing negative stock changes what
+    every stock number in the business means.
+    """
+    tenant = await service.update_negative_stock_policy(tenant_context, policy=payload.policy)
     return TenantResponseSchema.from_entity(tenant)
 
 

@@ -207,6 +207,47 @@ class InventoryModel:
         return replace(self, reserved_quantity=released, version=self.version + 1, updated_at=at)
 
 
+def coerce_inventory_quantity(value: object, *, field_name: str = "quantity") -> Decimal:
+    """Return the Decimal a stock quantity or delta represents, or raise ValueError.
+
+    For the transport boundary, which shares the entity's rules rather than restating
+    them: three decimal places, finite, and inside the column's range. Signed on purpose -
+    a stock *delta* may be negative, while an on-hand quantity may not - so the sign is
+    checked by the caller that knows which of the two it is holding.
+
+    A float is parsed through its own decimal text rather than its binary value, because
+    `Decimal(0.1)` is not the number the client typed. A quantity that arrives as a float
+    with more than three decimal places is refused, which is how a client's arithmetic
+    error becomes a 422 instead of a stock count nobody can reconcile.
+    """
+    if isinstance(value, bool) or value is None:
+        raise ValueError(f"{field_name} must be a number")
+    if isinstance(value, Decimal):
+        parsed = value
+    elif isinstance(value, int):
+        parsed = Decimal(value)
+    elif isinstance(value, float):
+        parsed = Decimal(str(value))
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text:
+            raise ValueError(f"{field_name} is empty")
+        try:
+            parsed = Decimal(text)
+        except InvalidOperation as invalid:
+            raise ValueError(f"{field_name} is not a number") from invalid
+    else:
+        raise ValueError(f"{field_name} must be a number, not {type(value).__name__}")
+
+    if not parsed.is_finite():
+        raise ValueError(f"{field_name} is not a finite number")
+    if parsed.quantize(QUANTITY_PLACES) != parsed:
+        raise ValueError(f"{field_name} has more than three decimal places")
+    if abs(parsed) > MAXIMUM_QUANTITY:
+        raise ValueError(f"{field_name} exceeds {MAXIMUM_QUANTITY} in magnitude")
+    return parsed
+
+
 def _require_quantity(value: object, *, field_name: str, inventory_id: UUID) -> None:
     """Raise unless the value is a Decimal quantity this table can hold."""
     if isinstance(value, bool) or not isinstance(value, Decimal):

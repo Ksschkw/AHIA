@@ -947,8 +947,27 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ## M10 - Inventory ledger and projections
 
+- [x] M10.1.1 `inventory_model.py` and `inventory_movement_model.py` as pure
+      entities with the invariant `after = before + delta`, derived by the factory so
+      a caller cannot supply three values that disagree, plus
+      `negative_stock_policy.py` as the vocabulary the tenant stores.
+
 ### M10 - progress log
 
+- M10.1.5 complete, which closes M10 apart from the milestone's own tests. The
+  architecture contract caught a real violation on the first attempt: the inventory
+  response schema imported the service's combined `InventoryLevel` view, so a schema
+  depended on the layer above it. The schema now takes the product and the inventory as
+  two entities and the router pairs them, which is what the contract asks for. That is
+  the check doing its job rather than a test that had to be adjusted.
+- The listing route had to be ordered deliberately: `GET /inventory/movements` is
+  declared before `GET /inventory/{product_id}`, because FastAPI matches in registration
+  order and would otherwise parse the literal word `movements` as a product identifier
+  and answer 422. A test asserts the route works, which is what keeps the ordering from
+  being tidied away later.
+- The stock policy is its own operation on the tenant surface (`PUT
+  /tenants/{id}/stock-policy`, requiring `tenants.manage`) rather than a profile field:
+  a business that allows negative stock is changing what its own numbers mean.
 - M10.1.3, M10.1.6 and M10.1.7 complete, which leaves only the transport layer for M10.
   The concurrency test is the one worth reading: two `asyncio.gather`ed transactions
   selling three and four of ten end at three, with both movements present and the ledger
@@ -993,7 +1012,9 @@ Goal: a business exists as a tenant with a globally unique public slug.
       point: `tenants.negative_stock_policy`, defaulting to `BLOCK_NEGATIVE_STOCK`,
       read back through the enum so a value this version does not know fails loudly
       rather than becoming the default.
-- [ ] M10.1.5 `inventory_schema.py` and `inventory_router.py`.
+- [x] M10.1.5 `inventory_schema.py` and `inventory_router.py`, plus the tenant's stock
+      policy on the tenant surface. Quantities follow the money rule: accepted as a
+      number or a decimal string, always returned as a decimal string, three places.
 - [x] M10.1.6 Concurrency test: two concurrent offline sales produce two movements
       and a deterministic projection, run as genuinely concurrent transactions
       against real PostgreSQL using `asyncio.gather`. Two simultaneous overdraws with
