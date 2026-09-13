@@ -147,7 +147,7 @@ lint error and a failing test. CI runs the same command.
 
 ### M0.3 Configuration contract
 
-- [ ] M0.3.1 `backend/.env.example`: every variable from
+- [x] M0.3.1 `backend/.env.example`: every variable from
       `docs/PREREQUISITES.md` section 3 with placeholder values only, grouped by
       concern, with the secret values obviously fake.
 - [ ] M0.3.2 `.gitignore` coverage proof: a test that asserts `.env`,
