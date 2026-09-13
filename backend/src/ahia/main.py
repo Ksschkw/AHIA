@@ -109,13 +109,18 @@ def create_application(settings: Settings | None = None) -> FastAPI:
             max_age=600,
         )
 
-    application.add_middleware(
-        SecurityHeadersMiddleware,
-        hsts_max_age_seconds=resolved_settings.hsts_max_age_seconds,
-        content_security_policy=resolved_settings.content_security_policy,
-        enabled=resolved_settings.security_headers_enabled,
-        is_production=resolved_settings.is_production,
-    )
+    # Order matters, and Starlette applies it from the inside out: the last
+    # middleware added is the outermost. The intended nesting is
+    #
+    #     correlation -> security headers -> rate limit -> error handler -> routes
+    #
+    # which is why they are added in the reverse of that order.
+    #
+    # Two consequences of getting it wrong, both found by tests rather than by
+    # review: an error handler outside the security headers produces error
+    # responses with no security headers, and a correlation middleware that is not
+    # outermost produces failures with no correlation ID for the client to quote.
+    application.add_middleware(ErrorHandlerMiddleware)
     application.add_middleware(
         RateLimitMiddleware,
         limiter=build_default_limiter(
@@ -126,7 +131,13 @@ def create_application(settings: Settings | None = None) -> FastAPI:
         ),
         trusted_proxy_count=resolved_settings.trusted_proxy_count,
     )
-    application.add_middleware(ErrorHandlerMiddleware)
+    application.add_middleware(
+        SecurityHeadersMiddleware,
+        hsts_max_age_seconds=resolved_settings.hsts_max_age_seconds,
+        content_security_policy=resolved_settings.content_security_policy,
+        enabled=resolved_settings.security_headers_enabled,
+        is_production=resolved_settings.is_production,
+    )
     application.add_middleware(
         CorrelationIdMiddleware,
         header_name=resolved_settings.correlation_id_header,

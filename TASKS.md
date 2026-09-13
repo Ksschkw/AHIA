@@ -77,8 +77,8 @@ assertion in a commit message.
 |---|---|---|---|
 | M0 | Repository and developer tooling foundation | `[x]` | - |
 | M1 | Core cross-cutting infrastructure | `[x]` | M0 |
-| M2 | User demonstrative vertical slice | `[~]` | M1 |
-| M3 | Authentication and sessions | `[ ]` | M2 |
+| M2 | User demonstrative vertical slice | `[x]` | M1 |
+| M3 | Authentication and sessions | `[~]` | M2 |
 | M4 | Tenant slice | `[ ]` | M3 |
 | M5 | Membership and staff administration | `[ ]` | M4 |
 | M6 | Roles, permissions and deny-by-default authorization | `[ ]` | M5 |
@@ -568,9 +568,9 @@ layer-appropriate tests.
 
 ### M2.7 Cross-cutting verification
 
-- [ ] M2.7.1 Security test: the external error response for a failed request
+- [x] M2.7.1 Security test: the external error response for a failed request
       contains no stack trace, SQL, path, hostname or dependency name.
-- [ ] M2.7.2 Architecture test additions for the new modules, and a
+- [x] M2.7.2 Architecture test additions for the new modules, and a
       confirmation run of `make check` recorded in the commit message.
 
 ---
