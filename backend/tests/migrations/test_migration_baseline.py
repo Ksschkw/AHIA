@@ -55,6 +55,7 @@ EXPECTED_TABLES = frozenset(
         "role_permissions",
         "tenant_storage_usage",
         "categories",
+        "products",
     }
 )
 

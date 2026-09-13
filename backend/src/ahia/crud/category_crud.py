@@ -55,6 +55,12 @@ class CategoryRecord(Base):
         # what it sells. The constraint name comes from the metadata naming
         # convention, so it is the same shape as every other constraint here.
         UniqueConstraint("tenant_id", "slug"),
+        # The cross-tenant anchor. A product carries `(category_id, tenant_id)` as a
+        # composite foreign key to this pair, which is what makes it impossible for a
+        # product in one business to point at another business's category. A plain
+        # foreign key on the identifier cannot express that: the identifier is unique
+        # and therefore valid wherever it is used.
+        UniqueConstraint("id", "tenant_id", name="uq_categories_id_tenant_id"),
     )
 
 

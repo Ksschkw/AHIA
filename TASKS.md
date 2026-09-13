@@ -739,8 +739,12 @@ Goal: a business exists as a tenant with a globally unique public slug.
       is accepted as a JSON number or a decimal string and always returned as a decimal
       string, so no client passes money through a binary float. The slug, the tenant,
       the public token and the two lifecycle booleans are refused at the edge.
-- [ ] M9.1.4 `product_crud.py` with tenant-scoped uniqueness
-      (`UNIQUE(tenant_id, slug)`, conditional SKU and barcode uniqueness).
+- [x] M9.1.4 `product_crud.py` with tenant-scoped uniqueness
+      (`UNIQUE(tenant_id, slug)`, conditional SKU and barcode uniqueness). Both
+      anchors are in place: `products(id, tenant_id)` for the tables that will
+      reference products, and `categories(id, tenant_id)` so that a product's
+      category reference is composite and a cross-tenant reference is refused by
+      the database itself. This closes the item M8.1.4 deferred.
 - [ ] M9.1.5 `product_service.py`: `create_product`, `update_product`,
       `deactivate_product`, `publish_product`, `unpublish_product`.
 - [ ] M9.1.6 `product_router.py` and `category_router.py`.
@@ -777,6 +781,24 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ### M9 - progress log
 
+- M9.1.4 complete, and it closed M8.1.4. Writing the persistence test for "a product
+  cannot reference another business's category" exposed that a plain foreign key does
+  not express that rule at all: the category identifier is unique, so it is valid in
+  every tenant. `categories` gained its `(id, tenant_id)` anchor and `products`
+  references the pair, which is the specification's cross-tenant key pattern applied
+  where it means something. The test failed first, then passed - the order that makes
+  it evidence rather than decoration.
+- M9.1.4 also settled where persistence tests live: `tests/crud/test_product_crud.py`,
+  mirroring `src/ahia/crud/product_crud.py`. The device and category slices had put
+  their persistence tests inside their model test modules, which is why the migration
+  test's expected-table list is the only place that must be kept in step with a new
+  table - and it failed loudly when it was not, which is how it should behave.
+- A stale table definition cost time and is worth recording: `create_all(checkfirst=True)`
+  never alters an existing table, so after the model changed the test database kept the
+  old shape until the schema was rebuilt from migrations. A red test that passes alone
+  and fails after another module is usually shared-state shape, not logic.
+- M9.1.3 complete. The transport contract carries money as a decimal string in both
+  directions, and refuses the slug, the tenant, the public token and the lifecycle.
 - M9.1.2 complete. The product entity is where money lives, so it is the strictest
   entity in the codebase. A price arriving as a float is refused rather than rounded:
   `0.1 + 0.2 != 0.3`, and a shop that loses a kobo per sale is a shop whose books do
