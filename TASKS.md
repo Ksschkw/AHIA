@@ -217,7 +217,7 @@ lint error and a failing test. CI runs the same command.
 
 ### M0.10 Containers
 
-- [ ] M0.10.1 `backend/Dockerfile`: multi-stage build, non-root runtime user,
+- [x] M0.10.1 `backend/Dockerfile`: multi-stage build, non-root runtime user,
       no secrets in the image, `uvicorn ahia.main:app` as the process.
 - [ ] M0.10.2 `backend/.dockerignore`: excludes virtualenvs, tests, caches,
       env files and documentation from the build context.

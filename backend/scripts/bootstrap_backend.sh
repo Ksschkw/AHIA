@@ -19,8 +19,10 @@ set -Eeuo pipefail
 
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly BACKEND_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+readonly REPOSITORY_ROOT="$(cd -- "${BACKEND_DIR}/.." && pwd)"
 readonly VENV_DIR="${BACKEND_DIR}/.venv"
 readonly LOCKFILE="${BACKEND_DIR}/requirements.lock"
+readonly PRODUCTION_LOCKFILE="${BACKEND_DIR}/requirements.prod.lock"
 readonly PYPROJECT="${BACKEND_DIR}/pyproject.toml"
 
 mode="install"
@@ -68,7 +70,8 @@ readonly PYTHON_BIN="$(require_python)"
 
 if [[ "${mode}" == "verify" ]]; then
   [[ -f "${LOCKFILE}" ]] || fail "missing lockfile: ${LOCKFILE}"
-  log "lockfile present: ${LOCKFILE}"
+  [[ -f "${PRODUCTION_LOCKFILE}" ]] || fail "missing lockfile: ${PRODUCTION_LOCKFILE}"
+  log "lockfiles present: ${LOCKFILE}, ${PRODUCTION_LOCKFILE}"
   exit 0
 fi
 
@@ -88,21 +91,43 @@ source "${VENV_DIR}/bin/activate"
 log "upgrading pip, setuptools and wheel"
 python -m pip install --quiet --upgrade pip setuptools wheel
 
-if [[ -f "${LOCKFILE}" && "${mode}" != "relock" ]]; then
-  log "installing pinned dependencies from ${LOCKFILE}"
-  python -m pip install --quiet --require-hashes=false --no-deps -r "${LOCKFILE}"
-  log "installing the project in editable mode without touching pins"
-  python -m pip install --quiet --no-deps --editable "${BACKEND_DIR}"
-else
-  if [[ "${mode}" == "relock" ]]; then
-    log "re-resolving dependencies from ${PYPROJECT} (this rewrites the lockfile)"
-  else
-    log "no lockfile found; resolving from ${PYPROJECT} and writing one"
+if [[ "${mode}" == "relock" ]]; then
+  log "re-resolving dependencies from ${PYPROJECT} and rewriting both lockfiles"
+
+  # uv is the resolver. It is a development-only tool; it is installed here
+  # unpinned on purpose because it is the thing that produces the pins, and it
+  # is not part of the runtime or test dependency set.
+  if [[ ! -x "${VENV_DIR}/bin/uv" ]]; then
+    log "installing the resolver (uv)"
+    python -m pip install --quiet uv
   fi
-  python -m pip install --quiet --editable "${BACKEND_DIR}[dev]"
-  python -m pip freeze --exclude-editable > "${LOCKFILE}"
+
+  # The resolver cache lives inside the repository because the default user
+  # cache directory is not writable on this workstation.
+  export UV_CACHE_DIR="${REPOSITORY_ROOT}/.tools/uv-cache"
+  mkdir -p "${UV_CACHE_DIR}"
+
+  # Two locks, because a production image must not ship the test toolchain:
+  #   requirements.lock       full development closure (local, CI, audit)
+  #   requirements.prod.lock  runtime closure only (container image, deploy)
+  # Hashes are recorded so installation can run in --require-hashes mode.
+  "${VENV_DIR}/bin/uv" pip compile "${PYPROJECT}" \
+    --extra dev --python-version 3.12 --no-header --generate-hashes \
+    --output-file "${LOCKFILE}"
   log "wrote ${LOCKFILE}"
+
+  "${VENV_DIR}/bin/uv" pip compile "${PYPROJECT}" \
+    --python-version 3.12 --no-header --generate-hashes \
+    --output-file "${PRODUCTION_LOCKFILE}"
+  log "wrote ${PRODUCTION_LOCKFILE}"
 fi
+
+[[ -f "${LOCKFILE}" ]] || fail "missing lockfile: ${LOCKFILE}; run with --relock"
+
+log "installing pinned dependencies from ${LOCKFILE} (hashes enforced)"
+python -m pip install --quiet --require-hashes --no-deps -r "${LOCKFILE}"
+log "installing the project in editable mode without touching pins"
+python -m pip install --quiet --no-deps --editable "${BACKEND_DIR}"
 
 log "installed packages: $(python -m pip list --format=freeze --exclude-editable | wc -l)"
 log "bootstrap complete"

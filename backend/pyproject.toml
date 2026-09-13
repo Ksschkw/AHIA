@@ -54,6 +54,9 @@ dev = [
   "import-linter>=2.0,<3.0",
   "pip-audit>=2.7,<3.0",
   "pre-commit>=3.7,<5.0",
+  # Resolver used to regenerate both lockfiles. Development-only: the runtime
+  # image installs from requirements.prod.lock, which never contains it.
+  "uv>=0.5,<1.0",
 ]
 
 [tool.setuptools]

@@ -62,8 +62,23 @@ tests import the installed package rather than accidentally importing files from
 the working directory.
 
 Lockfile policy: exact pins for every runtime and development dependency are
-committed. The pin set is produced by a resolver, not by hand, and refreshed by
-a deliberate command, never silently by an unpinned install in CI.
+committed, with SHA-256 hashes recorded so installation runs in
+`--require-hashes` mode and a tampered artifact fails the install rather than
+being silently accepted. The pin sets are produced by a resolver (`uv`, a
+development-only tool), never by hand, and are refreshed only by the explicit
+`bootstrap_backend.sh --relock` command, never silently by an unpinned install
+in CI.
+
+Two lockfiles exist because the container image must not ship the test
+toolchain:
+
+| File | Closure | Consumed by |
+|---|---|---|
+| `backend/requirements.lock` | runtime plus development tools | local development, CI, the vulnerability audit |
+| `backend/requirements.prod.lock` | runtime only, no pytest/ruff/mypy/uv | the container image and deployed environments |
+
+Both are generated from `backend/pyproject.toml` in the same command, so they
+cannot drift from each other.
 
 Local runtime is a project-local virtual environment at `backend/.venv`.
 Nothing is installed into the system interpreter and nothing is installed
