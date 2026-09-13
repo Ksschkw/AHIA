@@ -48,6 +48,7 @@ from ahia.middleware.security_headers_middleware import SecurityHeadersMiddlewar
 from ahia.routers import (
     auth_router,
     category_router,
+    customer_router,
     device_router,
     health_router,
     inventory_router,
@@ -262,6 +263,7 @@ def register_routers(application: FastAPI, settings: Settings) -> None:
         product_router.router,
         product_image_router.router,
         inventory_router.router,
+        customer_router.router,
     ]
     for versioned_router in versioned_routers:
         application.include_router(versioned_router, prefix=settings.api_v1_prefix)

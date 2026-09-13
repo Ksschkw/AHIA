@@ -1030,6 +1030,16 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ### M11 - progress log
 
+- M11.1.1 and M11.1.4 complete, which closes M11 apart from its progress notes. Two
+  behaviours were corrected while testing rather than after: a local phone number was
+  being checked for plausibility *before* country completion, so `0803 123 4567` was
+  stored as eleven digits that cannot be dialled from anywhere else; and Pydantic was
+  coercing `"yes"` into `True` for the marketing consent field, which is the one field
+  where guessing is least welcome. Consent is now parsed strictly, and a client that means
+  yes sends `true`.
+- The consent rule is enforced twice on purpose - the schema refuses a non-boolean, and the
+  service's narrowing refuses it again - because consent is the field whose value has legal
+  weight and a CLI caller never passes through the schema.
 - M11.1.2 and M11.1.3 complete in the persistence layer. A phone number is indexed but
   not unique: a household shares one, and the specification asks for duplicate
   *detection*, not prevention. Refusing the second entry would push a shopkeeper into
@@ -1045,7 +1055,8 @@ Goal: a business exists as a tenant with a globally unique public slug.
   delegate to it, and the plausible-length bounds tightened to E.164's own (seven to
   fifteen digits), which is what the user entity already enforced.
 
-- [x] M11.1.1 `customer_model.py` (the rest of the slice follows below), plus
+- [x] M11.1.1 `customer_model.py`, `customer_schema.py`, `customer_crud.py`,
+      `customer_service.py`, `customer_router.py`, plus
       `phone_number.py`: the phone rule was split between the user entity and the auth
       service, and a customer needs the same one, so it now lives in a single module the
       entity layer owns.
@@ -1058,8 +1069,11 @@ Goal: a business exists as a tenant with a globally unique public slug.
       column that every transition moves, and an update that can be checked against the
       version an offline client was working from, so two edits produce a typed conflict
       rather than one silently discarding the other.
-- [ ] M11.1.4 Tests: cross-tenant customer access denial, duplicate detection
-      by phone within a tenant, soft deactivation preserving sales history.
+- [x] M11.1.4 Tests: cross-tenant customer access denial (by identifier, listing,
+      count and phone, at the persistence and endpoint layers), duplicate detection by
+      phone within a tenant, and soft deactivation that preserves everything and is
+      reversible. The sales-history half is asserted structurally: deactivation keeps
+      every field and there is no delete function to call.
 
 ---
 

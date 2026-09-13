@@ -47,6 +47,7 @@ from ahia.integrations.storage.storage_factory import (
 )
 from ahia.services.auth_service import AuthService
 from ahia.services.category_service import CategoryService
+from ahia.services.customer_service import CustomerService
 from ahia.services.device_service import DeviceService
 from ahia.services.inventory_service import InventoryService
 from ahia.services.permission_service import PermissionService
@@ -89,6 +90,7 @@ class ApplicationContainer:
     product_service: ProductService
     product_image_service: ProductImageService
     inventory_service: InventoryService
+    customer_service: CustomerService
     token_service: TokenService
     password_hasher: PasswordHasher
     logger: StructuredLogger
@@ -192,6 +194,12 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         logger=logger,
     )
 
+    customer_service = CustomerService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        default_phone_country_code=settings.default_phone_country_code,
+        logger=logger,
+    )
+
     inventory_service = InventoryService(
         unit_of_work_factory=database.unit_of_work_factory(),
         logger=logger,
@@ -225,6 +233,7 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         product_service=product_service,
         product_image_service=product_image_service,
         inventory_service=inventory_service,
+        customer_service=customer_service,
         token_service=token_service,
         password_hasher=password_hasher,
         logger=logger,
