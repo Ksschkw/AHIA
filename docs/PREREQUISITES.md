@@ -46,10 +46,10 @@ required to run the core backend, its migrations or its test suite.
 
 | Tool | Version floor | Needed from | Why |
 |---|---|---|---|
-| Node.js | 20 LTS or 22 LTS | M18 (web), M19 (mobile) | Next.js and Expo toolchains |
-| pnpm | 9 | M18, M19 | web/mobile package manager with a committed lockfile |
-| Expo CLI (via `npx expo`) | SDK 51+ | M19 | React Native development and device builds |
-| EAS CLI | latest | M19 | store builds and OTA updates |
+| Node.js | 20 LTS or 22 LTS | M19 (web), M20 (mobile) | Next.js and Expo toolchains |
+| pnpm | 9 | M19, M20 | web/mobile package manager with a committed lockfile |
+| Expo CLI (via `npx expo`) | SDK 51+ | M20 | React Native development and device builds |
+| EAS CLI | latest | M20 | store builds and OTA updates |
 | AWS CLI (optional) | v2 | M7 | manual R2 bucket inspection using the S3-compatible API |
 | `gitleaks` | 8.x | M0 | secret scanning; installed into the workspace, see 2.4 |
 | `pip-audit` | 2.x | M0 | dependency vulnerability scanning |
@@ -148,13 +148,13 @@ credential material it produces. Items marked "required" block their milestone.
 - Produces: no application environment variables beyond those already listed;
   the platform injects `PORT`.
 
-### 2.5 Vercel or equivalent - required from M18
+### 2.5 Vercel - required from M19
 
 - Why: managed hosting for the Next.js web application and public storefronts.
 - Credential: platform token for automated deploys.
 - Produces: web-side variables, see section 4.
 
-### 2.6 Expo / EAS - required from M19
+### 2.6 Expo / EAS - required from M20
 
 - Why: React Native trader application builds and distribution.
 - Credential: Expo account, EAS project ID, Apple and Google store credentials
@@ -316,7 +316,7 @@ requests that cost money. The same reasoning applies to Cloudinary's free tier.
 | `WHATSAPP_DEFAULT_COUNTRY_CODE` | D | `234` | normalizes local numbers before link building |
 | `PUBLIC_TOKEN_BYTES` | D | `24` | entropy of share tokens for invoices, shipments, reports |
 
-### 3.7 Web application (milestone M18)
+### 3.7 Web application (milestone M19)
 
 | Variable | Req | Default | Notes |
 |---|---|---|---|
@@ -324,7 +324,7 @@ requests that cost money. The same reasoning applies to Cloudinary's free tier.
 | `NEXT_PUBLIC_STOREFRONT_BASE_URL` | R | none | public storefront origin |
 | `API_INTERNAL_BASE_URL` | D | none | server-side rendering calls |
 
-### 3.8 Mobile application (milestone M19)
+### 3.8 Mobile application (milestone M20)
 
 | Variable | Req | Default | Notes |
 |---|---|---|---|
@@ -484,5 +484,5 @@ Backend work may begin when every line below is true.
 - [ ] `make check` runs tests, lint, architecture check and secret scan locally
 - [ ] `.env` created locally from `.env.example` (never committed)
 
-Frontend work (M18, M19) additionally requires Node 20+, pnpm, and the Expo/EAS
+Frontend work (M19, M20) additionally requires Node 20+, pnpm, and the Expo/EAS
 account from section 2.6.
