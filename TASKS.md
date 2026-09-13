@@ -260,16 +260,16 @@ server-side and configuration-driven, not provider features.
 
 ### M1.2 Error architecture
 
-- [ ] M1.2.1 `core/errors.py` base hierarchy: one root error, layer-tagged
+- [x] M1.2.1 `core/errors.py` base hierarchy: one root error, layer-tagged
       subclasses (`EntityError`, `SchemaError`, `PersistenceError`,
       `DomainError`, `TransportError`, `IntegrationError`), and the typed
       `NotFoundError`, `ConflictError`, `AuthorizationError`,
       `AuthenticationError`, `ValidationError`, `DependencyUnavailableError`.
-- [ ] M1.2.2 Correlation ID: context variable, generator, inbound validation
+- [x] M1.2.2 Correlation ID: context variable, generator, inbound validation
       rules (length, character set) and accessor used by every layer.
-- [ ] M1.2.3 External envelope mapping: one table from error type to HTTP
+- [x] M1.2.3 External envelope mapping: one table from error type to HTTP
       status, external code and safe message. Internal detail never crosses.
-- [ ] M1.2.4 Tests: internal errors carry operation, entity, identifier, layer,
+- [x] M1.2.4 Tests: internal errors carry operation, entity, identifier, layer,
       correlation ID and cause chain; external payloads contain exactly the
       code, safe message and correlation ID; a leak test asserts that no stack
       trace, SQL fragment, path, hostname or dependency exception appears.
