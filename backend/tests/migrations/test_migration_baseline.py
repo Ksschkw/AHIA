@@ -59,6 +59,7 @@ EXPECTED_TABLES = frozenset(
         "product_images",
         "inventory",
         "inventory_movements",
+        "customers",
     }
 )
 

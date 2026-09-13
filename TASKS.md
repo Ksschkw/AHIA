@@ -1030,6 +1030,12 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ### M11 - progress log
 
+- M11.1.2 and M11.1.3 complete in the persistence layer. A phone number is indexed but
+  not unique: a household shares one, and the specification asks for duplicate
+  *detection*, not prevention. Refusing the second entry would push a shopkeeper into
+  inventing a number to get past the constraint, which turns a duplicate into wrong data.
+  Detection can exclude the customer being edited, so renaming somebody does not report
+  them as their own duplicate.
 - M11.1.1's entity is in, and consolidating the phone rule was part of it rather than a
   separate chore: `normalize_phone` lived on the user entity and country completion lived
   in the auth service, so a customer would have become a third place where "the same
@@ -1043,9 +1049,15 @@ Goal: a business exists as a tenant with a globally unique public slug.
       `phone_number.py`: the phone rule was split between the user entity and the auth
       service, and a customer needs the same one, so it now lives in a single module the
       entity layer owns.
-- [ ] M11.1.2 Tenant scoping and privacy: opt-in flag, no cross-tenant leakage,
-      identifiers rather than names in logs.
-- [ ] M11.1.3 Customer notes and version metadata for sync-safe merging.
+- [x] M11.1.2 Tenant scoping and privacy: every lookup in `customer_crud` takes a
+      tenant and there is no function that can read one without it; the opt-in flag
+      defaults to False; and `describe_for_audit` returns identifiers and booleans
+      rather than the name, phone, email or address, asserted by a test that renders
+      it and searches for the values.
+- [x] M11.1.3 Customer notes and version metadata for sync-safe merging: a `version`
+      column that every transition moves, and an update that can be checked against the
+      version an offline client was working from, so two edits produce a typed conflict
+      rather than one silently discarding the other.
 - [ ] M11.1.4 Tests: cross-tenant customer access denial, duplicate detection
       by phone within a tenant, soft deactivation preserving sales history.
 
