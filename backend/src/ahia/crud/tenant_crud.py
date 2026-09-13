@@ -19,6 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from ahia.core.database import Base
 from ahia.core.errors import NotFoundError
 from ahia.crud.integrity_violations import translate_integrity_violation
+from ahia.models.entities.negative_stock_policy import NegativeStockPolicy
 from ahia.models.entities.tenant_model import TenantModel
 
 _TABLE_NAME: Final[str] = "tenants"
@@ -28,6 +29,7 @@ _SHORT_TEXT_LENGTH: Final[int] = 120
 _LOCATION_LENGTH: Final[int] = 80
 _EMAIL_LENGTH: Final[int] = 254
 _PHONE_LENGTH: Final[int] = 20
+_NEGATIVE_STOCK_POLICY_LENGTH: Final[int] = 32
 
 
 class TenantRecord(Base):
@@ -49,6 +51,11 @@ class TenantRecord(Base):
     country: Mapped[str] = mapped_column(String(2), nullable=False, default="NG")
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="NGN")
     timezone: Mapped[str] = mapped_column(String(_SHORT_TEXT_LENGTH), nullable=False)
+    # Stored as text so adding a policy is not a migration, and read back through the
+    # enum by `to_entity`, which fails loudly on a value the entity does not know.
+    negative_stock_policy: Mapped[str] = mapped_column(
+        String(_NEGATIVE_STOCK_POLICY_LENGTH), nullable=False
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -74,6 +81,7 @@ def to_entity(record: TenantRecord) -> TenantModel:
         country=record.country,
         currency=record.currency,
         timezone=record.timezone,
+        negative_stock_policy=NegativeStockPolicy(record.negative_stock_policy),
         is_active=record.is_active,
         created_at=record.created_at,
         updated_at=record.updated_at,
@@ -92,6 +100,7 @@ def apply_entity(record: TenantRecord, entity: TenantModel) -> None:
     record.country = entity.country
     record.currency = entity.currency
     record.timezone = entity.timezone
+    record.negative_stock_policy = entity.negative_stock_policy.value
     record.is_active = entity.is_active
     record.created_at = entity.created_at
     record.updated_at = entity.updated_at

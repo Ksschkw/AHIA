@@ -947,15 +947,36 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ## M10 - Inventory ledger and projections
 
+### M10 - progress log
+
+- M10.1.1, M10.1.2 and M10.1.4 complete. The append-only rule is a trigger rather than a
+  convention: `crud/inventory_movement_crud.py` has no update or delete function, and a
+  unit test asserts that mechanically, but the database refuses both anyway - including
+  from a psql session and from code that never read the docstring.
+- Two test assumptions were wrong and both were corrected rather than worked around. A
+  raw duplicate insert raises `IntegrityError`, not the `PersistenceError` the service
+  path would raise, because `lock_for_product` deliberately tolerates a concurrent insert
+  with `ON CONFLICT DO NOTHING`; and a raised trigger surfaces as `DBAPIError`, since
+  asyncpg reports it as a generic database error rather than a programming mistake.
+- The migration adds `tenants.negative_stock_policy` with a server default and then drops
+  it: existing businesses are backfilled with the policy that refuses negative stock, and
+  a future insert that forgets the column fails loudly instead of inheriting a policy
+  nobody chose.
+
 - [ ] M10.1.1 `inventory_model.py` and `inventory_movement_model.py` as pure
       entities with the invariant `after = before + delta`.
-- [ ] M10.1.2 Persistence for both, with the movement ledger append-only.
+- [x] M10.1.2 Persistence for both, with the movement ledger append-only - enforced
+      by a database trigger, not only by the absence of an update function, and with
+      `operation_id` unique per tenant so a replayed offline operation is recognised
+      rather than applied twice.
 - [ ] M10.1.3 `inventory_service.py`: `receive_stock`, `adjust_stock`,
       `record_damage`, `transfer_stock`, `get_inventory_for_product`,
       `list_movements`, each writing a movement and updating the projection in
       one transaction.
-- [ ] M10.1.4 Negative-stock policy handling with an explicit tenant
-      configuration point.
+- [x] M10.1.4 Negative-stock policy handling with an explicit tenant configuration
+      point: `tenants.negative_stock_policy`, defaulting to `BLOCK_NEGATIVE_STOCK`,
+      read back through the enum so a value this version does not know fails loudly
+      rather than becoming the default.
 - [ ] M10.1.5 `inventory_schema.py` and `inventory_router.py`.
 - [ ] M10.1.6 Concurrency test: two concurrent offline sales produce two
       movements and a deterministic projection.
