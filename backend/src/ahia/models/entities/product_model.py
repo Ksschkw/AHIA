@@ -423,6 +423,104 @@ class ProductModel:
 # ---------------------------------------------------------------------------
 
 
+def coerce_money(value: object, *, field_name: str) -> Decimal:
+    """Return the Decimal a price or cost represents, or raise ValueError.
+
+    This is the boundary's parser and the domain's rule in one function, so the edge
+    and the entity cannot disagree about what a price is - the same reason the tenant
+    slice shares `validate_slug` between its schema and its entity.
+
+    A JSON body carries money as a number or as a string, and both are accepted:
+
+    * a string is the safest form, and the one this API publishes, because no client
+      ever has to pass a value through a binary float to send it
+    * a number is accepted because most clients send one, and it is converted through
+      its own decimal text rather than through its binary value
+
+    Raises ValueError rather than a domain error so the schema layer can turn it into a
+    422 for a client while the entity layer turns it into an invariant violation.
+    """
+    parsed = _parse_decimal_like(value, field_name=field_name)
+    _check_money_rules(
+        parsed,
+        field_name=field_name,
+        minimum=ZERO_PRICE,
+        maximum=MAXIMUM_PRICE,
+    )
+    return parsed
+
+
+def coerce_quantity(value: object, *, field_name: str) -> Decimal:
+    """Return the Decimal a quantity represents, or raise ValueError.
+
+    Quantities carry three decimal places rather than two, because stock is counted in
+    kilos and litres as well as in units.
+    """
+    parsed = _parse_decimal_like(value, field_name=field_name)
+    _check_quantity_rules(parsed, field_name=field_name, maximum=MAXIMUM_QUANTITY)
+    return parsed
+
+
+def _parse_decimal_like(value: object, *, field_name: str) -> Decimal:
+    """Turn a wire value into a Decimal without ever going through a binary float."""
+    if isinstance(value, bool) or value is None:
+        raise ValueError(f"{field_name} must be a number")
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        # A float that reached this point came from JSON, so its shortest decimal text
+        # is what the client sent. `Decimal(float)` would instead expose the binary
+        # approximation, which is the value nobody typed.
+        return Decimal(str(value))
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            raise ValueError(f"{field_name} is empty")
+        try:
+            return Decimal(text)
+        except InvalidOperation as invalid:
+            raise ValueError(f"{field_name} is not a number") from invalid
+    raise ValueError(f"{field_name} must be a number, not {type(value).__name__}")
+
+
+def _check_money_rules(
+    value: Decimal,
+    *,
+    field_name: str,
+    minimum: Decimal,
+    maximum: Decimal,
+) -> None:
+    """Raise ValueError unless the Decimal is a price this column can hold."""
+    if not value.is_finite():
+        raise ValueError(f"{field_name} is not a finite number")
+    try:
+        quantised = value.quantize(MONEY_PLACES)
+    except InvalidOperation as unrepresentable:
+        raise ValueError(
+            f"{field_name} cannot be represented with two decimal places"
+        ) from unrepresentable
+    if quantised != value:
+        raise ValueError(f"{field_name} has more than two decimal places")
+    if value < minimum:
+        raise ValueError(f"{field_name} is below {minimum}")
+    if value > maximum:
+        raise ValueError(f"{field_name} exceeds {maximum}")
+
+
+def _check_quantity_rules(value: Decimal, *, field_name: str, maximum: Decimal) -> None:
+    """Raise ValueError unless the Decimal is a quantity this column can hold."""
+    if not value.is_finite():
+        raise ValueError(f"{field_name} is not a finite number")
+    if value.quantize(QUANTITY_PLACES) != value:
+        raise ValueError(f"{field_name} has more than three decimal places")
+    if value < ZERO_QUANTITY:
+        raise ValueError(f"{field_name} is negative")
+    if value > maximum:
+        raise ValueError(f"{field_name} exceeds {maximum}")
+
+
 def _require_money(
     value: object,
     *,
@@ -431,7 +529,7 @@ def _require_money(
     minimum: Decimal,
     maximum: Decimal,
 ) -> None:
-    """Raise unless the value is a Decimal price this column can hold.
+    """Raise unless the field already holds a Decimal price this column can hold.
 
     The parameter is typed as `object` on purpose. The annotation on the field says
     `Decimal`, and that is the contract; this function is where the contract is
@@ -439,9 +537,9 @@ def _require_money(
     `Decimal` here would tell the checker the float case cannot happen, which is the
     case the check exists for.
 
-    A float is refused rather than converted. Converting would hide the bug at the
-    exact place it can be caught, and the person who typed the price would never learn
-    that the number they see is not the number that was stored.
+    A float is refused rather than converted. The wire parser converts, because JSON
+    has no decimal type; an entity holding a float means something upstream skipped
+    that boundary, and rounding it here would hide the bug where it can be caught.
     """
     if isinstance(value, float):
         raise EntityInvariantError(
@@ -460,43 +558,15 @@ def _require_money(
             identifier=str(product_id),
             detail=f"{field_name} must be a Decimal, not {type(value).__name__}",
         )
-    if not value.is_finite():
-        raise EntityInvariantError(
-            operation="build_product",
-            entity="product",
-            identifier=str(product_id),
-            detail=f"{field_name} is not a finite number",
-        )
     try:
-        quantised = value.quantize(MONEY_PLACES)
-    except InvalidOperation as unrepresentable:
+        _check_money_rules(value, field_name=field_name, minimum=minimum, maximum=maximum)
+    except ValueError as invalid:
         raise EntityInvariantError(
             operation="build_product",
             entity="product",
             identifier=str(product_id),
-            detail=f"{field_name} cannot be represented with two decimal places",
-        ) from unrepresentable
-    if quantised != value:
-        raise EntityInvariantError(
-            operation="build_product",
-            entity="product",
-            identifier=str(product_id),
-            detail=f"{field_name} has more than two decimal places",
-        )
-    if value < minimum:
-        raise EntityInvariantError(
-            operation="build_product",
-            entity="product",
-            identifier=str(product_id),
-            detail=f"{field_name} is below {minimum}",
-        )
-    if value > maximum:
-        raise EntityInvariantError(
-            operation="build_product",
-            entity="product",
-            identifier=str(product_id),
-            detail=f"{field_name} exceeds {maximum}",
-        )
+            detail=str(invalid),
+        ) from invalid
 
 
 def _require_quantity(
@@ -506,7 +576,7 @@ def _require_quantity(
     product_id: UUID,
     maximum: Decimal,
 ) -> None:
-    """Raise unless the value is a Decimal quantity with at most three places.
+    """Raise unless the field already holds a Decimal quantity.
 
     Typed as `object` for the same reason as `_require_money`: this is the check that
     makes the field's annotation true, so it must assume nothing.
@@ -529,34 +599,15 @@ def _require_quantity(
             identifier=str(product_id),
             detail=f"{field_name} must be a Decimal, not {type(value).__name__}",
         )
-    if not value.is_finite():
+    try:
+        _check_quantity_rules(value, field_name=field_name, maximum=maximum)
+    except ValueError as invalid:
         raise EntityInvariantError(
             operation="build_product",
             entity="product",
             identifier=str(product_id),
-            detail=f"{field_name} is not a finite number",
-        )
-    if value.quantize(QUANTITY_PLACES) != value:
-        raise EntityInvariantError(
-            operation="build_product",
-            entity="product",
-            identifier=str(product_id),
-            detail=f"{field_name} has more than three decimal places",
-        )
-    if value < ZERO_QUANTITY:
-        raise EntityInvariantError(
-            operation="build_product",
-            entity="product",
-            identifier=str(product_id),
-            detail=f"{field_name} is negative",
-        )
-    if value > maximum:
-        raise EntityInvariantError(
-            operation="build_product",
-            entity="product",
-            identifier=str(product_id),
-            detail=f"{field_name} exceeds {maximum}",
-        )
+            detail=str(invalid),
+        ) from invalid
 
 
 def _clean_optional_text(value: str | None) -> str | None:

@@ -735,7 +735,10 @@ Goal: a business exists as a tenant with a globally unique public slug.
       invariant violation rather than a value to round, prices carry at most two
       decimal places, and deactivating a published product unpublishes it in the
       same transition.
-- [ ] M9.1.3 `product_schema.py` with price, slug and publication validation.
+- [x] M9.1.3 `product_schema.py` with price, slug and publication validation. A price
+      is accepted as a JSON number or a decimal string and always returned as a decimal
+      string, so no client passes money through a binary float. The slug, the tenant,
+      the public token and the two lifecycle booleans are refused at the edge.
 - [ ] M9.1.4 `product_crud.py` with tenant-scoped uniqueness
       (`UNIQUE(tenant_id, slug)`, conditional SKU and barcode uniqueness).
 - [ ] M9.1.5 `product_service.py`: `create_product`, `update_product`,
