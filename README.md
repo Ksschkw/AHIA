@@ -121,19 +121,25 @@ with one command.
 Milestones M0 through M8 are complete and committed: repository and tooling, core
 cross-cutting infrastructure, the User vertical slice, authentication and sessions,
 tenants, staff administration, the permission model as data, devices, and the versioned
-migration baseline. M9 is under way: categories are complete, and products are complete
-end to end - entity, contract, table, use cases and endpoints - with decimal money,
-per-tenant codes and the composite cross-tenant anchors the specification calls for.
-1248 tests pass, the nine-stage build gate is green, and the service serves a real flow:
+migration baseline. M9 is nearly complete: categories and products are done end to end,
+and product images are done from the upload pipeline to the endpoints - validated,
+optimized, charged against the tenant's quota and stored under a server-built key.
+1308 tests pass, the nine-stage build gate is green, and the service serves a real flow:
 create an account, sign in, create a business, invite a worker, have that worker accept
 the invitation with the role they were given, inspect what that role can do, group the
-catalogue into categories, add a product and publish it at an address a customer can
-share, and revoke a lost phone - which ends the sessions bound to it.
+catalogue into categories, add a product, upload its pictures, publish it at an address
+a customer can share, and revoke a lost phone - which ends the sessions bound to it.
 
 Cross-tenant integrity is enforced by the database, not only by services: `products`
 references `categories(id, tenant_id)` as a composite key, so a product in one business
-cannot point at another business's category even if a service forgets to check. The
-same anchor on `products(id, tenant_id)` is what the sales tables will reference.
+cannot point at another business's category even if a service forgets to check; product
+images reference `products(id, tenant_id)` the same way. The anchor on
+`products(id, tenant_id)` is what the sales tables will reference.
+
+Object storage is provider-neutral in the schema as well as in the code: an image row
+records `storage_provider` and `storage_key` rather than a column named after a vendor,
+so switching providers is a configuration change and an architecture test fails the
+build if a provider's name appears in a column or outside the storage boundary.
 
 The schema is versioned: `alembic upgrade head` builds every table from an empty
 database, `alembic downgrade base` takes it back, and a test asserts that an
@@ -149,6 +155,6 @@ that is safe under concurrent uploads, and authentication whose failures are
 indistinguishable across an unknown account, a wrong password and a deactivated
 account.
 
-Next in M9: product images - provider-neutral metadata, the server-side upload pipeline
-against R2 or Cloudinary, tenant quota accounting and deletion - then the catalogue's
-cross-tenant tests. Progress is tracked in `TASKS.md`.
+Next: the last of M9 - the storage-failure and provider-switch tests, including proving
+that an image written under one provider still resolves after a switch - then M10, the
+inventory ledger. Progress is tracked in `TASKS.md`.
