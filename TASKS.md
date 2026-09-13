@@ -610,7 +610,7 @@ an account exists.
 
 Goal: a business exists as a tenant with a globally unique public slug.
 
-- [ ] M4.1.1 `tenant_model.py` with slug invariants and lifecycle rules.
+- [x] M4.1.1 `tenant_model.py` with slug invariants and lifecycle rules.
 - [ ] M4.1.2 `tenant_schema.py` with slug format validation and reserved-word
       rejection.
 - [ ] M4.1.3 `tenant_crud.py`: persistence with global slug uniqueness.
