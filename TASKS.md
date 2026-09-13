@@ -532,11 +532,11 @@ layer-appropriate tests.
 
 ### M2.3 Persistence
 
-- [ ] M2.3.1 `crud/user_crud.py`: SQLAlchemy record owning the `users` table,
+- [x] M2.3.1 `crud/user_crud.py`: SQLAlchemy record owning the `users` table,
       the row-to-entity mapper, and `get_by_id`, `get_by_email`,
       `get_by_phone`, `create`, `update`, `deactivate`. Returns entities, never
       records.
-- [ ] M2.3.2 CRUD tests: mapping both directions, unique constraint behavior,
+- [x] M2.3.2 CRUD tests: mapping both directions, unique constraint behavior,
       tenant-independent lookups by identity, and no business decisions in the
       file.
 
