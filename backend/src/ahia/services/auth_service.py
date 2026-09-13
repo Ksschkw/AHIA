@@ -81,12 +81,14 @@ class AuthService:
         password_hasher: PasswordHasher,
         refresh_token_ttl_days: int,
         access_token_ttl_minutes: int,
+        default_phone_country_code: str = "234",
         logger: StructuredLogger | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._token_service = token_service
         self._password_hasher = password_hasher
         self._refresh_token_lifetime = timedelta(days=refresh_token_ttl_days)
+        self._default_country_code = f"+{default_phone_country_code.lstrip('+')}"
         self._access_token_expires_in_seconds = access_token_ttl_minutes * 60
         self._logger = (logger or get_logger(_AUTH_LOGGER_NAME)).bind(
             component="auth_service", layer="service"
@@ -126,7 +128,7 @@ class AuthService:
             first_name=first_name,
             last_name=last_name,
             email=email,
-            phone=phone,
+            phone=self.canonical_phone(phone),
             password_hash=self._password_hasher.hash_password(password),
             now=now,
         )
@@ -269,8 +271,30 @@ class AuthService:
         )
         return issued
 
-    @staticmethod
+    def canonical_phone(self, phone: str | None) -> str | None:
+        """Return the E.164 form of a phone number, using the configured country.
+
+        A Nigerian trader writes 0803 123 4567, another client sends
+        +2348031234567, and both must resolve to one account. The entity
+        normalizes syntax only, because completing a country code requires
+        configuration; this is where that configuration is available.
+
+        A number already in international form is left alone: guessing a country
+        for a number that states one would corrupt it.
+        """
+        normalized = normalize_phone(phone)
+        if normalized is None:
+            return None
+        if normalized.startswith("+"):
+            return normalized
+        if normalized.startswith("0"):
+            # A trunk prefix is meaningful only locally, so it is replaced by the
+            # country code rather than kept.
+            return f"{self._default_country_code}{normalized[1:]}"
+        return f"{self._default_country_code}{normalized}"
+
     async def _find_by_identifier(
+        self,
         session: object,
         email: str | None,
         phone: str | None,
@@ -278,15 +302,22 @@ class AuthService:
         """Look the identifier up as an email first, then as a phone number.
 
         An identifier containing an at-sign is an email; anything else is treated
-        as a phone number. Trying both shapes costs two queries and removes a
-        class of "it says my account does not exist" support requests.
+        as a phone number, tried in its canonical form and then in the form it
+        arrived in, so an account stored before the canonical rule existed can
+        still sign in.
         """
         if email is not None and "@" in email:
             found = await user_crud.get_by_email(session, email)  # type: ignore[arg-type]
             if found is not None:
                 return found
+
         if phone is not None:
-            return await user_crud.get_by_phone(session, phone)  # type: ignore[arg-type]
+            for candidate in (self.canonical_phone(phone), phone):
+                if candidate is None:
+                    continue
+                found_by_phone = await user_crud.get_by_phone(session, candidate)  # type: ignore[arg-type]
+                if found_by_phone is not None:
+                    return found_by_phone
         return None
 
     def _log_failed_sign_in(self, *, reason: str, user_id: UUID | None = None) -> None:
