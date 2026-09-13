@@ -758,12 +758,13 @@ Goal: a business exists as a tenant with a globally unique public slug.
       `product_image_router.py`.
 - [ ] M9.1.8 Storage and media capabilities: delivered in M1.11 through M1.17.
       M9 consumes them through the port; it does not construct a provider.
-- [ ] M9.1.9 Server-side upload pipeline: authorize `products.update`, validate
-      the request, decode and optimize the image through the media capability,
-      reserve tenant quota, upload through the storage capability under a
-      server-generated key, then persist the metadata and commit the quota in
-      one transaction. A client-supplied object key or storage provider is never
-      trusted or accepted.
+- [x] M9.1.9 Server-side upload pipeline: authorize `products.update`, resolve the
+      product in the tenant, check the per-product limit, decode and optimize through
+      the media capability, reserve quota for the *optimized* size, upload through the
+      storage capability under a server-built key, then persist the metadata and commit
+      the reservation. Every failure path compensates: a provider that raises releases
+      the reservation, a degraded result is a typed failure rather than an empty
+      success, and a metadata write that fails deletes the object it had stored.
 - [x] M9.1.10 Provider-neutral image metadata persistence: `storage_provider`,
       `storage_key`, `mime_type`, `size_bytes`, `width`, `height`,
       `checksum_sha256`, `sort_order`, `is_primary`, plus `removed_at` and
@@ -771,13 +772,16 @@ Goal: a business exists as a tenant with a globally unique public slug.
       is named after a provider, and an architecture test now asserts that over the
       whole metadata: no table may have a column containing `r2`, `s3`, `bucket` or
       the other vendor's name.
-- [ ] M9.1.11 Product image limits: maximum count per product and maximum
-      stored bytes per tenant, both configuration-driven, both enforced before
-      persistence, with the error naming the limit that was hit.
-- [ ] M9.1.12 Deletion and replacement: removing an image deletes the stored
-      object and releases its quota allocation; a failed provider delete leaves
-      the metadata row marked for reconciliation rather than silently leaking
-      storage.
+- [x] M9.1.11 Product image limits: maximum count per product and maximum stored
+      bytes per tenant, both configuration-driven, both enforced before persistence,
+      with the error naming the limit that was hit. The per-product limit is checked
+      before the server decodes anything, and the gallery count excludes removed
+      images, so a business that removes one can add another.
+- [x] M9.1.12 Deletion and replacement: removing an image deletes the stored object,
+      drops the row and releases its bytes; a provider delete that fails leaves the row
+      marked for reconciliation with the quota still committed, because the bytes are
+      still there, and a reconciliation pass retries it and releases the bytes when it
+      succeeds.
 - [ ] M9.1.13 Catalog migration and tests, including cross-tenant product
       access denial, cross-tenant image access denial and price precision tests.
 - [ ] M9.1.14 Storage failure test: with the active provider unavailable,
@@ -790,6 +794,26 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ### M9 - progress log
 
+- M9.1.12 and M9.1.11 complete. Quota is released only when the provider confirms the
+  object is gone; a failed delete keeps the bytes committed and the row marked, because
+  releasing quota for storage that still exists would understate usage and let it grow
+  with nobody watching. Reconciliation retries and releases on success, and never
+  removes a row whose object it could not delete - the point of the pass is to reduce
+  the leak, not to hide it.
+- M9.1.9 complete, and it found a defect in its own first version: a provider that
+  raises left the reservation held, because only the degraded-result path released it.
+  A reservation nobody releases is quota the tenant paid for and cannot use until the
+  stale-reservation reaper runs, so the failure path now releases it before re-raising.
+  The test asserts both accounting columns, not only the committed one.
+- The upload pipeline charges for the optimized size rather than the uploaded one, so a
+  1.9-megapixel phone photo costs the tenant the 800x600 WebP that was actually stored.
+  The media processor's decompression-bomb ceiling is what stops a deliberately huge
+  upload, and a test shows it refusing one that would have blown past the configured
+  area.
+- Tests for the pipeline run against the real image processor and a recording storage
+  double: the processor is real because its rules are the subject, and the double is a
+  double because the object store is not - what is asserted is that the service calls it
+  with a server-built key, once, and compensates when a later step fails.
 - M9.1.10 complete, and the schema enforces two rules that a service could otherwise
   only promise. At most one primary image per product is a partial unique index, so two
   simultaneous requests cannot produce two covers; and "a removed image is never the
