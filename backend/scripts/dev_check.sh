@@ -44,6 +44,7 @@ gate_names=()
 gate_results=()
 gate_seconds=()
 failed_gates=0
+skipped_gates=0
 
 record() {
   local name="$1"
@@ -52,9 +53,16 @@ record() {
   gate_names+=("${name}")
   gate_results+=("${result}")
   gate_seconds+=("${seconds}")
-  if [[ "${result}" != "OK" ]]; then
-    failed_gates=$((failed_gates + 1))
-  fi
+  # Only a failure makes the build red. A SKIP is a gate the caller deliberately
+  # did not run: check-fast skips the dependency audit because it needs network
+  # access. Counting a skip as a failure made the documented offline command end
+  # in a red summary on a healthy tree, which teaches people to ignore the
+  # summary - the opposite of what a gate is for.
+  case "${result}" in
+    OK) ;;
+    SKIP) skipped_gates=$((skipped_gates + 1)) ;;
+    *) failed_gates=$((failed_gates + 1)) ;;
+  esac
 }
 
 run_gate() {
@@ -100,6 +108,13 @@ printf '%s\n' '-----------------------------------------------------------------
 if (( failed_gates > 0 )); then
   printf '[FAIL] %d gate(s) failed. The build is red.\n' "${failed_gates}"
   exit 1
+fi
+
+if (( skipped_gates > 0 )); then
+  # Naming what did not run matters: a green summary that quietly omits a gate
+  # would read as "everything was checked".
+  printf '[OK] all gates passed (%d skipped)\n' "${skipped_gates}"
+  exit 0
 fi
 
 printf '[OK] all gates passed\n'
