@@ -83,7 +83,7 @@ assertion in a commit message.
 | M5 | Membership and staff administration | `[x]` | M4 |
 | M6 | Roles, permissions and deny-by-default authorization | `[x]` | M5 |
 | M7 | Devices and session management | `[x]` | M6 |
-| M8 | Alembic migration baseline (M8.1.4 deferred to M9) | `[~]` | M6 |
+| M8 | Alembic migration baseline (M8.1.4 delivered in M9) | `[x]` | M6 |
 | M9 | Catalog: categories, products, images, storage | `[x]` | M8 |
 | M10 | Inventory ledger and projections | `[ ]` | M9 |
 | M11 | Customers | `[ ]` | M9 |
@@ -695,12 +695,12 @@ Goal: a business exists as a tenant with a globally unique public slug.
       empty schema to head, downgrade to base, upgrade again, plus a no-drift
       assertion - an autogenerate comparison against the models must find nothing -
       and a check that `alembic.ini` holds no credential.
-- [ ] M8.1.4 DEFERRED to M9, deliberately. Composite foreign keys of the
-      `(product_id, tenant_id)` form anchor on tenant-owned tables such as
-      `products`, which do not exist yet. The constraint is added with the table
-      that needs it, together with the test that a cross-tenant reference is
-      rejected by the database itself. Adding the anchor now would mean inventing
-      a table in M8 to satisfy a later milestone.
+- [x] M8.1.4 DELIVERED IN M9, which is where it was deferred to. The composite keys
+      arrived with the tables that need them: `products` references
+      `categories(id, tenant_id)`, product images reference `products(id, tenant_id)`,
+      and `products(id, tenant_id)` is the anchor the sales tables will reference in
+      M12. Each is covered by a test that the database itself refuses a cross-tenant
+      reference, and by a test that the anchor a key depends on is actually declared.
 
 ### M8 - progress log
 
