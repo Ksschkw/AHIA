@@ -118,8 +118,18 @@ with one command.
 
 ## Current status
 
-Milestone progress is tracked in `TASKS.md`. The scaffold work is being executed
-in the order fixed by the product specification: repository and tooling, core
-cross-cutting infrastructure, the User demonstrative vertical slice, then the
-foundation domain (tenant, membership, roles, permissions, devices) before the
-operational domain (catalog, inventory, customers, sales, sync, storefront).
+Milestones M0 (repository and tooling) and M1 (core cross-cutting
+infrastructure) are complete and committed. 557 tests pass, the nine-stage build
+gate is green, and the service runs: liveness and readiness answer, errors use
+the standard envelope with a correlation ID, and every response carries the
+security headers.
+
+Delivered in M1, beyond the core: a provider-neutral storage capability with both
+Cloudflare R2 and Cloudinary adapters selectable by configuration, mandatory
+server-side image validation and optimization, and per-tenant storage quota
+accounting that is safe under concurrent uploads.
+
+Next is M2, the User demonstrative vertical slice, followed by authentication and
+the foundation domain (tenant, membership, roles, permissions, devices) before
+the operational domain (catalog, inventory, customers, sales, sync, storefront).
+Progress is tracked in `TASKS.md`.

@@ -926,6 +926,34 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ---
 
+## Progress log
+
+Completed milestones, with what is verifiably working.
+
+**M0 - repository and developer tooling foundation (25 micro-milestones).**
+Repository hygiene, the pinned dependency closure with two lockfiles (development
+and runtime-only, both with hashes), the ASCII and banned-name guards, nine
+architecture contracts run inside pytest, secret scanning with a
+checksum-verified scanner install, dependency auditing with expiring ignores, the
+pre-commit hooks, one `make check` gate, CI, and the container image.
+
+**M1 - core cross-cutting infrastructure (55 micro-milestones).** Typed
+configuration and the feature flag register; the error hierarchy with correlation
+IDs and the external envelope; structured logging with infrastructure-level
+redaction; outbound resilience primitives; password hashing and token issuance;
+the database lifecycle and unit of work; the permission registry, tenant context
+and deny-by-default authorization policy; the storage port with two adapters and
+the factory; server-side media optimization; tenant storage quota accounting with
+concurrency safety; the composition root; correlation, security header, rate
+limit and error handling middleware; and the assembled application with liveness
+and readiness endpoints.
+
+Verification at the end of M1: 557 tests pass, of which the storage, quota and
+database suites run against real PostgreSQL; the build gate passes all nine
+stages; the service starts, answers `/health` and `/ready`, returns the standard
+error envelope on an unknown route with the caller's correlation ID echoed, and
+carries the security headers on every response.
+
 ## Cross-milestone obligations
 
 These apply continuously and are re-verified at each milestone boundary.
