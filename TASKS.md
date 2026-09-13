@@ -164,7 +164,7 @@ lint error and a failing test. CI runs the same command.
       `helper`, `utils`, `common`, `misc`, `temp`, `tmp`, `process`, `handle`,
       `do`, `thing` as standalone module, class or file names, with the
       narrow exceptions the preset allows.
-- [ ] M0.4.3 Tests for both guards: a passing tree and planted violations that
+- [x] M0.4.3 Tests for both guards: a passing tree and planted violations that
       must be detected, so the guard cannot silently rot.
 
 ### M0.5 Architecture enforcement

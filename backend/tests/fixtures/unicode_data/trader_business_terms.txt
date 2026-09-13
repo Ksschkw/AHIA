@@ -1,0 +1,23 @@
+# Intentionally non-ASCII fixture.
+
+This file exists so the tests can prove three things at once:
+
+1. The ASCII guard skips paths declared in its UNICODE_ALLOWED_PREFIXES list,
+   and only those paths.
+2. The product stores and returns real Unicode business data faithfully: Igbo
+   names, the dotted product name, Pidgin phrasing and an emoji a trader might
+   actually type into a customer note.
+3. The engineering-artifact rule and the runtime-data rule are genuinely
+   different rules, not one rule with an exception bolted on.
+
+Every line below is customer data, never code, never a log message.
+
+AHỊA
+Emeka Ọkọnkwo
+Ngozi Ụzọma
+Chinedu Nwachukwu
+Oga, how much be this one?
+Na 45k last price.
+Customer note: bring am tomorrow morning.
+Customer note with emoji: thanks o 🙏
+Storefront banner text: AHỊA — Alaba Electronics
