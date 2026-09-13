@@ -29,7 +29,7 @@ from collections.abc import Callable, Mapping
 from typing import Any, Final, Protocol
 
 from ahia.core.config import R2Configuration
-from ahia.core.errors import StorageOperationError, StorageUnavailableError
+from ahia.core.errors import StorageOperationError, StorageUnavailableError, TenantIsolationError
 from ahia.core.logging import StructuredLogger, get_logger
 from ahia.core.ports.storage_port import (
     StorageUploadRequest,
@@ -313,7 +313,7 @@ class R2StorageAdapter:
             tenant_id=tenant_id,
             key_prefix=key[:64],
         )
-        raise StorageOperationError(
+        raise TenantIsolationError(
             operation=operation,
             entity="storage_object",
             detail="key is outside the caller's tenant prefix",

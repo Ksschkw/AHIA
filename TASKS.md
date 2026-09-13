@@ -478,10 +478,10 @@ server-side and configuration-driven, not provider features.
 
 ### M1.16 Storage contract test suite
 
-- [ ] M1.16.1 One shared, provider-agnostic behavioural suite executed against
+- [x] M1.16.1 One shared, provider-agnostic behavioural suite executed against
       both adapters, so a divergence between providers is a test failure rather
       than a production surprise.
-- [ ] M1.16.2 Security assertions: another tenant's storage key is never
+- [x] M1.16.2 Security assertions: another tenant's storage key is never
       reachable through the port's public operations, and a storage failure
       surfaces as a safe external error with the internal detail confined to the
       log.

@@ -5,8 +5,10 @@ lives in `core` because every layer may import `core`, while only the
 composition root and the adapters may touch `integrations`.
 
 That placement is what keeps the dependency direction clean: a service declares
-"I need a storage capability", the container injects the R2 or Cloudinary
-adapter, and the service never learns which one it received.
+"I need a storage capability", the container injects whichever adapter the
+configuration selected, and the service never learns which one it received. The
+ports themselves name no vendor: a test asserts it, so a contract file cannot
+quietly acquire a provider-shaped parameter.
 
 Ports defined here:
 

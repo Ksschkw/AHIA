@@ -1,12 +1,12 @@
 """The provider-neutral object storage port.
 
 Services depend on this module. They never depend on an adapter, and they never
-learn whether the bytes ended up on Cloudflare R2 or Cloudinary.
+learn which provider actually stored the bytes.
 
 The contract is deliberately narrow: the operations AHIA actually performs, over
 value objects that mean the same thing regardless of who stores the file.
 
-* no Cloudinary public identifier, no bucket name, no region, no endpoint
+* no provider-specific public identifier, no bucket name, no region, no endpoint
 * no provider SDK type anywhere in a signature
 * no method that returns ``None`` to mean "the provider was unavailable". A
   provider that is down produces a typed degraded object, so a caller cannot

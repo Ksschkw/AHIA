@@ -23,6 +23,7 @@ from ahia.core.errors import (
     IntegrationError,
     StorageOperationError,
     StorageUnavailableError,
+    TenantIsolationError,
 )
 from ahia.core.ports.storage_port import StoragePort, StorageUploadRequest, compute_sha256
 from ahia.core.resilience import (
@@ -112,8 +113,6 @@ def build_configuration(**overrides: Any) -> R2Configuration:
         "region": "auto",
         "public_base_url": None,
         "request_timeout_seconds": 5.0,
-        "circuit_failure_threshold": 3,
-        "circuit_reset_seconds": 30.0,
     }
     baseline.update(overrides)
     return R2Configuration(**baseline)
@@ -402,7 +401,7 @@ async def test_cross_tenant_key_is_rejected_before_the_provider_is_called(
 
     with (
         caplog.at_level(logging.ERROR, logger="ahia.integrations.storage.r2"),
-        pytest.raises(StorageOperationError) as captured,
+        pytest.raises(TenantIsolationError) as captured,
     ):
         if method_name == "delete":
             await adapter.delete(key=cross_tenant_key, tenant_id=TENANT_ID)
@@ -410,6 +409,9 @@ async def test_cross_tenant_key_is_rejected_before_the_provider_is_called(
             await adapter.exists(key=cross_tenant_key, tenant_id=TENANT_ID)
 
     assert "tenant prefix" in str(captured.value)
+    # Externally this is a 404 that is indistinguishable from a missing object,
+    # which is the same answer the Cloudinary adapter gives.
+    assert captured.value.external().code == "NOT_FOUND"
     assert client.delete_calls == []
     assert client.head_calls == []
     assert caplog.records[0].getMessage() == "storage_cross_tenant_key_rejected"
