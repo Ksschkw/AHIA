@@ -120,7 +120,7 @@ lint error and a failing test. CI runs the same command.
 - [x] M0.1.2 Root `README.md`: what AHIA is, the repository layout, the five
       layers in one table, the command index, and a pointer to the
       specification documents and this file.
-- [ ] M0.1.3 `.editorconfig` and `.gitattributes` so line endings, encoding and
+- [x] M0.1.3 `.editorconfig` and `.gitattributes` so line endings, encoding and
       indentation are identical on every machine. UTF-8 without BOM, LF endings,
       which is what the ASCII guard expects.
 - [ ] M0.1.4 `docs/ARCHITECTURE.md`: the layer table mapped onto AHIA's
