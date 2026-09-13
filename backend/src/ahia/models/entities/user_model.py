@@ -29,13 +29,12 @@ from typing import Final
 from uuid import UUID
 
 from ahia.core.errors import EntityInvariantError
+from ahia.models.entities.phone_number import (
+    is_plausible_phone_number,
+    normalize_phone_number,
+)
 
 _EMAIL_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$")
-
-#: Characters people type into a phone field that carry no information.
-_PHONE_SEPARATORS: Final[re.Pattern[str]] = re.compile(r"[\s()\-.]")
-
-_PHONE_DIGIT_PATTERN: Final[re.Pattern[str]] = re.compile(r"^\+?[0-9]{7,15}$")
 
 _MAXIMUM_NAME_LENGTH: Final[int] = 100
 _MAXIMUM_EMAIL_LENGTH: Final[int] = 254
@@ -56,16 +55,13 @@ def normalize_email(email: str | None) -> str | None:
 
 
 def normalize_phone(phone: str | None) -> str | None:
-    """Return the canonical form of a phone number, or None.
+    """Return the canonical syntax of a phone number, or None.
 
-    Separators are removed and a single leading plus is preserved. Country-code
-    completion needs configuration, so it belongs to the service that has it;
-    what belongs here is the shape, because uniqueness depends on it.
+    Kept as a name on this entity because a user's own module is where a reader looks for
+    it, and implemented by the shared rule in `phone_number` so that a customer's phone
+    and a user's phone cannot end up canonicalised differently.
     """
-    if phone is None:
-        return None
-    without_separators = _PHONE_SEPARATORS.sub("", phone.strip())
-    return without_separators or None
+    return normalize_phone_number(phone)
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,7 +144,9 @@ class UserModel:
                 )
 
         if self.phone is not None:
-            if not _PHONE_DIGIT_PATTERN.match(self.phone):
+            # The shared rule, so a user's phone and a customer's phone are judged by the
+            # same shape rather than by two patterns that agree until one is edited.
+            if not is_plausible_phone_number(self.phone):
                 raise EntityInvariantError(
                     operation="build_user",
                     entity="user",

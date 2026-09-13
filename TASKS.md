@@ -1028,8 +1028,21 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ## M11 - Customers
 
-- [ ] M11.1.1 `customer_model.py`, `customer_schema.py`, `customer_crud.py`,
-      `customer_service.py`, `customer_router.py`.
+### M11 - progress log
+
+- M11.1.1's entity is in, and consolidating the phone rule was part of it rather than a
+  separate chore: `normalize_phone` lived on the user entity and country completion lived
+  in the auth service, so a customer would have become a third place where "the same
+  number" is decided. `models/entities/phone_number.py` now holds both halves - syntax in
+  one function, country completion in another that takes the code as a parameter, because
+  only a configured caller can choose a country. The user entity and the auth service both
+  delegate to it, and the plausible-length bounds tightened to E.164's own (seven to
+  fifteen digits), which is what the user entity already enforced.
+
+- [x] M11.1.1 `customer_model.py` (the rest of the slice follows below), plus
+      `phone_number.py`: the phone rule was split between the user entity and the auth
+      service, and a customer needs the same one, so it now lives in a single module the
+      entity layer owns.
 - [ ] M11.1.2 Tenant scoping and privacy: opt-in flag, no cross-tenant leakage,
       identifiers rather than names in logs.
 - [ ] M11.1.3 Customer notes and version metadata for sync-safe merging.
