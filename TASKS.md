@@ -724,8 +724,12 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ## M9 - Catalog: categories, products, images, R2 storage
 
-- [ ] M9.1.1 `category_model.py`, `category_schema.py`, `category_crud.py`,
-      `category_service.py`, `category_router.py`.
+- [x] M9.1.1 `category_model.py`, `category_schema.py`, `category_crud.py`,
+      `category_service.py`, `category_router.py`. Complete, with the table's own
+      migration revision (`ab9af68b0824`) and tests at every layer. Categories are
+      governed by `products.*`: the specification declares no `categories.*`
+      permission, and inventing one would change what every existing role means.
+      Deletion is deliberately absent - see the progress log.
 - [ ] M9.1.2 `product_model.py` with pricing and publication invariants,
       including the rule that money is never floating point.
 - [ ] M9.1.3 `product_schema.py` with price, slug and publication validation.
@@ -764,6 +768,31 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - [ ] M9.1.15 Provider switch test: switching `STORAGE_PROVIDER` changes the
       adapter and leaves every product, storefront and image service untouched,
       with existing rows still resolvable to the provider that holds them.
+
+### M9 - progress log
+
+- M9.1.1 complete. The slice is the template the catalogue follows: entity, contract,
+  persistence, use cases, routes, one migration revision, tests at each layer.
+- Categories carry no permission of their own. The specification names `products.read`,
+  `products.create`, `products.update` and `products.delete` and nothing else for the
+  catalogue, so a category is created under `products.create`, read under
+  `products.read` and edited under `products.update`. Adding `categories.*` would mean
+  deciding which of OWNER, MANAGER, SALES and INVENTORY should hold it, and every role
+  bundle in the registry would quietly change meaning.
+- Creating and editing are refused before the database is touched, so a caller without
+  the permission cannot use the uniqueness rule as an oracle for which category names
+  are taken. A test asserts exactly that, because it is the kind of property that
+  disappears in a refactor.
+- Deletion is deliberately not implemented yet. A category has no `is_active` column in
+  the specification, and what happens to a product whose category is removed is a
+  question the products table answers: the foreign key from products to categories, and
+  the rule for deleting a referenced category, arrive in the revision that creates
+  products. Implementing deletion now would mean choosing an answer before the
+  question exists.
+- Each catalogue table arrives with its own migration revision rather than one
+  revision for the whole milestone, because the drift check in tests/migrations
+  compares the migrated database against the models: a model added without a revision
+  fails the build, and that is the property worth keeping.
 
 ---
 
