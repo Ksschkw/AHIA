@@ -80,8 +80,8 @@ assertion in a commit message.
 | M2 | User demonstrative vertical slice | `[x]` | M1 |
 | M3 | Authentication and sessions | `[x]` | M2 |
 | M4 | Tenant slice | `[x]` | M3 |
-| M5 | Membership and staff administration | `[~]` | M4 |
-| M6 | Roles, permissions and deny-by-default authorization | `[ ]` | M5 |
+| M5 | Membership and staff administration | `[x]` | M4 |
+| M6 | Roles, permissions and deny-by-default authorization | `[~]` | M5 |
 | M7 | Devices and session management | `[ ]` | M6 |
 | M8 | Alembic migration baseline | `[ ]` | M6 |
 | M9 | Catalog: categories, products, images, R2 storage | `[ ]` | M8 |
@@ -635,10 +635,10 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - [x] M5.1.4 `tenant_membership_service.py`: `invite_tenant_member`,
       `activate_membership`, `change_member_role`, `suspend_member`,
       `remove_member`, each authorizing `staff.*` permissions.
-- [ ] M5.1.5 `tenant_membership_router.py` for the staff endpoints.
+- [x] M5.1.5 `tenant_membership_router.py` for the staff endpoints.
 - [x] M5.1.6 Invitation token entity and flow that never requires an owner to
       share a password.
-- [ ] M5.1.7 Tests: last-owner protection, self-removal policy, duplicate
+- [x] M5.1.7 Tests: last-owner protection, self-removal policy, duplicate
       membership, inactive membership denial, cross-tenant denial.
 
 ---

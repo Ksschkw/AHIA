@@ -265,6 +265,26 @@ class TenantMembershipService:
                 views.append(MemberView(membership=membership, user=user))
         return views
 
+    async def load_member_user(
+        self, tenant_context: TenantContext, user_id: UUID
+    ) -> UserModel | None:
+        """Return the person behind a membership in the caller's business.
+
+        Used to render a member response. It resolves the user through the
+        membership path, so it cannot be used to read an arbitrary account: the
+        membership has already been proven to belong to this tenant.
+        """
+        tenant_context.require_permission(
+            STAFF_READ,
+            operation="load_member_user",
+            resource_type="tenant_membership",
+            resource_id=str(user_id),
+            logger=self._logger,
+        )
+        unit_of_work = self._unit_of_work_factory()
+        async with unit_of_work:
+            return await user_crud.get_by_id(unit_of_work.session_handle, user_id)
+
     async def change_member_role(
         self,
         tenant_context: TenantContext,
