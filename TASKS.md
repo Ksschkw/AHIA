@@ -329,20 +329,20 @@ server-side and configuration-driven, not provider features.
 
 ### M1.7 Tenant context and authorization policy
 
-- [ ] M1.7.1 `core/tenant_context.py`: immutable context carrying user,
+- [x] M1.7.1 `core/tenant_context.py`: immutable context carrying user,
       tenant, membership, role, permissions and device, with explicit
       helpers that make the difference between "requested tenant" and
       "authorized tenant" obvious.
-- [ ] M1.7.2 Permission registry: one module per domain
+- [x] M1.7.2 Permission registry: one module per domain
       (`product_permissions`, `inventory_permissions`, `sales_permissions`,
       `customer_permissions`, `expense_permissions`, `storefront_permissions`,
       `staff_permissions`, `report_permissions`) plus `permissions_registry`
       exposing the full code set and the system role bundles.
-- [ ] M1.7.3 `require_permission` policy: deny-by-default, checks against the
+- [x] M1.7.3 `require_permission` policy: deny-by-default, checks against the
       authorized context only, logs every decision with principal, tenant,
       resource, action and outcome, and fails closed when the permission set
       cannot be resolved.
-- [ ] M1.7.4 Tests: missing permission denies, unrelated role denies, owner
+- [x] M1.7.4 Tests: missing permission denies, unrelated role denies, owner
       bundle allows configured codes, and every decision produces a log record.
 
 ### M1.8 Composition root
