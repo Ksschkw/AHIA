@@ -48,7 +48,7 @@ core sits underneath everything and depends on nothing in the application.
 5. Wire validation happens only in schemas. Domain invariants live only in
    entities. Database integrity lives only in PostgreSQL constraints.
 6. No module-level mutable singletons. Everything is constructed in
-   `core/container.py` and injected.
+   `ahia/bootstrap.py` (ADR-0011) and injected.
 7. Cross-entity coordination lives in a service named after the use case
    (`complete_sale`, `receive_stock`), not after a table.
 8. Authorization is enforced in the service layer. A router check is UX, never
@@ -65,6 +65,16 @@ SQLAlchemy ORM classes are not the domain model. Each CRUD file owns:
 
 `UserModel` is the domain source of truth. `UserRecord` is how PostgreSQL
 happens to store it. The mapping boundary is the CRUD file and nowhere else.
+
+Foreign keys, indexes and check constraints are declared on the `*Record`
+classes, and Alembic derives the schema from them (ADR-0012). A constraint
+declared only in a migration and not in a record is invisible to the next
+autogenerate run and would be dropped by it, so the record is the declaration and
+the migration is its history.
+
+`crud/integrity_violations.py` is the one place that turns a database integrity
+failure into a typed application error (ADR-0013). It owns no table and imports
+no driver: it reads SQLSTATE codes, which are part of the SQL standard.
 
 ---
 
@@ -138,6 +148,47 @@ not just the schema.
 
 New decisions are appended here before implementation proceeds. Each entry
 states the decision, the reasoning and the consequence.
+
+### ADR-0012 - Migrations own the schema, and the models own the migrations
+
+Decision: Alembic is the only way the schema changes. `alembic/env.py` reads the
+URL from application settings (never from `alembic.ini`), imports every
+persistence module through `crud/table_registry.py`, and runs with
+`compare_type` and `compare_server_default` enabled. A test asserts that an
+autogenerate comparison between the migrated database and the models returns no
+differences.
+
+Reasoning: a migration tool is only as good as what it can see. A model that is
+never imported is invisible to autogenerate, and its absence reads as "drop this
+table" - which is how a generated migration deletes data. Importing by walking
+the package removes the possibility of somebody forgetting to add a line.
+Comparing types and server defaults means a column changed in code but not in the
+database fails the build instead of surfacing as a runtime error months later.
+Keeping the URL out of a committed file keeps the credential out of version
+control.
+
+Consequence: seeding is not migration data. The permission registry is
+provisioned idempotently at startup by `IamSeedService`, so a change to a role is
+a provisioning step rather than a migration over production data. Composite
+cross-tenant keys are added with the table that needs them, not in advance.
+
+### ADR-0013 - Database integrity failures are classified by SQLSTATE, once
+
+Decision: `crud/integrity_violations.py` is the single place that translates a
+database integrity failure into a typed application error. A duplicate becomes a
+`ConflictError`, a missing referenced row a `NotFoundError`, and a check or NOT
+NULL violation a `PersistenceError`. The classification reads SQLSTATE codes from
+the driver's exception chain; it never imports a driver.
+
+Reasoning: the database reports several unrelated refusals through one exception
+class. Reporting them all as "already exists" sends an operator looking for a
+duplicate that was never there, which is exactly the failure mode the error
+hierarchy exists to prevent. SQLSTATE is part of the SQL standard, so the mapping
+survives a driver change and the persistence layer stays free of driver imports.
+
+Consequence: repositories share one translation instead of seven private copies
+of the same constraint-name extractor. The violated constraint's name appears in
+the internal detail and never in the external message; a test asserts that.
 
 ### ADR-0001 - Pure domain entities, persistence mapping in CRUD
 

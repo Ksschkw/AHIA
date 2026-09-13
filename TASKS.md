@@ -83,7 +83,7 @@ assertion in a commit message.
 | M5 | Membership and staff administration | `[x]` | M4 |
 | M6 | Roles, permissions and deny-by-default authorization | `[x]` | M5 |
 | M7 | Devices and session management | `[x]` | M6 |
-| M8 | Alembic migration baseline | `[~]` | M6 |
+| M8 | Alembic migration baseline (M8.1.4 deferred to M9) | `[~]` | M6 |
 | M9 | Catalog: categories, products, images, R2 storage | `[ ]` | M8 |
 | M10 | Inventory ledger and projections | `[ ]` | M9 |
 | M11 | Customers | `[ ]` | M9 |
@@ -678,16 +678,47 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ## M8 - Alembic migration baseline
 
-- [ ] M8.1.1 Alembic environment configured for async engine, settings-driven
-      URL and naming conventions from the metadata base.
-- [ ] M8.1.2 Foundation migration: `users`, `tenants`, `permissions`, `roles`,
-      `role_permissions`, `tenant_memberships`, `devices`, plus indexes and
-      constraints from the database specification.
-- [ ] M8.1.3 Migration verification test: upgrade from empty to head, downgrade
-      to base, and upgrade again, all against `ahia_test`.
-- [ ] M8.1.4 Composite foreign keys where the specification calls for
-      cross-tenant safety (`(product_id, tenant_id)` style), with tests that a
-      cross-tenant reference is rejected by the database itself.
+- [x] M8.1.1 Alembic environment configured for async engine, settings-driven
+      URL and naming conventions from the metadata base. The URL is never stored
+      in `alembic.ini`; `alembic/env.py` reads it from application settings and
+      imports every persistence module through `crud/table_registry.py` so
+      autogenerate cannot propose dropping a table it never saw.
+- [x] M8.1.2 Foundation migration: `users`, `user_sessions`, `tenants`,
+      `tenant_memberships`, `membership_invitations`, `devices`, `permissions`,
+      `roles`, `role_permissions`, `tenant_storage_usage`, with the indexes and
+      constraints the database specification calls for. Seeding is deliberately
+      absent: the permission registry is provisioning data, applied idempotently at
+      startup, not migration data. Foreign keys on the pre-existing tables were
+      declared in `crud/` first, so the migration reflects the models rather than
+      inventing a schema of its own.
+- [x] M8.1.3 Migration verification test in `tests/migrations/`: upgrade from an
+      empty schema to head, downgrade to base, upgrade again, plus a no-drift
+      assertion - an autogenerate comparison against the models must find nothing -
+      and a check that `alembic.ini` holds no credential.
+- [ ] M8.1.4 DEFERRED to M9, deliberately. Composite foreign keys of the
+      `(product_id, tenant_id)` form anchor on tenant-owned tables such as
+      `products`, which do not exist yet. The constraint is added with the table
+      that needs it, together with the test that a cross-tenant reference is
+      rejected by the database itself. Adding the anchor now would mean inventing
+      a table in M8 to satisfy a later milestone.
+
+### M8 - progress log
+
+- PostgreSQL refuses to create a foreign key to a table that was never imported,
+  which is why `crud/table_registry.py` walks the package instead of relying on a
+  hand-maintained import list: an omission there produces a migration that drops a
+  table nobody meant to touch.
+- The baseline was verified twice, and both verifications are tests rather than
+  notes: the round trip (empty to head, head to base, base to head) and the drift
+  check (`compare_metadata` against `Base.metadata` must return no differences).
+- Foreign keys landed as their own change, with the fixtures that needed parent
+  rows, because a foreign key is a schedule: the schema change and the test change
+  have to arrive together or the suite is red in between.
+- Reporting an integrity failure: the database reports duplicates, missing parent
+  rows and check violations through one exception class. `crud/integrity_violations.py`
+  classifies by SQLSTATE once, so a missing parent is a typed NotFoundError rather
+  than a fabricated "already exists" - the previous message would have sent an
+  operator looking for a duplicate that never existed.
 
 ---
 

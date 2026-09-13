@@ -120,11 +120,18 @@ with one command.
 
 Milestones M0 through M7 are complete and committed: repository and tooling, core
 cross-cutting infrastructure, the User vertical slice, authentication and sessions,
-tenants, staff administration, the permission model as data, and devices. 941 tests
-pass, the nine-stage build gate is green, and the service serves a real flow: create
-an account, sign in, create a business, invite a worker, have that worker accept the
-invitation with the role they were given, inspect what that role can do, and revoke
-a lost phone - which ends the sessions bound to it.
+tenants, staff administration, the permission model as data, and devices. M8 is
+complete apart from its composite-key item, which moves to M9 where the tables it
+anchors on exist. 964 tests pass, the nine-stage build gate is green, and the service
+serves a real flow: create an account, sign in, create a business, invite a worker,
+have that worker accept the invitation with the role they were given, inspect what
+that role can do, and revoke a lost phone - which ends the sessions bound to it.
+
+The schema is now versioned: `alembic upgrade head` builds every table from an empty
+database, `alembic downgrade base` takes it back, and a test asserts that an
+autogenerate run afterwards finds no difference between the migrations and the models
+- so a model changed without a migration fails the build rather than a deployment.
+The migration URL comes from the environment, never from `alembic.ini`.
 
 Delivered beyond the core: a provider-neutral storage capability with both
 Cloudflare R2 and Cloudinary adapters selectable by configuration, mandatory
@@ -133,6 +140,6 @@ that is safe under concurrent uploads, and authentication whose failures are
 indistinguishable across an unknown account, a wrong password and a deactivated
 account.
 
-Next is M8, the Alembic migration baseline that turns this schema into versioned
-migrations, before the operational domain (catalog, inventory, customers, sales,
-sync, storefront). Progress is tracked in `TASKS.md`.
+Next is M9, the catalog: categories, products, product images against R2 or
+Cloudinary, and the composite cross-tenant keys the specification calls for.
+Progress is tracked in `TASKS.md`.
