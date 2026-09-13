@@ -1,0 +1,127 @@
+# AHIA - repository root ignore rules
+#
+# Two principles:
+#   1. Generated and machine-specific files never enter version control.
+#   2. Secret material is ignored by pattern, not by convention, so an
+#      accidental `git add .` cannot stage it.
+
+# ---------------------------------------------------------------------------
+# Secrets and environment
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+secrets/
+credentials.json
+service-account*.json
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+sdist/
+wheels/
+*.egg-info/
+*.egg
+.eggs/
+pip-wheel-metadata/
+.python-version
+.venv/
+venv/
+env/
+ENV/
+.mypy_cache/
+.dmypy.json
+.ruff_cache/
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+coverage-html/
+.hypothesis/
+.benchmarks/
+
+# ---------------------------------------------------------------------------
+# Node, Next.js, Expo, React Native
+# ---------------------------------------------------------------------------
+node_modules/
+.pnpm-store/
+.pnp
+.pnp.js
+.next/
+out/
+.turbo/
+.vercel/
+.expo/
+.expo-shared/
+dist-web/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.yarn/cache
+.yarn/install-state.gz
+ios/Pods/
+android/.gradle/
+android/app/build/
+android/local.properties
+*.jks
+*.mobileprovision
+
+# ---------------------------------------------------------------------------
+# Local databases, dumps and object storage scratch space
+# ---------------------------------------------------------------------------
+*.sqlite
+*.sqlite3
+*.db
+pgdata/
+pg_data/
+*.dump
+*.backup
+storage-local/
+uploads-local/
+
+# ---------------------------------------------------------------------------
+# Workspace tooling installed by scripts (checksum-verified binaries)
+# ---------------------------------------------------------------------------
+.tools/bin/
+.tools/tmp/
+
+# ---------------------------------------------------------------------------
+# Editors and operating systems
+# ---------------------------------------------------------------------------
+.idea/
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.example.json
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------------------------------------------------------------------------
+# Logs and temporary files
+# ---------------------------------------------------------------------------
+*.log
+logs/
+tmp/
+temp/
+.cache/

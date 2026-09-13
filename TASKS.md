@@ -114,7 +114,7 @@ lint error and a failing test. CI runs the same command.
 
 ### M0.1 Repository skeleton and hygiene
 
-- [ ] M0.1.1 Root `.gitignore` covering Python, virtualenvs, env files, Node,
+- [x] M0.1.1 Root `.gitignore` covering Python, virtualenvs, env files, Node,
       Expo, build output, coverage and editor state. Committed with the backend
       scaffold so that no generated file can be staged accidentally.
 - [ ] M0.1.2 Root `README.md`: what AHIA is, the repository layout, the five
