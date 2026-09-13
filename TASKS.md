@@ -82,8 +82,8 @@ assertion in a commit message.
 | M4 | Tenant slice | `[x]` | M3 |
 | M5 | Membership and staff administration | `[x]` | M4 |
 | M6 | Roles, permissions and deny-by-default authorization | `[x]` | M5 |
-| M7 | Devices and session management | `[~]` | M6 |
-| M8 | Alembic migration baseline | `[ ]` | M6 |
+| M7 | Devices and session management | `[x]` | M6 |
+| M8 | Alembic migration baseline | `[~]` | M6 |
 | M9 | Catalog: categories, products, images, R2 storage | `[ ]` | M8 |
 | M10 | Inventory ledger and projections | `[ ]` | M9 |
 | M11 | Customers | `[ ]` | M9 |
@@ -666,12 +666,12 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 - [x] M7.1.1 `device_model.py` and persistence with
       `UNIQUE(tenant_id, device_identifier)`.
-- [ ] M7.1.2 Device registration and heartbeat endpoints.
-- [ ] M7.1.3 Device revocation: revoked devices are rejected by sync and by
+- [x] M7.1.2 Device registration and heartbeat endpoints.
+- [x] M7.1.3 Device revocation: revoked devices are rejected by sync and by
       session validation.
-- [ ] M7.1.4 `device_service.py` and `device_router.py` wired to
+- [x] M7.1.4 `device_service.py` and `device_router.py` wired to
       `staff.*`/`devices.*` permissions as appropriate.
-- [ ] M7.1.5 Tests: revoked device denied, unknown device denied, device cannot
+- [x] M7.1.5 Tests: revoked device denied, unknown device denied, device cannot
       grant permissions, tenant scoping.
 
 ---

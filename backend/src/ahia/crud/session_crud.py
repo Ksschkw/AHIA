@@ -165,6 +165,30 @@ async def revoke_all_for_user(
     return int(cursor_result.rowcount or 0)
 
 
+async def revoke_all_for_device(
+    session: AsyncSession,
+    *,
+    device_id: UUID,
+    at: datetime,
+    reason: str,
+) -> int:
+    """Revoke every session bound to one device.
+
+    This is what revoking a lost phone does. Without it, revocation would only stop
+    the device registering itself again while its refresh tokens kept working.
+    """
+    cursor_result = cast(
+        CursorResult[Any],
+        await session.execute(
+            sql_update(SessionRecord)
+            .where(SessionRecord.device_id == device_id)
+            .where(SessionRecord.revoked_at.is_(None))
+            .values(revoked_at=at, revocation_reason=reason)
+        ),
+    )
+    return int(cursor_result.rowcount or 0)
+
+
 async def list_active_for_user(
     session: AsyncSession,
     *,

@@ -47,6 +47,7 @@ from ahia.middleware.rate_limit_middleware import RateLimitMiddleware, build_def
 from ahia.middleware.security_headers_middleware import SecurityHeadersMiddleware
 from ahia.routers import (
     auth_router,
+    device_router,
     health_router,
     permission_router,
     tenant_membership_router,
@@ -252,6 +253,7 @@ def register_routers(application: FastAPI, settings: Settings) -> None:
         tenant_membership_router.router,
         tenant_membership_router.invitation_router,
         permission_router.router,
+        device_router.router,
     ]
     for versioned_router in versioned_routers:
         application.include_router(versioned_router, prefix=settings.api_v1_prefix)
