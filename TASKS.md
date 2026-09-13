@@ -160,7 +160,7 @@ lint error and a failing test. CI runs the same command.
       decorative symbols and any non-ASCII character in engineering artifacts,
       with a scoped, explicit allowlist for test fixtures that intentionally
       contain Unicode user data.
-- [ ] M0.4.2 Banned-identifier check: rejects `data`, `info`, `manager`,
+- [x] M0.4.2 Banned-identifier check: rejects `data`, `info`, `manager`,
       `helper`, `utils`, `common`, `misc`, `temp`, `tmp`, `process`, `handle`,
       `do`, `thing` as standalone module, class or file names, with the
       narrow exceptions the preset allows.
