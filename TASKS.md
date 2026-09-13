@@ -581,7 +581,7 @@ Goal: real identity. Email/password registration and login, short-lived access
 tokens, rotating refresh tokens, logout, and rate limiting on every credential
 endpoint.
 
-- [ ] M3.1.1 `SessionModel` entity and `session_crud.py` persistence for
+- [x] M3.1.1 `SessionModel` entity and `session_crud.py` persistence for
       refresh token hashes, device binding, expiry and revocation.
 - [ ] M3.1.2 `auth_schema.py` request and response contracts.
 - [ ] M3.1.3 `auth_service.py`: `register_user`, `authenticate_user`,
