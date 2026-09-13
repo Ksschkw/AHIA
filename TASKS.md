@@ -123,7 +123,7 @@ lint error and a failing test. CI runs the same command.
 - [x] M0.1.3 `.editorconfig` and `.gitattributes` so line endings, encoding and
       indentation are identical on every machine. UTF-8 without BOM, LF endings,
       which is what the ASCII guard expects.
-- [ ] M0.1.4 `docs/ARCHITECTURE.md`: the layer table mapped onto AHIA's
+- [x] M0.1.4 `docs/ARCHITECTURE.md`: the layer table mapped onto AHIA's
       directories, the allowed dependency arrows, the cross-cutting rules, the
       decisions already locked in the specification, and the decision log that
       future architectural changes append to.
