@@ -664,7 +664,7 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ## M7 - Devices and session management
 
-- [ ] M7.1.1 `device_model.py` and persistence with
+- [x] M7.1.1 `device_model.py` and persistence with
       `UNIQUE(tenant_id, device_identifier)`.
 - [ ] M7.1.2 Device registration and heartbeat endpoints.
 - [ ] M7.1.3 Device revocation: revoked devices are rejected by sync and by
