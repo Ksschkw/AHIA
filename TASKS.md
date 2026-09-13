@@ -515,11 +515,11 @@ layer-appropriate tests.
 
 ### M2.1 Entity
 
-- [ ] M2.1.1 `models/entities/user_model.py`: frozen domain object with
+- [x] M2.1.1 `models/entities/user_model.py`: frozen domain object with
       identity, contact, name, lifecycle fields and domain invariants
       (identifier stability, at least one contact channel, normalized phone,
       active-state transitions). No framework import.
-- [ ] M2.1.2 Entity tests: construction invariants, normalization, equality,
+- [x] M2.1.2 Entity tests: construction invariants, normalization, equality,
       immutability, and rejection of invalid values.
 
 ### M2.2 Schema
