@@ -636,7 +636,7 @@ Goal: a business exists as a tenant with a globally unique public slug.
       `activate_membership`, `change_member_role`, `suspend_member`,
       `remove_member`, each authorizing `staff.*` permissions.
 - [ ] M5.1.5 `tenant_membership_router.py` for the staff endpoints.
-- [ ] M5.1.6 Invitation token entity and flow that never requires an owner to
+- [x] M5.1.6 Invitation token entity and flow that never requires an owner to
       share a password.
 - [ ] M5.1.7 Tests: last-owner protection, self-removal policy, duplicate
       membership, inactive membership denial, cross-tenant denial.
