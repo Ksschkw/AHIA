@@ -954,6 +954,30 @@ stages; the service starts, answers `/health` and `/ready`, returns the standard
 error envelope on an unknown route with the caller's correlation ID echoed, and
 carries the security headers on every response.
 
+**M2 - User demonstrative vertical slice (13 micro-milestones).** The template
+every future entity copies, built through all five layers: a framework-free user
+entity with its invariants, wire schemas with no credential-shaped field, one
+CRUD file owning the table and the mapping, a service enforcing self-scoped
+authorization, and three HTTP endpoints. `docs/API_USER_SLICE.md` is the contract.
+Seven end-to-end tests run against real PostgreSQL with nothing mocked, including
+a request whose database is unreachable asserting the response leaks no path,
+driver, query or hostname.
+
+**M3 - Authentication and sessions (7 micro-milestones).** Registration, sign-in,
+refresh rotation, sign-out and password change, backed by a session entity that
+stores only a peppered digest and keeps its rotation chain so reuse is detectable.
+Sign-in answers identically for an unknown account, a wrong password and a
+deactivated account, and performs the same work on every path so timing does not
+answer what the body refuses to. Reusing a rotated token ends the entire session
+family and logs a security incident. 21 end-to-end tests, again against real
+PostgreSQL, real Argon2 and real JWTs.
+
+Two defects were found by tests rather than by review, both fixed at the cause:
+error responses were missing every security header because the middleware order
+put the error handler outside them, and a locally written phone number did not
+resolve to the same account as its international form, which is now canonicalised
+through a configured country code.
+
 ## Cross-milestone obligations
 
 These apply continuously and are re-verified at each milestone boundary.
