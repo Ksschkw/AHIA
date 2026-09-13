@@ -45,7 +45,7 @@ from ahia.middleware.correlation_middleware import CorrelationIdMiddleware
 from ahia.middleware.error_handler_middleware import ErrorHandlerMiddleware
 from ahia.middleware.rate_limit_middleware import RateLimitMiddleware, build_default_limiter
 from ahia.middleware.security_headers_middleware import SecurityHeadersMiddleware
-from ahia.routers import health_router
+from ahia.routers import health_router, user_router
 
 _MAIN_LOGGER_NAME: Final[str] = "ahia.main"
 
@@ -225,9 +225,16 @@ def register_routers(application: FastAPI, settings: Settings) -> None:
     """
     application.include_router(health_router.router)
 
-    # Versioned routers are registered here as each vertical slice lands. User,
-    # tenant, membership, permission, device, product, inventory, sales,
-    # customer, storefront and sync routers all arrive under this prefix.
+    # Business routers live under the version prefix so the contract can evolve
+    # without republishing public links, which do not carry a version.
+    versioned_routers = [
+        user_router.router,
+    ]
+    for versioned_router in versioned_routers:
+        application.include_router(versioned_router, prefix=settings.api_v1_prefix)
+
+    # The remaining slices register here as they land: tenant, membership,
+    # permission, device, product, inventory, sales, customer, storefront, sync.
     application.state.api_v1_prefix = settings.api_v1_prefix
 
 

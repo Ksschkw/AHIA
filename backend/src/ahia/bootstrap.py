@@ -45,6 +45,7 @@ from ahia.integrations.storage.storage_factory import (
     build_storage_policy,
 )
 from ahia.services.storage_quota_service import StorageQuotaService
+from ahia.services.user_service import UserService
 
 _CONTAINER_LOGGER_NAME: Final[str] = "ahia.core.container"
 
@@ -64,6 +65,7 @@ class ApplicationContainer:
     media: MediaProcessingPort
     storage_policy: ResiliencePolicy
     storage_quota_service: StorageQuotaService
+    user_service: UserService
     token_service: TokenService
     password_hasher: PasswordHasher
     logger: StructuredLogger
@@ -119,6 +121,11 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         logger=logger,
     )
 
+    user_service = UserService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        logger=logger,
+    )
+
     container = ApplicationContainer(
         settings=settings,
         database=database,
@@ -126,6 +133,7 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         media=media,
         storage_policy=storage_policy,
         storage_quota_service=storage_quota_service,
+        user_service=user_service,
         token_service=token_service,
         password_hasher=password_hasher,
         logger=logger,

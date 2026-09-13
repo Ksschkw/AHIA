@@ -551,10 +551,10 @@ layer-appropriate tests.
 
 ### M2.5 Transport
 
-- [ ] M2.5.1 `routers/user_router.py`: `GET /api/v1/users/me` and
+- [x] M2.5.1 `routers/user_router.py`: `GET /api/v1/users/me` and
       `PATCH /api/v1/users/me`, both parse, call one service method and return
       a schema. No branching beyond dependency wiring.
-- [ ] M2.5.2 Router tests with the service mocked: response shape, status
+- [x] M2.5.2 Router tests with the service mocked: response shape, status
       codes, unauthenticated access, and confirmation that the handler performs
       no business logic.
 
