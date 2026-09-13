@@ -647,17 +647,17 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 - [x] M6.1.1 `permission_model.py`, `role_model.py`, `role_permission_model.py`
       as pure entities.
-- [ ] M6.1.2 Persistence for the three entities, one file each.
-- [ ] M6.1.3 Permission registry seeding: system permissions from
+- [x] M6.1.2 Persistence for the three entities, one file each.
+- [x] M6.1.3 Permission registry seeding: system permissions from
       `core/permissions/`, system roles (OWNER, MANAGER, SALES, INVENTORY) as
       permission bundles.
-- [ ] M6.1.4 `permission_service.py`: `resolve_permissions_for_membership`,
+- [x] M6.1.4 `permission_service.py`: `resolve_permissions_for_membership`,
       `list_roles`, `list_permissions`, `update_role_permissions` with
       server-authoritative decisions.
 - [ ] M6.1.5 `role_service.py` and `permission_router.py`.
-- [ ] M6.1.6 Data migration/seeding path that installs the registry
+- [x] M6.1.6 Data migration/seeding path that installs the registry
       idempotently.
-- [ ] M6.1.7 Tests: role bundle correctness, permission escalation attempt,
+- [x] M6.1.7 Tests: role bundle correctness, permission escalation attempt,
       custom role behavior if enabled, and a cross-tenant role isolation test.
 
 ---

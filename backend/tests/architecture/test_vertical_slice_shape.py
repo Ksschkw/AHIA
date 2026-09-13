@@ -39,6 +39,9 @@ USE_CASE_MODULES: frozenset[str] = frozenset(
         # Coordinates quota accounting across the product-image use case; there is
         # no `storage_quota` table and there should not be one.
         "services/storage_quota_service.py",
+        # Provisions the declared permission registry into the database. It spans
+        # permissions, roles and grants, and it is named after what it does.
+        "services/iam_seed_service.py",
     }
 )
 
