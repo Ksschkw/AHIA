@@ -1,0 +1,63 @@
+# Gitleaks configuration for the AHIA repository.
+#
+# The default rule set is kept intact and only extended with narrow,
+# path-scoped allowlists. A rule is never disabled by id: disabling a detector
+# to make a build green is how a real credential eventually ships.
+#
+# Every allowlist entry below states why it is safe. Nothing here allows a
+# secret value; the entries allow *placeholder* or *documentation* content that
+# a detector would otherwise read as a credential.
+
+title = "AHIA secret scanning configuration"
+
+[extend]
+# Keep the upstream detectors - cloud keys, provider tokens, private keys,
+# generic high-entropy assignments - and add repository-specific scoping.
+useDefault = true
+
+[[allowlists]]
+name = "product-owner-specifications"
+description = "Source specifications supplied by the product owner and kept verbatim; they contain example identifiers, not credentials."
+paths = [
+  '''PRODUCT_INITIAL_DEFINITION/.*''',
+]
+
+[[allowlists]]
+name = "environment-template"
+description = "The committed environment template contains placeholder instructions such as 'replace-with-32-bytes-of-random-entropy' and REPLACE_ME markers, never a working credential."
+paths = [
+  '''backend/\.env\.example''',
+]
+
+[[allowlists]]
+name = "prerequisites-documentation"
+description = "docs/PREREQUISITES.md documents the local-only development database password that exists solely because this workstation requires password authentication over TCP. It is labelled as local-only, is not used in any deployed environment, and is excluded from every other rule by path."
+paths = [
+  '''docs/PREREQUISITES\.md''',
+]
+
+[[allowlists]]
+name = "documentation-examples"
+description = "Architecture and task documents contain illustrative code fragments, environment variable names and command examples. None of them hold a credential value."
+paths = [
+  '''docs/ARCHITECTURE\.md''',
+  '''TASKS\.md''',
+  '''README\.md''',
+]
+
+[[allowlists]]
+name = "unicode-business-data-fixtures"
+description = "Test fixtures holding intentional Unicode user data: product names, customer notes, Igbo personal names. No credential material."
+paths = [
+  '''backend/tests/fixtures/unicode_data/.*''',
+]
+
+[[allowlists]]
+name = "guard-rule-definitions"
+description = "The developer guards and the gitleaks configuration itself must name the patterns they reject, including the literal words 'password', 'secret' and 'token'."
+paths = [
+  '''backend/scripts/check_ascii\.py''',
+  '''backend/scripts/check_banned_names\.py''',
+  '''backend/scripts/scan_secrets\.sh''',
+  '''\.gitleaks\.toml''',
+]

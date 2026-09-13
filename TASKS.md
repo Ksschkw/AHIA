@@ -181,7 +181,7 @@ lint error and a failing test. CI runs the same command.
 - [x] M0.6.1 `gitleaks` installed into a workspace tool directory by a script
       that verifies a pinned checksum, since this workstation's system paths are
       read-only.
-- [ ] M0.6.2 `.gitleaks.toml`: default rule set plus an explicit allowlist for
+- [x] M0.6.2 `.gitleaks.toml`: default rule set plus an explicit allowlist for
       the placeholder values in `.env.example` and the local-only development
       password documented in `docs/PREREQUISITES.md`.
 - [ ] M0.6.3 `backend/scripts/scan_secrets.sh`: scans the working tree and,
