@@ -14,6 +14,7 @@ this test says so.
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import contextlib
 import os
@@ -53,6 +54,7 @@ EXPECTED_TABLES = frozenset(
         "permissions",
         "role_permissions",
         "tenant_storage_usage",
+        "categories",
     }
 )
 
@@ -251,15 +253,59 @@ async def test_the_migration_matches_the_models(
 
 
 @pytest.mark.unit
-def test_the_baseline_is_the_only_migration() -> None:
-    """One migration means the schema has one history, which is what a baseline is."""
-    versions = sorted(
-        path.name
+def test_the_migration_history_is_one_linear_chain() -> None:
+    """Every revision has at most one parent, and exactly one head exists.
+
+    A branch point or a second head means two developers generated revisions from the
+    same parent, and `alembic upgrade head` then fails on a database that has already
+    applied one of them. That is worth failing here rather than in a deployment.
+    """
+    revisions: dict[str, str | None] = {}
+    for path in migration_files():
+        assignments = _revision_assignments(path)
+        revisions[assignments["revision"]] = assignments["down_revision"]
+
+    assert revisions, "no migration revisions found"
+
+    parents = {parent for parent in revisions.values() if parent is not None}
+    for parent in parents:
+        assert parent in revisions, f"a revision names an unknown parent: {parent}"
+
+    heads = sorted(set(revisions) - parents)
+    assert len(heads) == 1, f"expected exactly one head, found: {heads}"
+    assert revisions["ae15ce60c835"] is None, "the baseline must have no parent"
+
+
+def migration_files() -> list[Path]:
+    return sorted(
+        path
         for path in (BACKEND_DIRECTORY / "alembic" / "versions").glob("*.py")
         if not path.name.startswith("__")
     )
 
-    assert len(versions) == 1, f"expected a single baseline migration, found: {versions}"
+
+def _revision_assignments(path: Path) -> dict[str, str | None]:
+    """Read a revision's identity without importing the module.
+
+    Parsed rather than imported: importing every revision executes module-level code
+    in a migration, which is not something a test about the history needs to do.
+    """
+    found: dict[str, str | None] = {}
+    for node in ast.parse(path.read_text(encoding="utf-8")).body:
+        if not isinstance(node, ast.AnnAssign) or not isinstance(node.target, ast.Name):
+            continue
+        if node.target.id not in {"revision", "down_revision"}:
+            continue
+        value = node.value
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            found[node.target.id] = value.value
+        elif isinstance(value, ast.Constant) and value.value is None:
+            found[node.target.id] = None
+        else:
+            found[node.target.id] = None
+    assert "revision" in found, f"{path.name} declares no revision identifier"
+    found.setdefault("down_revision", None)
+    return found
 
 
 @pytest.mark.security

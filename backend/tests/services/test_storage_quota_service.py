@@ -25,7 +25,6 @@ from ahia.core.database import Base, Database
 from ahia.core.errors import AuthorizationError, StorageQuotaExceededError
 from ahia.core.tenant_context import build_tenant_context
 from ahia.crud import tenant_crud, tenant_storage_usage_crud
-from ahia.crud.tenant_storage_usage_crud import TenantStorageUsageRecord
 from ahia.models.entities.tenant_model import TenantModel
 from ahia.models.entities.tenant_storage_usage_model import TenantStorageUsage
 from ahia.services.storage_quota_service import StorageQuotaService
@@ -53,6 +52,14 @@ def build_settings() -> Settings:
 
 @pytest.fixture
 async def database() -> Any:
+    """A database with the whole schema present and quota rows emptied.
+
+    The rows are truncated rather than the table dropped. Dropping it - which this
+    fixture used to do - leaves the shared test database in a state that no longer
+    matches the migrations, and the next `alembic revision --autogenerate` compares
+    against that state and proposes creating a table the baseline already creates.
+    That is a hazard for whoever generates the next migration, and it is silent.
+    """
     instance = Database(build_settings())
     async with instance.engine.begin() as connection:
         # The whole schema, created from the models. A table's foreign keys require
@@ -61,15 +68,10 @@ async def database() -> Any:
         await connection.run_sync(
             lambda sync_connection: Base.metadata.create_all(sync_connection, checkfirst=True)
         )
+        await connection.execute(text("TRUNCATE TABLE tenant_storage_usage CASCADE"))
     try:
         yield instance
     finally:
-        async with instance.engine.begin() as connection:
-            await connection.run_sync(
-                lambda sync_connection: TenantStorageUsageRecord.__table__.drop(
-                    sync_connection, checkfirst=True
-                )
-            )
         await instance.dispose()
 
 
