@@ -201,7 +201,7 @@ lint error and a failing test. CI runs the same command.
 
 ### M0.8 One reproducible developer command
 
-- [ ] M0.8.1 `Makefile`: `setup`, `lint`, `format`, `typecheck`, `test`,
+- [x] M0.8.1 `Makefile`: `setup`, `lint`, `format`, `typecheck`, `test`,
       `arch`, `secrets`, `audit`, `ascii`, `check`, `run`, `migrate`, `revision`
       targets, each a thin wrapper over a real script or tool with no hidden
       logic.
