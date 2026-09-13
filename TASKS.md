@@ -999,6 +999,23 @@ be unreachable, and the product's own first-run journey requires both in one
 transaction. The task numbers are identifiers; the dependency direction is what the
 work has to respect.
 
+**M6 - Roles, permissions and authorization as data (6 micro-milestones).** The
+declared registry is now provisioned into the database by an idempotent service that
+converges rather than merely adding, so a grant removed from code is removed from the
+database with a warning. Two sources of truth are only safe if they cannot drift, so
+a check reports every difference and tests prove it is silent when they agree and
+loud when they do not. Resolution is deny-by-default, and privilege escalation is
+refused by a rule: a caller may not grant a permission they do not themselves hold.
+The catalogue is readable by any active member, because a person cannot judge a role
+they are being given without knowing what it means.
+
+**M7 - Devices (5 micro-milestones).** An installation registers itself, renews its
+identity through the same request, appears in the business's device list, and can be
+revoked. A device never grants permission, which is asserted rather than commented.
+Revocation marks the device revoked, ends every session bound to it and logs a
+security event in one transaction: the first without the second would be theatre.
+11 end-to-end tests including a lost-phone flow whose refresh token stops working.
+
 ## Cross-milestone obligations
 
 These apply continuously and are re-verified at each milestone boundary.

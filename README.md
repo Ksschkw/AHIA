@@ -118,12 +118,13 @@ with one command.
 
 ## Current status
 
-Milestones M0 through M5 are complete and committed: repository and tooling, core
+Milestones M0 through M7 are complete and committed: repository and tooling, core
 cross-cutting infrastructure, the User vertical slice, authentication and sessions,
-tenants, and staff administration. 850 tests pass, the nine-stage build gate is
-green, and the service serves a real flow: create an account, sign in, create a
-business, invite a worker, and have that worker accept the invitation and arrive
-inside the business with the role they were given.
+tenants, staff administration, the permission model as data, and devices. 941 tests
+pass, the nine-stage build gate is green, and the service serves a real flow: create
+an account, sign in, create a business, invite a worker, have that worker accept the
+invitation with the role they were given, inspect what that role can do, and revoke
+a lost phone - which ends the sessions bound to it.
 
 Delivered beyond the core: a provider-neutral storage capability with both
 Cloudflare R2 and Cloudinary adapters selectable by configuration, mandatory
@@ -132,6 +133,6 @@ that is safe under concurrent uploads, and authentication whose failures are
 indistinguishable across an unknown account, a wrong password and a deactivated
 account.
 
-Next is M6 (roles and permissions as data, custom roles), then devices and the
-migration baseline, before the operational domain (catalog, inventory, customers,
-sales, sync, storefront). Progress is tracked in `TASKS.md`.
+Next is M8, the Alembic migration baseline that turns this schema into versioned
+migrations, before the operational domain (catalog, inventory, customers, sales,
+sync, storefront). Progress is tracked in `TASKS.md`.
