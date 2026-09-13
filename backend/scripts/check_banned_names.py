@@ -47,6 +47,16 @@ BANNED_NAMES: frozenset[str] = frozenset(
     }
 )
 
+# Method names that stay banned everywhere except as a method, where they are
+# part of a deliberate, documented API rather than an undecided responsibility.
+#
+# `info` is the level name in every logging API in every language. A logging
+# facade that renamed it to `information` would be less readable, not more, and
+# would surprise every Python developer who reads it. The exception is scoped to
+# methods: a module-level function named `info`, or a variable named `info`, is
+# still rejected.
+ALLOWED_METHOD_NAMES: frozenset[str] = frozenset({"info"})
+
 SKIPPED_DIRECTORY_NAMES: frozenset[str] = frozenset(
     {
         ".git",
@@ -118,11 +128,35 @@ def build_violation(
     )
 
 
-def find_banned_definition_name(node: ast.AST) -> tuple[str, str] | None:
+def collect_allowed_method_nodes(module: ast.Module) -> set[int]:
+    """Return the identity of method nodes whose names are explicitly allowed.
+
+    Only direct children of a class body count as methods. A module-level
+    function with the same name is still reported.
+    """
+    allowed_nodes: set[int] = set()
+    for node in ast.walk(module):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        for child in node.body:
+            if (
+                isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef)
+                and child.name.lower() in ALLOWED_METHOD_NAMES
+            ):
+                allowed_nodes.add(id(child))
+    return allowed_nodes
+
+
+def find_banned_definition_name(
+    node: ast.AST,
+    allowed_method_nodes: set[int],
+) -> tuple[str, str] | None:
     """Return (name, kind) when a class or function definition is banned."""
     if isinstance(node, ast.ClassDef):
         kind = "class"
     elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+        if id(node) in allowed_method_nodes:
+            return None
         kind = "function"
     else:
         return None
@@ -153,9 +187,10 @@ def find_banned_assignment_name(node: ast.AST) -> tuple[str, str] | None:
 
 def scan_parsed_module(module: ast.Module, relative_path: str) -> list[BannedNameViolation]:
     """Collect banned names from a parsed module."""
+    allowed_method_nodes = collect_allowed_method_nodes(module)
     violations: list[BannedNameViolation] = []
     for node in ast.walk(module):
-        definition = find_banned_definition_name(node)
+        definition = find_banned_definition_name(node, allowed_method_nodes)
         if definition is not None:
             name, kind = definition
             violations.append(build_violation(relative_path, name, kind, node.lineno))

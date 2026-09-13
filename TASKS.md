@@ -276,14 +276,14 @@ server-side and configuration-driven, not provider features.
 
 ### M1.3 Structured logging
 
-- [ ] M1.3.1 `core/logging.py` JSON formatter: timestamp, level, logger,
+- [x] M1.3.1 `core/logging.py` JSON formatter: timestamp, level, logger,
       correlation ID, operation, layer, and safe identifiers.
-- [ ] M1.3.2 Redaction: passwords, hashes, tokens, API keys, authorization
+- [x] M1.3.2 Redaction: passwords, hashes, tokens, API keys, authorization
       headers, cookies and configured secret fields are redacted by the logger
       itself, not by call sites.
-- [ ] M1.3.3 Request-scoped logger: a bound adapter that carries correlation ID,
+- [x] M1.3.3 Request-scoped logger: a bound adapter that carries correlation ID,
       tenant, actor and device without callers repeating them.
-- [ ] M1.3.4 Tests: redaction of nested and case-varied keys, correlation ID
+- [x] M1.3.4 Tests: redaction of nested and case-varied keys, correlation ID
       presence in every record, and no secret ever appearing in a formatted
       record.
 

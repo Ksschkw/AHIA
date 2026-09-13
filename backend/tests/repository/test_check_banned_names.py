@@ -109,6 +109,52 @@ def test_permits_local_variable_inside_a_function(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
+def test_permits_an_allowlisted_method_name(tmp_path: Path) -> None:
+    """A logging facade legitimately exposes `info` as a level method.
+
+    The standard library, and every logging library in every language, names it
+    that way. The exception is scoped to methods only.
+    """
+    write_module(
+        tmp_path,
+        "structured_logger.py",
+        "class StructuredLogger:\n    def info(self, event: str) -> None:\n        return None\n",
+    )
+
+    violations = scan(tmp_path)
+
+    assert violations == []
+
+
+@pytest.mark.unit
+def test_module_level_function_with_an_allowlisted_method_name_is_still_rejected(
+    tmp_path: Path,
+) -> None:
+    write_module(tmp_path, "reporting.py", "def info() -> None:\n    return None\n")
+
+    violations = scan(tmp_path)
+
+    assert [(violation.kind, violation.name) for violation in violations] == [("function", "info")]
+
+
+@pytest.mark.unit
+def test_method_named_with_a_banned_word_outside_the_allowlist_is_rejected(
+    tmp_path: Path,
+) -> None:
+    write_module(
+        tmp_path,
+        "invoice_service.py",
+        "class InvoiceService:\n    def handle(self) -> None:\n        return None\n",
+    )
+
+    violations = scan(tmp_path)
+
+    assert [(violation.kind, violation.name) for violation in violations] == [
+        ("function", "handle")
+    ]
+
+
+@pytest.mark.unit
 def test_reports_syntax_errors_rather_than_passing_silently(tmp_path: Path) -> None:
     write_module(tmp_path, "broken.py", "def calculate(\n")
 
