@@ -61,6 +61,34 @@ paths = [
 ]
 
 [[allowlists]]
+name = "generated-and-cached-artifacts"
+description = "Bytecode caches, test caches and type-checker caches are generated from source that this scanner inspects directly. They are gitignored, so nothing in them can be committed, and scanning them produced a finding inside a .pyc file that no human wrote."
+paths = [
+  '''__pycache__/.*''',
+  '''[.]pyc$''',
+  '''[.]pyo$''',
+  '''[.]pytest_cache/.*''',
+  '''[.]mypy_cache/.*''',
+  '''[.]ruff_cache/.*''',
+  '''[.]import_linter_cache/.*''',
+]
+
+[[allowlists]]
+name = "deliberate-test-fixture-credentials"
+description = "Tests that prove redaction, fingerprinting and provider credential handling must use values shaped like real credentials, and must use values that are obviously not real. The convention in this repository is the suffix '-for-tests'; the high-entropy strings below are canonical public examples used to prove the redactor catches that shape. Matching the value rather than the file means a genuinely different credential added to the same file is still reported."
+regexes = [
+  '''.*for-tests.*''',
+  '''.*must-never-appear.*''',
+  '''ghp_A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8''',
+  '''AKIAIOSFODNN7EXAMPLE1''',
+  '''sup3rsecret''',
+  '''abcdefghijklmnop''',
+  '''ci-placeholder-[a-z-]*''',
+  '''eyJhbGciOiJIUzI1NiJ9[.]eyJzdWIiOiIxMjM0NTY3ODkwIn0[.][A-Za-z0-9_-]+''',
+  '''presentation_width=[0-9]+''',
+]
+
+[[allowlists]]
 name = "guard-rule-definitions"
 description = "The developer guards and the gitleaks configuration itself must name the patterns they reject, including the literal words 'password', 'secret' and 'token'."
 paths = [

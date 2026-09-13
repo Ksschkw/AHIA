@@ -53,11 +53,20 @@ def test_allowlist_entries_are_present(secret_scan_config: dict[str, object]) ->
 
 @pytest.mark.security
 def test_every_allowlist_entry_is_justified(secret_scan_config: dict[str, object]) -> None:
+    """An entry needs a name, a reason, and a scope that is a path or a value.
+
+    Matching by value rather than by file is preferred, because it keeps the
+    scanner active for every other secret in the same file. Both forms are
+    permitted; an entry with neither would allow everything.
+    """
     for entry in secret_scan_config["allowlists"]:
         assert isinstance(entry, dict)
         assert entry.get("name"), f"allowlist entry without a name: {entry}"
         assert entry.get("description"), f"allowlist entry without a reason: {entry.get('name')}"
-        assert entry.get("paths"), f"allowlist entry without paths: {entry.get('name')}"
+        assert entry.get("paths") or entry.get("regexes"), (
+            f"allowlist entry {entry.get('name')} allows everything: it scopes neither a "
+            "path nor a value"
+        )
 
 
 @pytest.mark.security
@@ -72,10 +81,27 @@ def test_no_allowlist_entry_matches_the_whole_repository(
 
 
 @pytest.mark.security
+def test_no_value_pattern_is_a_bare_wildcard(secret_scan_config: dict[str, object]) -> None:
+    """A value allowlist that matches anything is the same as no scanner."""
+    for entry in secret_scan_config["allowlists"]:
+        for pattern in entry.get("regexes", []):
+            assert pattern not in {"", ".*", ".+", "^.*$"}, (
+                f"allowlist entry {entry.get('name')} matches every value"
+            )
+
+
+@pytest.mark.security
 def test_every_path_pattern_is_a_valid_regex(secret_scan_config: dict[str, object]) -> None:
     for entry in secret_scan_config["allowlists"]:
         for pattern in entry.get("paths", []):
             try:
                 re.compile(pattern)
             except re.error as error:  # pragma: no cover - failure path
-                pytest.fail(f"invalid pattern in {entry.get('name')}: {pattern} ({error})")
+                pytest.fail(f"invalid path pattern in {entry.get('name')}: {pattern} ({error})")
+
+    for entry in secret_scan_config["allowlists"]:
+        for pattern in entry.get("regexes", []):
+            try:
+                re.compile(pattern)
+            except re.error as error:  # pragma: no cover - failure path
+                pytest.fail(f"invalid value pattern in {entry.get('name')}: {pattern} ({error})")
