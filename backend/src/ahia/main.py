@@ -45,7 +45,7 @@ from ahia.middleware.correlation_middleware import CorrelationIdMiddleware
 from ahia.middleware.error_handler_middleware import ErrorHandlerMiddleware
 from ahia.middleware.rate_limit_middleware import RateLimitMiddleware, build_default_limiter
 from ahia.middleware.security_headers_middleware import SecurityHeadersMiddleware
-from ahia.routers import auth_router, health_router, user_router
+from ahia.routers import auth_router, health_router, tenant_router, user_router
 
 _MAIN_LOGGER_NAME: Final[str] = "ahia.main"
 
@@ -241,6 +241,7 @@ def register_routers(application: FastAPI, settings: Settings) -> None:
     versioned_routers = [
         auth_router.router,
         user_router.router,
+        tenant_router.router,
     ]
     for versioned_router in versioned_routers:
         application.include_router(versioned_router, prefix=settings.api_v1_prefix)

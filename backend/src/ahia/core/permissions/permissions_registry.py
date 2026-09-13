@@ -22,6 +22,7 @@ from ahia.core.permissions import (
     sales_permissions,
     staff_permissions,
     storefront_permissions,
+    tenant_permissions,
 )
 from ahia.core.permissions.permission_types import (
     CODE_SEPARATOR,
@@ -39,6 +40,7 @@ _PERMISSION_MODULES: Final[tuple[tuple[PermissionDefinition, ...], ...]] = (
     storefront_permissions.PERMISSIONS,
     report_permissions.PERMISSIONS,
     device_permissions.PERMISSIONS,
+    tenant_permissions.PERMISSIONS,
 )
 
 #: Every permission the application understands.
@@ -89,6 +91,8 @@ SYSTEM_ROLES: Final[dict[str, RoleDefinition]] = {
                 storefront_permissions.STOREFRONT_MANAGE,
                 report_permissions.REPORTS_READ,
                 device_permissions.DEVICES_READ,
+                tenant_permissions.TENANTS_READ,
+                tenant_permissions.TENANTS_MANAGE,
             }
         ),
     ),
@@ -107,6 +111,7 @@ SYSTEM_ROLES: Final[dict[str, RoleDefinition]] = {
                 customer_permissions.CUSTOMERS_READ,
                 customer_permissions.CUSTOMERS_CREATE,
                 storefront_permissions.STOREFRONT_READ,
+                tenant_permissions.TENANTS_READ,
             }
         ),
     ),
@@ -124,6 +129,7 @@ SYSTEM_ROLES: Final[dict[str, RoleDefinition]] = {
                 inventory_permissions.INVENTORY_ADJUST,
                 inventory_permissions.INVENTORY_SCAN,
                 storefront_permissions.STOREFRONT_READ,
+                tenant_permissions.TENANTS_READ,
             }
         ),
     ),

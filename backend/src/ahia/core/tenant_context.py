@@ -47,10 +47,10 @@ class TenantContext:
     user_id: UUID
     tenant_id: UUID
     membership_id: UUID
-    role_id: UUID
     permissions: frozenset[str]
-    device_id: UUID | None = None
+    role_id: UUID | None = None
     role_name: str | None = None
+    device_id: UUID | None = None
 
     def has_permission(self, permission_code: str) -> bool:
         """Return True only when the permission is explicitly present.
@@ -128,10 +128,10 @@ def build_tenant_context(
     user_id: UUID,
     tenant_id: UUID,
     membership_id: UUID,
-    role_id: UUID,
     permission_codes: frozenset[str],
-    device_id: UUID | None = None,
+    role_id: UUID | None = None,
     role_name: str | None = None,
+    device_id: UUID | None = None,
 ) -> TenantContext:
     """Build a context from resolved membership.
 

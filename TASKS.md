@@ -79,8 +79,8 @@ assertion in a commit message.
 | M1 | Core cross-cutting infrastructure | `[x]` | M0 |
 | M2 | User demonstrative vertical slice | `[x]` | M1 |
 | M3 | Authentication and sessions | `[x]` | M2 |
-| M4 | Tenant slice | `[~]` | M3 |
-| M5 | Membership and staff administration | `[ ]` | M4 |
+| M4 | Tenant slice | `[x]` | M3 |
+| M5 | Membership and staff administration | `[~]` | M4 |
 | M6 | Roles, permissions and deny-by-default authorization | `[ ]` | M5 |
 | M7 | Devices and session management | `[ ]` | M6 |
 | M8 | Alembic migration baseline | `[ ]` | M6 |
@@ -614,14 +614,14 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - [x] M4.1.2 `tenant_schema.py` with slug format validation and reserved-word
       rejection.
 - [x] M4.1.3 `tenant_crud.py`: persistence with global slug uniqueness.
-- [ ] M4.1.4 `tenant_service.py`: `create_tenant`, `update_tenant_profile`,
+- [x] M4.1.4 `tenant_service.py`: `create_tenant`, `update_tenant_profile`,
       `get_tenant`, `deactivate_tenant`, with slug allocation and conflict
       handling.
-- [ ] M4.1.5 `tenant_router.py`: `POST /api/v1/tenants`, `GET /api/v1/tenants`,
+- [x] M4.1.5 `tenant_router.py`: `POST /api/v1/tenants`, `GET /api/v1/tenants`,
       `GET /api/v1/tenants/{tenant_id}`, `PATCH /api/v1/tenants/{tenant_id}`.
-- [ ] M4.1.6 Tests: slug collisions, reserved slugs, cross-tenant access
+- [x] M4.1.6 Tests: slug collisions, reserved slugs, cross-tenant access
       denial, tenant list scoping to memberships.
-- [ ] M4.1.7 Tenant-context resolution: requested tenant is a hint, membership
+- [x] M4.1.7 Tenant-context resolution: requested tenant is a hint, membership
       is the proof; denial is deny-by-default.
 
 ---

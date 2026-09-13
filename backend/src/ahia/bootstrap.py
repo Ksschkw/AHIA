@@ -46,6 +46,7 @@ from ahia.integrations.storage.storage_factory import (
 )
 from ahia.services.auth_service import AuthService
 from ahia.services.storage_quota_service import StorageQuotaService
+from ahia.services.tenant_service import TenantService
 from ahia.services.user_service import UserService
 
 _CONTAINER_LOGGER_NAME: Final[str] = "ahia.core.container"
@@ -68,6 +69,7 @@ class ApplicationContainer:
     storage_quota_service: StorageQuotaService
     user_service: UserService
     auth_service: AuthService
+    tenant_service: TenantService
     token_service: TokenService
     password_hasher: PasswordHasher
     logger: StructuredLogger
@@ -138,6 +140,11 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         logger=logger,
     )
 
+    tenant_service = TenantService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        logger=logger,
+    )
+
     container = ApplicationContainer(
         settings=settings,
         database=database,
@@ -147,6 +154,7 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         storage_quota_service=storage_quota_service,
         user_service=user_service,
         auth_service=auth_service,
+        tenant_service=tenant_service,
         token_service=token_service,
         password_hasher=password_hasher,
         logger=logger,
