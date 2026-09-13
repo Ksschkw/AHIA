@@ -521,6 +521,18 @@ class StorageUnavailableError(IntegrationError):
     safe_message = "File storage is temporarily unavailable."
 
 
+class DependencyBusyError(IntegrationError):
+    """A dependency's concurrency limit is full.
+
+    A typed refusal rather than an unbounded queue: when one dependency slows
+    down, the rest of the process must keep serving.
+    """
+
+    error_code = "DEPENDENCY_BUSY"
+    http_status = 503
+    safe_message = "A dependent service is busy. Try again shortly."
+
+
 class StorageOperationError(IntegrationError):
     """An object storage operation failed for a reason other than availability."""
 
@@ -593,6 +605,7 @@ _ERROR_CLASSES: Final[tuple[type[AhiaError], ...]] = (
     IntegrationError,
     DependencyTimeoutError,
     DependencyCircuitOpenError,
+    DependencyBusyError,
     StorageUnavailableError,
     StorageOperationError,
 )

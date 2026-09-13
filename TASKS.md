@@ -289,16 +289,16 @@ server-side and configuration-driven, not provider features.
 
 ### M1.4 Resilience primitives
 
-- [ ] M1.4.1 Timeout wrapper for outbound calls, with a typed timeout error.
-- [ ] M1.4.2 Circuit breaker: closed, open and half-open states; failure
+- [x] M1.4.1 Timeout wrapper for outbound calls, with a typed timeout error.
+- [x] M1.4.2 Circuit breaker: closed, open and half-open states; failure
       threshold, reset window and probe count from configuration; one breaker
       per dependency; state transitions emit a metric and a structured log.
-- [ ] M1.4.3 Bulkhead: per-dependency concurrency limit and queue behavior.
-- [ ] M1.4.4 Retry policy: bounded attempts, exponential backoff with jitter,
+- [x] M1.4.3 Bulkhead: per-dependency concurrency limit and queue behavior.
+- [x] M1.4.4 Retry policy: bounded attempts, exponential backoff with jitter,
       idempotency guard that refuses to retry a non-idempotent operation.
-- [ ] M1.4.5 Fallback contract: a typed degraded result, never `None`, never a
+- [x] M1.4.5 Fallback contract: a typed degraded result, never `None`, never a
       silent success.
-- [ ] M1.4.6 Tests: breaker trips and recovers, retries are bounded and
+- [x] M1.4.6 Tests: breaker trips and recovers, retries are bounded and
       jittered, timeout fires, bulkhead rejects past the limit, fallback is
       typed, and no breaker exists around in-process calls.
 
