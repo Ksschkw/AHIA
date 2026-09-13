@@ -315,16 +315,16 @@ server-side and configuration-driven, not provider features.
 
 ### M1.6 Database lifecycle
 
-- [ ] M1.6.1 `core/database.py`: async engine and session factory built from
+- [x] M1.6.1 `core/database.py`: async engine and session factory built from
       configuration, with pool size, overflow, pool timeout, statement timeout
       and TLS enforcement.
-- [ ] M1.6.2 Session dependency: one session per request, committed or rolled
+- [x] M1.6.2 Session dependency: one session per request, committed or rolled
       back exactly once, closed on exit.
-- [ ] M1.6.3 Unit of work port and SQLAlchemy implementation: services declare
+- [x] M1.6.3 Unit of work port and SQLAlchemy implementation: services declare
       transactional intent without importing a database driver.
-- [ ] M1.6.4 Declarative base with a naming convention for constraints and
+- [x] M1.6.4 Declarative base with a naming convention for constraints and
       indexes so Alembic autogenerate produces stable, reviewable names.
-- [ ] M1.6.5 Tests: engine configuration reflects settings, sessions do not
+- [x] M1.6.5 Tests: engine configuration reflects settings, sessions do not
       leak, rollback on error, and the unit of work commits once.
 
 ### M1.7 Tenant context and authorization policy
