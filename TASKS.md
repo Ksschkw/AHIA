@@ -583,8 +583,8 @@ endpoint.
 
 - [x] M3.1.1 `SessionModel` entity and `session_crud.py` persistence for
       refresh token hashes, device binding, expiry and revocation.
-- [ ] M3.1.2 `auth_schema.py` request and response contracts.
-- [ ] M3.1.3 `auth_service.py`: `register_user`, `authenticate_user`,
+- [x] M3.1.2 `auth_schema.py` request and response contracts.
+- [x] M3.1.3 `auth_service.py`: `register_user`, `authenticate_user`,
       `refresh_session`, `revoke_session`, `change_password` with constant-time
       failure behavior and identical external errors for unknown user and wrong
       password.

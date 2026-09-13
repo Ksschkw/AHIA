@@ -26,20 +26,32 @@ LAYER_DIRECTORIES: dict[str, str] = {
     "routers": "_router.py",
 }
 
-#: Files that legitimately exist without a matching entity, each with its reason.
-#: A use-case service spanning several entities is the documented exception: it is
-#: named after the operation, not after a table.
-FILES_WITHOUT_AN_ENTITY: frozenset[str] = frozenset(
+#: Files named after a use case rather than an entity. The preset allows this
+#: deliberately: an operation that spans entities is named after the operation, and
+#: forcing it to borrow an entity name would either invent a table or mislead a
+#: reader about what the file owns.
+USE_CASE_MODULES: frozenset[str] = frozenset(
     {
-        # Coordinates quota accounting across the image use case; there is no
-        # `storage_quota` table and there should not be one.
+        # Spans the user, the session and their credentials.
+        "schemas/auth_schema.py",
+        "services/auth_service.py",
+        # Coordinates quota accounting across the product-image use case; there is
+        # no `storage_quota` table and there should not be one.
         "services/storage_quota_service.py",
-        # Operational endpoints. Liveness and readiness are properties of the
-        # process, not of a business entity, and giving them a model would be
-        # inventing a domain concept to satisfy a rule.
+    }
+)
+
+#: Files that belong to the process rather than to the domain.
+OPERATIONAL_MODULES: frozenset[str] = frozenset(
+    {
+        # Liveness and readiness are properties of the running process, not of a
+        # business entity. Giving them a model would invent a domain concept to
+        # satisfy a naming rule.
         "routers/health_router.py",
     }
 )
+
+FILES_WITHOUT_AN_ENTITY: frozenset[str] = USE_CASE_MODULES | OPERATIONAL_MODULES
 
 
 def layer_files(layer: str, suffix: str) -> list[Path]:

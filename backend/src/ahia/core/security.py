@@ -52,7 +52,13 @@ _REFRESH_TOKEN_BYTES: Final[int] = 48
 
 @dataclass(frozen=True, slots=True)
 class TokenClaims:
-    """The validated contents of an access token."""
+    """The validated contents of an access token.
+
+    `session_id` links the token to the refresh session it was issued with. It is
+    optional because a token can be issued without one, and it exists now so that a
+    per-request session check can be added later without changing the token
+    format or invalidating every issued token.
+    """
 
     subject: str
     token_identifier: str
@@ -60,6 +66,7 @@ class TokenClaims:
     expires_at: datetime
     issuer: str
     audience: str
+    session_id: str | None = None
 
 
 class PasswordHasher:
@@ -158,9 +165,18 @@ class TokenService:
         self._public_token_bytes = public_token_bytes
 
     def issue_access_token(
-        self, *, subject: str, now: datetime | None = None
+        self,
+        *,
+        subject: str,
+        now: datetime | None = None,
+        session_identifier: str | None = None,
     ) -> tuple[str, TokenClaims]:
-        """Return a signed short-lived access token and its claims."""
+        """Return a signed short-lived access token and its claims.
+
+        `session_identifier` is embedded as the `sid` claim when supplied. It is
+        what makes a future device or session revocation check possible without a
+        token-format change or an invalidation of every issued token.
+        """
         issued_at = now or datetime.now(UTC)
         expires_at = issued_at + self._access_token_ttl
         token_identifier = uuid4().hex
@@ -174,6 +190,9 @@ class TokenService:
             "jti": token_identifier,
             "typ": _ACCESS_TOKEN_TYPE,
         }
+        if session_identifier is not None:
+            payload["sid"] = session_identifier
+
         encoded = jwt.encode(payload, self._secret, algorithm=self._algorithm)
         claims = TokenClaims(
             subject=subject,
@@ -182,6 +201,7 @@ class TokenService:
             expires_at=expires_at,
             issuer=self._issuer,
             audience=self._audience,
+            session_id=session_identifier,
         )
         return encoded, claims
 
@@ -256,6 +276,7 @@ class TokenService:
                 detail="token has no identifier claim",
             )
 
+        session_identifier = payload.get("sid")
         return TokenClaims(
             subject=subject,
             token_identifier=token_identifier,
@@ -263,6 +284,7 @@ class TokenService:
             expires_at=datetime.fromtimestamp(int(payload["exp"]), tz=UTC),
             issuer=str(payload["iss"]),
             audience=str(payload["aud"]),
+            session_id=str(session_identifier) if session_identifier is not None else None,
         )
 
     # ------------------------------------------------------------------
