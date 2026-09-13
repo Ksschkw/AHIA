@@ -1,0 +1,44 @@
+# Docker build context exclusions.
+#
+# The build needs exactly four things: requirements.prod.lock, pyproject.toml,
+# src/ and the alembic configuration. Everything else is noise at best and a
+# leak risk at worst.
+
+# Secrets and environment files. Never in the image.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+
+# Virtual environment and caches: the image builds its own from the lockfile.
+.venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Tests are not shipped: the image is the service, and the test toolchain is
+# not installed inside it either.
+tests/
+
+# Repository-level metadata and tooling.
+.git/
+.gitignore
+.github/
+.tools/
+.pre-commit-config.yaml
+import-linter.ini
+dependency_audit_ignores.txt
+scripts/
+*.md
+Dockerfile
+.dockerignore
+docker-compose.dev.yml
