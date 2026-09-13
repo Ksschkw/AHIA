@@ -205,7 +205,7 @@ lint error and a failing test. CI runs the same command.
       `arch`, `secrets`, `audit`, `ascii`, `check`, `run`, `migrate`, `revision`
       targets, each a thin wrapper over a real script or tool with no hidden
       logic.
-- [ ] M0.8.2 `backend/scripts/dev_check.sh`: runs every gate in a fixed order,
+- [x] M0.8.2 `backend/scripts/dev_check.sh`: runs every gate in a fixed order,
       prints a plain-ASCII summary (`[OK]`, `[FAIL]`) and returns the correct
       exit code.
 
