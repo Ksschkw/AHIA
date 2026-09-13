@@ -449,17 +449,17 @@ server-side and configuration-driven, not provider features.
 
 ### M1.14 Cloudinary adapter
 
-- [ ] M1.14.1 `integrations/storage/cloudinary_client.py` implementing the same
+- [x] M1.14.1 `integrations/storage/cloudinary_client.py` implementing the same
       port, translating the neutral storage key to a Cloudinary public ID
       entirely inside the adapter and translating Cloudinary errors to the
       shared error hierarchy.
-- [ ] M1.14.2 `core/ports/storage_port.py` delivery contract extended so a
+- [x] M1.14.2 `core/ports/storage_port.py` delivery contract extended so a
       provider may honour a requested presentation width. The Cloudinary
       adapter encodes that as a transformation; the R2 adapter returns the
       stored object. Services pass a width, not a transformation.
-- [ ] M1.14.3 Same resilience policy and the same error translation as the R2
+- [x] M1.14.3 Same resilience policy and the same error translation as the R2
       adapter.
-- [ ] M1.14.4 Tests: the shared contract suite passes for Cloudinary, a
+- [x] M1.14.4 Tests: the shared contract suite passes for Cloudinary, a
       Cloudinary failure produces a typed application error, and no Cloudinary
       identifier or transformation string appears outside the adapter.
 
