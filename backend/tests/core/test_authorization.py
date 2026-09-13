@@ -35,7 +35,6 @@ from ahia.core.permissions.permissions_registry import (
     validate_registry,
 )
 from ahia.core.tenant_context import (
-    MembershipStatus,
     TenantContext,
     build_tenant_context,
 )
@@ -354,25 +353,6 @@ def test_a_context_without_a_device_still_authorizes() -> None:
     context.require_permission("sales.create", operation="complete_sale")
 
     assert "device_id" not in context.describe_for_audit()
-
-
-# ---------------------------------------------------------------------------
-# Membership status
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize(
-    ("status", "grants"),
-    [
-        (MembershipStatus.ACTIVE, True),
-        (MembershipStatus.INVITED, False),
-        (MembershipStatus.SUSPENDED, False),
-        (MembershipStatus.REMOVED, False),
-    ],
-)
-def test_only_an_active_membership_grants_access(status: MembershipStatus, grants: bool) -> None:
-    assert status.grants_access is grants
 
 
 @pytest.mark.unit

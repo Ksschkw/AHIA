@@ -22,7 +22,6 @@ attempted cross-tenant access becomes visible at all.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import Final
 from uuid import UUID
 
@@ -33,31 +32,16 @@ from ahia.core.permissions.permissions_registry import PERMISSION_CODES
 _AUTHORIZATION_LOGGER_NAME: Final[str] = "ahia.core.authorization"
 
 
-class MembershipStatus(StrEnum):
-    """The lifecycle of a user's access to one business."""
-
-    INVITED = "invited"
-    ACTIVE = "active"
-    SUSPENDED = "suspended"
-    REMOVED = "removed"
-
-    @property
-    def grants_access(self) -> bool:
-        """Return True only for an active membership.
-
-        The three other states deny. An invitation that has not been accepted is
-        not access, and a suspended or removed membership is a decision someone
-        made on purpose.
-        """
-        return self is MembershipStatus.ACTIVE
-
-
 @dataclass(frozen=True, slots=True)
 class TenantContext:
     """The resolved, authorized identity of a caller within one business.
 
     Constructed only after the identity is authenticated and the membership is
     confirmed active. Nothing in this object came from the request body.
+
+    There is no status field: a context exists only for an active membership. The
+    lifecycle itself belongs to the membership entity, which is the one place the
+    vocabulary is defined.
     """
 
     user_id: UUID

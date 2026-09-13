@@ -210,11 +210,14 @@ absolute. Moving one file is cheaper than weakening the contract.
 Consequence: `main` imports `ahia.bootstrap`, and the `core` contract continues to
 forbid every application import without exception.
 
-### ADR-0010 - Entities may import the error hierarchy, nothing else from core
+### ADR-0010 - Entities may import the error hierarchy and the permission registry
 
 Decision: the entity layer's dependency contract forbids every application layer,
 every framework and every vendor SDK, and forbids each ``core`` module except
-``core.errors``.
+``core.errors`` and ``core.permissions``. Both exceptions are conditional on the
+module staying pure: standard library only, no configuration, no I/O, importable
+in a test with no setup. A test asserts that condition, so the carve-out cannot
+widen by accident.
 
 Reasoning: the preset allows any layer to import cross-cutting core, and the
 scaffold specification's prohibited list for entities is frameworks, ORMs,
@@ -223,10 +226,16 @@ violated invariant must be able to raise a typed error, otherwise it either
 raises a bare exception the transport layer cannot map or it stops enforcing its
 own invariants and pushes them into services, which is worse.
 
+``core.permissions`` is included because roles and permissions are the product's
+own vocabulary, not the framework's: a membership entity that validates a role
+name, or resolves what a role grants, is consulting the domain. The alternative -
+duplicating the registry inside the entity layer - would create two definitions of
+one concept.
+
 The carve-out is written as an explicit list of forbidden ``core`` modules rather
 than as a blanket allowance, so an entity still cannot read configuration, open a
-connection, write a log line or resolve a permission. Those are the imports that
-would turn a domain object into an application object.
+connection, write a log line or resolve a tenant. Those are the imports that would
+turn a domain object into an application object.
 
 Consequence: adding a new ``core`` module means deciding, on purpose, whether
 entities may import it. The default in the contract file is that they may not.
