@@ -21,11 +21,6 @@ from sqlalchemy import text
 from ahia.core.config import AppEnvironment, Settings, StorageProviderName
 from ahia.core.database import Base, Database
 from ahia.crud import session_crud, tenant_membership_crud
-from ahia.crud.device_crud import DeviceRecord
-from ahia.crud.session_crud import SessionRecord
-from ahia.crud.tenant_crud import TenantRecord
-from ahia.crud.tenant_membership_crud import TenantMembershipRecord
-from ahia.crud.user_crud import UserRecord
 from ahia.main import create_application
 from ahia.models.entities.tenant_membership_model import TenantMembershipModel
 
@@ -33,14 +28,6 @@ DEFAULT_TEST_DATABASE_URL = (
     "postgresql+asyncpg://ksschkw:ahia_local_dev_only@127.0.0.1:5432/ahia_test"
 )
 PASSWORD = "a-good-enough-password"
-
-TABLE_RECORDS = (
-    UserRecord,
-    SessionRecord,
-    TenantRecord,
-    TenantMembershipRecord,
-    DeviceRecord,
-)
 
 
 def build_settings(**overrides: Any) -> Settings:

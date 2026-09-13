@@ -22,13 +22,6 @@ from ahia.core.config import AppEnvironment, Settings, StorageProviderName
 from ahia.core.database import Base, Database
 from ahia.core.permissions.permissions_registry import ALL_PERMISSIONS, SYSTEM_ROLES
 from ahia.crud import tenant_membership_crud
-from ahia.crud.permission_crud import PermissionRecord
-from ahia.crud.role_crud import RoleRecord
-from ahia.crud.role_permission_crud import RolePermissionRecord
-from ahia.crud.session_crud import SessionRecord
-from ahia.crud.tenant_crud import TenantRecord
-from ahia.crud.tenant_membership_crud import TenantMembershipRecord
-from ahia.crud.user_crud import UserRecord
 from ahia.main import create_application
 from ahia.models.entities.tenant_membership_model import TenantMembershipModel
 from ahia.services.iam_seed_service import IamSeedService
@@ -37,16 +30,6 @@ DEFAULT_TEST_DATABASE_URL = (
     "postgresql+asyncpg://ksschkw:ahia_local_dev_only@127.0.0.1:5432/ahia_test"
 )
 PASSWORD = "a-good-enough-password"
-
-TABLE_RECORDS = (
-    UserRecord,
-    SessionRecord,
-    TenantRecord,
-    TenantMembershipRecord,
-    RoleRecord,
-    PermissionRecord,
-    RolePermissionRecord,
-)
 
 
 def build_settings(**overrides: Any) -> Settings:
