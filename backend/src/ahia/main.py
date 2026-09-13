@@ -45,7 +45,7 @@ from ahia.middleware.correlation_middleware import CorrelationIdMiddleware
 from ahia.middleware.error_handler_middleware import ErrorHandlerMiddleware
 from ahia.middleware.rate_limit_middleware import RateLimitMiddleware, build_default_limiter
 from ahia.middleware.security_headers_middleware import SecurityHeadersMiddleware
-from ahia.routers import health_router, user_router
+from ahia.routers import auth_router, health_router, user_router
 
 _MAIN_LOGGER_NAME: Final[str] = "ahia.main"
 
@@ -239,6 +239,7 @@ def register_routers(application: FastAPI, settings: Settings) -> None:
     # Business routers live under the version prefix so the contract can evolve
     # without republishing public links, which do not carry a version.
     versioned_routers = [
+        auth_router.router,
         user_router.router,
     ]
     for versioned_router in versioned_routers:

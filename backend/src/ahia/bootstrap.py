@@ -44,6 +44,7 @@ from ahia.integrations.storage.storage_factory import (
     build_storage_adapter,
     build_storage_policy,
 )
+from ahia.services.auth_service import AuthService
 from ahia.services.storage_quota_service import StorageQuotaService
 from ahia.services.user_service import UserService
 
@@ -66,6 +67,7 @@ class ApplicationContainer:
     storage_policy: ResiliencePolicy
     storage_quota_service: StorageQuotaService
     user_service: UserService
+    auth_service: AuthService
     token_service: TokenService
     password_hasher: PasswordHasher
     logger: StructuredLogger
@@ -126,6 +128,16 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         logger=logger,
     )
 
+    auth_service = AuthService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        token_service=token_service,
+        password_hasher=password_hasher,
+        refresh_token_ttl_days=settings.refresh_token_ttl_days,
+        access_token_ttl_minutes=settings.access_token_ttl_minutes,
+        default_phone_country_code=settings.default_phone_country_code,
+        logger=logger,
+    )
+
     container = ApplicationContainer(
         settings=settings,
         database=database,
@@ -134,6 +146,7 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         storage_policy=storage_policy,
         storage_quota_service=storage_quota_service,
         user_service=user_service,
+        auth_service=auth_service,
         token_service=token_service,
         password_hasher=password_hasher,
         logger=logger,

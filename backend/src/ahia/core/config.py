@@ -397,6 +397,10 @@ class Settings(BaseSettings):
     cloudinary_request_timeout_seconds: float = Field(default=15.0, gt=0, le=120)
 
     # -- Public sharing and messaging --------------------------------------
+    # Phone numbers are identity here: a trader types 0803..., an international
+    # form is +234803..., and both must resolve to one account. Country-code
+    # completion needs a default, and a default is configuration.
+    default_phone_country_code: str = "234"
     public_web_base_url: str = "http://localhost:3000"
     whatsapp_click_to_chat_base_url: str = "https://wa.me"
     whatsapp_default_country_code: str = "234"
@@ -424,6 +428,15 @@ class Settings(BaseSettings):
         if normalised not in allowed:
             raise ValueError(f"log level must be one of {sorted(allowed)}")
         return normalised
+
+    @field_validator("default_phone_country_code")
+    @classmethod
+    def _validate_country_code(cls, value: str) -> str:
+        """Reject anything that is not a plausible calling code."""
+        digits = value.lstrip("+")
+        if not digits.isdigit() or not 1 <= len(digits) <= 3:
+            raise ValueError("default phone country code must be 1 to 3 digits")
+        return digits
 
     @field_validator("jwt_algorithm")
     @classmethod

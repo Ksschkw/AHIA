@@ -78,8 +78,8 @@ assertion in a commit message.
 | M0 | Repository and developer tooling foundation | `[x]` | - |
 | M1 | Core cross-cutting infrastructure | `[x]` | M0 |
 | M2 | User demonstrative vertical slice | `[x]` | M1 |
-| M3 | Authentication and sessions | `[~]` | M2 |
-| M4 | Tenant slice | `[ ]` | M3 |
+| M3 | Authentication and sessions | `[x]` | M2 |
+| M4 | Tenant slice | `[~]` | M3 |
 | M5 | Membership and staff administration | `[ ]` | M4 |
 | M6 | Roles, permissions and deny-by-default authorization | `[ ]` | M5 |
 | M7 | Devices and session management | `[ ]` | M6 |
@@ -588,16 +588,16 @@ endpoint.
       `refresh_session`, `revoke_session`, `change_password` with constant-time
       failure behavior and identical external errors for unknown user and wrong
       password.
-- [ ] M3.1.4 `auth_router.py`: `POST /api/v1/auth/register`,
+- [x] M3.1.4 `auth_router.py`: `POST /api/v1/auth/register`,
       `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`,
       `POST /api/v1/auth/logout` with strict rate limits.
-- [ ] M3.1.5 Authentication dependency: bearer token to authenticated
+- [x] M3.1.5 Authentication dependency: bearer token to authenticated
       principal, denying malformed, expired, wrong-issuer and wrong-audience
       tokens with a single external message.
-- [ ] M3.1.6 Tests: registration, duplicate registration policy, login
+- [x] M3.1.6 Tests: registration, duplicate registration policy, login
       success and failure, refresh rotation and reuse detection, logout
       revocation, rate limit behavior, and no-existence-disclosure.
-- [ ] M3.1.7 Security tests: token tampering, algorithm confusion, replay of a
+- [x] M3.1.7 Security tests: token tampering, algorithm confusion, replay of a
       rotated refresh token, and credential stuffing throttling.
 
 M3 exit criteria: a client can register, log in, call `/users/me`, refresh and

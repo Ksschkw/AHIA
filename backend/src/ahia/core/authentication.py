@@ -36,10 +36,14 @@ class Principal:
     token_identifier: str
     issued_at: datetime
     expires_at: datetime
+    session_id: str | None = None
 
     def describe_for_audit(self) -> dict[str, str]:
         """Return the fields an audit record needs, and nothing else."""
-        return {"actor_id": str(self.user_id), "token_id": self.token_identifier}
+        description = {"actor_id": str(self.user_id), "token_id": self.token_identifier}
+        if self.session_id is not None:
+            description["session_id"] = self.session_id
+        return description
 
 
 def extract_bearer_token(authorization_header: str | None) -> str:
@@ -96,6 +100,7 @@ def principal_from_claims(claims: TokenClaims) -> Principal:
         token_identifier=claims.token_identifier,
         issued_at=claims.issued_at,
         expires_at=claims.expires_at,
+        session_id=claims.session_id,
     )
 
 

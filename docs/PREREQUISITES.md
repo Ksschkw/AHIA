@@ -310,6 +310,7 @@ requests that cost money. The same reasoning applies to Cloudinary's free tier.
 
 | Variable | Req | Default | Notes |
 |---|---|---|---|
+| `DEFAULT_PHONE_COUNTRY_CODE` | D | `234` | country code applied to a locally written phone number so 0803... and +234803... are one account |
 | `PUBLIC_WEB_BASE_URL` | R from M14 | `http://localhost:3000` | used to build share links and QR payloads |
 | `WHATSAPP_CLICK_TO_CHAT_BASE_URL` | D | `https://wa.me` | provider base, overridable |
 | `WHATSAPP_DEFAULT_COUNTRY_CODE` | D | `234` | normalizes local numbers before link building |

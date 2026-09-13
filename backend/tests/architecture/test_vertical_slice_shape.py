@@ -35,6 +35,7 @@ USE_CASE_MODULES: frozenset[str] = frozenset(
         # Spans the user, the session and their credentials.
         "schemas/auth_schema.py",
         "services/auth_service.py",
+        "routers/auth_router.py",
         # Coordinates quota accounting across the product-image use case; there is
         # no `storage_quota` table and there should not be one.
         "services/storage_quota_service.py",
