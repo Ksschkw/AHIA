@@ -43,9 +43,11 @@ dependencies = [
 # Development tooling. Pinned through the committed lockfile like everything
 # else; the split exists so a production image can install runtime only.
 dev = [
-  "pytest>=8.2,<9.0",
-  "pytest-asyncio>=0.23,<1.0",
-  "pytest-cov>=5.0,<7.0",
+  # pytest 9.0.3 is the first release with the fix for PYSEC-2026-1845, which
+  # the audit step in scripts/audit_dependencies.sh fails the build on.
+  "pytest>=9.0.3,<10.0",
+  "pytest-asyncio>=1.0,<2.0",
+  "pytest-cov>=7.0,<8.0",
   "anyio>=4.3,<5.0",
   "ruff>=0.6,<1.0",
   "mypy>=1.10,<2.0",

@@ -1,0 +1,16 @@
+# Dependency vulnerability audit ignores.
+#
+# Policy: a permanent ignore is an unaudited dependency. Every entry here is
+# dated, justified, and expires automatically after 90 days, at which point
+# scripts/audit_dependencies.sh fails the build until the entry is re-reviewed
+# or the dependency is remediated.
+#
+# Format, one entry per line:
+#     <VULNERABILITY-ID> <YYYY-MM-DD> <reason and remediation plan>
+#
+# Lines starting with # and blank lines are ignored.
+#
+# Current state: empty. The pinned dependency set has no known vulnerabilities
+# as of the last audit, so nothing is being suppressed. The file and its
+# expiry enforcement exist so that the first genuine suppression is recorded
+# deliberately rather than added as a permanent flag in a script.
