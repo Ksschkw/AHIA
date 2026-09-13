@@ -730,8 +730,11 @@ Goal: a business exists as a tenant with a globally unique public slug.
       governed by `products.*`: the specification declares no `categories.*`
       permission, and inventing one would change what every existing role means.
       Deletion is deliberately absent - see the progress log.
-- [ ] M9.1.2 `product_model.py` with pricing and publication invariants,
-      including the rule that money is never floating point.
+- [x] M9.1.2 `product_model.py` with pricing and publication invariants,
+      including the rule that money is never floating point. A float price is an
+      invariant violation rather than a value to round, prices carry at most two
+      decimal places, and deactivating a published product unpublishes it in the
+      same transition.
 - [ ] M9.1.3 `product_schema.py` with price, slug and publication validation.
 - [ ] M9.1.4 `product_crud.py` with tenant-scoped uniqueness
       (`UNIQUE(tenant_id, slug)`, conditional SKU and barcode uniqueness).
@@ -771,6 +774,22 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ### M9 - progress log
 
+- M9.1.2 complete. The product entity is where money lives, so it is the strictest
+  entity in the codebase. A price arriving as a float is refused rather than rounded:
+  `0.1 + 0.2 != 0.3`, and a shop that loses a kobo per sale is a shop whose books do
+  not reconcile. A price with three decimal places is refused for the same reason -
+  the column cannot hold it, and rounding silently would mean the price a person typed
+  and the price that was stored are different. Zero is a legitimate price; negative is
+  not. Selling below cost is allowed and merely reported, because clearing stock at a
+  loss is a decision rather than a defect.
+- Publication is a state with rules, not a flag: an inactive product cannot be
+  published, deactivating a published product unpublishes it, and publishing twice
+  keeps the token a customer's shared link already carries. A published product
+  without a public token is rejected by the entity, so the state and the value that
+  makes it reachable cannot drift apart.
+- The composite uniqueness anchor `UNIQUE(id, tenant_id)` on products - the item M8.1.4
+  deferred - arrives with the table in M9.1.4, because it is a constraint on a table
+  rather than a rule about a product.
 - M9.1.1 complete. The slice is the template the catalogue follows: entity, contract,
   persistence, use cases, routes, one migration revision, tests at each layer.
 - Categories carry no permission of their own. The specification names `products.read`,
