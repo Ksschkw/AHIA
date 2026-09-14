@@ -39,6 +39,7 @@ from ahia.core.permissions.permissions_registry import (
 from ahia.crud import permission_crud, role_crud, role_permission_crud
 from ahia.models.entities.permission_model import PermissionModel
 from ahia.models.entities.role_model import RoleModel
+from ahia.services.audit_event_service import AuditEventService
 from ahia.services.permission_service import PermissionService
 
 _IAM_SEED_LOGGER_NAME: Final[str] = "ahia.services.iam_seed"
@@ -270,7 +271,12 @@ class IamSeedService:
         agree; anything else means authorization would resolve differently from
         what the code says, which is exactly the failure this guards against.
         """
-        permission_service = PermissionService(unit_of_work_factory=self._unit_of_work_factory)
+        # A read-only helper: the permission service needs a recorder to be constructed, and
+        # nothing on this path writes an event.
+        permission_service = PermissionService(
+            unit_of_work_factory=self._unit_of_work_factory,
+            audit_event_service=AuditEventService(unit_of_work_factory=self._unit_of_work_factory),
+        )
         disagreements: list[RegistryDisagreement] = []
 
         unit_of_work = self._unit_of_work_factory()

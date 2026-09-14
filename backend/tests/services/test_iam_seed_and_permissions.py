@@ -30,6 +30,7 @@ from ahia.core.tenant_context import build_tenant_context
 from ahia.crud import permission_crud, role_crud, role_permission_crud, tenant_crud
 from ahia.models.entities.role_model import RoleModel
 from ahia.models.entities.tenant_model import TenantModel
+from ahia.services.audit_event_service import AuditEventService
 from ahia.services.iam_seed_service import IamSeedService
 from ahia.services.permission_service import PermissionService
 
@@ -107,7 +108,10 @@ def seed_service(database: Database) -> IamSeedService:
 
 @pytest.fixture
 def permission_service(database: Database) -> PermissionService:
-    return PermissionService(unit_of_work_factory=database.unit_of_work_factory())
+    return PermissionService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        audit_event_service=AuditEventService(unit_of_work_factory=database.unit_of_work_factory()),
+    )
 
 
 def build_owner_context(tenant_id: UUID | None = None) -> Any:

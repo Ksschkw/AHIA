@@ -33,6 +33,7 @@ from ahia.core.tenant_context import TenantContext
 from ahia.crud import permission_crud, role_crud, role_permission_crud
 from ahia.models.entities.permission_model import PermissionModel
 from ahia.models.entities.role_model import RoleModel
+from ahia.services.audit_event_service import AuditEventService
 
 _PERMISSION_LOGGER_NAME: Final[str] = "ahia.services.permission"
 
@@ -64,9 +65,11 @@ class PermissionService:
         self,
         *,
         unit_of_work_factory: Callable[[], UnitOfWork],
+        audit_event_service: AuditEventService,
         logger: StructuredLogger | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
+        self._audit = audit_event_service
         self._logger = (logger or get_logger(_PERMISSION_LOGGER_NAME)).bind(
             component="permission_service", layer="service"
         )
@@ -246,6 +249,15 @@ class PermissionService:
                 role_id=role.id,
                 permission_ids=[permission.id for permission in permissions],
             )
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="create_custom_role",
+                entity_type="role",
+                entity_id=role.id,
+                now=now,
+                detail={**role.describe_for_audit(), "granted_permissions": str(len(permissions))},
+            )
             await unit_of_work.commit()
 
         self._logger.info(
@@ -321,6 +333,21 @@ class PermissionService:
                     created_at=role.created_at,
                     updated_at=now,
                 ),
+            )
+            # A permission change is the most security-relevant action in this file, so the
+            # event names the role and how many grants moved rather than only that it changed.
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="update_role_permissions",
+                entity_type="role",
+                entity_id=updated.id,
+                now=now,
+                detail={
+                    **updated.describe_for_audit(),
+                    "granted": str(len(wanted_ids - granted_ids)),
+                    "revoked": str(len(granted_ids - wanted_ids)),
+                },
             )
             await unit_of_work.commit()
 

@@ -37,6 +37,7 @@ from ahia.crud import tenant_crud, tenant_membership_crud
 from ahia.models.entities.negative_stock_policy import NegativeStockPolicy
 from ahia.models.entities.tenant_membership_model import TenantMembershipModel
 from ahia.models.entities.tenant_model import TenantModel
+from ahia.services.audit_event_service import AuditEventService
 
 _TENANT_SERVICE_LOGGER_NAME: Final[str] = "ahia.services.tenant"
 
@@ -83,9 +84,11 @@ class TenantService:
         self,
         *,
         unit_of_work_factory: Callable[[], UnitOfWork],
+        audit_event_service: AuditEventService,
         logger: StructuredLogger | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
+        self._audit = audit_event_service
         self._logger = (logger or get_logger(_TENANT_SERVICE_LOGGER_NAME)).bind(
             component="tenant_service", layer="service"
         )
@@ -322,6 +325,15 @@ class TenantService:
                 at=now,
             )
             stored = await tenant_crud.update(session, updated)
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="update_tenant_profile",
+                entity_type="tenant",
+                entity_id=stored.id,
+                now=now,
+                detail=stored.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         self._logger.info(
@@ -352,6 +364,15 @@ class TenantService:
             session = unit_of_work.session_handle
             tenant = await tenant_crud.require_by_id(session, tenant_context.tenant_id)
             stored = await tenant_crud.update(session, tenant.deactivate(at=now))
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="deactivate_tenant",
+                entity_type="tenant",
+                entity_id=stored.id,
+                now=now,
+                detail=stored.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         self._logger.warning(
@@ -390,6 +411,15 @@ class TenantService:
             previous = tenant.negative_stock_policy
             updated = await tenant_crud.update(
                 session, tenant.with_negative_stock_policy(policy=policy, at=now)
+            )
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="update_negative_stock_policy",
+                entity_type="tenant",
+                entity_id=updated.id,
+                now=now,
+                detail={**updated.describe_for_audit(), "policy": policy.value},
             )
             await unit_of_work.commit()
 

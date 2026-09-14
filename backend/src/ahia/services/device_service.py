@@ -26,6 +26,7 @@ from ahia.core.permissions.device_permissions import DEVICES_READ, DEVICES_REVOK
 from ahia.core.tenant_context import TenantContext
 from ahia.crud import device_crud, session_crud
 from ahia.models.entities.device_model import DeviceModel
+from ahia.services.audit_event_service import AuditEventService
 
 _DEVICE_LOGGER_NAME: Final[str] = "ahia.services.device"
 
@@ -47,9 +48,11 @@ class DeviceService:
         self,
         *,
         unit_of_work_factory: Callable[[], UnitOfWork],
+        audit_event_service: AuditEventService,
         logger: StructuredLogger | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
+        self._audit = audit_event_service
         self._logger = (logger or get_logger(_DEVICE_LOGGER_NAME)).bind(
             component="device_service", layer="service"
         )
@@ -111,6 +114,15 @@ class DeviceService:
                     app_version=app_version,
                     now=now,
                 ),
+            )
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="register_device",
+                entity_type="device",
+                entity_id=device.id,
+                now=now,
+                detail=device.describe_for_audit(),
             )
             await unit_of_work.commit()
 
@@ -235,6 +247,15 @@ class DeviceService:
             revoked = await device_crud.update(session, device.revoke(at=now))
             sessions_ended = await session_crud.revoke_all_for_device(
                 session, device_id=device_id, at=now, reason=REASON_DEVICE_REVOKED
+            )
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="revoke_device",
+                entity_type="device",
+                entity_id=revoked.id,
+                now=now,
+                detail={**revoked.describe_for_audit(), "sessions_ended": str(sessions_ended)},
             )
             await unit_of_work.commit()
 

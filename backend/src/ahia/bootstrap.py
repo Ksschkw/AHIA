@@ -177,22 +177,26 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
 
     tenant_service = TenantService(
         unit_of_work_factory=database.unit_of_work_factory(),
+        audit_event_service=audit_event_service,
         logger=logger,
     )
 
     membership_service = TenantMembershipService(
         unit_of_work_factory=database.unit_of_work_factory(),
         token_service=token_service,
+        audit_event_service=audit_event_service,
         logger=logger,
     )
 
     permission_service = PermissionService(
         unit_of_work_factory=database.unit_of_work_factory(),
+        audit_event_service=audit_event_service,
         logger=logger,
     )
 
     device_service = DeviceService(
         unit_of_work_factory=database.unit_of_work_factory(),
+        audit_event_service=audit_event_service,
         logger=logger,
     )
 

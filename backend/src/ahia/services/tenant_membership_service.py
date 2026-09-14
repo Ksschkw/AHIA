@@ -46,6 +46,7 @@ from ahia.models.entities.membership_invitation_model import MembershipInvitatio
 from ahia.models.entities.tenant_membership_model import TenantMembershipModel
 from ahia.models.entities.tenant_model import TenantModel
 from ahia.models.entities.user_model import UserModel
+from ahia.services.audit_event_service import AuditEventService
 
 _MEMBERSHIP_LOGGER_NAME: Final[str] = "ahia.services.tenant_membership"
 
@@ -92,10 +93,12 @@ class TenantMembershipService:
         *,
         unit_of_work_factory: Callable[[], UnitOfWork],
         token_service: TokenService,
+        audit_event_service: AuditEventService,
         logger: StructuredLogger | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._token_service = token_service
+        self._audit = audit_event_service
         self._logger = (logger or get_logger(_MEMBERSHIP_LOGGER_NAME)).bind(
             component="tenant_membership_service", layer="service"
         )
@@ -154,6 +157,15 @@ class TenantMembershipService:
                     invited_email=normalized_email,
                     invited_phone=normalized_phone,
                 ),
+            )
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="invite_member",
+                entity_type="membership_invitation",
+                entity_id=invitation.id,
+                now=now,
+                detail=invitation.describe_for_audit(),
             )
             await unit_of_work.commit()
 
@@ -322,6 +334,15 @@ class TenantMembershipService:
             updated = await tenant_membership_crud.update(
                 session, membership.change_role(role_name=role_name, at=now)
             )
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="change_member_role",
+                entity_type="tenant_membership",
+                entity_id=updated.id,
+                now=now,
+                detail=updated.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         self._logger.info(
@@ -361,6 +382,15 @@ class TenantMembershipService:
                     action="suspend the last owner",
                 )
             updated = await tenant_membership_crud.update(session, membership.suspend(at=now))
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="suspend_member",
+                entity_type="tenant_membership",
+                entity_id=updated.id,
+                now=now,
+                detail=updated.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         self._logger.warning(
@@ -393,6 +423,15 @@ class TenantMembershipService:
                 session, tenant_context.tenant_id, membership_id
             )
             updated = await tenant_membership_crud.update(session, membership.activate(at=now))
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="reactivate_member",
+                entity_type="tenant_membership",
+                entity_id=updated.id,
+                now=now,
+                detail=updated.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         self._logger.info(
@@ -434,6 +473,15 @@ class TenantMembershipService:
                     action="remove the last owner",
                 )
             updated = await tenant_membership_crud.update(session, membership.remove(at=now))
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="remove_member",
+                entity_type="tenant_membership",
+                entity_id=updated.id,
+                now=now,
+                detail=updated.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         self._logger.warning(
