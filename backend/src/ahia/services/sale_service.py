@@ -58,6 +58,7 @@ from ahia.models.entities.payment_model import PaymentMethod, PaymentModel
 from ahia.models.entities.product_model import ProductModel
 from ahia.models.entities.sale_item_model import SaleItemModel
 from ahia.models.entities.sale_model import SaleModel, SaleStatus
+from ahia.services.audit_event_service import AuditEventService
 from ahia.services.inventory_service import InventoryService
 
 _SALES_LOGGER_NAME: Final[str] = "ahia.services.sales"
@@ -116,10 +117,12 @@ class SalesService:
         *,
         unit_of_work_factory: Callable[[], UnitOfWork],
         inventory_service: InventoryService,
+        audit_event_service: AuditEventService,
         logger: StructuredLogger | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._inventory = inventory_service
+        self._audit = audit_event_service
         self._logger = (logger or get_logger(_SALES_LOGGER_NAME)).bind(
             component="sale_service", layer="service"
         )
@@ -212,6 +215,18 @@ class SalesService:
                 session, tenant_context=tenant_context, sale=sale, items=items, now=now
             )
             await self._write_ledger(session, tenant_context=tenant_context, sale=sale, now=now)
+            # The trail entry lands with the sale: one event for the use case, not one per
+            # table it wrote. A sale is one thing that happened.
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="complete_sale",
+                entity_type="sale",
+                entity_id=sale.id,
+                operation_id=operation_id,
+                now=now,
+                detail=sale.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         self._logger.info(
@@ -552,6 +567,15 @@ class SalesService:
                 sale.cancelled(at=now, reason=resolved_reason).with_payment_status_for(
                     amount_paid=ZERO_MONEY, at=now
                 ),
+            )
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="cancel_sale",
+                entity_type="sale",
+                entity_id=cancelled.id,
+                now=now,
+                detail=cancelled.describe_for_audit(),
             )
             await unit_of_work.commit()
 

@@ -126,6 +126,20 @@ def test_a_detail_key_that_names_a_credential_is_refused(key: str) -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("key", ["mapping_id", "shipping_address", "spin_count", "cabin_code"])
+def test_an_honest_identifier_that_merely_contains_a_banned_word_is_allowed(key: str) -> None:
+    """A guard that refuses honest keys is a guard somebody deletes."""
+    assert build_event(detail={key: "value"}).detail == {key: "value"}
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("key", ["api_key_id", "rotated_private_key", "card_number_last_four"])
+def test_a_compound_credential_key_is_refused_wherever_it_appears(key: str) -> None:
+    with pytest.raises(EntityInvariantError, match="names a credential"):
+        build_event(detail={key: "value"})
+
+
+@pytest.mark.unit
 def test_a_detail_value_that_is_not_a_short_string_is_refused() -> None:
     with pytest.raises(EntityInvariantError, match="must be a string"):
         build_event(detail={"amount": 3500})

@@ -46,26 +46,41 @@ MAXIMUM_DETAIL_KEYS: Final[int] = 24
 MAXIMUM_DETAIL_KEY_LENGTH: Final[int] = 64
 MAXIMUM_DETAIL_VALUE_LENGTH: Final[int] = 256
 
-#: Key names that indicate a secret or a credential. This is a safety net, not the primary
+#: Words that indicate a secret or a credential. This is a safety net, not the primary
 #: control: the primary control is that callers pass the entity's own `describe_for_audit`,
 #: which returns identifiers and vocabulary values only. A name that looks like a secret is
 #: refused here so that a mistake in a call site fails at the write rather than in an incident
-#: review. It is deliberately a substring match: `user_password`, `PASSWORD` and `api_key_id`
-#: all mean the same mistake.
-_SENSITIVE_DETAIL_KEY_FRAGMENTS: Final[tuple[str, ...]] = (
-    "password",
-    "secret",
-    "token",
-    "credential",
-    "authorization",
-    "cookie",
+#: review.
+#:
+#: Matched word by word rather than as a substring, and that distinction is not cosmetic:
+#: `pin` as a substring would refuse `mapping_id` and `shipping_address`, and a guard that
+#: refuses honest identifiers is a guard somebody deletes.
+_SENSITIVE_DETAIL_KEY_WORDS: Final[frozenset[str]] = frozenset(
+    {
+        "password",
+        "passwd",
+        "secret",
+        "token",
+        "credential",
+        "credentials",
+        "authorization",
+        "auth",
+        "cookie",
+        "pin",
+        "cvv",
+        "ssn",
+        "apikey",
+    }
+)
+
+#: Credential names that are themselves two words joined by an underscore. Matched as whole
+#: keys, so `api_key`, `api_key_id` and `rotated_api_key` are all refused.
+_SENSITIVE_DETAIL_KEY_PHRASES: Final[tuple[str, ...]] = (
     "api_key",
-    "apikey",
     "private_key",
-    "pin",
+    "access_key",
+    "secret_key",
     "card_number",
-    "cvv",
-    "ssn",
 )
 
 #: The characters an action or entity type may use: lower-case words joined by underscores.
@@ -160,18 +175,16 @@ class AuditEventModel:
                     identifier=str(self.id),
                     detail=f"detail value for {key!r} exceeds {MAXIMUM_DETAIL_VALUE_LENGTH} chars",
                 )
-            lowered = key.lower()
-            for fragment in _SENSITIVE_DETAIL_KEY_FRAGMENTS:
-                if fragment in lowered:
-                    raise EntityInvariantError(
-                        operation="record_audit_event",
-                        entity="audit_event",
-                        identifier=str(self.id),
-                        detail=(
-                            f"detail key {key!r} names a credential; the trail records "
-                            "identifiers, never secrets"
-                        ),
-                    )
+            if _names_a_credential(key):
+                raise EntityInvariantError(
+                    operation="record_audit_event",
+                    entity="audit_event",
+                    identifier=str(self.id),
+                    detail=(
+                        f"detail key {key!r} names a credential; the trail records "
+                        "identifiers, never secrets"
+                    ),
+                )
 
     # ------------------------------------------------------------------
     # Construction
@@ -245,6 +258,14 @@ class AuditEventModel:
         if self.operation_id is not None:
             fields["operation_id"] = str(self.operation_id)
         return fields
+
+
+def _names_a_credential(key: str) -> bool:
+    """Return True when a detail key names a secret rather than a value."""
+    lowered = key.lower()
+    if any(phrase in lowered for phrase in _SENSITIVE_DETAIL_KEY_PHRASES):
+        return True
+    return any(word in _SENSITIVE_DETAIL_KEY_WORDS for word in lowered.split("_"))
 
 
 def _require_lower_snake_case(value: str, *, field_name: str, event_id: UUID) -> None:

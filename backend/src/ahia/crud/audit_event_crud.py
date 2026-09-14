@@ -17,6 +17,14 @@ Events are read by what a person asks
     `(tenant_id, actor_id, occurred_at)`. All three are declared with the table rather than
     discovered from a slow screen later.
 
+`actor_id` and `device_id` are copies, not references, and carry no foreign key
+    The trail records who acted at the moment the action happened. An event that pointed at
+    `users` would be a copy with a leash: the row could not be written if the actor were
+    missing, and - because this table is append-only and refuses deletes - the trail would also
+    pin that user row forever, making an erasure of a person impossible to complete. The
+    identifier is copied in and belongs to the event. This is the same decision the entity states
+    for the context it carries, applied to the constraints.
+
 `detail` is JSON, and it is bounded by the entity rather than by the column
     A second, weaker bound on the column would only be a second answer. The entity refuses
     secrets by key name, refuses values that are not short strings and refuses free text
@@ -71,9 +79,10 @@ class AuditEventRecord(Base):
     entity_type: Mapped[str] = mapped_column(String(MAXIMUM_ENTITY_TYPE_LENGTH), nullable=False)
     # Nullable: an event caused by the system rather than by a person - the permission
     # registry being provisioned, a scheduled job - has no actor, and inventing one would put
-    # a name on an action nobody took.
-    actor_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
-    device_id: Mapped[UUID | None] = mapped_column(ForeignKey("devices.id"), nullable=True)
+    # a name on an action nobody took. Deliberately not a foreign key: the identifier belongs to
+    # the event, so the trail neither requires the user row to exist nor pins it forever.
+    actor_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    device_id: Mapped[UUID | None] = mapped_column(nullable=True)
     operation_id: Mapped[UUID | None] = mapped_column(nullable=True)
     # The entity the action was about. Nullable because a refusal can be about a record that
     # does not exist, and the reason it was refused is the interesting part.

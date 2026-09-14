@@ -34,6 +34,7 @@ from ahia.core.errors import (
 from ahia.core.permissions.permissions_registry import permission_codes_for_role
 from ahia.core.tenant_context import TenantContext, build_tenant_context
 from ahia.crud import (
+    audit_event_crud,
     customer_crud,
     inventory_crud,
     inventory_movement_crud,
@@ -54,6 +55,7 @@ from ahia.models.entities.product_model import ProductModel
 from ahia.models.entities.sale_model import SaleStatus
 from ahia.models.entities.tenant_model import TenantModel
 from ahia.models.entities.user_model import UserModel
+from ahia.services.audit_event_service import AuditEventService
 from ahia.services.inventory_service import InventoryService
 from ahia.services.sale_service import PaymentRequest, SaleLineRequest, SalesService
 
@@ -113,6 +115,7 @@ def service(database: Database, inventory_service: InventoryService) -> SalesSer
     return SalesService(
         unit_of_work_factory=database.unit_of_work_factory(),
         inventory_service=inventory_service,
+        audit_event_service=AuditEventService(unit_of_work_factory=database.unit_of_work_factory()),
     )
 
 
@@ -1140,3 +1143,44 @@ async def test_a_salesperson_may_not_cancel(
         await service.cancel_sale(seller, sale_id=sale.id, reason="changed my mind")
 
     assert await stock_level(database, tenant_id, product_id) == Decimal("2.000")
+
+
+# ---------------------------------------------------------------------------
+# The trail
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_completing_a_sale_is_one_event_in_the_audit_trail(
+    database: Database,
+    service: SalesService,
+    inventory_service: InventoryService,
+    tenant_id: UUID,
+    seller_id: UUID,
+    product_id: UUID,
+) -> None:
+    """M14.1.3: one event for the use case, not one per table the sale wrote to."""
+    context = context_for(tenant_id, "SALES", seller_id=seller_id)
+    await inventory_service.receive_stock(
+        context_for(tenant_id, "OWNER", seller_id=seller_id),
+        product_id=product_id,
+        quantity=Decimal("10.000"),
+    )
+
+    result = await service.complete_sale(
+        context,
+        lines=[SaleLineRequest(product_id=product_id, quantity=Decimal("2.000"))],
+        payments=[PaymentRequest(amount=Decimal("90000.00"))],
+    )
+
+    async with database.transaction_scope() as unit_of_work:
+        events = await audit_event_crud.list_for_entity(
+            unit_of_work.session_handle,
+            tenant_id=tenant_id,
+            entity_type="sale",
+            entity_id=result.sale.id,
+        )
+
+    assert [event.action for event in events] == ["complete_sale"]
+    assert events[0].actor_id == seller_id
+    assert events[0].detail["receipt_number"] == result.sale.receipt_number

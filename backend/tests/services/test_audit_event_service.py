@@ -67,9 +67,7 @@ async def database() -> AsyncIterator[Database]:
         await connection.run_sync(
             lambda sync_connection: Base.metadata.create_all(sync_connection, checkfirst=True)
         )
-        await connection.execute(
-            text("TRUNCATE TABLE audit_events, devices, tenants, users CASCADE")
-        )
+        await connection.execute(text("TRUNCATE TABLE audit_events, tenants CASCADE"))
     try:
         yield instance
     finally:

@@ -37,8 +37,9 @@ from ahia.core.errors import (
 )
 from ahia.core.permissions.permissions_registry import permission_codes_for_role
 from ahia.core.tenant_context import TenantContext, build_tenant_context
-from ahia.crud import customer_crud, tenant_crud
+from ahia.crud import audit_event_crud, customer_crud, tenant_crud
 from ahia.models.entities.tenant_model import TenantModel
+from ahia.services.audit_event_service import AuditEventService
 from ahia.services.customer_service import CustomerService
 
 DEFAULT_TEST_DATABASE_URL = (
@@ -86,6 +87,7 @@ def service(database: Database) -> CustomerService:
     return CustomerService(
         unit_of_work_factory=database.unit_of_work_factory(),
         default_phone_country_code="234",
+        audit_event_service=AuditEventService(unit_of_work_factory=database.unit_of_work_factory()),
     )
 
 
@@ -513,6 +515,7 @@ async def test_the_log_line_for_a_new_customer_carries_no_personal_data(
     service = CustomerService(
         unit_of_work_factory=database.unit_of_work_factory(),
         default_phone_country_code="234",
+        audit_event_service=AuditEventService(unit_of_work_factory=database.unit_of_work_factory()),
     )
 
     with caplog.at_level(logging.INFO, logger="ahia.services.customer"):
@@ -594,3 +597,31 @@ async def test_authorization_is_checked_before_the_database_is_touched(
     async with database.transaction_scope() as unit_of_work:
         count = await customer_crud.count_for_tenant(unit_of_work.session_handle, tenant_id)
     assert count == 0
+
+
+# ---------------------------------------------------------------------------
+# The trail
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_recording_a_customer_is_in_the_audit_trail_without_the_person_in_it(
+    service: CustomerService, database: Database, tenant_id: UUID
+) -> None:
+    """M14.1.3: the trail entry carries identifiers, and never the customer's details."""
+    creation = await service.create_customer(
+        context_for(tenant_id, "OWNER"), name="Ada Obi", phone="0803 123 4567"
+    )
+
+    async with database.transaction_scope() as unit_of_work:
+        events = await audit_event_crud.list_for_entity(
+            unit_of_work.session_handle,
+            tenant_id=tenant_id,
+            entity_type="customer",
+            entity_id=creation.customer.id,
+        )
+
+    assert [event.action for event in events] == ["create_customer"]
+    rendered = str(events[0].detail)
+    assert "Ada" not in rendered
+    assert "08031234567" not in rendered

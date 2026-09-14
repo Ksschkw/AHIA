@@ -45,6 +45,7 @@ from ahia.integrations.storage.storage_factory import (
     build_storage_adapters,
     build_storage_policy,
 )
+from ahia.services.audit_event_service import AuditEventService
 from ahia.services.auth_service import AuthService
 from ahia.services.category_service import CategoryService
 from ahia.services.customer_service import CustomerService
@@ -92,6 +93,7 @@ class ApplicationContainer:
     product_service: ProductService
     product_image_service: ProductImageService
     inventory_service: InventoryService
+    audit_event_service: AuditEventService
     customer_service: CustomerService
     expense_service: ExpenseService
     sales_service: SalesService
@@ -198,14 +200,23 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         logger=logger,
     )
 
+    # One recorder, shared by every service that mutates. It holds no state of its own: the
+    # event is written into the transaction the calling use case already owns.
+    audit_event_service = AuditEventService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        logger=logger,
+    )
+
     customer_service = CustomerService(
         unit_of_work_factory=database.unit_of_work_factory(),
         default_phone_country_code=settings.default_phone_country_code,
+        audit_event_service=audit_event_service,
         logger=logger,
     )
 
     expense_service = ExpenseService(
         unit_of_work_factory=database.unit_of_work_factory(),
+        audit_event_service=audit_event_service,
         logger=logger,
     )
 
@@ -217,6 +228,7 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
     sales_service = SalesService(
         unit_of_work_factory=database.unit_of_work_factory(),
         inventory_service=inventory_service,
+        audit_event_service=audit_event_service,
         logger=logger,
     )
 
@@ -248,6 +260,7 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         product_service=product_service,
         product_image_service=product_image_service,
         inventory_service=inventory_service,
+        audit_event_service=audit_event_service,
         customer_service=customer_service,
         expense_service=expense_service,
         sales_service=sales_service,

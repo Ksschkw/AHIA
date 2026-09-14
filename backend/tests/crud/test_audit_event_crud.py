@@ -74,7 +74,7 @@ async def database() -> AsyncIterator[Database]:
         await connection.run_sync(
             lambda sync_connection: Base.metadata.create_all(sync_connection, checkfirst=True)
         )
-        await connection.execute(text("TRUNCATE TABLE audit_events, tenants, users CASCADE"))
+        await connection.execute(text("TRUNCATE TABLE audit_events, tenants CASCADE"))
         # asyncpg refuses more than one statement per prepared statement, so the function and
         # the trigger are created in separate round trips.
         await connection.execute(

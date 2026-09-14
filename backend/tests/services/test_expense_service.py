@@ -44,13 +44,21 @@ from ahia.core.errors import (
 from ahia.core.permissions.expense_permissions import EXPENSES_CREATE
 from ahia.core.permissions.permissions_registry import permission_codes_for_role
 from ahia.core.tenant_context import TenantContext, build_tenant_context
-from ahia.crud import device_crud, expense_crud, ledger_entry_crud, tenant_crud, user_crud
+from ahia.crud import (
+    audit_event_crud,
+    device_crud,
+    expense_crud,
+    ledger_entry_crud,
+    tenant_crud,
+    user_crud,
+)
 from ahia.models.entities.device_model import DeviceModel
 from ahia.models.entities.expense_category import ExpenseCategory
 from ahia.models.entities.ledger_entry_model import LedgerDirection, LedgerEntryType
 from ahia.models.entities.payment_model import PaymentMethod
 from ahia.models.entities.tenant_model import TenantModel
 from ahia.models.entities.user_model import UserModel
+from ahia.services.audit_event_service import AuditEventService
 from ahia.services.expense_service import (
     EXPENSE_REFERENCE_TYPE,
     EXPENSE_REVERSAL_REFERENCE_TYPE,
@@ -102,7 +110,10 @@ async def database() -> AsyncIterator[Database]:
 
 @pytest.fixture
 def service(database: Database) -> ExpenseService:
-    return ExpenseService(unit_of_work_factory=database.unit_of_work_factory())
+    return ExpenseService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        audit_event_service=AuditEventService(unit_of_work_factory=database.unit_of_work_factory()),
+    )
 
 
 async def insert_tenant(database: Database, *, name: str = "Obi Electronics") -> UUID:
@@ -336,6 +347,41 @@ async def test_a_ledger_failure_rolls_the_expense_back(
 
 
 # ---------------------------------------------------------------------------
+# The trail
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_recording_and_reversing_an_expense_are_both_in_the_audit_trail(
+    service: ExpenseService, database: Database, tenant_id: UUID, actor_id: UUID
+) -> None:
+    """M14.1.3: the trail entry is written by the use case, inside its transaction."""
+    context = context_for(tenant_id, "OWNER", actor_id=actor_id)
+    recorded = await service.record_expense(
+        context,
+        category=ExpenseCategory.TRANSPORT,
+        amount=Decimal("3500.00"),
+        incurred_at=NOW,
+    )
+    await service.reverse_expense(
+        context, expense_id=recorded.expense.id, reason="the driver never came"
+    )
+
+    async with database.transaction_scope() as unit_of_work:
+        events = await audit_event_crud.list_for_entity(
+            unit_of_work.session_handle,
+            tenant_id=tenant_id,
+            entity_type="expense",
+            entity_id=recorded.expense.id,
+        )
+
+    assert [event.action for event in events] == ["record_expense", "reverse_expense"]
+    assert all(event.actor_id == actor_id for event in events)
+    assert all(event.tenant_id == tenant_id for event in events)
+    assert events[0].detail["category"] == "TRANSPORT"
+
+
+# ---------------------------------------------------------------------------
 # Replay
 # ---------------------------------------------------------------------------
 
@@ -522,11 +568,19 @@ async def test_spending_per_category_excludes_reversed_expenses(
     actor_id: UUID,
 ) -> None:
     context = context_for(tenant_id, "OWNER", actor_id=actor_id)
+    # Both expenses are dated explicitly: the period below is a fixed window, and an expense
+    # recorded "now" would fall outside it as soon as the wall clock moved past the boundary.
     await service.record_expense(
-        context, category=ExpenseCategory.TRANSPORT, amount=Decimal("3500.00")
+        context,
+        category=ExpenseCategory.TRANSPORT,
+        amount=Decimal("3500.00"),
+        incurred_at=NOW,
     )
     to_reverse = await service.record_expense(
-        context, category=ExpenseCategory.MARKETING, amount=Decimal("9000.00")
+        context,
+        category=ExpenseCategory.MARKETING,
+        amount=Decimal("9000.00"),
+        incurred_at=NOW,
     )
     await service.reverse_expense(
         context, expense_id=to_reverse.expense.id, reason="the post was never published"

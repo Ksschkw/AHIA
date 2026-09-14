@@ -64,6 +64,7 @@ from ahia.models.entities.ledger_entry_model import (
 )
 from ahia.models.entities.money import ZERO_MONEY, quantise_money
 from ahia.models.entities.payment_model import PaymentMethod
+from ahia.services.audit_event_service import AuditEventService
 
 _EXPENSE_LOGGER_NAME: Final[str] = "ahia.services.expense"
 
@@ -121,9 +122,11 @@ class ExpenseService:
         self,
         *,
         unit_of_work_factory: Callable[[], UnitOfWork],
+        audit_event_service: AuditEventService,
         logger: StructuredLogger | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
+        self._audit = audit_event_service
         self._logger = (logger or get_logger(_EXPENSE_LOGGER_NAME)).bind(
             component="expense_service", layer="service"
         )
@@ -191,6 +194,19 @@ class ExpenseService:
             )
             stored = await expense_crud.create(session, expense)
             ledger_entry = await self._account_for(session, expense=stored, now=now)
+            # The trail entry lands with the expense and its ledger entry, in this
+            # transaction: the money that left and the record of who recorded it are one
+            # fact, and a rolled-back expense must not leave an event claiming it happened.
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="record_expense",
+                entity_type="expense",
+                entity_id=stored.id,
+                operation_id=operation_id,
+                now=now,
+                detail=stored.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         self._logger.info(
@@ -249,6 +265,15 @@ class ExpenseService:
                 session, expense.reversed(at=now, reason=resolved_reason)
             )
             ledger_entry = await self._compensate_for(session, expense=reversed_expense, now=now)
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="reverse_expense",
+                entity_type="expense",
+                entity_id=reversed_expense.id,
+                now=now,
+                detail=reversed_expense.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         # Logged at warning level, like a cancelled sale: money that was booked as spent is

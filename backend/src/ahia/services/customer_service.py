@@ -46,6 +46,7 @@ from ahia.models.entities.phone_number import (
     is_plausible_phone_number,
     normalize_phone_number,
 )
+from ahia.services.audit_event_service import AuditEventService
 
 _CUSTOMER_LOGGER_NAME: Final[str] = "ahia.services.customer"
 
@@ -81,10 +82,12 @@ class CustomerService:
         *,
         unit_of_work_factory: Callable[[], UnitOfWork],
         default_phone_country_code: str,
+        audit_event_service: AuditEventService,
         logger: StructuredLogger | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._default_country_code = f"+{default_phone_country_code.lstrip('+')}"
+        self._audit = audit_event_service
         self._logger = (logger or get_logger(_CUSTOMER_LOGGER_NAME)).bind(
             component="customer_service", layer="service"
         )
@@ -133,6 +136,15 @@ class CustomerService:
                 session, tenant_context=tenant_context, phone=canonical_phone
             )
             stored = await customer_crud.create(session, customer)
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="create_customer",
+                entity_type="customer",
+                entity_id=stored.id,
+                now=stored.created_at,
+                detail=stored.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         self._logger.info(
@@ -303,6 +315,15 @@ class CustomerService:
             stored = await customer_crud.update(
                 session, customer, expected_version=expected_version
             )
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="update_customer",
+                entity_type="customer",
+                entity_id=stored.id,
+                now=now,
+                detail=stored.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         self._logger.info(
@@ -371,6 +392,15 @@ class CustomerService:
             )
             changed = customer.reactivated(at=now) if reactivating else customer.deactivated(at=now)
             stored = await customer_crud.update(session, changed)
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="reactivate_customer" if reactivating else "deactivate_customer",
+                entity_type="customer",
+                entity_id=stored.id,
+                now=now,
+                detail=stored.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         self._logger.warning(
