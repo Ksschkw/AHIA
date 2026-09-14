@@ -1084,6 +1084,19 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ### M12 - progress log
 
+- M12.1.4 and M12.1.7 complete. The receipt counter is a table rather than a PostgreSQL
+  sequence because a sequence belongs to the schema and cannot be scoped: every business
+  would share one counter, and a customer would watch their receipts jump by the number of
+  sales other businesses made. Claiming the next number inside the sale's transaction also
+  means a rolled-back sale releases it - the alternative, allocating from a separate
+  transaction, would leave gaps that make a business think receipts went missing.
+- The architecture check caught the counter's placement: `crud/receipt_counter_crud.py` had
+  no entity behind it, and the fix was not an exemption but moving the reading rules -
+  rendering and prefix sanitising - into `ReceiptCounterModel`, where domain vocabulary
+  belongs, leaving the crud with the locking claim alone.
+- Two test assumptions were corrected rather than worked around: a trigger refuses rows, so a
+  DELETE on an empty ledger fires nothing and proves nothing; and a receipt prefix longer
+  than the column is truncated rather than rendered whole.
 - The money vocabulary moved out of the product entity first: a sale computes line totals,
   subtotals, payment sums and ledger amounts, and every one of those has to agree with the
   prices it is computed from. `models/entities/money.py` now holds the decimal places, the
@@ -1107,14 +1120,19 @@ Goal: a business exists as a tenant with a globally unique public slug.
       amount with an explicit direction, a reference that must name what caused the
       entry, and a direction derived from the entry type so revenue cannot be filed as a
       debit.
-- [ ] M12.1.4 Persistence for all four entities, one file each, no cross-entity
-      joins.
+- [x] M12.1.4 Persistence for all four entities, one file each, no cross-entity
+      joins. The ledger carries a database trigger refusing UPDATE and DELETE, exactly
+      as the stock ledger does, and a test asserts the module offers no mutating
+      function either.
 - [ ] M12.1.5 `sales_service.py`: `complete_sale` inside a single transaction
       creating sale, items, payments, inventory movements, inventory projection
       updates, ledger entry and audit event; failure of any part rolls back all.
 - [ ] M12.1.6 `cancel_sale` with compensating inventory and financial events,
       never a deletion.
-- [ ] M12.1.7 Receipt numbering per tenant with a uniqueness guarantee.
+- [x] M12.1.7 Receipt numbering per tenant with a uniqueness guarantee: one counter
+      row per business, claimed under a row lock inside the sale's transaction, with
+      `UNIQUE(tenant_id, receipt_number)` behind it. A rolled-back sale releases its
+      number, so a number nobody printed is not a gap in the book.
 - [ ] M12.1.8 Sales schemas and router endpoints.
 - [ ] M12.1.9 Tests: full transaction rollback on injected failure, no
       half-created sale, cancellation semantics, money precision, permission

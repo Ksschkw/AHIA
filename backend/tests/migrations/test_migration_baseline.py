@@ -60,6 +60,11 @@ EXPECTED_TABLES = frozenset(
         "inventory",
         "inventory_movements",
         "customers",
+        "sales",
+        "sale_items",
+        "payments",
+        "ledger_entries",
+        "receipt_counters",
     }
 )
 

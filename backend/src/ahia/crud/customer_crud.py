@@ -2,6 +2,10 @@
 
 One table, one entity, one file. Four properties are worth stating.
 
+A sale references a customer as a pair, so the anchor exists
+    `UNIQUE(id, tenant_id)`, which the sales table references as `(customer_id, tenant_id)`.
+    It arrived with the table that needed it, exactly as the anchors in the catalogue did.
+
 A phone number is not unique, and the index says why
     Two people in a household share a phone, and one person may be entered twice by
     mistake. The specification asks for duplicate *detection* by phone within a business,
@@ -41,6 +45,7 @@ from sqlalchemy import (
     Index,
     String,
     Text,
+    UniqueConstraint,
     func,
     select,
     text,
@@ -82,6 +87,11 @@ class CustomerRecord(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (
+        # The cross-tenant anchor a sale references as `(customer_id, tenant_id)`, which is
+        # what makes it impossible to record a sale against another business's customer. It
+        # was added in the revision that created the sales table, which is the table that
+        # needed it - the same rule the catalogue follows.
+        UniqueConstraint("id", "tenant_id", name="uq_customers_id_tenant_id"),
         # The picker: a business's active customers, by the name a person reads.
         Index("ix_customers_tenant_active_name", "tenant_id", "is_active", "name"),
         # Duplicate detection by phone, only where a phone exists.
