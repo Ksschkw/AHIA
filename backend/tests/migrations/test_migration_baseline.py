@@ -67,6 +67,9 @@ EXPECTED_TABLES = frozenset(
         "receipt_counters",
         "expenses",
         "audit_events",
+        "sync_changes",
+        "sync_cursors",
+        "sync_operations",
     }
 )
 

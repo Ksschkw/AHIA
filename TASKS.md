@@ -1261,8 +1261,8 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ## M15 - Offline synchronization and idempotency
 
-- [ ] M15.1.1 `sync_operation_model.py` and `sync_cursor_model.py`.
-- [ ] M15.1.2 Change/outbox table with a monotonically increasing server
+- [x] M15.1.1 `sync_operation_model.py` and `sync_cursor_model.py`.
+- [x] M15.1.2 Change/outbox table with a monotonically increasing server
       sequence, written in the same transaction as the business change.
 - [ ] M15.1.3 `sync_service.py`: `push_operations` (authenticate, resolve
       tenant, check permission, check operation id, validate payload, execute
