@@ -189,15 +189,22 @@ async def list_for_entity(
     entity_type: str,
     entity_id: UUID,
     limit: int = 100,
+    since: datetime | None = None,
+    until: datetime | None = None,
 ) -> list[AuditEventModel]:
     """Return the history of one record: what happened to it, and in what order."""
-    result = await session.execute(
+    statement = (
         select(AuditEventRecord)
         .where(AuditEventRecord.tenant_id == tenant_id)
         .where(AuditEventRecord.entity_type == entity_type)
         .where(AuditEventRecord.entity_id == entity_id)
-        .order_by(AuditEventRecord.occurred_at, AuditEventRecord.id)
-        .limit(limit)
+    )
+    if since is not None:
+        statement = statement.where(AuditEventRecord.occurred_at >= since)
+    if until is not None:
+        statement = statement.where(AuditEventRecord.occurred_at < until)
+    result = await session.execute(
+        statement.order_by(AuditEventRecord.occurred_at, AuditEventRecord.id).limit(limit)
     )
     return [to_entity(row) for row in result.scalars().all()]
 
@@ -208,14 +215,23 @@ async def list_for_actor(
     tenant_id: UUID,
     actor_id: UUID,
     limit: int = 100,
+    since: datetime | None = None,
+    until: datetime | None = None,
 ) -> list[AuditEventModel]:
     """Return what one person did in one business, most recent first."""
-    result = await session.execute(
+    statement = (
         select(AuditEventRecord)
         .where(AuditEventRecord.tenant_id == tenant_id)
         .where(AuditEventRecord.actor_id == actor_id)
-        .order_by(AuditEventRecord.occurred_at.desc(), AuditEventRecord.id.desc())
-        .limit(limit)
+    )
+    if since is not None:
+        statement = statement.where(AuditEventRecord.occurred_at >= since)
+    if until is not None:
+        statement = statement.where(AuditEventRecord.occurred_at < until)
+    result = await session.execute(
+        statement.order_by(AuditEventRecord.occurred_at.desc(), AuditEventRecord.id.desc()).limit(
+            limit
+        )
     )
     return [to_entity(row) for row in result.scalars().all()]
 
