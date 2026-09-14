@@ -33,10 +33,11 @@ from ahia.core.errors import (
 from ahia.core.permissions.permissions_registry import permission_codes_for_role
 from ahia.core.security import TokenService
 from ahia.core.tenant_context import TenantContext, build_tenant_context
-from ahia.crud import category_crud, tenant_crud
+from ahia.crud import audit_event_crud, category_crud, tenant_crud
 from ahia.models.entities.category_model import CategoryModel
 from ahia.models.entities.product_model import ProductModel
 from ahia.models.entities.tenant_model import TenantModel
+from ahia.services.audit_event_service import AuditEventService
 from ahia.services.product_service import ProductService
 
 DEFAULT_TEST_DATABASE_URL = (
@@ -95,6 +96,7 @@ def service(database: Database) -> ProductService:
     return ProductService(
         unit_of_work_factory=database.unit_of_work_factory(),
         token_service=build_token_service(),
+        audit_event_service=AuditEventService(unit_of_work_factory=database.unit_of_work_factory()),
     )
 
 
@@ -572,3 +574,33 @@ async def test_authorization_is_checked_before_the_database_is_touched(
         await service.create_product(
             sales_context(tenant_id), name="A Name Nobody Used", selling_price=Decimal("1.00")
         )
+
+
+# ---------------------------------------------------------------------------
+# The trail
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_creating_a_product_is_in_the_audit_trail(
+    database: Database, service: ProductService, tenant_id: UUID
+) -> None:
+    """M14.1.3: the catalogue use cases write their event with the change."""
+    context = context_for(tenant_id, "OWNER")
+    product = await service.create_product(
+        context,
+        name="Rice 50kg",
+        selling_price=Decimal("45000.00"),
+    )
+
+    async with database.transaction_scope() as unit_of_work:
+        events = await audit_event_crud.list_for_entity(
+            unit_of_work.session_handle,
+            tenant_id=tenant_id,
+            entity_type="product",
+            entity_id=product.id,
+        )
+
+    assert [event.action for event in events] == ["create_product"]
+    assert events[0].actor_id == context.user_id
+    assert events[0].detail["product_slug"] == product.slug

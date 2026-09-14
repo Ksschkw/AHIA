@@ -33,6 +33,7 @@ from ahia.core.permissions.product_permissions import (
 from ahia.core.tenant_context import TenantContext
 from ahia.crud import category_crud
 from ahia.models.entities.category_model import CategoryModel
+from ahia.services.audit_event_service import AuditEventService
 
 _CATEGORY_LOGGER_NAME: Final[str] = "ahia.services.category"
 
@@ -49,9 +50,11 @@ class CategoryService:
         self,
         *,
         unit_of_work_factory: Callable[[], UnitOfWork],
+        audit_event_service: AuditEventService,
         logger: StructuredLogger | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
+        self._audit = audit_event_service
         self._logger = (logger or get_logger(_CATEGORY_LOGGER_NAME)).bind(
             component="category_service", layer="service"
         )
@@ -93,6 +96,15 @@ class CategoryService:
         unit_of_work = self._unit_of_work_factory()
         async with unit_of_work:
             stored = await category_crud.create(unit_of_work.session_handle, category)
+            await self._audit.record_audit_event(
+                unit_of_work.session_handle,
+                tenant_context,
+                action="create_category",
+                entity_type="category",
+                entity_id=stored.id,
+                now=stored.created_at,
+                detail=stored.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         self._logger.info(
@@ -198,6 +210,15 @@ class CategoryService:
                 updated = updated.described(description=changes["description"], at=now)
 
             stored = await category_crud.update(session, updated)
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="update_category",
+                entity_type="category",
+                entity_id=stored.id,
+                now=now,
+                detail=stored.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         self._logger.info(

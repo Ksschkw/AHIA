@@ -60,8 +60,27 @@ from ahia.models.entities.inventory_movement_model import (
 )
 from ahia.models.entities.negative_stock_policy import NegativeStockPolicy
 from ahia.models.entities.product_model import ProductModel
+from ahia.services.audit_event_service import AuditEventService
 
 _INVENTORY_LOGGER_NAME: Final[str] = "ahia.services.inventory"
+
+#: The use case each movement type is the result of. Declared here rather than inline so the
+#: mapping is one thing to read, and so a movement type added without a use case name fails
+#: loudly at the first stock movement rather than writing an event called "unknown".
+_AUDIT_ACTION_FOR_MOVEMENT: Final[dict[MovementType, str]] = {
+    MovementType.STOCK_INITIALIZED: "initialize_stock",
+    MovementType.STOCK_RECEIVED: "receive_stock",
+    MovementType.ADJUSTMENT: "adjust_stock",
+    MovementType.DAMAGE: "record_damage",
+    MovementType.TRANSFER: "transfer_stock",
+    MovementType.SHIPMENT_OUT: "ship_stock",
+    MovementType.SHIPMENT_IN: "receive_shipment",
+    # Movements caused by another use case name that use case, because that is the action
+    # somebody actually took. The sale service writes its own event; these entries exist so
+    # the mapping is total and a new movement type cannot silently produce an unnamed event.
+    MovementType.SALE: "complete_sale",
+    MovementType.RETURN: "cancel_sale",
+}
 
 #: How many movements a listing returns unless a caller asks for fewer.
 DEFAULT_MOVEMENT_LIMIT: Final[int] = 100
@@ -99,9 +118,11 @@ class InventoryService:
         self,
         *,
         unit_of_work_factory: Callable[[], UnitOfWork],
+        audit_event_service: AuditEventService,
         logger: StructuredLogger | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
+        self._audit = audit_event_service
         self._logger = (logger or get_logger(_INVENTORY_LOGGER_NAME)).bind(
             component="inventory_service", layer="service"
         )
@@ -446,6 +467,20 @@ class InventoryService:
             stored_destination = await inventory_crud.save(
                 session, destination.with_movement(delta=moved, at=now)
             )
+            # One event for the transfer: two movements, one thing a person did.
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="transfer_stock",
+                entity_type="inventory_movement",
+                entity_id=outgoing.id,
+                now=now,
+                detail={
+                    "source_product_id": str(source_product_id),
+                    "destination_product_id": str(destination_product_id),
+                    "quantity": str(moved),
+                },
+            )
             await unit_of_work.commit()
 
         self._logger.warning(
@@ -497,6 +532,19 @@ class InventoryService:
                 reference_id=reference_id,
                 device_id=device_id,
                 operation_id=operation_id,
+            )
+            # The event is written here rather than inside `apply_stock_change`, because that
+            # method is also called by a use case that has its own transaction and its own
+            # event - a sale. One event per use case, not one per table it wrote to.
+            await self._audit.record_audit_event(
+                unit_of_work.session_handle,
+                tenant_context,
+                action=_AUDIT_ACTION_FOR_MOVEMENT[movement_type],
+                entity_type="inventory_movement",
+                entity_id=change.movement.id,
+                operation_id=operation_id,
+                now=change.movement.occurred_at,
+                detail=change.movement.describe_for_audit(),
             )
             await unit_of_work.commit()
 

@@ -56,6 +56,7 @@ from ahia.integrations.storage.storage_factory import (
 )
 from ahia.models.entities.product_model import ProductModel
 from ahia.models.entities.tenant_model import TenantModel
+from ahia.services.audit_event_service import AuditEventService
 from ahia.services.product_image_service import ProductImageService
 from ahia.services.storage_quota_service import StorageQuotaService
 
@@ -256,6 +257,7 @@ def build_service(
             quota_bytes=resolved_limits.max_tenant_storage_bytes,
         ),
         limits=resolved_limits,
+        audit_event_service=AuditEventService(unit_of_work_factory=database.unit_of_work_factory()),
     )
 
 

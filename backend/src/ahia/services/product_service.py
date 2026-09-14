@@ -49,6 +49,7 @@ from ahia.core.security import TokenService, fingerprint_for_log
 from ahia.core.tenant_context import TenantContext
 from ahia.crud import category_crud, product_crud
 from ahia.models.entities.product_model import ProductModel
+from ahia.services.audit_event_service import AuditEventService
 
 _PRODUCT_LOGGER_NAME: Final[str] = "ahia.services.product"
 
@@ -77,10 +78,12 @@ class ProductService:
         *,
         unit_of_work_factory: Callable[[], UnitOfWork],
         token_service: TokenService,
+        audit_event_service: AuditEventService,
         logger: StructuredLogger | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._token_service = token_service
+        self._audit = audit_event_service
         self._logger = (logger or get_logger(_PRODUCT_LOGGER_NAME)).bind(
             component="product_service", layer="service"
         )
@@ -135,6 +138,15 @@ class ProductService:
                 creation_arguments["low_stock_threshold"] = low_stock_threshold
 
             product = await product_crud.create(session, ProductModel.create(**creation_arguments))
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="create_product",
+                entity_type="product",
+                entity_id=product.id,
+                now=product.created_at,
+                detail=product.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         self._logger.info(
@@ -294,6 +306,15 @@ class ProductService:
                 )
 
             stored = await product_crud.update(session, product)
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="update_product",
+                entity_type="product",
+                entity_id=stored.id,
+                now=now,
+                detail=stored.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         self._logger.info(
@@ -340,15 +361,25 @@ class ProductService:
             # A product that has been published before already has an address. Minting
             # a new one would break every link a customer holds, so a token is only
             # generated when there is none.
+            now = datetime.now(UTC)
             published = product.publish(
                 public_token=product.public_token or self._token_service.generate_public_token(),
-                at=datetime.now(UTC),
+                at=now,
             )
             if published == product:
                 # Already published: the public address does not change, so there is
                 # nothing to write and nothing new to tell anybody.
                 return product
             stored = await product_crud.update(session, published)
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="publish_product",
+                entity_type="product",
+                entity_id=stored.id,
+                now=now,
+                detail=stored.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         self._logger.info(
@@ -387,6 +418,15 @@ class ProductService:
                 session, tenant_context=tenant_context, product_id=product_id
             )
             stored = await product_crud.update(session, product.unpublish(at=now))
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="unpublish_product",
+                entity_type="product",
+                entity_id=stored.id,
+                now=now,
+                detail=stored.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         self._logger.info(
@@ -430,6 +470,15 @@ class ProductService:
                 session, tenant_context=tenant_context, product_id=product_id
             )
             stored = await product_crud.update(session, product.deactivate(at=now))
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="deactivate_product",
+                entity_type="product",
+                entity_id=stored.id,
+                now=now,
+                detail=stored.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         self._logger.warning(
@@ -464,6 +513,15 @@ class ProductService:
                 session, tenant_context=tenant_context, product_id=product_id
             )
             stored = await product_crud.update(session, product.activate(at=now))
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="activate_product",
+                entity_type="product",
+                entity_id=stored.id,
+                now=now,
+                detail=stored.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         self._logger.info(

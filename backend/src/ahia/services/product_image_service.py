@@ -62,6 +62,7 @@ from ahia.core.ports.storage_port import (
 from ahia.core.tenant_context import TenantContext
 from ahia.crud import product_crud, product_image_crud
 from ahia.models.entities.product_image_model import ProductImageModel
+from ahia.services.audit_event_service import AuditEventService
 from ahia.services.storage_quota_service import StorageQuotaService
 
 _PRODUCT_IMAGE_LOGGER_NAME: Final[str] = "ahia.services.product_image"
@@ -110,6 +111,7 @@ class ProductImageService:
         media: MediaProcessingPort,
         storage_quota_service: StorageQuotaService,
         limits: StorageLimits,
+        audit_event_service: AuditEventService,
         storage_readers: Mapping[str, StoragePort] | None = None,
         logger: StructuredLogger | None = None,
     ) -> None:
@@ -124,6 +126,7 @@ class ProductImageService:
         self._media = media
         self._quota = storage_quota_service
         self._limits = limits
+        self._audit = audit_event_service
         self._logger = (logger or get_logger(_PRODUCT_IMAGE_LOGGER_NAME)).bind(
             component="product_image_service", layer="service"
         )
@@ -307,6 +310,15 @@ class ProductImageService:
                     is_primary=is_primary,
                 ),
             )
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="attach_product_image",
+                entity_type="product_image",
+                entity_id=image.id,
+                now=image.created_at,
+                detail=image.describe_for_audit(),
+            )
             await unit_of_work.commit()
         return image
 
@@ -403,6 +415,15 @@ class ProductImageService:
                 session, tenant_context=tenant_context, product_id=product_id
             )
             stored = await product_image_crud.update(session, image.marked_primary())
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="set_primary_product_image",
+                entity_type="product_image",
+                entity_id=stored.id,
+                now=datetime.now(UTC),
+                detail=stored.describe_for_audit(),
+            )
             await unit_of_work.commit()
 
         self._logger.info(
@@ -468,6 +489,22 @@ class ProductImageService:
                 )
             stored = await product_image_crud.list_for_product(
                 session, tenant_id=tenant_context.tenant_id, product_id=product_id
+            )
+            # One event for the gallery rather than one per image: arranging a gallery is a
+            # single thing a person did, and the product is what it happened to. A gallery that
+            # was just reordered is not empty, and the first image is the record the event
+            # points at; a gallery with nothing in it has nothing to point at.
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="reorder_product_images",
+                entity_type="product_image",
+                entity_id=stored[0].id if stored else None,
+                now=datetime.now(UTC),
+                detail={
+                    "product_id": str(product_id),
+                    "image_count": str(len(stored)),
+                },
             )
             await unit_of_work.commit()
 
@@ -549,6 +586,15 @@ class ProductImageService:
                     released_bytes=0,
                 )
 
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="remove_product_image",
+                entity_type="product_image",
+                entity_id=image.id,
+                now=now,
+                detail=image.describe_for_audit(),
+            )
             await product_image_crud.delete_row(session, image)
             await unit_of_work.commit()
             released_bytes = image.size_bytes

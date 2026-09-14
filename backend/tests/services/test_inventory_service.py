@@ -39,9 +39,11 @@ from ahia.core.errors import (
 from ahia.core.permissions.permissions_registry import permission_codes_for_role
 from ahia.core.tenant_context import TenantContext, build_tenant_context
 from ahia.crud import (
+    audit_event_crud,
     inventory_crud,
     inventory_movement_crud,
     product_crud,
+    sale_crud,
     tenant_crud,
     user_crud,
 )
@@ -50,6 +52,7 @@ from ahia.models.entities.negative_stock_policy import NegativeStockPolicy
 from ahia.models.entities.product_model import ProductModel
 from ahia.models.entities.tenant_model import TenantModel
 from ahia.models.entities.user_model import UserModel
+from ahia.services.audit_event_service import AuditEventService
 from ahia.services.inventory_service import InventoryService
 
 DEFAULT_TEST_DATABASE_URL = (
@@ -96,7 +99,10 @@ async def database() -> AsyncIterator[Database]:
 
 @pytest.fixture
 def service(database: Database) -> InventoryService:
-    return InventoryService(unit_of_work_factory=database.unit_of_work_factory())
+    return InventoryService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        audit_event_service=AuditEventService(unit_of_work_factory=database.unit_of_work_factory()),
+    )
 
 
 async def insert_tenant(database: Database, *, policy: NegativeStockPolicy | None = None) -> UUID:
@@ -559,7 +565,10 @@ async def test_two_simultaneous_sales_produce_two_movements_and_the_right_total(
     transactions against real PostgreSQL are the only way to show that it does not.
     """
     owner = await owner_context(database, tenant_id)
-    service = InventoryService(unit_of_work_factory=database.unit_of_work_factory())
+    service = InventoryService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        audit_event_service=AuditEventService(unit_of_work_factory=database.unit_of_work_factory()),
+    )
     await service.receive_stock(owner, product_id=product_id, quantity=Decimal("10.000"))
 
     results = await asyncio.gather(
@@ -612,7 +621,10 @@ async def test_two_simultaneous_overdraws_are_both_refused_when_the_policy_block
 ) -> None:
     """With one item left, two sales of two must leave the stock untouched, not negative."""
     owner = await owner_context(database, tenant_id)
-    service = InventoryService(unit_of_work_factory=database.unit_of_work_factory())
+    service = InventoryService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        audit_event_service=AuditEventService(unit_of_work_factory=database.unit_of_work_factory()),
+    )
     await service.receive_stock(owner, product_id=product_id, quantity=Decimal("1.000"))
 
     results = await asyncio.gather(
@@ -637,7 +649,10 @@ async def test_the_ledger_reconstructs_the_projection_after_concurrent_writes(
 ) -> None:
     """The invariant test: a quantity cannot change without a movement, and the sum agrees."""
     owner = await owner_context(database, tenant_id)
-    service = InventoryService(unit_of_work_factory=database.unit_of_work_factory())
+    service = InventoryService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        audit_event_service=AuditEventService(unit_of_work_factory=database.unit_of_work_factory()),
+    )
     await service.receive_stock(owner, product_id=product_id, quantity=Decimal("100.000"))
 
     await asyncio.gather(
@@ -707,3 +722,48 @@ async def test_an_inventory_worker_may_count_stock(
 
     assert received.movement.actor_id == worker.user_id
     assert adjusted.inventory.quantity_on_hand == Decimal("4.000")
+
+
+# ---------------------------------------------------------------------------
+# The trail
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_receiving_stock_is_one_event_in_the_audit_trail(
+    database: Database, service: InventoryService, tenant_id: UUID, product_id: UUID
+) -> None:
+    """M14.1.3: the direct stock use cases write their event; a sale writes its own."""
+    owner = await owner_context(database, tenant_id)
+
+    change = await service.receive_stock(owner, product_id=product_id, quantity=Decimal("50.000"))
+
+    async with database.transaction_scope() as unit_of_work:
+        events = await audit_event_crud.list_for_entity(
+            unit_of_work.session_handle,
+            tenant_id=tenant_id,
+            entity_type="inventory_movement",
+            entity_id=change.movement.id,
+        )
+
+    assert [event.action for event in events] == ["receive_stock"]
+    assert events[0].actor_id == owner.user_id
+    assert events[0].detail["quantity_after"] == "50.000"
+
+
+@pytest.mark.integration
+async def test_a_sale_does_not_write_a_movement_event_of_its_own(
+    database: Database, service: InventoryService, tenant_id: UUID, product_id: UUID
+) -> None:
+    """One event per use case: the sale's event covers the stock it moved."""
+    owner = await owner_context(database, tenant_id)
+    await service.receive_stock(owner, product_id=product_id, quantity=Decimal("10.000"))
+
+    async with database.transaction_scope() as unit_of_work:
+        events = await audit_event_crud.list_for_tenant(
+            unit_of_work.session_handle, tenant_id, limit=50
+        )
+        sales = await sale_crud.count_for_tenant(unit_of_work.session_handle, tenant_id)
+
+    assert sales == 0
+    assert [event.action for event in events] == ["receive_stock"]

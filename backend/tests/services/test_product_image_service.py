@@ -52,6 +52,7 @@ from ahia.crud import product_crud, tenant_crud
 from ahia.integrations.media.image_processor import PillowImageProcessor
 from ahia.models.entities.product_model import ProductModel
 from ahia.models.entities.tenant_model import TenantModel
+from ahia.services.audit_event_service import AuditEventService
 from ahia.services.product_image_service import ProductImageService
 from ahia.services.storage_quota_service import StorageQuotaService
 
@@ -230,6 +231,7 @@ def build_service(
         media=PillowImageProcessor(resolved_limits),
         storage_quota_service=quota,
         limits=resolved_limits,
+        audit_event_service=AuditEventService(unit_of_work_factory=database.unit_of_work_factory()),
     )
 
 

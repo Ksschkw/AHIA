@@ -28,6 +28,7 @@ from ahia.core.permissions.permissions_registry import permission_codes_for_role
 from ahia.core.tenant_context import TenantContext, build_tenant_context
 from ahia.crud import tenant_crud
 from ahia.models.entities.tenant_model import TenantModel
+from ahia.services.audit_event_service import AuditEventService
 from ahia.services.category_service import CategoryService
 
 DEFAULT_TEST_DATABASE_URL = (
@@ -71,7 +72,10 @@ async def database() -> AsyncIterator[Database]:
 
 @pytest.fixture
 def service(database: Database) -> CategoryService:
-    return CategoryService(unit_of_work_factory=database.unit_of_work_factory())
+    return CategoryService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        audit_event_service=AuditEventService(unit_of_work_factory=database.unit_of_work_factory()),
+    )
 
 
 async def insert_tenant(database: Database, tenant_id: UUID) -> None:

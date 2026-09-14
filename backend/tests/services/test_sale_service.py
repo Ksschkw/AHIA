@@ -107,7 +107,10 @@ async def database() -> AsyncIterator[Database]:
 
 @pytest.fixture
 def inventory_service(database: Database) -> InventoryService:
-    return InventoryService(unit_of_work_factory=database.unit_of_work_factory())
+    return InventoryService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        audit_event_service=AuditEventService(unit_of_work_factory=database.unit_of_work_factory()),
+    )
 
 
 @pytest.fixture

@@ -140,6 +140,13 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         public_token_bytes=settings.public_token_bytes,
     )
 
+    # One recorder, shared by every service that mutates. It holds no state of its own: the
+    # event is written into the transaction the calling use case already owns.
+    audit_event_service = AuditEventService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        logger=logger,
+    )
+
     password_hasher = PasswordHasher(
         time_cost=settings.argon2_time_cost,
         memory_cost_kib=settings.argon2_memory_cost_kib,
@@ -191,19 +198,14 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
 
     category_service = CategoryService(
         unit_of_work_factory=database.unit_of_work_factory(),
+        audit_event_service=audit_event_service,
         logger=logger,
     )
 
     product_service = ProductService(
         unit_of_work_factory=database.unit_of_work_factory(),
         token_service=token_service,
-        logger=logger,
-    )
-
-    # One recorder, shared by every service that mutates. It holds no state of its own: the
-    # event is written into the transaction the calling use case already owns.
-    audit_event_service = AuditEventService(
-        unit_of_work_factory=database.unit_of_work_factory(),
+        audit_event_service=audit_event_service,
         logger=logger,
     )
 
@@ -222,6 +224,7 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
 
     inventory_service = InventoryService(
         unit_of_work_factory=database.unit_of_work_factory(),
+        audit_event_service=audit_event_service,
         logger=logger,
     )
 
@@ -239,6 +242,7 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         media=media,
         storage_quota_service=storage_quota_service,
         limits=settings.storage_limits(),
+        audit_event_service=audit_event_service,
         logger=logger,
     )
 
