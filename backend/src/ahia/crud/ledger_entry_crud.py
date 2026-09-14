@@ -15,6 +15,13 @@ Every entry names what caused it
     `(reference_type, reference_id)` is required and indexed, which is what makes "what does
     this amount belong to" answerable. An entry that cannot be attributed is a number
     somebody has to explain from memory.
+
+Entries written in the same instant have no defined relative order
+    Reads are ordered by `(occurred_at, id)`, and a sale and its discount share a timestamp
+    because they were written inside one transaction. The sum is what matters and it does not
+    depend on the order; a reader that needs a sequence across instants gets one from
+    `occurred_at`. Ordering by insertion would need a sequence column, and nothing in this
+    product reads the ledger that way yet.
 """
 
 from __future__ import annotations

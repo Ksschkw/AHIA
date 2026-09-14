@@ -476,59 +476,109 @@ class InventoryService:
         device_id: UUID | None = None,
         operation_id: UUID | None = None,
     ) -> StockChange:
-        """Lock the product, record the movement, save the projection, commit."""
-        now = datetime.now(UTC)
+        """Apply one movement in a transaction of its own, then report it.
+
+        The transaction belongs to this method because its callers are single stock
+        operations - a receipt, an adjustment, damage. A caller that has a transaction
+        already, such as a sale being completed, calls `apply_stock_change` with the session
+        it is holding instead, so the stock change commits or rolls back with everything else
+        rather than beside it.
+        """
         unit_of_work = self._unit_of_work_factory()
         async with unit_of_work:
-            session = unit_of_work.session_handle
-            await self._require_product(
-                session, tenant_context=tenant_context, product_id=product_id
-            )
-            inventory = await inventory_crud.lock_for_product(
-                session,
-                inventory_id=uuid4(),
-                tenant_id=tenant_context.tenant_id,
-                product_id=product_id,
-                now=now,
-            )
-            policy = await self._tenant_policy(session, tenant_context)
-
-            movement = self._build_movement(
+            change = await self.apply_stock_change(
+                unit_of_work.session_handle,
                 tenant_context,
                 product_id=product_id,
                 movement_type=movement_type,
                 delta=delta,
-                quantity_before=inventory.quantity_on_hand,
                 note=note,
-                now=now,
                 reference_type=reference_type,
                 reference_id=reference_id,
                 device_id=device_id,
                 operation_id=operation_id,
             )
-            self._refuse_overdraw(
-                tenant_context, policy=policy, movement=movement, product_id=product_id
-            )
-
-            await inventory_movement_crud.record(session, movement)
-            updated = await inventory_crud.save(
-                session, inventory.with_movement(delta=movement.quantity_delta, at=now)
-            )
             await unit_of_work.commit()
 
-        log_method = self._logger.warning if movement.is_overdraw() else self._logger.info
+        self._log_movement(tenant_context, change)
+        return change
+
+    async def apply_stock_change(
+        self,
+        session: object,
+        tenant_context: TenantContext,
+        *,
+        product_id: UUID,
+        movement_type: MovementType,
+        delta: Decimal,
+        note: str | None = None,
+        reference_type: str | None = None,
+        reference_id: UUID | None = None,
+        device_id: UUID | None = None,
+        operation_id: UUID | None = None,
+        now: datetime | None = None,
+    ) -> StockChange:
+        """Apply one movement inside the transaction the caller is holding.
+
+        This is the whole ledger rule in one place: resolve the product in the authorized
+        tenant, lock its projection so two concurrent writers serialize, read the business's
+        negative-stock policy, build the movement from the locked quantity, refuse the
+        write if the policy refuses the result, append the movement and save the projection.
+
+        It does not commit. A sale that has to write a sale, its lines, its payments, its
+        stock movements and its ledger entry must commit them together, and a stock change
+        that committed on its own would leave half a sale behind.
+        """
+        resolved_moment = now or datetime.now(UTC)
+        await self._require_product(session, tenant_context=tenant_context, product_id=product_id)
+        inventory = await inventory_crud.lock_for_product(
+            session,  # type: ignore[arg-type]
+            inventory_id=uuid4(),
+            tenant_id=tenant_context.tenant_id,
+            product_id=product_id,
+            now=resolved_moment,
+        )
+        policy = await self._tenant_policy(session, tenant_context)
+
+        movement = self._build_movement(
+            tenant_context,
+            product_id=product_id,
+            movement_type=movement_type,
+            delta=delta,
+            quantity_before=inventory.quantity_on_hand,
+            note=note,
+            now=resolved_moment,
+            reference_type=reference_type,
+            reference_id=reference_id,
+            device_id=device_id,
+            operation_id=operation_id,
+        )
+        self._refuse_overdraw(
+            tenant_context, policy=policy, movement=movement, product_id=product_id
+        )
+
+        await inventory_movement_crud.record(session, movement)  # type: ignore[arg-type]
+        updated = await inventory_crud.save(
+            session,  # type: ignore[arg-type]
+            inventory.with_movement(delta=movement.quantity_delta, at=resolved_moment),
+        )
+        return StockChange(inventory=updated, movement=movement)
+
+    def _log_movement(self, tenant_context: TenantContext, change: StockChange) -> None:
+        """Report a movement at the level its outcome deserves."""
+        log_method = self._logger.warning if change.movement.is_overdraw() else self._logger.info
         log_method(
             "inventory_movement_recorded",
             tenant_id=str(tenant_context.tenant_id),
             actor_id=str(tenant_context.user_id),
-            product_id=str(product_id),
-            movement_id=str(movement.id),
-            movement_type=movement.movement_type.value,
-            quantity_delta=str(movement.quantity_delta),
-            quantity_after=str(movement.quantity_after),
-            is_overdraw=movement.is_overdraw(),
+            product_id=str(change.movement.product_id),
+            movement_id=str(change.movement.id),
+            movement_type=change.movement.movement_type.value,
+            quantity_delta=str(change.movement.quantity_delta),
+            quantity_after=str(change.movement.quantity_after),
+            is_overdraw=change.movement.is_overdraw(),
+            reference_type=change.movement.reference_type,
         )
-        return StockChange(inventory=updated, movement=movement)
 
     def _build_movement(
         self,

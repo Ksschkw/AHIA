@@ -124,6 +124,10 @@ ignore = [
   "S607",    # partial executable path: git is resolved from PATH on purpose
   "PLR2004", # magic value comparison: expected values are the point of a test
   "SLF001",  # private member access: guards are tested at their internals
+  # A test function's parameters are the fixtures it needs, and their number says nothing
+  # about its complexity - a test that needs the database, two services, a tenant, a seller
+  # and a product is a test of something that spans all of them.
+  "PLR0917",
 ]
 # The R2 adapter and its test double must match boto3's S3 client surface,
 # which uses keyword names that are not PEP 8. The exception is narrow and

@@ -1084,6 +1084,24 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ### M12 - progress log
 
+- M12.1.5, M12.1.6 and M12.1.10 complete, which leaves the transport layer and the
+  permission tests for M12. The transactional property is tested by breaking it on purpose:
+  a failure injected after the sale, its lines, its payments and its stock movement have all
+  been written rolls back every one of them, and the receipt number the sale had claimed is
+  reused by the next sale rather than becoming a gap in the book.
+- Making that possible needed one refactor rather than a second implementation:
+  `InventoryService` split "the stock rules" from "the transaction". `apply_stock_change`
+  takes the session the caller is holding, so a sale commits its stock movements with
+  everything else or rolls them back with everything else; the single-operation methods
+  (`receive_stock` and friends) keep opening their own transaction and now call it.
+- The naming rule caught `sales_service.py`: the entity is `sale_model.py`, and the
+  exemption list is for use-case modules that genuinely have no entity - not for a plural
+  that hides a slice. Renamed to `sale_service.py`.
+- Two test assumptions were corrected rather than worked around: the receipt counter is
+  rolled back with the failed sale, so the assertion that it had moved was backwards; and
+  two ledger entries written in the same instant have no defined relative order, so that
+  assertion compares a set while the cancellation test - whose entries differ in time -
+  keeps its ordering.
 - M12.1.4 and M12.1.7 complete. The receipt counter is a table rather than a PostgreSQL
   sequence because a sequence belongs to the schema and cannot be scoped: every business
   would share one counter, and a customer would watch their receipts jump by the number of
@@ -1124,11 +1142,16 @@ Goal: a business exists as a tenant with a globally unique public slug.
       joins. The ledger carries a database trigger refusing UPDATE and DELETE, exactly
       as the stock ledger does, and a test asserts the module offers no mutating
       function either.
-- [ ] M12.1.5 `sales_service.py`: `complete_sale` inside a single transaction
+- [x] M12.1.5 `sale_service.py` (named for its entity, `sale_model.py`, rather than for
+      the domain area: the naming rule is what makes a slice predictable, and a plural
+      here would have needed an exemption to hide the drift): `complete_sale` inside a
+      single transaction
       creating sale, items, payments, inventory movements, inventory projection
       updates, ledger entry and audit event; failure of any part rolls back all.
-- [ ] M12.1.6 `cancel_sale` with compensating inventory and financial events,
-      never a deletion.
+- [x] M12.1.6 `cancel_sale` with compensating inventory and financial events, never a
+      deletion: the stock returns as a `RETURN` movement, each payment is marked
+      refunded, the ledger records a refund, and the sale keeps its number, its lines
+      and its total. Cancelling twice moves nothing twice.
 - [x] M12.1.7 Receipt numbering per tenant with a uniqueness guarantee: one counter
       row per business, claimed under a row lock inside the sale's transaction, with
       `UNIQUE(tenant_id, receipt_number)` behind it. A rolled-back sale releases its
@@ -1137,8 +1160,9 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - [ ] M12.1.9 Tests: full transaction rollback on injected failure, no
       half-created sale, cancellation semantics, money precision, permission
       enforcement (`sales.create`, `sales.cancel`).
-- [ ] M12.1.10 Idempotency at the operation level: replaying `operation_id`
-      returns the original result and creates nothing new.
+- [x] M12.1.10 Idempotency at the operation level: replaying `operation_id` returns the
+      original sale with its lines and payments, marked as a replay, and writes nothing -
+      asserted by counting sales, movements and stock before and after.
 
 ---
 
