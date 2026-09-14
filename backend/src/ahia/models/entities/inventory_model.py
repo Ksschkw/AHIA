@@ -32,15 +32,25 @@ from typing import Final
 from uuid import UUID
 
 from ahia.core.errors import EntityInvariantError
+from ahia.models.entities.money import (
+    MAXIMUM_QUANTITY as _MAXIMUM_QUANTITY,
+)
+from ahia.models.entities.money import (
+    QUANTITY_PLACES as _QUANTITY_PLACES,
+)
+from ahia.models.entities.money import (
+    ZERO_QUANTITY as _ZERO_QUANTITY,
+)
 
 #: Quantities carry three decimal places, because stock is counted in kilos and litres as
-#: well as in units. The same rule as a product's threshold, expressed once for inventory.
-QUANTITY_PLACES: Final[Decimal] = Decimal("0.001")
+#: well as in units. The rule lives in `money`, beside the one for amounts, so a stock
+#: count and a sale quantity cannot disagree about what a thousandth is.
+QUANTITY_PLACES: Final[Decimal] = _QUANTITY_PLACES
 
 #: The largest quantity this table accepts, in the same unit as a product's threshold.
-MAXIMUM_QUANTITY: Final[Decimal] = Decimal("999999999999.999")
+MAXIMUM_QUANTITY: Final[Decimal] = _MAXIMUM_QUANTITY
 
-ZERO_QUANTITY: Final[Decimal] = Decimal("0.000")
+ZERO_QUANTITY: Final[Decimal] = _ZERO_QUANTITY
 
 
 @dataclass(frozen=True, slots=True)

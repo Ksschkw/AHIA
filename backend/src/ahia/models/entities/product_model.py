@@ -30,33 +30,40 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Final
 from uuid import UUID
 
 from ahia.core.errors import EntityInvariantError
 from ahia.core.slug import normalize_slug, require_slug_shape
+from ahia.models.entities.money import (
+    MAXIMUM_MONEY,
+    ZERO_MONEY,
+    ZERO_QUANTITY,
+    check_money_rules,
+    check_quantity_rules,
+)
+from ahia.models.entities.money import (
+    coerce_money as _coerce_money,
+)
+from ahia.models.entities.money import (
+    coerce_quantity as _coerce_quantity,
+)
 
 MAXIMUM_NAME_LENGTH: Final[int] = 200
 MAXIMUM_SLUG_LENGTH: Final[int] = 63
 MAXIMUM_DESCRIPTION_LENGTH: Final[int] = 5_000
 MAXIMUM_IDENTIFIER_LENGTH: Final[int] = 64
 
-#: How many decimal places each kind of number may carry. A price with three places is
-#: a value the column cannot hold, and rounding it would change what somebody typed.
-MONEY_PLACES: Final[Decimal] = Decimal("0.01")
-QUANTITY_PLACES: Final[Decimal] = Decimal("0.001")
-
-#: The largest price this product accepts. NUMERIC(18,2) can hold more, but a product
-#: priced above a trillion units is a typo rather than a price, and catching it here
-#: means the mistake is a validation error instead of a number nobody notices.
-MAXIMUM_PRICE: Final[Decimal] = Decimal("999999999999.99")
+#: The largest price this product accepts. The bound is the money module's, restated under
+#: the name a reader of this entity expects; a price beyond it is a typo rather than a
+#: price, and catching it here means a validation error instead of a number nobody notices.
+MAXIMUM_PRICE: Final[Decimal] = MAXIMUM_MONEY
 
 #: The largest stock threshold, in the same unit as a quantity.
-MAXIMUM_QUANTITY: Final[Decimal] = Decimal("999999999999.999")
+MAXIMUM_QUANTITY: Final[Decimal] = MAXIMUM_MONEY.__class__("999999999999.999")
 
-ZERO_PRICE: Final[Decimal] = Decimal("0.00")
-ZERO_QUANTITY: Final[Decimal] = Decimal("0.000")
+ZERO_PRICE: Final[Decimal] = ZERO_MONEY
 
 
 @dataclass(frozen=True, slots=True)
@@ -449,14 +456,12 @@ def coerce_money(value: object, *, field_name: str) -> Decimal:
     Raises ValueError rather than a domain error so the schema layer can turn it into a
     422 for a client while the entity layer turns it into an invariant violation.
     """
-    parsed = _parse_decimal_like(value, field_name=field_name)
-    _check_money_rules(
-        parsed,
+    return _coerce_money(
+        value,
         field_name=field_name,
         minimum=ZERO_PRICE,
         maximum=MAXIMUM_PRICE,
     )
-    return parsed
 
 
 def coerce_quantity(value: object, *, field_name: str) -> Decimal:
@@ -465,33 +470,7 @@ def coerce_quantity(value: object, *, field_name: str) -> Decimal:
     Quantities carry three decimal places rather than two, because stock is counted in
     kilos and litres as well as in units.
     """
-    parsed = _parse_decimal_like(value, field_name=field_name)
-    _check_quantity_rules(parsed, field_name=field_name, maximum=MAXIMUM_QUANTITY)
-    return parsed
-
-
-def _parse_decimal_like(value: object, *, field_name: str) -> Decimal:
-    """Turn a wire value into a Decimal without ever going through a binary float."""
-    if isinstance(value, bool) or value is None:
-        raise ValueError(f"{field_name} must be a number")
-    if isinstance(value, Decimal):
-        return value
-    if isinstance(value, int):
-        return Decimal(value)
-    if isinstance(value, float):
-        # A float that reached this point came from JSON, so its shortest decimal text
-        # is what the client sent. `Decimal(float)` would instead expose the binary
-        # approximation, which is the value nobody typed.
-        return Decimal(str(value))
-    if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            raise ValueError(f"{field_name} is empty")
-        try:
-            return Decimal(text)
-        except InvalidOperation as invalid:
-            raise ValueError(f"{field_name} is not a number") from invalid
-    raise ValueError(f"{field_name} must be a number, not {type(value).__name__}")
+    return _coerce_quantity(value, field_name=field_name, maximum=MAXIMUM_QUANTITY)
 
 
 def _check_money_rules(
@@ -501,33 +480,17 @@ def _check_money_rules(
     minimum: Decimal,
     maximum: Decimal,
 ) -> None:
-    """Raise ValueError unless the Decimal is a price this column can hold."""
-    if not value.is_finite():
-        raise ValueError(f"{field_name} is not a finite number")
-    try:
-        quantised = value.quantize(MONEY_PLACES)
-    except InvalidOperation as unrepresentable:
-        raise ValueError(
-            f"{field_name} cannot be represented with two decimal places"
-        ) from unrepresentable
-    if quantised != value:
-        raise ValueError(f"{field_name} has more than two decimal places")
-    if value < minimum:
-        raise ValueError(f"{field_name} is below {minimum}")
-    if value > maximum:
-        raise ValueError(f"{field_name} exceeds {maximum}")
+    """Raise ValueError unless the Decimal is a price this column can hold.
+
+    Delegates to the shared money rule, so a price and a sale total cannot be judged by
+    two different sets of decimal places.
+    """
+    check_money_rules(value, field_name=field_name, minimum=minimum, maximum=maximum)
 
 
 def _check_quantity_rules(value: Decimal, *, field_name: str, maximum: Decimal) -> None:
     """Raise ValueError unless the Decimal is a quantity this column can hold."""
-    if not value.is_finite():
-        raise ValueError(f"{field_name} is not a finite number")
-    if value.quantize(QUANTITY_PLACES) != value:
-        raise ValueError(f"{field_name} has more than three decimal places")
-    if value < ZERO_QUANTITY:
-        raise ValueError(f"{field_name} is negative")
-    if value > maximum:
-        raise ValueError(f"{field_name} exceeds {maximum}")
+    check_quantity_rules(value, field_name=field_name, maximum=maximum)
 
 
 def _require_money(

@@ -37,7 +37,7 @@ from typing import Final
 from uuid import UUID
 
 from ahia.core.errors import EntityInvariantError
-from ahia.models.entities.inventory_model import (
+from ahia.models.entities.money import (
     MAXIMUM_QUANTITY,
     QUANTITY_PLACES,
     ZERO_QUANTITY,

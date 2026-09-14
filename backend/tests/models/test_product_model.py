@@ -16,11 +16,11 @@ from uuid import UUID, uuid4
 import pytest
 
 from ahia.core.errors import EntityInvariantError
+from ahia.models.entities.money import MAXIMUM_QUANTITY
 from ahia.models.entities.product_model import (
     MAXIMUM_DESCRIPTION_LENGTH,
     MAXIMUM_NAME_LENGTH,
     MAXIMUM_PRICE,
-    MAXIMUM_QUANTITY,
     ProductModel,
 )
 

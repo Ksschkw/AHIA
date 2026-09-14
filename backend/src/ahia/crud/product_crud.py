@@ -55,11 +55,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 from ahia.core.database import Base
 from ahia.core.errors import NotFoundError
 from ahia.crud.integrity_violations import constraint_name, translate_integrity_violation
+from ahia.models.entities.money import ZERO_QUANTITY
 from ahia.models.entities.product_model import (
     MAXIMUM_IDENTIFIER_LENGTH,
     MAXIMUM_NAME_LENGTH,
     MAXIMUM_SLUG_LENGTH,
-    ZERO_QUANTITY,
     ProductModel,
 )
 

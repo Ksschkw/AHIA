@@ -37,12 +37,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, StringConstraints, field_validator
 
+from ahia.models.entities.money import MONEY_PLACES, QUANTITY_PLACES
 from ahia.models.entities.product_model import (
     MAXIMUM_DESCRIPTION_LENGTH,
     MAXIMUM_IDENTIFIER_LENGTH,
     MAXIMUM_NAME_LENGTH,
-    MONEY_PLACES,
-    QUANTITY_PLACES,
     ProductModel,
     coerce_money,
     coerce_quantity,
