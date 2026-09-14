@@ -58,6 +58,7 @@ from ahia.services.product_service import ProductService
 from ahia.services.sale_service import SalesService
 from ahia.services.storage_quota_service import StorageQuotaService
 from ahia.services.sync_change_service import SyncChangeService
+from ahia.services.sync_service import SyncService
 from ahia.services.tenant_membership_service import TenantMembershipService
 from ahia.services.tenant_service import TenantService
 from ahia.services.user_service import UserService
@@ -96,6 +97,7 @@ class ApplicationContainer:
     inventory_service: InventoryService
     audit_event_service: AuditEventService
     sync_change_service: SyncChangeService
+    sync_service: SyncService
     customer_service: CustomerService
     expense_service: ExpenseService
     sales_service: SalesService
@@ -249,6 +251,18 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         logger=logger,
     )
 
+    # Synchronization coordinates the use cases rather than reimplementing them, so it is built
+    # last, with the services it dispatches to.
+    sync_service = SyncService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        sales_service=sales_service,
+        expense_service=expense_service,
+        customer_service=customer_service,
+        inventory_service=inventory_service,
+        sync_change_service=sync_change_service,
+        logger=logger,
+    )
+
     product_image_service = ProductImageService(
         unit_of_work_factory=database.unit_of_work_factory(),
         storage=storage,
@@ -280,6 +294,7 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         inventory_service=inventory_service,
         audit_event_service=audit_event_service,
         sync_change_service=sync_change_service,
+        sync_service=sync_service,
         customer_service=customer_service,
         expense_service=expense_service,
         sales_service=sales_service,

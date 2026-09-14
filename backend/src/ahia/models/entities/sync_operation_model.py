@@ -15,11 +15,12 @@ questions: the use case's own uniqueness keeps the *business fact* from happenin
 when it arrives through another route, and this row lets the sync endpoint answer a retry
 without knowing which use case it was.
 
-**The outcome is recorded for both answers.** `APPLIED` means the server did the work,
-`REPLAYED` means it had already done it and is returning the same result, `REJECTED` means the
-work was refused - by a permission, by a conflict, by validation - and the reason is stored
-without the payload. A device that keeps retrying a rejected operation must be able to learn that
-retrying will not help.
+**The outcome is recorded for every answer.** `APPLIED` means the server did the work,
+`REPLAYED` means it had already done it and is returning the same result, `CONFLICT` means the
+operation was valid and the client's copy was stale, and `REJECTED` means the work was refused by
+a permission or by validation. A device that keeps retrying a rejected operation must be able to
+learn that retrying will not help; a device that hit a conflict must be able to learn what to
+merge against.
 
 **The payload is not stored.** What the client sent is in the client's queue; what matters here
 is the outcome and the entity it produced. Storing the payload would copy customer names and
@@ -54,6 +55,10 @@ class SyncOperationStatus(StrEnum):
 
     APPLIED = "APPLIED"
     REPLAYED = "REPLAYED"
+    #: The operation was valid and the server refused it because the client's copy was stale.
+    #: Distinct from `REJECTED`, which means retrying will not help: a conflict is answered with
+    #: the server's current version so the client can merge and try again.
+    CONFLICT = "CONFLICT"
     REJECTED = "REJECTED"
 
 

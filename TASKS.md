@@ -1264,10 +1264,10 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - [x] M15.1.1 `sync_operation_model.py` and `sync_cursor_model.py`.
 - [x] M15.1.2 Change/outbox table with a monotonically increasing server
       sequence, written in the same transaction as the business change.
-- [ ] M15.1.3 `sync_service.py`: `push_operations` (authenticate, resolve
+- [x] M15.1.3 `sync_service.py`: `push_operations` (authenticate, resolve
       tenant, check permission, check operation id, validate payload, execute
       transaction, return result) and `pull_changes` (cursor-based change feed).
-- [ ] M15.1.4 Conflict classification per the specification matrix: operation
+- [x] M15.1.4 Conflict classification per the specification matrix: operation
       based for transactional facts, versioned/LWW for safe metadata,
       explicit conflict for high-value fields.
 - [ ] M15.1.5 `sync_schema.py` and `sync_router.py` gated by
