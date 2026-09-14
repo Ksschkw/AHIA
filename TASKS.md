@@ -89,7 +89,7 @@ assertion in a commit message.
 | M11 | Customers | `[x]` | M9 |
 | M12 | Sales, payments, ledger, transactional integrity | `[x]` | M10, M11 |
 | M13 | Expenses | `[x]` | M12 |
-| M14 | Audit trail | `[ ]` | M6 |
+| M14 | Audit trail | `[x]` | M6 |
 | M15 | Offline synchronization and idempotency | `[ ]` | M12 |
 | M16 | Public storefront, sharing, WhatsApp click-to-chat, QR | `[ ]` | M9 |
 | M17 | Reports, insights, low-stock alerts, notifications | `[ ]` | M12 |
@@ -1220,14 +1220,42 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ## M14 - Audit trail
 
-- [ ] M14.1.1 `audit_event_model.py` and append-only persistence.
-- [ ] M14.1.2 `audit_service.py`: `record_audit_event` and a query surface for
+- [x] M14.1.1 `audit_event_model.py` and append-only persistence.
+- [x] M14.1.2 `audit_service.py`: `record_audit_event` and a query surface for
       owners.
-- [ ] M14.1.3 Audit writing wired into every mutating use case from M4 onward.
-- [ ] M14.1.4 Audit query endpoints restricted to `reports.read` or an
+- [x] M14.1.3 Audit writing wired into every mutating use case from M4 onward.
+- [x] M14.1.4 Audit query endpoints restricted to `reports.read` or an
       equivalent owner-only permission.
-- [ ] M14.1.5 Tests: actor, tenant, device, operation, entity and timestamp
+- [x] M14.1.5 Tests: actor, tenant, device, operation, entity and timestamp
       captured; audit records cannot be updated or deleted through the API.
+
+### M14 - progress log
+
+- M14.1.1 to M14.1.5 complete, which closes M14. The service is named
+  `audit_event_service.py` after its entity, and `AuditEventService` after the class
+  convention; the architecture contract caught the first name.
+- The trail is append-only in the database, not only by convention: a trigger refuses UPDATE
+  and DELETE exactly as the stock and financial ledgers do, and a test exercises both refusals
+  with raw SQL. `audit_event_crud` has no function that could attempt either, asserted
+  mechanically against the source.
+- Events are written inside the caller's transaction. `record_audit_event` takes the session
+  the use case already holds and opens no unit of work of its own; a test writes an event,
+  fails the transaction, and asserts the trail is empty afterwards. Eleven services are wired
+  and five are documented exemptions, and a source-reading guard in
+  `tests/architecture/test_audit_wiring.py` fails the build when a service that commits a
+  transaction neither records an event nor appears in the exemption list.
+- Where the trail stops is a decision, not an omission: authentication, account actions,
+  registry provisioning and quota bookkeeping happen before a business is chosen or are
+  derived from another use case. `audit_events.tenant_id` is required because the trail is a
+  business's record, so a system-wide trail would need its own table and retention decision
+  rather than a nullable tenant here. Each exempt module carries an `# Audit exemption:`
+  comment, and a test requires it to be there and to be a reason rather than a word.
+- `actor_id` and `device_id` are copies with no foreign key, found while wiring: an append-only
+  table that referenced `users` would pin every actor row forever and make erasing a person's
+  account impossible while the trail held events about them.
+- Reading is `reports.read` - owner and manager - and there is no write route at all. `POST`,
+  `PATCH` and `DELETE` on the trail reach no handler, asserted over HTTP, and the event is still
+  there afterwards.
 
 ---
 

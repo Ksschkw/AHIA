@@ -20,6 +20,10 @@ It never touches a tenant's own roles. A custom role belongs to a business, and
 provisioning is not the place to decide what that business needs.
 """
 
+# Audit exemption: provisioning the permission registry is a deployment action with no
+# person and no tenant behind it. It is reported by the startup log, and there is nothing a
+# business's audit trail could say about it.
+
 from __future__ import annotations
 
 from collections.abc import Callable

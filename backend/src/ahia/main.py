@@ -46,6 +46,7 @@ from ahia.middleware.error_handler_middleware import ErrorHandlerMiddleware
 from ahia.middleware.rate_limit_middleware import RateLimitMiddleware, build_default_limiter
 from ahia.middleware.security_headers_middleware import SecurityHeadersMiddleware
 from ahia.routers import (
+    audit_event_router,
     auth_router,
     category_router,
     customer_router,
@@ -268,6 +269,7 @@ def register_routers(application: FastAPI, settings: Settings) -> None:
         customer_router.router,
         sale_router.router,
         expense_router.router,
+        audit_event_router.router,
     ]
     for versioned_router in versioned_routers:
         application.include_router(versioned_router, prefix=settings.api_v1_prefix)

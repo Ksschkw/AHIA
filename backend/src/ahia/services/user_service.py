@@ -15,6 +15,10 @@ assumption, because the moment a use case gains a target-identifier parameter th
 omitted check becomes a vulnerability.
 """
 
+# Audit exemption: an account is not tenant-scoped. Registering, editing a profile and
+# deactivating an account happen outside any business, and the security log is where they are
+# recorded; the tenant-scoped trail begins when a membership does.
+
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping

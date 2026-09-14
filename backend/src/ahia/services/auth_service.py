@@ -26,6 +26,10 @@ Duplicate registration
     created.
 """
 
+# Audit exemption: authentication happens before a business is chosen, and a person can
+# belong to several, so these events are written by the structured security log rather than
+# into one business's audit trail.
+
 from __future__ import annotations
 
 from collections.abc import Callable

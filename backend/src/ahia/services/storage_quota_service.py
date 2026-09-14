@@ -24,6 +24,10 @@ is why `release_stale_reservations` exists: reconciliation is an explicit
 operation with a stated threshold, not a silent assumption that nothing crashed.
 """
 
+# Audit exemption: quota accounting is bookkeeping derived from the product-image use case,
+# which writes its own event. Recording both would put two entries in the trail for one
+# upload, one of them about a byte counter.
+
 from __future__ import annotations
 
 from collections.abc import Callable

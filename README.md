@@ -134,7 +134,7 @@ receipt it already produced, and cancelling reverses the goods and the money wit
 deleting the record of either. M13 expenses is complete: recording what a business spent
 writes the expense and the ledger entry that accounts for it in one transaction, a mistake is
 reversed with a reason and a compensating entry rather than deleted, and the categories
-spending reports group by are a declared closed set published to clients. 1756 tests pass,
+spending reports group by are a declared closed set published to clients. M14 the audit trail is complete: every mutating use case from the catalogue, the stock ledger, the counter, the expenses and the staff administration writes an event in its own transaction, the table is append-only by database trigger, and the trail is readable by the owner and by nobody else. 1822 tests pass,
 the nine-stage build gate is green, and the service serves a real flow:
 create an account, sign in, create a business, invite a worker, have that worker accept
 the invitation with the role they were given, inspect what that role can do, group the
