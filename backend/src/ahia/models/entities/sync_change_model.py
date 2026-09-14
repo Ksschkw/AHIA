@@ -46,6 +46,24 @@ MAXIMUM_ENTITY_TYPE_LENGTH: Final[int] = 64
 _LOWER_SNAKE_CASE: Final[str] = "abcdefghijklmnopqrstuvwxyz0123456789_"
 
 
+#: The entity types a client can hold offline, and therefore the ones the feed carries. An
+#: event about a session being refreshed or a role's grants changing is real, and it is in the
+#: audit trail, but no client holds either offline - putting them in the feed would make every
+#: device fetch records it has no use for and cannot display.
+SYNCHRONIZABLE_ENTITY_TYPES: Final[frozenset[str]] = frozenset(
+    {
+        "category",
+        "product",
+        "product_image",
+        "inventory",
+        "inventory_movement",
+        "customer",
+        "sale",
+        "expense",
+    }
+)
+
+
 class ChangeType(StrEnum):
     """What happened to the record."""
 

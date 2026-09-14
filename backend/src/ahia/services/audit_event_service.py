@@ -18,6 +18,12 @@ caller cannot record that somebody else did something, which is the only way an 
 stays worth reading. The operation identifier is a parameter because an offline operation's
 identifier is known to the use case, not to the identity that authenticated.
 
+**The change feed is written from the same call.** An audit event names the entity that
+changed, in the transaction that changed it, which is exactly what an offline device needs to be
+told. Rather than ask every use case to write a second row, the recorder appends a change for the
+entity types a client can hold offline and for successful actions only; `SyncChangeService` owns
+that decision and the reason it is a projection rather than a second mechanism.
+
 **Reading is owner-facing and scoped.** `list_events` and `list_history_for_entity` require
 `reports.read`, which in this product is held by the owner and the manager: the trail names who
 did what, and it is not a screen a salesperson needs. Both are scoped to the caller's tenant by
@@ -37,6 +43,7 @@ from ahia.core.permissions.report_permissions import REPORTS_READ
 from ahia.core.tenant_context import TenantContext
 from ahia.crud import audit_event_crud
 from ahia.models.entities.audit_event_model import AuditEventModel, AuditOutcome
+from ahia.services.sync_change_service import SyncChangeService
 
 _AUDIT_LOGGER_NAME: Final[str] = "ahia.services.audit"
 
@@ -52,9 +59,14 @@ class AuditEventService:
         self,
         *,
         unit_of_work_factory: Callable[[], UnitOfWork],
+        sync_change_service: SyncChangeService | None = None,
         logger: StructuredLogger | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
+        # The change feed is a projection of the trail, so the recorder is the one place that
+        # knows to write it. Optional because a caller that only reads the trail - a test, a
+        # reconciliation script - has no use for a feed writer.
+        self._changes = sync_change_service
         self._logger = (logger or get_logger(_AUDIT_LOGGER_NAME)).bind(
             component="audit_event_service", layer="service"
         )
@@ -101,6 +113,19 @@ class AuditEventService:
         )
         stored = await audit_event_crud.record(session, event)  # type: ignore[arg-type]
         self._logger.info("audit_event_recorded", **stored.as_log_fields())
+        if self._changes is not None:
+            # Same transaction, same instant, one call: a change a device is told to fetch and
+            # the event that explains it cannot disagree about when it happened.
+            await self._changes.record_for_audit_event(
+                session,
+                tenant_context,
+                action=stored.action,
+                entity_type=stored.entity_type,
+                entity_id=stored.entity_id,
+                outcome=stored.outcome,
+                operation_id=stored.operation_id,
+                now=stored.occurred_at,
+            )
         return stored
 
     # ------------------------------------------------------------------

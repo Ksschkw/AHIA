@@ -57,6 +57,7 @@ from ahia.services.product_image_service import ProductImageService
 from ahia.services.product_service import ProductService
 from ahia.services.sale_service import SalesService
 from ahia.services.storage_quota_service import StorageQuotaService
+from ahia.services.sync_change_service import SyncChangeService
 from ahia.services.tenant_membership_service import TenantMembershipService
 from ahia.services.tenant_service import TenantService
 from ahia.services.user_service import UserService
@@ -94,6 +95,7 @@ class ApplicationContainer:
     product_image_service: ProductImageService
     inventory_service: InventoryService
     audit_event_service: AuditEventService
+    sync_change_service: SyncChangeService
     customer_service: CustomerService
     expense_service: ExpenseService
     sales_service: SalesService
@@ -140,10 +142,18 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         public_token_bytes=settings.public_token_bytes,
     )
 
-    # One recorder, shared by every service that mutates. It holds no state of its own: the
-    # event is written into the transaction the calling use case already owns.
+    # The change feed is a projection of the audit trail, so the recorder is built with the
+    # service that writes it. Both hold no state: the event and the change are written into the
+    # transaction the calling use case already owns.
+    sync_change_service = SyncChangeService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        logger=logger,
+    )
+
+    # One recorder, shared by every service that mutates.
     audit_event_service = AuditEventService(
         unit_of_work_factory=database.unit_of_work_factory(),
+        sync_change_service=sync_change_service,
         logger=logger,
     )
 
@@ -269,6 +279,7 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         product_image_service=product_image_service,
         inventory_service=inventory_service,
         audit_event_service=audit_event_service,
+        sync_change_service=sync_change_service,
         customer_service=customer_service,
         expense_service=expense_service,
         sales_service=sales_service,
