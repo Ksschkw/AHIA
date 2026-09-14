@@ -1082,10 +1082,31 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ## M12 - Sales, payments, ledger, transactional integrity
 
-- [ ] M12.1.1 `sale_model.py`, `sale_item_model.py` with snapshot fields and
-      monetary invariants.
-- [ ] M12.1.2 `payment_model.py` with method and status enums.
-- [ ] M12.1.3 `ledger_entry_model.py` as an append-only derived record.
+### M12 - progress log
+
+- The money vocabulary moved out of the product entity first: a sale computes line totals,
+  subtotals, payment sums and ledger amounts, and every one of those has to agree with the
+  prices it is computed from. `models/entities/money.py` now holds the decimal places, the
+  bounds, the wire parser and one rounding rule - half-up, stated rather than inferred,
+  because Python's default would turn 0.005 into 0.00 and lose a kobo on every line.
+- Three ordering defects in the new entities were found by their own tests and fixed at the
+  cause rather than in the assertions: a discount larger than its line was reported as "the
+  line total is below zero", which is true and tells the caller nothing; the same for a
+  discount larger than a subtotal; and a payment reference of only spaces was refused as
+  empty instead of being stored as absent. The checks now run shape first, then the rule
+  that relates the parts, then the bounds on the derived value.
+
+- [x] M12.1.1 `sale_model.py`, `sale_item_model.py` with snapshot fields and
+      monetary invariants: a line total is derived and checked, the names and prices are
+      snapshots taken at the sale, and cancellation is a status with a reason and a
+      timestamp rather than a deletion.
+- [x] M12.1.2 `payment_model.py` with method and status enums: only the methods the
+      product can actually accept, a strictly positive amount, and a refund that keeps
+      the amount and records when it happened.
+- [x] M12.1.3 `ledger_entry_model.py` as an append-only derived record: a positive
+      amount with an explicit direction, a reference that must name what caused the
+      entry, and a direction derived from the entry type so revenue cannot be filed as a
+      debit.
 - [ ] M12.1.4 Persistence for all four entities, one file each, no cross-entity
       joins.
 - [ ] M12.1.5 `sales_service.py`: `complete_sale` inside a single transaction
