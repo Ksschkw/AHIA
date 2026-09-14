@@ -65,6 +65,7 @@ EXPECTED_TABLES = frozenset(
         "payments",
         "ledger_entries",
         "receipt_counters",
+        "expenses",
     }
 )
 
