@@ -62,6 +62,7 @@ from ahia.models.entities.ledger_entry_model import (
     LedgerEntryModel,
     LedgerEntryType,
 )
+from ahia.models.entities.money import ZERO_MONEY, quantise_money
 from ahia.models.entities.payment_model import PaymentMethod
 
 _EXPENSE_LOGGER_NAME: Final[str] = "ahia.services.expense"
@@ -77,6 +78,25 @@ EXPENSE_REVERSAL_REFERENCE_TYPE: Final[str] = "expense_reversal"
 #: description has its own length bound, and copying free text into a second table where it
 #: can never be corrected would create a second version of the same explanation.
 EXPENSE_REVERSAL_NOTE: Final[str] = "expense reversed"
+
+
+@dataclass(frozen=True, slots=True)
+class SpendingReport:
+    """What a business spent in a period, per category and in total.
+
+    The total is computed here rather than by a caller summing the mapping: it is money, it is
+    what the business asks for, and two callers adding the same numbers in two places is how a
+    report and a dashboard end up disagreeing. Categories with no spending are absent.
+    """
+
+    since: datetime
+    until: datetime
+    by_category: dict[ExpenseCategory, Decimal]
+
+    @property
+    def total_spent(self) -> Decimal:
+        """Return what the categories add up to."""
+        return quantise_money(sum(self.by_category.values(), ZERO_MONEY))
 
 
 @dataclass(frozen=True, slots=True)
@@ -249,6 +269,27 @@ class ExpenseService:
     # Reading
     # ------------------------------------------------------------------
 
+    async def list_categories(
+        self,
+        tenant_context: TenantContext,
+    ) -> tuple[ExpenseCategory, ...]:
+        """Return the declared category vocabulary, in declaration order.
+
+        Published so a client renders the picker from the server's list instead of hard-coding
+        headings the product can change, and so a category added here appears in every client
+        without a release. The permission check is enforced even though the answer is the same
+        for every business: an endpoint that answers without authority is an endpoint that
+        teaches clients which requests succeed.
+        """
+        tenant_context.require_permission(
+            EXPENSES_READ,
+            operation="list_expense_categories",
+            resource_type="expense",
+            resource_id=str(tenant_context.tenant_id),
+            logger=self._logger,
+        )
+        return tuple(ExpenseCategory)
+
     async def get_expense(
         self,
         tenant_context: TenantContext,
@@ -310,7 +351,7 @@ class ExpenseService:
         *,
         since: datetime,
         until: datetime,
-    ) -> dict[ExpenseCategory, Decimal]:
+    ) -> SpendingReport:
         """Return what the business spent per category in a period.
 
         Categories with no spending are absent rather than zero: a report that shows every
@@ -326,12 +367,13 @@ class ExpenseService:
         )
         unit_of_work = self._unit_of_work_factory()
         async with unit_of_work:
-            return await expense_crud.sum_by_category(
+            by_category = await expense_crud.sum_by_category(
                 unit_of_work.session_handle,
                 tenant_context.tenant_id,
                 since=since,
                 until=until,
             )
+        return SpendingReport(since=since, until=until, by_category=by_category)
 
     # ------------------------------------------------------------------
     # The ledger

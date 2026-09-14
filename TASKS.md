@@ -88,7 +88,7 @@ assertion in a commit message.
 | M10 | Inventory ledger and projections | `[x]` | M9 |
 | M11 | Customers | `[x]` | M9 |
 | M12 | Sales, payments, ledger, transactional integrity | `[x]` | M10, M11 |
-| M13 | Expenses | `[ ]` | M12 |
+| M13 | Expenses | `[x]` | M12 |
 | M14 | Audit trail | `[ ]` | M6 |
 | M15 | Offline synchronization and idempotency | `[ ]` | M12 |
 | M16 | Public storefront, sharing, WhatsApp click-to-chat, QR | `[ ]` | M9 |
@@ -1182,13 +1182,39 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ## M13 - Expenses
 
-- [ ] M13.1.1 `expense_model.py`, `expense_schema.py`, `expense_crud.py`,
+- [x] M13.1.1 `expense_model.py`, `expense_schema.py`, `expense_crud.py`,
       `expense_service.py`, `expense_router.py`.
-- [ ] M13.1.2 Expense categories as configuration, not free text where
+- [x] M13.1.2 Expense categories as configuration, not free text where
       reporting depends on them.
-- [ ] M13.1.3 Ledger entry creation for each expense.
-- [ ] M13.1.4 Tests: permission enforcement, no hard delete of financial
+- [x] M13.1.3 Ledger entry creation for each expense.
+- [x] M13.1.4 Tests: permission enforcement, no hard delete of financial
       history, tenant scoping.
+
+### M13 - progress log
+
+- M13.1.1 to M13.1.4 complete, which closes M13. Money leaving the business is now a
+  record with a ledger entry behind it: `record_expense` writes the expense and the
+  `EXPENSE` / `DEBIT` entry in one unit of work, and `reverse_expense` stamps when and why
+  and appends the `ADJUSTMENT` that credits the money back while the original debit stays
+  exactly as it was written.
+- Two constraints autogenerate cannot infer are stated in the migration: `amount > 0`,
+  because a spending report sums that column, and
+  `(reversed_at IS NULL) = (reversal_reason IS NULL)`, because a reversal is a moment and a
+  reason together. A follow-up autogenerate reports no drift, so the metadata and the
+  schema agree.
+- The categories are a closed set in `models/entities/expense_category.py`, published at
+  `GET /expenses/categories` and in the OpenAPI document. A free-text category would give
+  one business three transport totals and nobody could see that it happened. `OTHER` is the
+  escape hatch and the description carries the detail.
+- Reversal needs `expenses.create`, which only OWNER and MANAGER hold. The specification
+  declares two expense permissions and inventing a third would put a code in the product
+  that the product definition does not have.
+- Three routes that do not exist are asserted over HTTP: `DELETE`, `PATCH` and `PUT` on an
+  expense reach no handler. A mistaken expense is reversed, never erased.
+- A defect found while running the migration is fixed in the same milestone: an empty
+  `DATABASE_MIGRATION_URL` followed by an inline comment parsed as the comment text, and
+  Alembic failed with "Could not parse SQLAlchemy URL". The comment now sits on its own
+  line in `.env.example` and `.env`.
 
 ---
 

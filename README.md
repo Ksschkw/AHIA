@@ -131,7 +131,11 @@ a version that makes two offline edits a conflict instead of a lost one. M12 sal
 complete: a sale, its lines, its payments, the stock it moved and its ledger entry are
 written in one transaction or none of them are, a replayed offline operation returns the
 receipt it already produced, and cancelling reverses the goods and the money without
-deleting the record of either. 1678 tests pass, the nine-stage build gate is green, and the service serves a real flow:
+deleting the record of either. M13 expenses is complete: recording what a business spent
+writes the expense and the ledger entry that accounts for it in one transaction, a mistake is
+reversed with a reason and a compensating entry rather than deleted, and the categories
+spending reports group by are a declared closed set published to clients. 1756 tests pass,
+the nine-stage build gate is green, and the service serves a real flow:
 create an account, sign in, create a business, invite a worker, have that worker accept
 the invitation with the role they were given, inspect what that role can do, group the
 catalogue into categories, add a product, upload its pictures, publish it at an address

@@ -532,9 +532,10 @@ async def test_spending_per_category_excludes_reversed_expenses(
         context, expense_id=to_reverse.expense.id, reason="the post was never published"
     )
 
-    totals = await service.spending_by_category(context, since=NOW - timedelta(days=1), until=LATER)
+    report = await service.spending_by_category(context, since=NOW - timedelta(days=1), until=LATER)
 
-    assert totals == {ExpenseCategory.TRANSPORT: Decimal("3500.00")}
+    assert report.by_category == {ExpenseCategory.TRANSPORT: Decimal("3500.00")}
+    assert report.total_spent == Decimal("3500.00")
 
 
 # ---------------------------------------------------------------------------
@@ -667,10 +668,11 @@ async def test_another_business_cannot_read_list_or_reverse_an_expense(
         )
 
     assert await service.list_expenses(intruder) == []
-    assert (
-        await service.spending_by_category(intruder, since=NOW - timedelta(days=1), until=LATER)
-        == {}
+    intruder_report = await service.spending_by_category(
+        intruder, since=NOW - timedelta(days=1), until=LATER
     )
+    assert intruder_report.by_category == {}
+    assert intruder_report.total_spent == Decimal("0.00")
 
 
 @pytest.mark.integration
