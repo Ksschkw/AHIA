@@ -308,7 +308,9 @@ def test_a_receipt_number_is_readable_and_the_prefix_is_sanitised() -> None:
         "a number past the padded width widens rather than truncating"
     )
 
-    assert clean_receipt_prefix("  a-very-long-prefix  ") == "AVERYLONGPRE"
+    assert clean_receipt_prefix("obi-electronics") == "OBI", "the first word, not a fragment"
+    assert clean_receipt_prefix("  ada's fabrics  ") == "ADAS"
+    assert clean_receipt_prefix("a-very-long-prefix") == "A"
     assert clean_receipt_prefix("  --  ") == "R", "a prefix with nothing in it falls back"
 
     counter = ReceiptCounterModel.for_new_business(tenant_id=uuid4(), prefix="obi", now=NOW)

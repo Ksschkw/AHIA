@@ -29,6 +29,7 @@ from ahia.models.entities.inventory_movement_model import (
     InventoryMovementModel,
 )
 from ahia.models.entities.product_model import ProductModel
+from ahia.schemas.money_format import quantity_text
 
 StockReason = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAXIMUM_NOTE_LENGTH)
@@ -59,16 +60,6 @@ Quantity = Annotated[Decimal, BeforeValidator(_parse_quantity)]
 
 #: A signed adjustment: three decimal places, either direction.
 SignedQuantity = Annotated[Decimal, BeforeValidator(_parse_delta)]
-
-
-def quantity_text(value: Decimal) -> str:
-    """Render a quantity exactly as it is stored, for the wire.
-
-    Quantised to three places so `12` and `12.000` reach a client identically - the
-    entity accepts both from a caller, and the column stores three places, so echoing the
-    shorter form would disagree with the next read.
-    """
-    return format(value.quantize(Decimal("0.001")), "f")
 
 
 class StockReceiveSchema(BaseModel):

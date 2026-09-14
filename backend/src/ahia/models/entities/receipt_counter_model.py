@@ -16,6 +16,7 @@ the unique constraint would then reject a legitimate sale instead of a bug.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Final
@@ -37,12 +38,18 @@ FALLBACK_PREFIX: Final[str] = "R"
 
 
 def clean_receipt_prefix(prefix: str) -> str:
-    """Return the prefix as it is stored: uppercase, alphanumeric and short.
+    """Return the prefix as it is stored: the first word of the slug, uppercase and short.
 
-    A receipt number is read aloud over a counter, so anything that is not a letter or a
-    digit would eventually be mistyped or misheard.
+    A receipt number is read aloud over a counter, so it has to be a word rather than a
+    fragment: the slug `obi-electronics` gives `OBI`, where truncating the whole slug to
+    twelve characters would give `OBIELECTRONI`, which is neither a word nor a
+    recognisable abbreviation. Anything that is not a letter or a digit is dropped, because
+    punctuation in a number somebody reads aloud is eventually misheard.
     """
-    cleaned = "".join(character for character in prefix.strip().upper() if character.isalnum())
+    # Split on the first separator a name is written with, so a prefix derived from a
+    # business name and one derived from its slug produce the same tag.
+    first_word = re.split(r"[\s-]+", prefix.strip())[0]
+    cleaned = "".join(character for character in first_word.upper() if character.isalnum())
     return (cleaned or FALLBACK_PREFIX)[:MAXIMUM_PREFIX_LENGTH]
 
 

@@ -87,7 +87,7 @@ assertion in a commit message.
 | M9 | Catalog: categories, products, images, storage | `[x]` | M8 |
 | M10 | Inventory ledger and projections | `[x]` | M9 |
 | M11 | Customers | `[x]` | M9 |
-| M12 | Sales, payments, ledger, transactional integrity | `[ ]` | M10, M11 |
+| M12 | Sales, payments, ledger, transactional integrity | `[x]` | M10, M11 |
 | M13 | Expenses | `[ ]` | M12 |
 | M14 | Audit trail | `[ ]` | M6 |
 | M15 | Offline synchronization and idempotency | `[ ]` | M12 |
@@ -1084,6 +1084,16 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ### M12 - progress log
 
+- M12.1.8 and M12.1.9 complete, which closes M12. The architecture contract caught the
+  same mistake in the sale schema that it caught in the inventory one: a response mapper
+  took the *service's* combined result, which makes a schema depend on the layer above it.
+  It now takes the sale, its lines and its payments as entities and the router assembles
+  both directions - and the contract test reported it in the same run rather than in
+  review.
+- The receipt prefix rule was wrong in a way only a real slug exposed: truncating
+  `obi-electronics` to twelve characters produced `OBIELECTRONI-000001`, a fragment that is
+  neither a word nor an abbreviation. The prefix is now the first word of the slug, so a
+  receipt reads `OBI-000001`.
 - M12.1.5, M12.1.6 and M12.1.10 complete, which leaves the transport layer and the
   permission tests for M12. The transactional property is tested by breaking it on purpose:
   a failure injected after the sale, its lines, its payments and its stock movement have all
@@ -1156,10 +1166,14 @@ Goal: a business exists as a tenant with a globally unique public slug.
       row per business, claimed under a row lock inside the sale's transaction, with
       `UNIQUE(tenant_id, receipt_number)` behind it. A rolled-back sale releases its
       number, so a number nobody printed is not a gap in the book.
-- [ ] M12.1.8 Sales schemas and router endpoints.
-- [ ] M12.1.9 Tests: full transaction rollback on injected failure, no
-      half-created sale, cancellation semantics, money precision, permission
-      enforcement (`sales.create`, `sales.cancel`).
+- [x] M12.1.8 Sales schemas and router endpoints: one request records a whole sale
+      (its lines and payments together, because they are one transaction), money leaves
+      as decimal strings, a replay is a 201 with `was_replayed`, and cancellation
+      accepts a reason and nothing else.
+- [x] M12.1.9 Tests: full transaction rollback on injected failure, no half-created
+      sale, cancellation semantics, money precision, and permission enforcement
+      (`sales.create` for recording, `sales.cancel` for cancelling) at the service layer
+      and over HTTP.
 - [x] M12.1.10 Idempotency at the operation level: replaying `operation_id` returns the
       original sale with its lines and payments, marked as a replay, and writes nothing -
       asserted by counting sales, movements and stock before and after.

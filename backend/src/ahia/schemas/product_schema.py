@@ -37,7 +37,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, StringConstraints, field_validator
 
-from ahia.models.entities.money import MONEY_PLACES, QUANTITY_PLACES
 from ahia.models.entities.product_model import (
     MAXIMUM_DESCRIPTION_LENGTH,
     MAXIMUM_IDENTIFIER_LENGTH,
@@ -46,6 +45,7 @@ from ahia.models.entities.product_model import (
     coerce_money,
     coerce_quantity,
 )
+from ahia.schemas.money_format import money_text, quantity_text
 
 ProductName = Annotated[
     str,
@@ -79,21 +79,6 @@ Money = Annotated[Decimal, BeforeValidator(_parse_money)]
 #: A stock quantity: at most three decimal places, because stock is counted in kilos
 #: and litres as well as in units.
 Quantity = Annotated[Decimal, BeforeValidator(_parse_quantity)]
-
-
-def money_text(value: Decimal) -> str:
-    """Render a price exactly as it is stored, for the wire.
-
-    Quantised to two places so `250` and `250.00` reach a client identically - the entity
-    accepts both from a caller, and the column stores two places, so a response that
-    echoed the shorter form would disagree with the next read.
-    """
-    return format(value.quantize(MONEY_PLACES), "f")
-
-
-def quantity_text(value: Decimal) -> str:
-    """Render a stock quantity exactly as it is stored, for the wire."""
-    return format(value.quantize(QUANTITY_PLACES), "f")
 
 
 class ProductCreateSchema(BaseModel):
