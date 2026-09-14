@@ -127,7 +127,11 @@ a server-built key, and resolvable through whichever provider holds the bytes - 
 the inventory ledger is complete - an append-only movement history, a stock projection
 derived from it, and a per-business rule about stock going negative - and M11 customers is
 complete: consent that is opt-in, duplicate detection that reports rather than refuses, and
-a version that makes two offline edits a conflict instead of a lost one. 1553 tests pass, the nine-stage build gate is green, and the service serves a real flow:
+a version that makes two offline edits a conflict instead of a lost one. M12 sales is
+complete: a sale, its lines, its payments, the stock it moved and its ledger entry are
+written in one transaction or none of them are, a replayed offline operation returns the
+receipt it already produced, and cancelling reverses the goods and the money without
+deleting the record of either. 1678 tests pass, the nine-stage build gate is green, and the service serves a real flow:
 create an account, sign in, create a business, invite a worker, have that worker accept
 the invitation with the role they were given, inspect what that role can do, group the
 catalogue into categories, add a product, upload its pictures, publish it at an address
@@ -158,6 +162,5 @@ that is safe under concurrent uploads, and authentication whose failures are
 indistinguishable across an unknown account, a wrong password and a deactivated
 account.
 
-Next: M12, sales, payments and the ledger - the milestone where the catalogue, the stock
-ledger and the customer record meet in one transaction. Progress is tracked in
-`TASKS.md`.
+Next: M13, expenses - the other side of the ledger, where money leaves the business and the
+same discipline applies. Progress is tracked in `TASKS.md`.
