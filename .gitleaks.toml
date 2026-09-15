@@ -97,3 +97,10 @@ paths = [
   '''backend/scripts/scan_secrets\.sh''',
   '''\.gitleaks\.toml''',
 ]
+
+[[allowlists]]
+name = "local-development-environment"
+description = "The operator's own backend/.env holds the credentials a developer's workstation needs: a database URL, a JWT signing secret and provider keys. The file is gitignored in full (`git ls-files` reports nothing and `git check-ignore` points at the rule), so no value in it can be committed, and scanning it produces a finding that can never become a leaked credential while training people to ignore the scanner. The committed template, `backend/.env.example`, is deliberately not covered by this entry and is still scanned."
+paths = [
+  '''backend/\.env$''',
+]

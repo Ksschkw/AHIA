@@ -91,7 +91,7 @@ assertion in a commit message.
 | M13 | Expenses | `[x]` | M12 |
 | M14 | Audit trail | `[x]` | M6 |
 | M15 | Offline synchronization and idempotency | `[x]` | M12 |
-| M16 | Public storefront, sharing, WhatsApp click-to-chat, QR | `[ ]` | M9 |
+| M16 | Public storefront, sharing, WhatsApp click-to-chat, QR | `[x]` | M9 |
 | M17 | Reports, insights, low-stock alerts, notifications | `[ ]` | M12 |
 | M18 | Hardening, observability, deployment | `[ ]` | M16 |
 | M19 | Web application bootstrap (Next.js) | `[ ]` | M16 |
@@ -1294,7 +1294,7 @@ Goal: a business exists as a tenant with a globally unique public slug.
       `integrations/whatsapp/click_to_chat.py` producing prefilled, correctly
       encoded links, including Nigerian number normalization.
 - [x] M16.1.6 QR payload builder encoding stable public URLs only.
-- [ ] M16.1.7 Tests: unpublished storefront inaccessible, no private field
+- [x] M16.1.7 Tests: unpublished storefront inaccessible, no private field
       leaks in public projections, share token revocation, link encoding with
       special characters, and cross-tenant slug isolation.
 - [x] M16.1.8 Feature flag `FEATURE_STOREFRONT_PUBLIC_PUBLISHING` wired and
@@ -1359,6 +1359,14 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - QR payloads are a closed set of public prefixes (`/shop/`, `/share/`): an admin path, a query
   string and a fragment are refused, because a printed code is read by a camera and shown to whoever
   is holding the phone.
+- M16.1.7 is covered by the three suites of this milestone rather than by a separate file: the
+  unpublished and withdrawn shop each have a test, the public projection is asserted field by field
+  and end to end against a product that carries a cost price and a stock count, revocation is
+  asserted together with the indistinguishable not-found, the encoding tests use an ampersand, a
+  newline and a hash, and cross-tenant isolation is asserted for the shop, the shared invoice and the
+  catalogue.
+- M16.1.8 was already satisfied by M0's flag register and the startup log: the flag is declared with
+  its default, its date and its removal condition, and the container logs every flag at startup.
 
 ## M17 - Reports, insights, low-stock alerts, notifications
 

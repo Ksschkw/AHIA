@@ -104,6 +104,14 @@ CHANGE_TYPE_FOR_ACTION: Final[dict[str, ChangeType]] = {
     "update_tenant_profile": ChangeType.UPDATED,
     "deactivate_tenant": ChangeType.UPDATED,
     "update_negative_stock_policy": ChangeType.UPDATED,
+    # The public shop and share links. Their entity types are not synchronizable - no client holds
+    # a storefront or a share link offline - but they are classified anyway, because this map is
+    # the action vocabulary and the guard below fails the build when a recorded action is missing.
+    "publish_storefront": ChangeType.UPDATED,
+    "unpublish_storefront": ChangeType.UPDATED,
+    "update_storefront": ChangeType.UPDATED,
+    "share_invoice": ChangeType.CREATED,
+    "revoke_share_link": ChangeType.DELETED,
 }
 
 #: What a caller must hold to be told about a kind of record. Declared once, so the feed's
