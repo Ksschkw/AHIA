@@ -71,6 +71,9 @@ OPERATIONAL_MODULES: frozenset[str] = frozenset(
         # business entity. Giving them a model would invent a domain concept to
         # satisfy a naming rule.
         "routers/health_router.py",
+        # The metrics endpoint belongs to the running process rather than to a business. It is not
+        # public: it answers only to a configured scraping token, which its own suite asserts.
+        "routers/metrics_router.py",
     }
 )
 

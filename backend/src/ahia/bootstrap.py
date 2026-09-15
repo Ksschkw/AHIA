@@ -31,6 +31,7 @@ from typing import Final
 from ahia.core.config import FEATURE_FLAGS, Settings
 from ahia.core.database import Database, configure_sqlalchemy_logging
 from ahia.core.logging import StructuredLogger, configure_logging, get_logger
+from ahia.core.metrics import MetricsRegistry
 from ahia.core.permissions.permissions_registry import (
     ALL_PERMISSIONS,
     SYSTEM_ROLES,
@@ -102,6 +103,7 @@ class ApplicationContainer:
     product_image_service: ProductImageService
     inventory_service: InventoryService
     audit_event_service: AuditEventService
+    metrics: MetricsRegistry
     sync_change_service: SyncChangeService
     sync_service: SyncService
     storefront_service: StorefrontService
@@ -117,7 +119,9 @@ class ApplicationContainer:
     logger: StructuredLogger
 
 
-def build_application_container(settings: Settings) -> ApplicationContainer:
+def build_application_container(
+    settings: Settings, *, metrics: MetricsRegistry | None = None
+) -> ApplicationContainer:
     """Construct every dependency and validate what can be validated up front.
 
     Synchronous on purpose: construction performs no I/O. The database engine is
@@ -154,6 +158,12 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         refresh_token_pepper=settings.refresh_token_pepper.get_secret_value(),
         public_token_bytes=settings.public_token_bytes,
     )
+
+    # The registry the middleware records into is handed in, so the numbers an operator scrapes and
+    # the numbers the denial and breaker counters live in are one object. A caller that builds a
+    # container on its own - a test, a job - gets its own, which is the point of constructing it
+    # rather than importing it.
+    registry = metrics or MetricsRegistry()
 
     # The change feed is a projection of the audit trail, so the recorder is built with the
     # service that writes it. Both hold no state: the event and the change are written into the
@@ -343,6 +353,7 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         product_image_service=product_image_service,
         inventory_service=inventory_service,
         audit_event_service=audit_event_service,
+        metrics=registry,
         sync_change_service=sync_change_service,
         sync_service=sync_service,
         storefront_service=storefront_service,

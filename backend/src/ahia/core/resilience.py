@@ -38,6 +38,7 @@ from ahia.core.errors import (
     IntegrationError,
 )
 from ahia.core.logging import StructuredLogger, get_logger
+from ahia.core.metrics import MetricsRegistry
 
 T = TypeVar("T")
 
@@ -114,6 +115,7 @@ class CircuitBreaker:
         *,
         clock: Callable[[], float] = time.monotonic,
         logger: StructuredLogger | None = None,
+        metrics: MetricsRegistry | None = None,
     ) -> None:
         self.dependency_name = dependency_name
         self._configuration = configuration
@@ -127,6 +129,14 @@ class CircuitBreaker:
         self._opened_at: float | None = None
         self._half_open_probes_in_flight = 0
         self.metrics = CircuitBreakerMetrics()
+        # Optional, because a breaker built directly in a test has no process to report to. When
+        # one is given, the state is recorded as it changes and every short circuit is counted: a
+        # log line tells one request's story, and a counter is what a dashboard alerts on.
+        self._registry = metrics
+        if self._registry is not None:
+            self._registry.record_breaker_state(
+                dependency=dependency_name, state=CircuitState.CLOSED.value
+            )
 
     @property
     def configuration(self) -> CircuitBreakerConfiguration:
@@ -157,6 +167,8 @@ class CircuitBreaker:
 
         if current_state is CircuitState.OPEN:
             self.metrics.short_circuited_calls += 1
+            if self._registry is not None:
+                self._registry.record_breaker_short_circuit(dependency=self.dependency_name)
             self._logger.warning(
                 "circuit_breaker_rejected_call",
                 state=current_state.value,
@@ -174,6 +186,8 @@ class CircuitBreaker:
             # Only a bounded number of probes are admitted while half-open.
             if self._half_open_probes_in_flight >= self._configuration.half_open_probe_count:
                 self.metrics.short_circuited_calls += 1
+            if self._registry is not None:
+                self._registry.record_breaker_short_circuit(dependency=self.dependency_name)
                 raise DependencyCircuitOpenError(
                     operation="outbound_call",
                     detail=(
@@ -215,6 +229,10 @@ class CircuitBreaker:
         previous_state = self._state
         self._state = new_state
         self.metrics.state_transitions += 1
+        if self._registry is not None:
+            self._registry.record_breaker_state(
+                dependency=self.dependency_name, state=self._state.value
+            )
         if new_state is CircuitState.CLOSED:
             self._consecutive_failures = 0
         self._logger.warning(
@@ -579,6 +597,7 @@ def build_policy(
     max_wait_seconds: float = 0.0,
     retry: RetryPolicy | None = None,
     logger: StructuredLogger | None = None,
+    metrics: MetricsRegistry | None = None,
 ) -> ResiliencePolicy:
     """Construct a policy for one dependency.
 
@@ -588,7 +607,9 @@ def build_policy(
     return ResiliencePolicy(
         dependency_name=dependency_name,
         timeout_seconds=timeout_seconds,
-        breaker=CircuitBreaker(dependency_name, breaker_configuration, logger=logger),
+        breaker=CircuitBreaker(
+            dependency_name, breaker_configuration, logger=logger, metrics=metrics
+        ),
         bulkhead=Bulkhead(
             dependency_name,
             max_concurrent_calls=max_concurrent_calls,

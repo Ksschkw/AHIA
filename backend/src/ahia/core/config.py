@@ -358,6 +358,12 @@ class Settings(BaseSettings):
     # for. It is a security control: never behind a feature flag, and it fails closed.
     rate_limit_public_read_per_minute: int = Field(default=120, ge=1, le=100_000)
 
+    # -- Operations ---------------------------------------------------------
+    # The bearer token a scraper must present to read `/metrics`. Unset means the endpoint answers
+    # as if it did not exist, which is the safe default: a deployment that has not decided who may
+    # scrape has not decided to be scraped. It is a secret, so it is a `SecretStr` and never logged.
+    metrics_auth_token: SecretStr | None = None
+
     # -- Storage selection --------------------------------------------------
     storage_provider: StorageProviderName = StorageProviderName.R2
     storage_signed_url_ttl_seconds: int = Field(default=900, ge=30, le=86_400)

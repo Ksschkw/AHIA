@@ -1459,7 +1459,7 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 - [ ] M18.1.1 Rate limiting reviewed across every endpoint class; expensive
       and message-sending endpoints covered.
-- [ ] M18.1.2 Request duration, error count, authorization denial and breaker
+- [x] M18.1.2 Request duration, error count, authorization denial and breaker
       state metrics exposed in a form the platform can scrape.
 - [ ] M18.1.3 Row-Level Security rollout plan and implementation for the
       highest-risk tables, with a session-level tenant setting that is
@@ -1474,6 +1474,26 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - [ ] M18.1.7 Load smoke test on the sale endpoint; record numbers.
 
 ---
+
+### M18 - progress log
+
+- M18.1.2 complete. `core/metrics.py` holds the registry and the renderer for the Prometheus text
+  exposition format; it is *constructed* in the application and handed to the middleware, the error
+  handler, the resilience policies and the container, so there is no module-level singleton and a test
+  asserts that. Request count, duration total and maximum, error count by code, authorization denials
+  by the use case that refused, and breaker state and short circuits are all recorded and rendered.
+- Labels are bounded by construction: a path label has its UUIDs, long hex and integers replaced by a
+  placeholder, so the series count depends on the API's shape rather than on traffic - a distinction
+  that matters the day a client hits an endpoint a thousand times with a thousand identifiers. No
+  correlation ID, tenant, user or query string reaches a label.
+- `GET /metrics` is unversioned like the probes and is **not open by default**: it answers only when
+  `METRICS_AUTH_TOKEN` is configured, and then only to a caller presenting it as a bearer token, with
+  a constant-time comparison. Unconfigured, it answers as if it did not exist. The `.env.example`
+  documents it, including how to rotate it.
+- The breaker reports its state into the registry on every transition and on every short circuit, and
+  reports its initial closed state, so a dashboard has a series before the first failure rather than
+  after it. The error handler counts every failure by the code a client was told and every refusal by
+  the use case, which is what an operator can act on.
 
 ## M19 - Web application bootstrap (Next.js)
 

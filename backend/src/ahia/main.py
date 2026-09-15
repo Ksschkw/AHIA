@@ -41,8 +41,10 @@ from ahia.core.errors import (
     require_correlation_id,
 )
 from ahia.core.logging import get_logger
+from ahia.core.metrics import MetricsRegistry
 from ahia.middleware.correlation_middleware import CorrelationIdMiddleware
 from ahia.middleware.error_handler_middleware import ErrorHandlerMiddleware
+from ahia.middleware.metrics_middleware import MetricsMiddleware
 from ahia.middleware.rate_limit_middleware import RateLimitMiddleware, build_default_limiter
 from ahia.middleware.security_headers_middleware import SecurityHeadersMiddleware
 from ahia.routers import (
@@ -54,6 +56,7 @@ from ahia.routers import (
     expense_router,
     health_router,
     inventory_router,
+    metrics_router,
     notification_router,
     permission_router,
     product_image_router,
@@ -82,7 +85,7 @@ async def application_lifespan(application: FastAPI) -> AsyncIterator[None]:
     settings: Settings = application.state.settings
     logger = get_logger(_MAIN_LOGGER_NAME)
 
-    container = build_application_container(settings)
+    container = build_application_container(settings, metrics=application.state.metrics)
     application.state.container = container
     logger.info("application_started")
 
@@ -114,6 +117,10 @@ def create_application(settings: Settings | None = None) -> FastAPI:
         openapi_url=None if resolved_settings.is_production else "/openapi.json",
     )
     application.state.settings = resolved_settings
+    # One registry per application, created here because the middleware that records into it is
+    # built here, and handed to the container at startup so the denial and breaker counters are the
+    # same object the request counters live in.
+    application.state.metrics = MetricsRegistry()
 
     if resolved_settings.cors_allowed_origin_list:
         application.add_middleware(
@@ -141,7 +148,16 @@ def create_application(settings: Settings | None = None) -> FastAPI:
     # review: an error handler outside the security headers produces error
     # responses with no security headers, and a correlation middleware that is not
     # outermost produces failures with no correlation ID for the client to quote.
-    application.add_middleware(ErrorHandlerMiddleware)
+    # Added last so it wraps everything below it: a request refused by the rate limiter is still a
+    # request that consumed time and failed.
+    application.add_middleware(
+        MetricsMiddleware,
+        registry=application.state.metrics,
+    )
+    application.add_middleware(
+        ErrorHandlerMiddleware,
+        metrics=application.state.metrics,
+    )
     application.add_middleware(
         RateLimitMiddleware,
         limiter=build_default_limiter(
@@ -257,6 +273,9 @@ def register_routers(application: FastAPI, settings: Settings) -> None:
     without republishing public links.
     """
     application.include_router(health_router.router)
+    # A scraper is infrastructure rather than a client, so the endpoint is unversioned like the
+    # probes - and it is refused unless a token is configured, which is asserted in its own suite.
+    application.include_router(metrics_router.router)
     # The public shop is unversioned for the same reason the health endpoints are: the address
     # is printed on a poster and held by customers, and it must keep working while the versioned
     # contract evolves.

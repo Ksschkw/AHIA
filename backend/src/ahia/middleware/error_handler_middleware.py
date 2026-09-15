@@ -28,11 +28,13 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from ahia.core.errors import (
     AhiaError,
+    AuthorizationError,
     ErrorLayer,
     internal_error_envelope,
     require_correlation_id,
 )
 from ahia.core.logging import StructuredLogger, get_logger
+from ahia.core.metrics import MetricsRegistry
 
 _ERROR_LOGGER_NAME: Final[str] = "ahia.http.errors"
 
@@ -40,9 +42,19 @@ _ERROR_LOGGER_NAME: Final[str] = "ahia.http.errors"
 class ErrorHandlerMiddleware:
     """Map typed errors to the external envelope, and log the internal view."""
 
-    def __init__(self, app: ASGIApp, *, logger: StructuredLogger | None = None) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        logger: StructuredLogger | None = None,
+        metrics: MetricsRegistry | None = None,
+    ) -> None:
         self.app = app
         self.logger = (logger or get_logger(_ERROR_LOGGER_NAME)).bind(component="error_handler")
+        # Optional, so a test can build the middleware without a registry. When one is given, every
+        # failure is counted by the code a client was told and every refusal separately: "the error
+        # rate went up" and "people are being refused" are different questions.
+        self.metrics = metrics
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -90,6 +102,13 @@ class ErrorHandlerMiddleware:
             error_detail=error.context.describe(),
             error_causes=list(error.context.causes),
         )
+        if self.metrics is not None:
+            self.metrics.record_error(error_code=error.error_code)
+            if isinstance(error, AuthorizationError):
+                # Keyed by the use case that refused, which is what an operator acts on:
+                # "records are being refused" names nothing, and "cancel_sale is being
+                # refused" names a role.
+                self.metrics.record_authorization_denial(action=error.context.operation)
         if response_started:  # pragma: no cover - defensive, response already sent
             return
         await send_json_response(send, status_code=error.http_status, payload=external.to_payload())
