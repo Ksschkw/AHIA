@@ -352,6 +352,11 @@ class Settings(BaseSettings):
     rate_limit_password_reset_per_hour: int = Field(default=5, ge=1, le=1_000)
     rate_limit_write_per_minute: int = Field(default=120, ge=1, le=10_000)
     rate_limit_global_per_minute: int = Field(default=600, ge=1, le=100_000)
+    # The public storefront is the one surface an anonymous caller reaches, so it carries its own
+    # limit rather than sharing the global one. Tighter than the global default because a shop
+    # page is cheap to serve and easy to scrape, and a burst of one address is what the limit is
+    # for. It is a security control: never behind a feature flag, and it fails closed.
+    rate_limit_public_read_per_minute: int = Field(default=120, ge=1, le=100_000)
 
     # -- Storage selection --------------------------------------------------
     storage_provider: StorageProviderName = StorageProviderName.R2

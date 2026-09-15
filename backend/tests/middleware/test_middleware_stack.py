@@ -331,6 +331,7 @@ def test_limits_are_per_identity() -> None:
         password_reset_per_hour=1,
         write_per_minute=1,
         global_per_minute=1,
+        public_read_per_minute=1,
     )
 
     assert limiter.check("first", RateLimitBucket.GLOBAL).allowed is True
@@ -361,6 +362,7 @@ async def test_authentication_paths_consume_the_authentication_limit() -> None:
             authentication_per_minute=2,
             password_reset_per_hour=5,
             write_per_minute=100,
+            public_read_per_minute=1_000,
             global_per_minute=100,
         ),
     )
@@ -383,6 +385,7 @@ async def test_rate_limit_rejection_uses_the_standard_envelope() -> None:
             authentication_per_minute=1,
             password_reset_per_hour=1,
             write_per_minute=1,
+            public_read_per_minute=1_000,
             global_per_minute=1,
         ),
     )
@@ -410,6 +413,7 @@ async def test_reads_consume_the_global_limit_not_the_write_limit() -> None:
             authentication_per_minute=1,
             password_reset_per_hour=1,
             write_per_minute=1,
+            public_read_per_minute=1_000,
             global_per_minute=5,
         ),
     )
@@ -431,6 +435,7 @@ async def test_forwarded_header_is_trusted_only_up_to_the_configured_proxy_count
             authentication_per_minute=1,
             password_reset_per_hour=1,
             write_per_minute=1,
+            public_read_per_minute=1_000,
             global_per_minute=1,
         ),
         trusted_proxy_count=1,
@@ -455,6 +460,7 @@ async def test_without_a_trusted_proxy_the_socket_address_is_used() -> None:
             authentication_per_minute=1,
             password_reset_per_hour=1,
             write_per_minute=1,
+            public_read_per_minute=1_000,
             global_per_minute=1,
         ),
         trusted_proxy_count=0,
@@ -645,3 +651,44 @@ async def test_generated_correlation_ids_are_unique_across_requests() -> None:
     identifiers = {generate_correlation_id() for _ in range(100)}
 
     assert len(identifiers) == 100
+
+
+@pytest.mark.unit
+def test_the_public_shop_carries_its_own_limit() -> None:
+    """The one surface an anonymous caller reaches does not share the global budget.
+
+    A shop page is cheap to serve and easy to scrape, and the limit on it is a security control:
+    it is not behind a feature flag and it fails closed to the conservative global rule when the
+    caller cannot be identified.
+    """
+    limiter = build_default_limiter(
+        authentication_per_minute=1_000,
+        password_reset_per_hour=1_000,
+        write_per_minute=1_000,
+        global_per_minute=1_000,
+        public_read_per_minute=2,
+    )
+
+    assert limiter.check("shopper", RateLimitBucket.PUBLIC_READ).allowed is True
+    assert limiter.check("shopper", RateLimitBucket.PUBLIC_READ).allowed is True
+    assert limiter.check("shopper", RateLimitBucket.PUBLIC_READ).allowed is False
+    assert limiter.check("shopper", RateLimitBucket.GLOBAL).allowed is True, (
+        "the shop's budget is separate from the global one"
+    )
+
+
+@pytest.mark.unit
+def test_the_public_routes_are_classified_into_the_public_bucket() -> None:
+    """A path that reaches the shop without consuming the shop's budget is not limited at all."""
+    assert (
+        RateLimitMiddleware._bucket_for(path="/shop/obi-electronics", method="GET")
+        is RateLimitBucket.PUBLIC_READ
+    )
+    assert (
+        RateLimitMiddleware._bucket_for(path="/share/invoice/abc", method="GET")
+        is RateLimitBucket.PUBLIC_READ
+    )
+    assert (
+        RateLimitMiddleware._bucket_for(path="/api/v1/tenants/x/products", method="GET")
+        is RateLimitBucket.GLOBAL
+    )

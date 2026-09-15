@@ -58,6 +58,7 @@ from ahia.routers import (
     product_image_router,
     product_router,
     sale_router,
+    storefront_router,
     sync_router,
     tenant_membership_router,
     tenant_router,
@@ -145,6 +146,7 @@ def create_application(settings: Settings | None = None) -> FastAPI:
             password_reset_per_hour=resolved_settings.rate_limit_password_reset_per_hour,
             write_per_minute=resolved_settings.rate_limit_write_per_minute,
             global_per_minute=resolved_settings.rate_limit_global_per_minute,
+            public_read_per_minute=resolved_settings.rate_limit_public_read_per_minute,
         ),
         trusted_proxy_count=resolved_settings.trusted_proxy_count,
     )
@@ -252,6 +254,10 @@ def register_routers(application: FastAPI, settings: Settings) -> None:
     without republishing public links.
     """
     application.include_router(health_router.router)
+    # The public shop is unversioned for the same reason the health endpoints are: the address
+    # is printed on a poster and held by customers, and it must keep working while the versioned
+    # contract evolves.
+    application.include_router(storefront_router.public_router)
 
     # Business routers live under the version prefix so the contract can evolve
     # without republishing public links, which do not carry a version.
@@ -272,6 +278,7 @@ def register_routers(application: FastAPI, settings: Settings) -> None:
         expense_router.router,
         audit_event_router.router,
         sync_router.router,
+        storefront_router.router,
     ]
     for versioned_router in versioned_routers:
         application.include_router(versioned_router, prefix=settings.api_v1_prefix)

@@ -42,6 +42,8 @@ class RateLimitBucket(StrEnum):
     # bucket label, not a credential.
     PASSWORD_RESET = "password_reset"  # noqa: S105
     WRITE = "write"
+    # The public storefront: the one surface an anonymous caller reaches.
+    PUBLIC_READ = "public_read"
     GLOBAL = "global"
 
 
@@ -147,6 +149,13 @@ _AUTHENTICATION_PATH_FRAGMENTS: Final[tuple[str, ...]] = (
     "/auth/token",
 )
 
+#: The public shop. Unversioned and unauthenticated, like every public URL in this product: a
+#: link a customer was given must keep working while the API contract evolves.
+_PUBLIC_STOREFRONT_PATH_FRAGMENTS: Final[tuple[str, ...]] = (
+    "/shop/",
+    "/share/",
+)
+
 _PASSWORD_RESET_PATH_FRAGMENTS: Final[tuple[str, ...]] = (
     "/auth/password-reset",
     "/auth/forgot-password",
@@ -209,7 +218,14 @@ class RateLimitMiddleware:
 
     @staticmethod
     def _bucket_for(*, path: str, method: str) -> RateLimitBucket:
-        """Classify a request by the limit it should consume."""
+        """Classify a request by the limit it should consume.
+
+        The public shop is checked first and regardless of method: it is the unauthenticated
+        surface, and a method that reached it would be a method that should be limited more
+        tightly, not less.
+        """
+        if any(fragment in path for fragment in _PUBLIC_STOREFRONT_PATH_FRAGMENTS):
+            return RateLimitBucket.PUBLIC_READ
         if any(fragment in path for fragment in _PASSWORD_RESET_PATH_FRAGMENTS):
             return RateLimitBucket.PASSWORD_RESET
         if any(fragment in path for fragment in _AUTHENTICATION_PATH_FRAGMENTS):
@@ -266,6 +282,7 @@ def build_default_limiter(
     password_reset_per_hour: int,
     write_per_minute: int,
     global_per_minute: int,
+    public_read_per_minute: int,
     clock: Callable[[], float] = time.monotonic,
 ) -> SlidingWindowRateLimiter:
     """Build the limiter from configuration.
@@ -283,6 +300,9 @@ def build_default_limiter(
             ),
             RateLimitBucket.WRITE: RateLimitRule(
                 maximum_requests=write_per_minute, window_seconds=60
+            ),
+            RateLimitBucket.PUBLIC_READ: RateLimitRule(
+                maximum_requests=public_read_per_minute, window_seconds=60
             ),
             RateLimitBucket.GLOBAL: RateLimitRule(
                 maximum_requests=global_per_minute, window_seconds=60

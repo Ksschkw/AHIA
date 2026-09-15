@@ -1286,7 +1286,7 @@ Goal: a business exists as a tenant with a globally unique public slug.
       `storefront_service.py` with publish/unpublish lifecycle.
 - [x] M16.1.2 Public slug resolution and public product projection that never
       exposes cost price, stock counts, staff or financial data.
-- [ ] M16.1.3 Public read endpoints: storefront, product detail, catalog
+- [x] M16.1.3 Public read endpoints: storefront, product detail, catalog
       listing, with no authentication required and rate limiting applied.
 - [ ] M16.1.4 Public share tokens for invoices, shipments and reports
       (non-guessable, revocable).
