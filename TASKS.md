@@ -92,7 +92,7 @@ assertion in a commit message.
 | M14 | Audit trail | `[x]` | M6 |
 | M15 | Offline synchronization and idempotency | `[x]` | M12 |
 | M16 | Public storefront, sharing, WhatsApp click-to-chat, QR | `[x]` | M9 |
-| M17 | Reports, insights, low-stock alerts, notifications | `[~]` | M12 |
+| M17 | Reports, insights, low-stock alerts, notifications | `[x]` | M12 |
 | M18 | Hardening, observability, deployment | `[ ]` | M16 |
 | M19 | Web application bootstrap (Next.js) | `[ ]` | M16 |
 | M20 | Mobile application bootstrap (React Native + Expo) | `[ ]` | M15 |
@@ -1376,7 +1376,7 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - [x] M17.1.4 Low-stock alert evaluation as a scheduled job entry point that
       reuses the service layer rather than duplicating rules.
 - [x] M17.1.5 In-app notification records.
-- [ ] M17.1.6 Tests: report correctness against seeded data, permission
+- [x] M17.1.6 Tests: report correctness against seeded data, permission
       enforcement (`reports.read`), and scheduled job idempotency.
 
 ---
@@ -1448,6 +1448,12 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - The change-feed vocabulary guard caught the two new recorded actions again (`share_report`,
   `export_report`) and they are now classified, which is the fourth time this milestone that guard
   has found something a commit message would have claimed was complete.
+- M17.1.6 complete, which closes M17. The three subjects it names are asserted where they can be
+  asserted honestly: report correctness against sales recorded through the API and against seeded
+  stock, `reports.read` refusal and allowance for a salesperson and a manager, and job idempotency
+  both end to end and at the service boundary. Two further claims that no response body can show are
+  asserted directly - that the job and the report screen return the same rows for the same business,
+  and that a business whose evaluation fails is reported while the others are still evaluated.
 
 ## M18 - Hardening, observability, deployment
 
