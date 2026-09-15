@@ -92,7 +92,7 @@ assertion in a commit message.
 | M14 | Audit trail | `[x]` | M6 |
 | M15 | Offline synchronization and idempotency | `[x]` | M12 |
 | M16 | Public storefront, sharing, WhatsApp click-to-chat, QR | `[x]` | M9 |
-| M17 | Reports, insights, low-stock alerts, notifications | `[ ]` | M12 |
+| M17 | Reports, insights, low-stock alerts, notifications | `[~]` | M12 |
 | M18 | Hardening, observability, deployment | `[ ]` | M16 |
 | M19 | Web application bootstrap (Next.js) | `[ ]` | M16 |
 | M20 | Mobile application bootstrap (React Native + Expo) | `[ ]` | M15 |
@@ -1373,9 +1373,9 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - [x] M17.1.1 Daily sales summary query surface with tenant scoping.
 - [x] M17.1.2 Product performance and low-stock reporting.
 - [x] M17.1.3 Report export to R2 with a share token.
-- [ ] M17.1.4 Low-stock alert evaluation as a scheduled job entry point that
+- [x] M17.1.4 Low-stock alert evaluation as a scheduled job entry point that
       reuses the service layer rather than duplicating rules.
-- [ ] M17.1.5 In-app notification records.
+- [x] M17.1.5 In-app notification records.
 - [ ] M17.1.6 Tests: report correctness against seeded data, permission
       enforcement (`reports.read`), and scheduled job idempotency.
 
@@ -1424,6 +1424,30 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - `tests/storage_double.py` now holds the in-memory object store that the image suite and the export
   suite both use: it models the port's contract, including both failure shapes, so a suite can assert
   what happens when storage is unavailable without a network.
+
+- M17.1.5 complete. `notifications` holds one row per message per person, addressed to a user in a
+  business and read back through a query that takes the recipient as part of its lookup rather than
+  checking afterwards - so no code path returns somebody else's inbox, and no permission code was
+  invented to stand in for that. `read_at` records acknowledgement; nothing deletes a notification,
+  because an inbox that empties itself cannot answer "was anybody told".
+- M17.1.4 complete. `services/low_stock_alert_service.py` decides *when* to ask and *who* to tell, and
+  `ReportService.low_stock_for_tenant` answers *what is low* by running the same comparison the report
+  screen runs - so the product has one definition of "low" rather than two that drift. The dedupe key
+  names the product and the day, which makes the job's frequency a cost decision rather than a
+  correctness one: a second run in one day raises nothing and reports a skip.
+- The job entry point is `python -m ahia.jobs.low_stock_alerts`. It prints an ASCII summary, takes no
+  arguments, and exits non-zero when a business could not be evaluated or the run could not start - a
+  scheduler that ignores a non-zero exit lets a broken job look healthy. It is the composition root
+  for its own process, which is why it is in the architecture test's list of modules permitted to
+  build settings; plain stdout is its contract, which is why `jobs/*` is exempt from the print rule
+  in the same way the developer guards are.
+- A failure in one business does not stop the run: the evaluator records it, reports it, and carries
+  on, because a job that dies on the third tenant leaves the rest unevaluated and nobody knows.
+- Only the roles that can act are told - the owner and the managers, the roles that hold
+  `reports.read` - so a salesperson is not sent an alert about stock they cannot order.
+- The change-feed vocabulary guard caught the two new recorded actions again (`share_report`,
+  `export_report`) and they are now classified, which is the fourth time this milestone that guard
+  has found something a commit message would have claimed was complete.
 
 ## M18 - Hardening, observability, deployment
 

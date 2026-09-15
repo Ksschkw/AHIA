@@ -54,6 +54,7 @@ from ahia.services.customer_service import CustomerService
 from ahia.services.device_service import DeviceService
 from ahia.services.expense_service import ExpenseService
 from ahia.services.inventory_service import InventoryService
+from ahia.services.notification_service import NotificationService
 from ahia.services.permission_service import PermissionService
 from ahia.services.product_image_service import ProductImageService
 from ahia.services.product_service import ProductService
@@ -106,6 +107,7 @@ class ApplicationContainer:
     storefront_service: StorefrontService
     share_link_service: ShareLinkService
     report_service: ReportService
+    notification_service: NotificationService
     sharing_port: SharingPort
     customer_service: CustomerService
     expense_service: ExpenseService
@@ -292,6 +294,11 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         logger=logger,
     )
 
+    notification_service = NotificationService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        logger=logger,
+    )
+
     report_service = ReportService(
         unit_of_work_factory=database.unit_of_work_factory(),
         storage=storage,
@@ -341,6 +348,7 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         storefront_service=storefront_service,
         share_link_service=share_link_service,
         report_service=report_service,
+        notification_service=notification_service,
         sharing_port=sharing_port,
         customer_service=customer_service,
         expense_service=expense_service,

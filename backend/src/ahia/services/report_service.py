@@ -504,6 +504,46 @@ class ReportService:
             for entry in low_stock
         ]
 
+    async def low_stock_for_tenant(
+        self, *, tenant_id: UUID, limit: int = 200
+    ) -> list[LowStockProduct]:
+        """Return the low-stock products of one business, for a caller with no identity.
+
+        The scheduled evaluator is a system caller: it has no user, no membership and no context,
+        and
+        it is the only legitimate one. Rather than let it construct a context that pretends to be
+        somebody - which would put a person's name on an alert nobody's action produced - the system
+        path is stated here by name, and it takes a tenant and nothing else. It is deliberately not
+        reachable from the API: there is no route that calls it, and a route added later would have
+        to
+        say what authorized it.
+
+        The comparison itself is unchanged: this is the same code the report screen runs.
+        """
+        unit_of_work = self._unit_of_work_factory()
+        async with unit_of_work:
+            session = unit_of_work.session_handle
+            products = await product_crud.list_for_tenant(session, tenant_id)
+            levels = await inventory_crud.list_for_tenant(session, tenant_id)
+
+        quantity_by_product = {level.product_id: level.quantity_on_hand for level in levels}
+        low: list[LowStockProduct] = []
+        for product in products:
+            threshold = product.low_stock_threshold
+            quantity = quantity_by_product.get(product.id, Decimal("0.000"))
+            if quantity > threshold:
+                continue
+            low.append(
+                LowStockProduct(
+                    product_id=product.id,
+                    product_name=product.name,
+                    quantity_on_hand=quantity,
+                    low_stock_threshold=threshold,
+                )
+            )
+        low.sort(key=lambda entry: (entry.quantity_on_hand, entry.product_name))
+        return low[:limit]
+
     # ------------------------------------------------------------------
     # The period
     # ------------------------------------------------------------------

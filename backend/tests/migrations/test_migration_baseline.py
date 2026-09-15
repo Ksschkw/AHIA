@@ -73,6 +73,7 @@ EXPECTED_TABLES = frozenset(
         "storefronts",
         "share_links",
         "report_exports",
+        "notifications",
     }
 )
 

@@ -112,6 +112,11 @@ CHANGE_TYPE_FOR_ACTION: Final[dict[str, ChangeType]] = {
     "update_storefront": ChangeType.UPDATED,
     "share_invoice": ChangeType.CREATED,
     "revoke_share_link": ChangeType.DELETED,
+    "share_report": ChangeType.CREATED,
+    # Exporting writes a record of a report being taken out of the product. Nothing a device holds
+    # offline changes, so no feed row is written; it is classified because this map is the action
+    # vocabulary and the guard fails the build for an action nobody classified.
+    "export_report": ChangeType.CREATED,
 }
 
 #: What a caller must hold to be told about a kind of record. Declared once, so the feed's

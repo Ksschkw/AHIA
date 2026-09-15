@@ -84,7 +84,15 @@ def test_configuration_is_injected_rather_than_imported_as_a_singleton() -> None
     Construction is permitted in the composition root, which owns it, and in the
     application factory, which is handed settings or loads them once.
     """
-    permitted = {"core/config.py", "bootstrap.py", "main.py"}
+    # The composition root, the application factory, and the entry point of a scheduled job: each is
+    # the place where a process's configuration is decided, and each is named here rather than
+    # pattern-matched so that adding one is a visible decision.
+    permitted = {
+        "core/config.py",
+        "bootstrap.py",
+        "main.py",
+        "jobs/low_stock_alerts.py",
+    }
     offenders: list[str] = []
 
     for path in source_modules():

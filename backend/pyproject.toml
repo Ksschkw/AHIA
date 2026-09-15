@@ -141,6 +141,11 @@ ignore = [
 # import is the point, not an oversight.
 "src/ahia/integrations/storage/storage_factory.py" = ["PLC0415"]
 
+# The scheduled jobs print their summary and exit with a code. Plain stdout is the contract with
+# whatever runs them - a scheduler captures it, a person reads it in a terminal - and the structured
+# logger is for the application, not for a job whose output is its report.
+"src/ahia/jobs/*.py" = ["T201"]
+
 # The developer guards are command-line tools. Plain stdout status lines are
 # their contract; the structured logger is for the application, not for a script
 # a developer runs by hand in a terminal.

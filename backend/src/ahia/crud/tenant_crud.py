@@ -195,3 +195,18 @@ async def count_tenants(session: AsyncSession) -> int:
     """Return the number of businesses. Used by tests and operational tooling."""
     result = await session.execute(select(func.count()).select_from(TenantRecord))
     return int(result.scalar_one())
+
+
+async def list_active(session: AsyncSession) -> list[TenantModel]:
+    """Return every active business, oldest first.
+
+    Read by the scheduled jobs, which have no tenant context to scope by and are the one caller that
+    legitimately needs the whole deployment. Ordering is by creation so a run is reproducible and a
+    partial run can be resumed by comparing two reports.
+    """
+    result = await session.execute(
+        select(TenantRecord)
+        .where(TenantRecord.is_active.is_(True))
+        .order_by(TenantRecord.created_at, TenantRecord.id)
+    )
+    return [to_entity(record) for record in result.scalars().all()]

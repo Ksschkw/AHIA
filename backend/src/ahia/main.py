@@ -54,6 +54,7 @@ from ahia.routers import (
     expense_router,
     health_router,
     inventory_router,
+    notification_router,
     permission_router,
     product_image_router,
     product_router,
@@ -284,6 +285,7 @@ def register_routers(application: FastAPI, settings: Settings) -> None:
         storefront_router.router,
         share_link_router.router,
         report_router.router,
+        notification_router.router,
     ]
     for versioned_router in versioned_routers:
         application.include_router(versioned_router, prefix=settings.api_v1_prefix)

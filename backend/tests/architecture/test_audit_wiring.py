@@ -37,6 +37,9 @@ EXEMPT_SERVICES: dict[str, str] = {
     # device's operation produced, and the position a device has read to. The changes themselves
     # are made by the use cases it dispatches to, which write their own events.
     "sync_service.py": "synchronization records answers; the use cases it calls are audited",
+    # A notification is a message to a person, and the row is the record of it. The action that
+    # noticed something is what a trail entry describes.
+    "notification_service.py": "a notification is a message; the row is its own record",
 }
 
 

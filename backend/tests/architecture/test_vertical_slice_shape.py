@@ -54,8 +54,15 @@ USE_CASE_MODULES: frozenset[str] = frozenset(
         "schemas/report_schema.py",
         "services/report_service.py",
         "routers/report_router.py",
+        # The scheduled evaluation of low stock: it applies the report service's rule on a timer and
+        # owns no table, so naming it after a table would be a lie about what it does.
+        "services/low_stock_alert_service.py",
     }
 )
+
+#: The job entry points. Operational, like the health routes: a job is a use case with no caller,
+#: and its file is named after the schedule it keeps.
+JOB_MODULES: frozenset[str] = frozenset({"jobs/low_stock_alerts.py"})
 
 #: Files that belong to the process rather than to the domain.
 OPERATIONAL_MODULES: frozenset[str] = frozenset(
@@ -110,7 +117,7 @@ def test_every_layer_file_names_the_entity_it_belongs_to() -> None:
 @pytest.mark.architecture
 def test_the_documented_exceptions_still_exist() -> None:
     """An exemption list that outlives its files is a list that hides a real gap."""
-    for relative in FILES_WITHOUT_AN_ENTITY:
+    for relative in FILES_WITHOUT_AN_ENTITY | JOB_MODULES:
         assert (SOURCE_ROOT / relative).is_file(), f"stale exemption: {relative}"
 
 
