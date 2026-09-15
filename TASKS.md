@@ -1288,7 +1288,7 @@ Goal: a business exists as a tenant with a globally unique public slug.
       exposes cost price, stock counts, staff or financial data.
 - [x] M16.1.3 Public read endpoints: storefront, product detail, catalog
       listing, with no authentication required and rate limiting applied.
-- [ ] M16.1.4 Public share tokens for invoices, shipments and reports
+- [x] M16.1.4 Public share tokens for invoices, shipments and reports
       (non-guessable, revocable).
 - [ ] M16.1.5 WhatsApp click-to-chat adapter in
       `integrations/whatsapp/click_to_chat.py` producing prefilled, correctly
@@ -1324,6 +1324,20 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - The release flag is injected as a boolean rather than read by the service, so the flag's
   meaning stays in `core/config` and the service has one behaviour to test. While it is off,
   publishing and public reads answer as if the capability did not exist.
+
+- M16.1.4 complete for invoices. A share link stores a peppered digest rather than the token, so a
+  leaked table yields no working links; the plaintext exists only in the response that mints it and
+  in the link the business sends, which is also why a business that loses a link mints a new one
+  rather than asking the server to re-show it. Shipments and reports are named in the specification
+  but do not exist in this product yet, so `ShareableResource` holds only `invoice`: naming them now
+  would let a caller mint a link to a record the server cannot serve.
+- Revocation is permanent and the row stays, so "this invoice was shared and then withdrawn" is
+  answerable. Expiry is a comparison rather than a flag, so nothing has to sweep the table for an
+  expired link to stop working - and an unknown token, a revoked link, an expired link and a
+  missing sale all produce the same not-found, so a holder cannot learn that a token was once real.
+- The shared invoice is an allowlist: the business's name and contact number, the receipt number,
+  the moment of the sale, its lines and its totals, and no customer name, customer phone number or
+  internal identifier. The person holding an invoice link already knows who they are.
 
 ## M17 - Reports, insights, low-stock alerts, notifications
 

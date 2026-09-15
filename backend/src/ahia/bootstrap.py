@@ -56,6 +56,7 @@ from ahia.services.permission_service import PermissionService
 from ahia.services.product_image_service import ProductImageService
 from ahia.services.product_service import ProductService
 from ahia.services.sale_service import SalesService
+from ahia.services.share_link_service import ShareLinkService
 from ahia.services.storage_quota_service import StorageQuotaService
 from ahia.services.storefront_service import StorefrontService
 from ahia.services.sync_change_service import SyncChangeService
@@ -100,6 +101,7 @@ class ApplicationContainer:
     sync_change_service: SyncChangeService
     sync_service: SyncService
     storefront_service: StorefrontService
+    share_link_service: ShareLinkService
     customer_service: CustomerService
     expense_service: ExpenseService
     sales_service: SalesService
@@ -276,6 +278,15 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         logger=logger,
     )
 
+    # Sharing an invoice mints a token and stores only its digest, so it needs the token service
+    # and the recorder for the trail entry that says who shared what.
+    share_link_service = ShareLinkService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        token_service=token_service,
+        audit_event_service=audit_event_service,
+        logger=logger,
+    )
+
     # The public shop reads the catalogue and asks the image service for URLs; it is built after
     # both, and it is told whether publishing is released rather than reading the flag itself.
     storefront_service = StorefrontService(
@@ -309,6 +320,7 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         sync_change_service=sync_change_service,
         sync_service=sync_service,
         storefront_service=storefront_service,
+        share_link_service=share_link_service,
         customer_service=customer_service,
         expense_service=expense_service,
         sales_service=sales_service,
