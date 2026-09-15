@@ -29,12 +29,15 @@ A refused public read is the same not-found for every reason
 from __future__ import annotations
 
 from typing import Annotated, Final
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
 
+from ahia.core.ports.sharing_port import SharingPort
 from ahia.core.tenant_context import TenantContext
 from ahia.routers.tenant_router import require_tenant_context
 from ahia.schemas.storefront_schema import (
+    ProductShareSheetSchema,
     PublicProductPageSchema,
     PublicSlug,
     PublicStorefrontSchema,
@@ -59,7 +62,19 @@ def get_storefront_service(request: Request) -> StorefrontService:
     return service
 
 
+def get_sharing_port(request: Request) -> SharingPort:
+    """Return the sharing capability this deployment was configured with.
+
+    Injected rather than imported: `core` is where a capability is named, the composition root is
+    where an adapter is chosen, and a router that imported one would be a router that knows a
+    provider's URL shape.
+    """
+    sharing: SharingPort = request.app.state.container.sharing_port
+    return sharing
+
+
 StorefrontServiceDependency = Annotated[StorefrontService, Depends(get_storefront_service)]
+SharingPortDependency = Annotated[SharingPort, Depends(get_sharing_port)]
 TenantContextDependency = Annotated[TenantContext, Depends(require_tenant_context)]
 
 
@@ -175,3 +190,37 @@ async def read_public_product(
     storefront = await service.read_public_storefront(tenant_slug=tenant_slug)
     product = await service.read_public_product(tenant_slug=tenant_slug, product_slug=product_slug)
     return PublicProductPageSchema.from_projection(storefront=storefront, product=product)
+
+
+@router.get(
+    "/products/{product_id}/share-sheet",
+    response_model=ProductShareSheetSchema,
+    summary="Everything needed to share one product",
+)
+async def read_product_share_sheet(
+    product_id: UUID,
+    tenant_context: TenantContextDependency,
+    service: StorefrontServiceDependency,
+    sharing: SharingPortDependency,
+) -> ProductShareSheetSchema:
+    """Return the public URL, the QR payload and the messaging link for one product.
+
+    The service supplies the facts - which product, which address, which number - and the sharing
+    port builds the two strings, because the spellings belong to the adapters and the composition of
+    the two belongs where the response is shaped.
+    """
+    target = await service.share_target_for_product(tenant_context, product_id=product_id)
+    sheet = sharing.share_sheet(
+        public_path=target.public_path,
+        business_name=target.business_name,
+        subject_name=target.product_name,
+        price_text=target.price_text,
+        contact_number=target.whatsapp_number,
+    )
+    return ProductShareSheetSchema(
+        product_name=target.product_name,
+        public_url=sheet.public_url,
+        qr_payload=sheet.qr_payload,
+        whatsapp_url=sheet.click_to_chat_url,
+        whatsapp_unavailable_reason=sheet.unavailable_reason,
+    )

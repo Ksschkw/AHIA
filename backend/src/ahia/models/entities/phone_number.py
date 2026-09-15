@@ -80,6 +80,21 @@ def canonical_phone_number(value: str | None, *, default_country_code: str) -> s
     return f"{default_country_code}{normalized}"
 
 
+def international_digits_for(value: str | None, *, default_country_code: str) -> str | None:
+    """Return the international digits of a phone number, or None.
+
+    The form a dialler wants: `+2348031234567` without its plus, and no punctuation anywhere. It is
+    the same normalisation the account and the customer record use, exposed in the one place that
+    defines what a phone number is - a second implementation in an integration would eventually
+    disagree with this one about a trunk prefix, and the disagreement would show up as a call to the
+    wrong number.
+    """
+    canonical = canonical_phone_number(value, default_country_code=default_country_code)
+    if canonical is None or not is_plausible_phone_number(canonical):
+        return None
+    return canonical.lstrip("+")
+
+
 def is_plausible_phone_number(value: str) -> bool:
     """Return True when the string looks like a phone number this product can dial.
 

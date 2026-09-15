@@ -37,10 +37,12 @@ from ahia.core.permissions.permissions_registry import (
     validate_registry,
 )
 from ahia.core.ports.media_port import MediaProcessingPort
+from ahia.core.ports.sharing_port import SharingPort
 from ahia.core.ports.storage_port import StoragePort
 from ahia.core.resilience import ResiliencePolicy
 from ahia.core.security import PasswordHasher, TokenService
 from ahia.integrations.media.image_processor import PillowImageProcessor
+from ahia.integrations.sharing_adapter import SharingAdapter
 from ahia.integrations.storage.storage_factory import (
     build_storage_adapters,
     build_storage_policy,
@@ -102,6 +104,7 @@ class ApplicationContainer:
     sync_service: SyncService
     storefront_service: StorefrontService
     share_link_service: ShareLinkService
+    sharing_port: SharingPort
     customer_service: CustomerService
     expense_service: ExpenseService
     sales_service: SalesService
@@ -298,6 +301,12 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         logger=logger,
     )
 
+    # The one place an adapter is chosen. Everything else asks `core.ports` for the capability.
+    sharing_port: SharingPort = SharingAdapter(
+        public_base_url=settings.public_web_base_url,
+        click_to_chat_base_url=settings.whatsapp_click_to_chat_base_url,
+    )
+
     container = ApplicationContainer(
         settings=settings,
         database=database,
@@ -321,6 +330,7 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         sync_service=sync_service,
         storefront_service=storefront_service,
         share_link_service=share_link_service,
+        sharing_port=sharing_port,
         customer_service=customer_service,
         expense_service=expense_service,
         sales_service=sales_service,

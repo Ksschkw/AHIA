@@ -1290,10 +1290,10 @@ Goal: a business exists as a tenant with a globally unique public slug.
       listing, with no authentication required and rate limiting applied.
 - [x] M16.1.4 Public share tokens for invoices, shipments and reports
       (non-guessable, revocable).
-- [ ] M16.1.5 WhatsApp click-to-chat adapter in
+- [x] M16.1.5 WhatsApp click-to-chat adapter in
       `integrations/whatsapp/click_to_chat.py` producing prefilled, correctly
       encoded links, including Nigerian number normalization.
-- [ ] M16.1.6 QR payload builder encoding stable public URLs only.
+- [x] M16.1.6 QR payload builder encoding stable public URLs only.
 - [ ] M16.1.7 Tests: unpublished storefront inaccessible, no private field
       leaks in public projections, share token revocation, link encoding with
       special characters, and cross-tenant slug isolation.
@@ -1338,6 +1338,27 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - The shared invoice is an allowlist: the business's name and contact number, the receipt number,
   the moment of the sale, its lines and its totals, and no customer name, customer phone number or
   internal identifier. The person holding an invoice link already knows who they are.
+
+- M16.1.5 and M16.1.6 complete. `integrations/whatsapp/click_to_chat.py` builds a `wa.me` link with
+  the inquiry already written and every character percent-encoded, and
+  `integrations/qr/qr_payload.py` builds the string a QR code encodes from a public path and the
+  configured base URL. Both are pure functions with no state.
+- The number is normalized by the domain (`phone_number.international_digits_for`) and the adapter
+  checks the dialling form it is handed: a second normalizer in an integration would be a second
+  opinion about a trunk prefix, and the disagreement would surface as a call to the wrong number.
+  A number that cannot be dialled produces no link and a typed reason, never a `wa.me` URL that opens
+  an error screen.
+- The adapters are reachable through `core/ports/sharing_port.py` and chosen in the composition
+  root. Neither a service nor a router may import an integration - the layer contracts enforce it,
+  and the first version of the share-sheet route broke that contract, which is how the port came to
+  exist. The port names no provider, so it cannot acquire a `whatsapp_` parameter.
+- `GET /tenants/{id}/products/{product_id}/share-sheet` returns the public URL, the QR payload and
+  the messaging link in one response, because the three describe one intention and a client that
+  fetched them separately would render a share sheet with a stale address. An unpublished product or
+  a closed shop is refused with a message naming which of the two is missing.
+- QR payloads are a closed set of public prefixes (`/shop/`, `/share/`): an admin path, a query
+  string and a fragment are refused, because a printed code is read by a camera and shown to whoever
+  is holding the phone.
 
 ## M17 - Reports, insights, low-stock alerts, notifications
 

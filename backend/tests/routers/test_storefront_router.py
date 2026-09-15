@@ -24,6 +24,7 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
 import pytest
@@ -397,3 +398,115 @@ def _settings_defaults_to_off() -> bool:
 def test_public_publishing_is_off_by_default() -> None:
     """New behaviour ships dark: the routes exist and the capability is refused until asked for."""
     assert _settings_defaults_to_off() is True
+
+
+# ---------------------------------------------------------------------------
+# The share sheet
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_a_published_product_has_a_share_sheet(database: Database) -> None:
+    """The public URL, a QR payload that encodes it, and a link with the message written."""
+    async with running_application(publishing=True) as (client, _application):
+        owner, tenant = await owner_with_business(client)
+        product = await create_published_product(client, owner, tenant)
+        await client.post(
+            storefront_path(tenant["id"], "publish"),
+            headers=auth(owner),
+            json={"contact_phone": "08031234567"},
+        )
+
+        response = await client.get(
+            f"/api/v1/tenants/{tenant['id']}/products/{product['id']}/share-sheet",
+            headers=auth(owner),
+        )
+
+    assert response.status_code == 200, response.text
+    sheet = response.json()
+    assert sheet["product_name"] == product["name"]
+    assert sheet["public_url"].endswith(f"/shop/{tenant['slug']}/product/{product['slug']}")
+    assert sheet["qr_payload"] == sheet["public_url"], "the code encodes the same address"
+    assert sheet["whatsapp_unavailable_reason"] is None
+
+    parsed = urlparse(sheet["whatsapp_url"])
+    assert parsed.netloc == "wa.me"
+    assert parsed.path == "/2348031234567"
+    message = parse_qs(parsed.query)["text"][0]
+    assert product["name"] in message
+    assert "45000.00" in message
+    assert sheet["public_url"] in message
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_a_shop_without_a_contact_number_says_so_instead_of_a_dead_button(
+    database: Database,
+) -> None:
+    async with running_application(publishing=True) as (client, _application):
+        owner, tenant = await owner_with_business(client)
+        product = await create_published_product(client, owner, tenant)
+        await client.post(storefront_path(tenant["id"], "publish"), headers=auth(owner), json={})
+
+        response = await client.get(
+            f"/api/v1/tenants/{tenant['id']}/products/{product['id']}/share-sheet",
+            headers=auth(owner),
+        )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["whatsapp_url"] is None
+    assert response.json()["whatsapp_unavailable_reason"]
+    assert response.json()["qr_payload"], "the address and the code are still offered"
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_an_unpublished_product_cannot_be_shared(database: Database) -> None:
+    """Sharing it would send a customer to an address that answers nothing."""
+    async with running_application(publishing=True) as (client, _application):
+        owner, tenant = await owner_with_business(client)
+        created = await client.post(
+            f"/api/v1/tenants/{tenant['id']}/products",
+            headers=auth(owner),
+            json={"name": f"Rice {uuid4().hex[:6]}", "selling_price": "45000.00"},
+        )
+        await client.post(storefront_path(tenant["id"], "publish"), headers=auth(owner), json={})
+
+        response = await client.get(
+            f"/api/v1/tenants/{tenant['id']}/products/{created.json()['id']}/share-sheet",
+            headers=auth(owner),
+        )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_REQUEST"
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_a_closed_shop_cannot_share_a_product(database: Database) -> None:
+    async with running_application(publishing=True) as (client, _application):
+        owner, tenant = await owner_with_business(client)
+        product = await create_published_product(client, owner, tenant)
+
+        response = await client.get(
+            f"/api/v1/tenants/{tenant['id']}/products/{product['id']}/share-sheet",
+            headers=auth(owner),
+        )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_a_share_sheet_needs_a_token(database: Database) -> None:
+    async with running_application(publishing=True) as (client, _application):
+        owner, tenant = await owner_with_business(client)
+        product = await create_published_product(client, owner, tenant)
+        await client.post(storefront_path(tenant["id"], "publish"), headers=auth(owner), json={})
+
+        response = await client.get(
+            f"/api/v1/tenants/{tenant['id']}/products/{product['id']}/share-sheet"
+        )
+
+    assert response.status_code == 401

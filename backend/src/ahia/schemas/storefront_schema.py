@@ -202,3 +202,24 @@ __all__ = [
     "StorefrontResponseSchema",
     "StorefrontUpdateSchema",
 ]
+
+
+class ProductShareSheetSchema(BaseModel):
+    """Everything a share button needs, in one response.
+
+    The public URL, the string a QR code should encode, and the WhatsApp link with the message
+    already written. One response rather than three: the three describe one intention, and a client
+    that fetched them separately would render a share sheet with a stale address in it.
+
+    `whatsapp_url` is null when the business has no number a customer can message, and
+    `whatsapp_unavailable_reason` says why. A typed absence rather than a silent null: a button that
+    does nothing is worse than one that explains itself.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    product_name: str
+    public_url: str
+    qr_payload: str
+    whatsapp_url: str | None
+    whatsapp_unavailable_reason: str | None

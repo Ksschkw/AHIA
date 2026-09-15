@@ -36,6 +36,7 @@ from uuid import UUID, uuid4
 from ahia.core.database import UnitOfWork
 from ahia.core.errors import InvalidInputError, NotFoundError
 from ahia.core.logging import StructuredLogger, get_logger
+from ahia.core.permissions.product_permissions import PRODUCTS_READ
 from ahia.core.permissions.storefront_permissions import STOREFRONT_MANAGE, STOREFRONT_READ
 from ahia.core.tenant_context import TenantContext
 from ahia.crud import (
@@ -45,10 +46,15 @@ from ahia.crud import (
     storefront_crud,
     tenant_crud,
 )
-from ahia.models.entities.phone_number import canonical_phone_number, is_plausible_phone_number
+from ahia.models.entities.phone_number import (
+    canonical_phone_number,
+    international_digits_for,
+    is_plausible_phone_number,
+)
 from ahia.models.entities.product_image_model import ProductImageModel
 from ahia.models.entities.product_model import ProductModel
 from ahia.models.entities.storefront_model import StorefrontModel
+from ahia.schemas.money_format import money_text
 from ahia.services.audit_event_service import AuditEventService
 from ahia.services.product_image_service import ProductImageService
 
@@ -89,6 +95,27 @@ class PublicStorefront:
     @property
     def is_open(self) -> bool:
         return True
+
+
+@dataclass(frozen=True, slots=True)
+class ProductShareTarget:
+    """What is needed to share one product: the address, and who to address.
+
+    The public path and the contact number, and no URLs. A service may not reach into an integration
+    adapter - the layer contract forbids it, and the forbidding is the point: the adapter knows
+    how a `wa.me` link is spelled, and this layer knows which product is being shared. The
+    transport layer is where the two meet, and it is the only place that has to know both.
+    """
+
+    business_name: str
+    product_name: str
+    product_slug: str
+    public_path: str
+    price_text: str
+    whatsapp_number: str | None
+    #: Why there is no number, when there is none. A typed absence rather than a silent null: a
+    #: screen that shows "share on WhatsApp" and does nothing is worse than one that says why.
+    whatsapp_unavailable_reason: str | None = None
 
 
 class StorefrontService:
@@ -341,6 +368,76 @@ class StorefrontService:
             description=shop.description,
             contact_phone=shop.contact_phone,
             products=tuple(catalogue),
+        )
+
+    async def share_target_for_product(
+        self,
+        tenant_context: TenantContext,
+        *,
+        product_id: UUID,
+    ) -> ProductShareTarget:
+        """Return what sharing one product needs: its public address and who to address.
+
+        The product must be published and the shop open, because sharing a product that is not on
+        the shop sends a customer to an address that answers "not found" - and they will blame the
+        shop, not the button. The refusal names which of the two is missing, so the person holding
+        the phone knows what to fix.
+        """
+        tenant_context.require_permission(
+            PRODUCTS_READ,
+            operation="share_product",
+            resource_type="product",
+            resource_id=str(product_id),
+            logger=self._logger,
+        )
+
+        unit_of_work = self._unit_of_work_factory()
+        async with unit_of_work:
+            session = unit_of_work.session_handle
+            product = await product_crud.get_by_id(
+                session, tenant_id=tenant_context.tenant_id, product_id=product_id
+            )
+            if product is None:
+                raise NotFoundError(
+                    operation="share_product",
+                    entity="product",
+                    identifier=str(product_id),
+                    detail="no product matched in this business",
+                )
+            shop = await storefront_crud.get_for_tenant(session, tenant_context.tenant_id)
+            tenant = await tenant_crud.require_by_id(session, tenant_context.tenant_id)
+
+        if not product.is_published or not product.is_active:
+            raise InvalidInputError(
+                operation="share_product",
+                entity="product",
+                detail="publish this product before sharing it; the link would open nothing",
+            )
+        if shop is None or not shop.is_open():
+            raise InvalidInputError(
+                operation="share_product",
+                entity="storefront",
+                detail="open the shop before sharing a product; the address answers nothing yet",
+            )
+
+        phone = shop.contact_phone or tenant.phone
+        whatsapp_number = (
+            international_digits_for(phone, default_country_code=self._default_country_code)
+            if phone
+            else None
+        )
+        return ProductShareTarget(
+            business_name=tenant.name,
+            product_name=product.name,
+            product_slug=product.slug,
+            public_path=f"/shop/{tenant.slug}/product/{product.slug}",
+            price_text=money_text(product.selling_price),
+            whatsapp_number=whatsapp_number,
+            whatsapp_unavailable_reason=(
+                None
+                if whatsapp_number
+                else "this shop has no contact number a customer can message"
+            ),
         )
 
     async def read_public_product(self, *, tenant_slug: str, product_slug: str) -> PublicProduct:
