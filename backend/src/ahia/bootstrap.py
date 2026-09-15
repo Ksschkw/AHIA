@@ -57,6 +57,7 @@ from ahia.services.inventory_service import InventoryService
 from ahia.services.permission_service import PermissionService
 from ahia.services.product_image_service import ProductImageService
 from ahia.services.product_service import ProductService
+from ahia.services.report_service import ReportService
 from ahia.services.sale_service import SalesService
 from ahia.services.share_link_service import ShareLinkService
 from ahia.services.storage_quota_service import StorageQuotaService
@@ -104,6 +105,7 @@ class ApplicationContainer:
     sync_service: SyncService
     storefront_service: StorefrontService
     share_link_service: ShareLinkService
+    report_service: ReportService
     sharing_port: SharingPort
     customer_service: CustomerService
     expense_service: ExpenseService
@@ -281,6 +283,11 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         logger=logger,
     )
 
+    report_service = ReportService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        logger=logger,
+    )
+
     # Sharing an invoice mints a token and stores only its digest, so it needs the token service
     # and the recorder for the trail entry that says who shared what.
     share_link_service = ShareLinkService(
@@ -330,6 +337,7 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         sync_service=sync_service,
         storefront_service=storefront_service,
         share_link_service=share_link_service,
+        report_service=report_service,
         sharing_port=sharing_port,
         customer_service=customer_service,
         expense_service=expense_service,

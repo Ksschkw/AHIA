@@ -1370,8 +1370,8 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ## M17 - Reports, insights, low-stock alerts, notifications
 
-- [ ] M17.1.1 Daily sales summary query surface with tenant scoping.
-- [ ] M17.1.2 Product performance and low-stock reporting.
+- [x] M17.1.1 Daily sales summary query surface with tenant scoping.
+- [x] M17.1.2 Product performance and low-stock reporting.
 - [ ] M17.1.3 Report export to R2 with a share token.
 - [ ] M17.1.4 Low-stock alert evaluation as a scheduled job entry point that
       reuses the service layer rather than duplicating rules.
@@ -1380,6 +1380,31 @@ Goal: a business exists as a tenant with a globally unique public slug.
       enforcement (`reports.read`), and scheduled job idempotency.
 
 ---
+
+### M17 - progress log
+
+- M17.1.1 and M17.1.2 complete. `report_service.py` answers three questions - what the business sold
+  day by day, what sold most, and what is running out - and the files are named after the use case
+  rather than an entity, because a report owns no table. The architecture test's exception list now
+  says so where a reader will find it.
+- The arithmetic happens in the database: `sale_crud.daily_totals` and `sale_crud.completed_total`
+  group inside the sales table, and the one report that needs two tables at once - what sold most -
+  goes through `crud/sale_performance_read_model.py`. A read model rather than a repository, because
+  an entity repository never joins: the rule exists so that a service is the only place that knows
+  two entities, and a report is the case where the database should do the composing anyway.
+- Cancelled sales are excluded from revenue and from what sold, while the sale, its lines, its
+  payments and its ledger entries stay readable: the money came back, the story did not. A test sells
+  twice, cancels one, and checks both halves.
+- Low stock is a comparison in the service rather than a join: the threshold belongs to the product
+  and the quantity to the stock projection. A threshold of zero is the default and reports a product
+  when the shelf is empty, which is the alert nobody has to ask for, and the emptiest shelf is listed
+  first.
+- The period is by default the last seven days and at most ninety: a report is a screen, and a wider
+  range is an export (M17.1.3). A period that ends before it starts is refused, and the bounds live
+  in the service so a CLI or a scheduled job gets the same answer as an HTTP request.
+- `reports.read` is enforced in the service. A test asserts a salesperson is refused on all three
+  reports while a manager is allowed, and that another business sees zeros rather than another
+  business's trading.
 
 ## M18 - Hardening, observability, deployment
 

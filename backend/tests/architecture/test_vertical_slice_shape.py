@@ -48,6 +48,12 @@ USE_CASE_MODULES: frozenset[str] = frozenset(
         "schemas/sync_schema.py",
         "services/sync_service.py",
         "routers/sync_router.py",
+        # Reports read the sales, the lines, the catalogue and the stock projection and answer a
+        # question. They own no table, and naming the file after one of the tables they read would
+        # tell a reader it owns that table.
+        "schemas/report_schema.py",
+        "services/report_service.py",
+        "routers/report_router.py",
     }
 )
 

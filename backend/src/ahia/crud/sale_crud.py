@@ -30,7 +30,7 @@ A cancelled sale is a row that changed status
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Final
 from uuid import UUID
@@ -333,3 +333,57 @@ async def count_for_tenant_since(
         .where(SaleRecord.occurred_at >= since)
     )
     return int(result.scalar_one())
+
+
+async def daily_totals(
+    session: AsyncSession,
+    tenant_id: UUID,
+    *,
+    since: datetime,
+    until: datetime,
+) -> list[tuple[date, Decimal, int]]:
+    """Return one row per day: what was sold, and how many sales it took.
+
+    Grouped in the database rather than by loading the sales and adding them up: a day's sales
+    are a number a business reads every morning, and a report that pulls a month of rows into
+    memory to sum them is a report that stops working on the busiest month.
+
+    Cancelled sales are excluded, because a cancelled sale is money that came back. The lines, the
+    payments and the ledger still hold its story; the revenue figure is what the business kept.
+    """
+    result = await session.execute(
+        select(
+            func.date(SaleRecord.occurred_at).label("sold_on"),
+            func.coalesce(func.sum(SaleRecord.total_amount), 0).label("revenue"),
+            func.count().label("sale_count"),
+        )
+        .where(SaleRecord.tenant_id == tenant_id)
+        .where(SaleRecord.status == SaleStatus.COMPLETED.value)
+        .where(SaleRecord.occurred_at >= since)
+        .where(SaleRecord.occurred_at < until)
+        .group_by(func.date(SaleRecord.occurred_at))
+        .order_by(func.date(SaleRecord.occurred_at))
+    )
+    return [(row.sold_on, Decimal(row.revenue), int(row.sale_count)) for row in result.all()]
+
+
+async def completed_total(
+    session: AsyncSession,
+    tenant_id: UUID,
+    *,
+    since: datetime,
+    until: datetime,
+) -> tuple[Decimal, int]:
+    """Return the revenue kept and the number of completed sales in a period."""
+    result = await session.execute(
+        select(
+            func.coalesce(func.sum(SaleRecord.total_amount), 0),
+            func.count(),
+        )
+        .where(SaleRecord.tenant_id == tenant_id)
+        .where(SaleRecord.status == SaleStatus.COMPLETED.value)
+        .where(SaleRecord.occurred_at >= since)
+        .where(SaleRecord.occurred_at < until)
+    )
+    revenue, sale_count = result.one()
+    return Decimal(revenue), int(sale_count)
