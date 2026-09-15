@@ -1,8 +1,10 @@
 """Rate limiting middleware.
 
 Rate limiting protects the endpoints where abuse is cheapest for the attacker and
-most expensive for the product: authentication, password reset, anything that
-sends a message, and anything that costs money.
+most expensive for the product: authentication, anything that sends a message (a
+password reset link, an invitation), any write, and the public shop, which is the
+one surface an anonymous caller reaches. `tests/middleware/test_rate_limit_coverage.py`
+walks every registered route and asserts that none of them escapes a limit.
 
 This is a security control. It is never behind a feature flag, and it fails
 closed: if the limiter cannot identify a caller, the caller gets the conservative
@@ -38,9 +40,11 @@ class RateLimitBucket(StrEnum):
     """The endpoint classes that carry their own limit."""
 
     AUTHENTICATION = "authentication"
-    # The name contains "PASSWORD" and the scanner flags it; the value is a
-    # bucket label, not a credential.
-    PASSWORD_RESET = "password_reset"  # noqa: S105
+    #: Endpoints that send a message to somebody: a password reset link, an invitation. They share
+    #: one budget because they cost the same thing - a message the recipient did not ask for at that
+    #: moment - and because two budgets for one cost drift apart. The setting that sizes it is still
+    #: named after the password reset, which was the first of them.
+    MESSAGE_SENDING = "message_sending"
     WRITE = "write"
     # The public storefront: the one surface an anonymous caller reaches.
     PUBLIC_READ = "public_read"
@@ -156,9 +160,12 @@ _PUBLIC_STOREFRONT_PATH_FRAGMENTS: Final[tuple[str, ...]] = (
     "/share/",
 )
 
-_PASSWORD_RESET_PATH_FRAGMENTS: Final[tuple[str, ...]] = (
+_MESSAGE_SENDING_PATH_FRAGMENTS: Final[tuple[str, ...]] = (
     "/auth/password-reset",
     "/auth/forgot-password",
+    # An invitation is a message to somebody who is not using the product yet, which is the most
+    # expensive kind of message to send by accident.
+    "/invitations",
 )
 
 _WRITE_METHODS: Final[frozenset[str]] = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -226,8 +233,8 @@ class RateLimitMiddleware:
         """
         if any(fragment in path for fragment in _PUBLIC_STOREFRONT_PATH_FRAGMENTS):
             return RateLimitBucket.PUBLIC_READ
-        if any(fragment in path for fragment in _PASSWORD_RESET_PATH_FRAGMENTS):
-            return RateLimitBucket.PASSWORD_RESET
+        if any(fragment in path for fragment in _MESSAGE_SENDING_PATH_FRAGMENTS):
+            return RateLimitBucket.MESSAGE_SENDING
         if any(fragment in path for fragment in _AUTHENTICATION_PATH_FRAGMENTS):
             return RateLimitBucket.AUTHENTICATION
         if method in _WRITE_METHODS:
@@ -295,7 +302,7 @@ def build_default_limiter(
             RateLimitBucket.AUTHENTICATION: RateLimitRule(
                 maximum_requests=authentication_per_minute, window_seconds=60
             ),
-            RateLimitBucket.PASSWORD_RESET: RateLimitRule(
+            RateLimitBucket.MESSAGE_SENDING: RateLimitRule(
                 maximum_requests=password_reset_per_hour, window_seconds=3_600
             ),
             RateLimitBucket.WRITE: RateLimitRule(

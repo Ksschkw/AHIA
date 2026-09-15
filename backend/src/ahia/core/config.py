@@ -349,6 +349,9 @@ class Settings(BaseSettings):
 
     # -- Rate limiting (always on; configuration only, never a flag) --------
     rate_limit_auth_per_minute: int = Field(default=10, ge=1, le=1_000)
+    # One budget for every endpoint that sends a message: a password reset link, an invitation.
+    # The name predates the invitation route; the value is what an operator tunes, and a second
+    # number for the same cost would drift from this one.
     rate_limit_password_reset_per_hour: int = Field(default=5, ge=1, le=1_000)
     rate_limit_write_per_minute: int = Field(default=120, ge=1, le=10_000)
     rate_limit_global_per_minute: int = Field(default=600, ge=1, le=100_000)

@@ -22,7 +22,10 @@ set -Eeuo pipefail
 
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly BACKEND_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
-readonly VENV_PIP_AUDIT="${BACKEND_DIR}/.venv/bin/pip-audit"
+# The audit binary is overridable so the gate's failure path can be exercised by a test with a
+# stub that reports a planted finding. It is not a way to skip the audit: whatever the override
+# points at must produce a report, and a report that cannot be read is a failed gate.
+readonly PIP_AUDIT_BIN="${PIP_AUDIT_BIN:-${BACKEND_DIR}/.venv/bin/pip-audit}"
 readonly VENV_PYTHON="${BACKEND_DIR}/.venv/bin/python"
 readonly LOCKFILE="${BACKEND_DIR}/requirements.lock"
 readonly IGNORE_FILE="${BACKEND_DIR}/dependency_audit_ignores.txt"
@@ -41,7 +44,7 @@ for argument in "$@"; do
   esac
 done
 
-[[ -x "${VENV_PIP_AUDIT}" ]] || fail "pip-audit is not installed; run scripts/bootstrap_backend.sh first"
+[[ -x "${PIP_AUDIT_BIN}" ]] || fail "pip-audit is not installed; run scripts/bootstrap_backend.sh first"
 [[ -f "${LOCKFILE}" ]] || fail "missing lockfile: ${LOCKFILE}"
 
 current_epoch="$(date -u +%s)"
@@ -69,7 +72,7 @@ fi
 log "auditing $(wc -l <"${LOCKFILE}") pinned distributions from ${LOCKFILE}"
 
 audit_exit_code=0
-audit_output="$("${VENV_PIP_AUDIT}" \
+audit_output="$("${PIP_AUDIT_BIN}" \
   --requirement "${LOCKFILE}" \
   --progress-spinner off \
   --strict \
@@ -81,23 +84,11 @@ if (( audit_exit_code == 0 )); then
   exit 0
 fi
 
-# A finding and a tooling failure are both red builds, and they are not the same thing. Reporting
-# "vulnerabilities found" when pip-audit could not reach the index or build a temporary venv sends
-# somebody hunting for a vulnerability that does not exist, which is how a real finding gets
-# ignored the next time. The verdict is read from the report itself: a vulnerability is a
-# dependency entry with a non-empty `vulns` list.
-audit_verdict="$(printf '%s' "${audit_output}" | "${VENV_PYTHON}" -c '
-import json
-import sys
-
-try:
-    report = json.load(sys.stdin)
-except ValueError:
-    print("tooling")
-else:
-    dependencies = report.get("dependencies", [])
-    print("findings" if any(entry.get("vulns") for entry in dependencies) else "tooling")
-' 2>/dev/null || printf 'tooling')"
+# A finding and a tooling failure are both red builds, and they are not the same thing. The verdict
+# is read from the report itself by `audit_verdict.py`, which is tested with fixtures for all three
+# answers - including the malformed report that must not be mistaken for a clean one.
+audit_verdict="$(printf '%s' "${audit_output}" | "${VENV_PYTHON}" "${SCRIPT_DIR}/audit_verdict.py" \
+  2>/dev/null || printf 'tooling')"
 
 if [[ "${audit_verdict}" == "findings" ]]; then
   printf '[FAIL] dependency audit: vulnerabilities found\n' >&2

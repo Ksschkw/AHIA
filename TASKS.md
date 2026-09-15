@@ -1457,14 +1457,14 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ## M18 - Hardening, observability, deployment
 
-- [ ] M18.1.1 Rate limiting reviewed across every endpoint class; expensive
+- [x] M18.1.1 Rate limiting reviewed across every endpoint class; expensive
       and message-sending endpoints covered.
 - [x] M18.1.2 Request duration, error count, authorization denial and breaker
       state metrics exposed in a form the platform can scrape.
 - [ ] M18.1.3 Row-Level Security rollout plan and implementation for the
       highest-risk tables, with a session-level tenant setting that is
       verifiably set before any query.
-- [ ] M18.1.4 Dependency audit gate confirmed to fail the build on a critical
+- [x] M18.1.4 Dependency audit gate confirmed to fail the build on a critical
       finding, with a deliberately planted test finding.
 - [ ] M18.1.5 Northflank deployment configuration, health checks and secret
       wiring documented.
@@ -1494,6 +1494,21 @@ Goal: a business exists as a tenant with a globally unique public slug.
   reports its initial closed state, so a dashboard has a series before the first failure rather than
   after it. The error handler counts every failure by the code a client was told and every refusal by
   the use case, which is what an operator can act on.
+- M18.1.1 complete, and the review is a test rather than a paragraph. Invitations now share the
+  message-sending budget with password resets - both send a message to somebody who did not ask for it
+  at that moment - and the bucket is named `MESSAGE_SENDING` for what it protects rather than after the
+  first endpoint that needed it. `tests/middleware/test_rate_limit_coverage.py` walks every registered
+  route and fails the build if a write route lands in the global bucket, if a named class has no
+  routes, or if a bucket has no configured limit; it found that the route walker must follow included
+  routers, because a top-level walk finds nothing and asserts nothing while passing.
+- M18.1.4 complete. The gate's decision moved out of the shell into `scripts/audit_verdict.py`, which
+  answers `clean`, `findings` or `tooling` and is tested apart from the shell - including the malformed
+  report that must not be mistaken for a clean one. `PIP_AUDIT_BIN` lets the suite hand the gate a stub
+  that reports a finding public since 2018, so the failure path is exercised offline and
+  deterministically: the build goes red, the CVE is shown, and the way to suppress it is named.
+- `docs/HARDENING.md` starts the operational documentation: the rate-limit classes and their limits,
+  the metrics endpoint and how to rotate its token, the error-reporting split, and a section that
+  states what is *not* yet in place so a reader is not left to discover it.
 
 ## M19 - Web application bootstrap (Next.js)
 
