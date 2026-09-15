@@ -23,6 +23,7 @@ set -Eeuo pipefail
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly BACKEND_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 readonly VENV_PIP_AUDIT="${BACKEND_DIR}/.venv/bin/pip-audit"
+readonly VENV_PYTHON="${BACKEND_DIR}/.venv/bin/python"
 readonly LOCKFILE="${BACKEND_DIR}/requirements.lock"
 readonly IGNORE_FILE="${BACKEND_DIR}/dependency_audit_ignores.txt"
 readonly IGNORE_MAX_AGE_DAYS=90
@@ -68,18 +69,48 @@ fi
 log "auditing $(wc -l <"${LOCKFILE}") pinned distributions from ${LOCKFILE}"
 
 audit_exit_code=0
-"${VENV_PIP_AUDIT}" \
+audit_output="$("${VENV_PIP_AUDIT}" \
   --requirement "${LOCKFILE}" \
   --progress-spinner off \
   --strict \
-  "${ignore_arguments[@]}" || audit_exit_code=$?
+  --format json \
+  "${ignore_arguments[@]}" 2>&1)" || audit_exit_code=$?
 
 if (( audit_exit_code == 0 )); then
   printf '[OK] dependency audit: no unignored vulnerabilities\n'
   exit 0
 fi
 
-printf '[FAIL] dependency audit: vulnerabilities found\n' >&2
-printf '       fix by upgrading the package, or add a dated entry to\n' >&2
-printf '       %s with a reason and a remediation plan\n' "${IGNORE_FILE}" >&2
+# A finding and a tooling failure are both red builds, and they are not the same thing. Reporting
+# "vulnerabilities found" when pip-audit could not reach the index or build a temporary venv sends
+# somebody hunting for a vulnerability that does not exist, which is how a real finding gets
+# ignored the next time. The verdict is read from the report itself: a vulnerability is a
+# dependency entry with a non-empty `vulns` list.
+audit_verdict="$(printf '%s' "${audit_output}" | "${VENV_PYTHON}" -c '
+import json
+import sys
+
+try:
+    report = json.load(sys.stdin)
+except ValueError:
+    print("tooling")
+else:
+    dependencies = report.get("dependencies", [])
+    print("findings" if any(entry.get("vulns") for entry in dependencies) else "tooling")
+' 2>/dev/null || printf 'tooling')"
+
+if [[ "${audit_verdict}" == "findings" ]]; then
+  printf '[FAIL] dependency audit: vulnerabilities found\n' >&2
+  printf '       fix by upgrading the package, or add a dated entry to\n' >&2
+  printf '       %s with a reason and a remediation plan\n' "${IGNORE_FILE}" >&2
+  printf '%s\n' "${audit_output}" | tail -40 >&2
+  exit 1
+fi
+
+printf '[FAIL] dependency audit: the audit could not complete\n' >&2
+printf '       pip-audit exited %s without reporting a dependency set, so nothing was verified.\n' \
+  "${audit_exit_code}" >&2
+printf '       This is an environment failure (network, index, or a temporary build), not a finding.\n' >&2
+printf '       Re-run: bash %s/scripts/audit_dependencies.sh\n' "${BACKEND_DIR}" >&2
+printf '%s\n' "${audit_output}" | tail -20 >&2
 exit 1

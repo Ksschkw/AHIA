@@ -42,6 +42,12 @@ USE_CASE_MODULES: frozenset[str] = frozenset(
         # Provisions the declared permission registry into the database. It spans
         # permissions, roles and grants, and it is named after what it does.
         "services/iam_seed_service.py",
+        # Offline synchronization spans the operation record, the device cursor and the change
+        # feed, and coordinates use cases rather than owning a table of its own. Forcing one of
+        # the three names onto it would mislead the reader about what the file owns.
+        "schemas/sync_schema.py",
+        "services/sync_service.py",
+        "routers/sync_router.py",
     }
 )
 

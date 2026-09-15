@@ -33,6 +33,10 @@ EXEMPT_SERVICES: dict[str, str] = {
     "iam_seed_service.py": "provisioning the registry is a deployment action",
     # Bookkeeping derived from the image use case, which writes its own event.
     "storage_quota_service.py": "quota accounting is derived from another use case",
+    # Synchronization commits twice, and neither is a business change: the record of what a
+    # device's operation produced, and the position a device has read to. The changes themselves
+    # are made by the use cases it dispatches to, which write their own events.
+    "sync_service.py": "synchronization records answers; the use cases it calls are audited",
 }
 
 

@@ -339,7 +339,12 @@ def test_the_audit_description_carries_identifiers_and_states_but_no_prices() ->
         "is_active",
         "is_published",
     }
-    assert "250" not in repr(description)
+    # The price is what must not be here, and asserting it as a bare substring was a latent
+    # flake: "250" occurs inside randomly generated identifiers often enough to fail every few
+    # hundred runs. A price carries a decimal point and an amount does not, and the free-text
+    # description is checked by its own words.
+    assert all("." not in value for value in description.values())
+    assert "250.00" not in repr(description)
     assert "Musa" not in repr(description)
 
 

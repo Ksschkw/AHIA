@@ -5,6 +5,11 @@ record, the device cursor and the change feed - and coordinating them is exactly
 does. It is the same exception `auth_service` and `iam_seed_service` take: an operation that
 belongs to no single table is named after the operation.
 
+# Audit exemption: this service commits twice and neither is a business change - the
+# record of what a device's operation produced, and the position a device has read to. The
+# changes themselves are made by the use cases it dispatches to, and those write their own
+# audit events in their own transactions.
+
 **A pushed operation is executed by the use case that owns it, never by this service.** A sale
 arrives as `complete_sale` and is handed to `SalesService`, which checks the permission, prices
 the lines, moves the stock, writes the ledger entry and writes its audit event. This file decides

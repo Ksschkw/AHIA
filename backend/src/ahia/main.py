@@ -58,6 +58,7 @@ from ahia.routers import (
     product_image_router,
     product_router,
     sale_router,
+    sync_router,
     tenant_membership_router,
     tenant_router,
     user_router,
@@ -270,6 +271,7 @@ def register_routers(application: FastAPI, settings: Settings) -> None:
         sale_router.router,
         expense_router.router,
         audit_event_router.router,
+        sync_router.router,
     ]
     for versioned_router in versioned_routers:
         application.include_router(versioned_router, prefix=settings.api_v1_prefix)

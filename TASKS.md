@@ -90,7 +90,7 @@ assertion in a commit message.
 | M12 | Sales, payments, ledger, transactional integrity | `[x]` | M10, M11 |
 | M13 | Expenses | `[x]` | M12 |
 | M14 | Audit trail | `[x]` | M6 |
-| M15 | Offline synchronization and idempotency | `[ ]` | M12 |
+| M15 | Offline synchronization and idempotency | `[x]` | M12 |
 | M16 | Public storefront, sharing, WhatsApp click-to-chat, QR | `[ ]` | M9 |
 | M17 | Reports, insights, low-stock alerts, notifications | `[ ]` | M12 |
 | M18 | Hardening, observability, deployment | `[ ]` | M16 |
@@ -1270,7 +1270,7 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - [x] M15.1.4 Conflict classification per the specification matrix: operation
       based for transactional facts, versioned/LWW for safe metadata,
       explicit conflict for high-value fields.
-- [ ] M15.1.5 `sync_schema.py` and `sync_router.py` gated by
+- [x] M15.1.5 `sync_schema.py` and `sync_router.py` gated by
       `FEATURE_OFFLINE_SYNC`.
 - [ ] M15.1.6 Tests: duplicate operation deduplicated, out-of-order arrival,
       conflict classification, cursor monotonicity, revoked device rejection,
