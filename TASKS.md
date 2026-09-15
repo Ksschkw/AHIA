@@ -1461,9 +1461,11 @@ Goal: a business exists as a tenant with a globally unique public slug.
       and message-sending endpoints covered.
 - [x] M18.1.2 Request duration, error count, authorization denial and breaker
       state metrics exposed in a form the platform can scrape.
-- [ ] M18.1.3 Row-Level Security rollout plan and implementation for the
-      highest-risk tables, with a session-level tenant setting that is
-      verifiably set before any query.
+- [~] M18.1.3 Row-Level Security rollout plan **done**
+      (`docs/RLS_ROLLOUT.md`); the implementation is the next step and is not
+      enabled yet. The plan states the mechanism, the table order, what is out
+      of scope, the three per-table assertions, and the two-transaction reads
+      that public paths need.
 - [x] M18.1.4 Dependency audit gate confirmed to fail the build on a critical
       finding, with a deliberately planted test finding.
 - [ ] M18.1.5 Northflank deployment configuration, health checks and secret
@@ -1509,6 +1511,15 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - `docs/HARDENING.md` starts the operational documentation: the rate-limit classes and their limits,
   the metrics endpoint and how to rotate its token, the error-reporting split, and a section that
   states what is *not* yet in place so a reader is not left to discover it.
+
+- M18.1.3's plan is written and committed, and deliberately not enabled. The plan states the
+  mechanism (`SET LOCAL app.current_tenant` per transaction, one policy shape per table, failing
+  closed because a missing setting makes `tenant_id = NULL` untrue), the order the tables are turned on
+  in, what stays out of scope and why (`tenants`, because a public read resolves a slug before any
+  scope exists; identity tables, because a person exists before a business does), the three assertions
+  every step lands with, and the two-transaction shape the public and job paths need. Enabling RLS
+  without the scope plumbing in place would return empty pages rather than errors, so the plan is the
+  first half of the micro-milestone and the plumbing is the second.
 
 ## M19 - Web application bootstrap (Next.js)
 
