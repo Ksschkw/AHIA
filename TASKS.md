@@ -1282,9 +1282,9 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ## M16 - Public storefront, sharing, WhatsApp click-to-chat, QR
 
-- [ ] M16.1.1 `storefront_model.py`, `storefront_crud.py`,
+- [x] M16.1.1 `storefront_model.py`, `storefront_crud.py`,
       `storefront_service.py` with publish/unpublish lifecycle.
-- [ ] M16.1.2 Public slug resolution and public product projection that never
+- [x] M16.1.2 Public slug resolution and public product projection that never
       exposes cost price, stock counts, staff or financial data.
 - [ ] M16.1.3 Public read endpoints: storefront, product detail, catalog
       listing, with no authentication required and rate limiting applied.
@@ -1297,10 +1297,33 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - [ ] M16.1.7 Tests: unpublished storefront inaccessible, no private field
       leaks in public projections, share token revocation, link encoding with
       special characters, and cross-tenant slug isolation.
-- [ ] M16.1.8 Feature flag `FEATURE_STOREFRONT_PUBLIC_PUBLISHING` wired and
+- [x] M16.1.8 Feature flag `FEATURE_STOREFRONT_PUBLIC_PUBLISHING` wired and
       logged at startup.
 
 ---
+
+### M16 - progress log
+
+- M16.1.1 and M16.1.2 complete. The shop is a state on a row, not a second address: the public URL
+  is `/shop/{tenant_slug}`, which the tenant already owns and which is already globally unique, and
+  `storefronts` says only whether the shop answers and what it says about itself. A second slug
+  would be a second address for the same shop.
+- The public projection is an allowlist built in `storefront_service`: product slug, name, selling
+  price, description, one image URL and a boolean availability. Cost price, the stock count, the
+  internal identifier and the publication token are not filtered out of the response, they are
+  never put into it - and a test asserts that each of them is absent from the object the service
+  returns rather than only from the rendered JSON.
+- Availability is a boolean rather than a count: "in stock" is what a customer needs to decide
+  whether to make the trip, and how thin the shelf is is the business's own information.
+- A slug that does not exist, a shop that was never opened, a shop that was withdrawn and a
+  deactivated business all produce the same not-found answer, so a stranger cannot enumerate which
+  businesses exist by watching the difference.
+- Publication is wired into the audit trail like every other mutating use case. The storefront is
+  deliberately not in the change feed: no client holds a shop offline, and a test asserts both
+  halves of that.
+- The release flag is injected as a boolean rather than read by the service, so the flag's
+  meaning stays in `core/config` and the service has one behaviour to test. While it is off,
+  publishing and public reads answer as if the capability did not exist.
 
 ## M17 - Reports, insights, low-stock alerts, notifications
 

@@ -70,6 +70,7 @@ EXPECTED_TABLES = frozenset(
         "sync_changes",
         "sync_cursors",
         "sync_operations",
+        "storefronts",
     }
 )
 

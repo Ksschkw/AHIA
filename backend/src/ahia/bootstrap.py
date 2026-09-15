@@ -57,6 +57,7 @@ from ahia.services.product_image_service import ProductImageService
 from ahia.services.product_service import ProductService
 from ahia.services.sale_service import SalesService
 from ahia.services.storage_quota_service import StorageQuotaService
+from ahia.services.storefront_service import StorefrontService
 from ahia.services.sync_change_service import SyncChangeService
 from ahia.services.sync_service import SyncService
 from ahia.services.tenant_membership_service import TenantMembershipService
@@ -98,6 +99,7 @@ class ApplicationContainer:
     audit_event_service: AuditEventService
     sync_change_service: SyncChangeService
     sync_service: SyncService
+    storefront_service: StorefrontService
     customer_service: CustomerService
     expense_service: ExpenseService
     sales_service: SalesService
@@ -274,6 +276,17 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         logger=logger,
     )
 
+    # The public shop reads the catalogue and asks the image service for URLs; it is built after
+    # both, and it is told whether publishing is released rather than reading the flag itself.
+    storefront_service = StorefrontService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        product_image_service=product_image_service,
+        audit_event_service=audit_event_service,
+        publishing_enabled=settings.is_feature_enabled("feature_storetfront_public_publishing"),
+        default_phone_country_code=settings.default_phone_country_code,
+        logger=logger,
+    )
+
     container = ApplicationContainer(
         settings=settings,
         database=database,
@@ -295,6 +308,7 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         audit_event_service=audit_event_service,
         sync_change_service=sync_change_service,
         sync_service=sync_service,
+        storefront_service=storefront_service,
         customer_service=customer_service,
         expense_service=expense_service,
         sales_service=sales_service,
