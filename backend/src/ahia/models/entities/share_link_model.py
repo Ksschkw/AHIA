@@ -52,12 +52,15 @@ DEFAULT_LIFETIME: Final[timedelta] = timedelta(days=30)
 class ShareableResource(StrEnum):
     """What a link can open.
 
-    A closed set. Shipments and reports join it when those modules exist; naming them now would let
-    a caller mint a link to a record this product cannot serve, and the failure would be discovered
-    by the customer who opened it.
+    A closed set. Shipments join it when that module exists; naming them now would let a caller
+    mint a link to a record this product cannot serve, and the failure would be discovered by the
+    customer who opened it.
     """
 
     INVOICE = "invoice"
+    #: A written-out report. The link opens the artifact, which is a file rather than a projection:
+    #: the report was computed when it was asked for, and the link shows exactly what was exported.
+    REPORT = "report"
 
 
 @dataclass(frozen=True, slots=True)

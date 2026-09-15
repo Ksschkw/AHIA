@@ -27,6 +27,7 @@ from uuid import UUID, uuid4
 import pytest
 from PIL import Image
 from sqlalchemy import text
+from tests.storage_double import RecordingStorage
 
 from ahia.core.config import (
     AppEnvironment,
@@ -46,7 +47,7 @@ from ahia.core.errors import (
     StorageUnavailableError,
 )
 from ahia.core.permissions.permissions_registry import permission_codes_for_role
-from ahia.core.ports.storage_port import StorageUploadRequest, StoredObject, compute_sha256
+from ahia.core.ports.storage_port import compute_sha256
 from ahia.core.tenant_context import TenantContext, build_tenant_context
 from ahia.crud import product_crud, tenant_crud
 from ahia.integrations.media.image_processor import PillowImageProcessor
@@ -66,91 +67,6 @@ MEBIBYTE = 1024 * 1024
 # ---------------------------------------------------------------------------
 # Doubles
 # ---------------------------------------------------------------------------
-
-
-class RecordingStorage:
-    """An in-memory object store that records what it was asked to do.
-
-    Models the port's contract faithfully: a key that is not inside the tenant's prefix
-    is refused, deleting something absent is not an error, and a configured failure
-    raises a typed integration error rather than returning an empty success.
-    """
-
-    def __init__(self, *, provider_name: str = "recording") -> None:
-        self._provider_name = provider_name
-        self.objects: dict[str, bytes] = {}
-        self.deleted_keys: list[str] = []
-        self.upload_requests: list[StorageUploadRequest] = []
-        self.fail_uploads = False
-        self.fail_deletes = False
-        self.degrade_uploads = False
-
-    @property
-    def provider_name(self) -> str:
-        return self._provider_name
-
-    async def upload(self, request: StorageUploadRequest) -> StoredObject:
-        self.upload_requests.append(request)
-        if self.fail_uploads:
-            raise StorageOperationError(
-                operation="storage_upload",
-                entity="object",
-                identifier=request.key,
-                detail="the provider refused the upload",
-            )
-        if self.degrade_uploads:
-            # The port's other failure shape: a typed degraded result rather than a
-            # raised error, used when a fallback is configured.
-            return StoredObject.degraded(
-                provider=self._provider_name,
-                key=request.key,
-                mime_type=request.mime_type,
-                size_bytes=len(request.content),
-                checksum_sha256=compute_sha256(request.content),
-                reason="provider unavailable",
-            )
-        self.objects[request.key] = request.content
-        return StoredObject(
-            provider=self._provider_name,
-            key=request.key,
-            mime_type=request.mime_type,
-            size_bytes=len(request.content),
-            checksum_sha256=compute_sha256(request.content),
-            delivery_url=f"https://cdn.example.test/{request.key}",
-        )
-
-    async def delete(self, *, key: str, tenant_id: str) -> None:
-        if not key.startswith(f"tenants/{tenant_id}/"):
-            raise StorageOperationError(
-                operation="storage_delete",
-                entity="object",
-                identifier=key,
-                detail="key is outside the caller's prefix",
-            )
-        if self.fail_deletes:
-            raise StorageOperationError(
-                operation="storage_delete",
-                entity="object",
-                identifier=key,
-                detail="the provider refused the delete",
-            )
-        self.objects.pop(key, None)
-        self.deleted_keys.append(key)
-
-    async def exists(self, *, key: str, tenant_id: str) -> bool:
-        return key in self.objects and key.startswith(f"tenants/{tenant_id}/")
-
-    async def build_delivery_url(
-        self,
-        *,
-        key: str,
-        presentation_width: int | None = None,
-        is_public: bool = False,
-    ) -> str:
-        return f"https://cdn.example.test/{key}"
-
-    async def close(self) -> None:
-        return None
 
 
 def build_limits(**overrides: Any) -> StorageLimits:

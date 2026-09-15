@@ -283,16 +283,19 @@ def build_application_container(settings: Settings) -> ApplicationContainer:
         logger=logger,
     )
 
-    report_service = ReportService(
-        unit_of_work_factory=database.unit_of_work_factory(),
-        logger=logger,
-    )
-
     # Sharing an invoice mints a token and stores only its digest, so it needs the token service
     # and the recorder for the trail entry that says who shared what.
     share_link_service = ShareLinkService(
         unit_of_work_factory=database.unit_of_work_factory(),
         token_service=token_service,
+        audit_event_service=audit_event_service,
+        logger=logger,
+    )
+
+    report_service = ReportService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        storage=storage,
+        share_link_service=share_link_service,
         audit_event_service=audit_event_service,
         logger=logger,
     )

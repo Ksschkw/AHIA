@@ -30,7 +30,9 @@ from typing import Annotated, Final
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, status
+from fastapi.responses import RedirectResponse
 
+from ahia.core.ports.storage_port import StoragePort
 from ahia.core.tenant_context import TenantContext
 from ahia.routers.tenant_router import require_tenant_context
 from ahia.schemas.share_link_schema import (
@@ -56,7 +58,18 @@ def get_share_link_service(request: Request) -> ShareLinkService:
     return service
 
 
+def get_storage(request: Request) -> StoragePort:
+    """Return the storage capability, for handing a shared artifact to its holder.
+
+    Injected rather than imported: a router may not reach into an integration, and the adapter that
+    holds the object is chosen in the composition root.
+    """
+    storage: StoragePort = request.app.state.container.storage
+    return storage
+
+
 ShareLinkServiceDependency = Annotated[ShareLinkService, Depends(get_share_link_service)]
+StorageDependency = Annotated[StoragePort, Depends(get_storage)]
 TenantContextDependency = Annotated[TenantContext, Depends(require_tenant_context)]
 
 
@@ -136,3 +149,28 @@ async def read_shared_invoice(
     """Return the invoice a token opens, for a caller with no account and no token of their own."""
     invoice = await service.read_shared_invoice(token=token)
     return SharedInvoiceSchema.from_projection(invoice)
+
+
+@public_router.get(
+    "/share/report/{token}",
+    summary="Open an exported report through a shared link",
+    response_class=RedirectResponse,
+)
+async def read_shared_report(
+    token: str,
+    service: ShareLinkServiceDependency,
+    storage: StorageDependency,
+) -> RedirectResponse:
+    """Redirect the holder to the artifact.
+
+    A redirect rather than a stream: the bytes never travel through the application process, and
+    the URL is the provider's own short-lived one, so a link shared onward stops working when the
+    object's URL expires. The address is built by the provider that holds the object, not by a
+    guess about which one it is.
+
+    Declared before the invoice route so a token can never be read as a path segment; a report token
+    is opaque and carries no meaning, which is the point.
+    """
+    export = await service.read_shared_report(token=token)
+    delivery_url = await storage.build_delivery_url(key=export.storage_key, is_public=True)
+    return RedirectResponse(url=delivery_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)

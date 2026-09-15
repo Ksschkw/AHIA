@@ -35,16 +35,19 @@ from uuid import UUID, uuid4
 from ahia.core.database import UnitOfWork
 from ahia.core.errors import AuthorizationError, InvalidInputError, NotFoundError
 from ahia.core.logging import StructuredLogger, get_logger
+from ahia.core.permissions.report_permissions import REPORTS_READ
 from ahia.core.permissions.sales_permissions import SALES_READ
 from ahia.core.security import TokenService
 from ahia.core.tenant_context import TenantContext
 from ahia.crud import (
+    report_export_crud,
     sale_crud,
     sale_item_crud,
     share_link_crud,
     storefront_crud,
     tenant_crud,
 )
+from ahia.models.entities.report_export_model import ReportExportModel
 from ahia.models.entities.sale_item_model import SaleItemModel
 from ahia.models.entities.sale_model import SaleModel
 from ahia.models.entities.share_link_model import (
@@ -63,6 +66,7 @@ _SHARE_LINK_LOGGER_NAME: Final[str] = "ahia.services.share_link"
 #: before it can be shared at all.
 READ_PERMISSION_FOR_RESOURCE: Final[dict[ShareableResource, str]] = {
     ShareableResource.INVOICE: SALES_READ,
+    ShareableResource.REPORT: REPORTS_READ,
 }
 
 
@@ -298,6 +302,115 @@ class ShareLinkService:
             business_name=business.name,
             business_contact_phone=business.contact_phone,
         )
+
+    async def share_report(
+        self,
+        tenant_context: TenantContext,
+        *,
+        report_export_id: UUID,
+        lifetime: timedelta = DEFAULT_LIFETIME,
+    ) -> IssuedShareLink:
+        """Mint a link that opens one exported report.
+
+        The export must exist and be available: a link to an export whose upload failed opens
+        nothing, and minting it would look like success. This is the same refusal the invoice path
+        makes for a sale that does not exist.
+        """
+        self._require_permission(
+            tenant_context,
+            resource_type=ShareableResource.REPORT,
+            operation="share_report",
+        )
+        if lifetime < MINIMUM_LIFETIME or lifetime > MAXIMUM_LIFETIME:
+            raise InvalidInputError(
+                operation="share_report",
+                entity="share_link",
+                detail=(
+                    f"lifetime must be between {MINIMUM_LIFETIME} and {MAXIMUM_LIFETIME}; a link "
+                    "that never expires is a permanent public address for a business's numbers"
+                ),
+            )
+
+        token = self._tokens.generate_public_token()
+        now = datetime.now(UTC)
+        unit_of_work = self._unit_of_work_factory()
+        async with unit_of_work:
+            session = unit_of_work.session_handle
+            export = await report_export_crud.get_for_tenant(
+                session, tenant_id=tenant_context.tenant_id, export_id=report_export_id
+            )
+            if export is None or not export.is_available():
+                raise NotFoundError(
+                    operation="share_report",
+                    entity="report_export",
+                    identifier=str(report_export_id),
+                    detail="no available report export matched in this business",
+                )
+            link = await share_link_crud.create(
+                session,
+                ShareLinkModel.issue(
+                    link_id=uuid4(),
+                    tenant_id=tenant_context.tenant_id,
+                    resource_type=ShareableResource.REPORT,
+                    resource_id=export.id,
+                    token_hash=self._tokens.hash_bearer_token(token),
+                    now=now,
+                    lifetime=lifetime,
+                    created_by_user_id=tenant_context.user_id,
+                ),
+            )
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="share_report",
+                entity_type="share_link",
+                entity_id=link.id,
+                now=now,
+                detail=link.describe_for_audit(),
+            )
+            await unit_of_work.commit()
+
+        self._logger.info(
+            "share_link_created",
+            **link.describe_for_audit(),
+            actor_id=str(tenant_context.user_id),
+        )
+        return IssuedShareLink(link=link, token=token)
+
+    async def read_shared_report(self, *, token: str) -> ReportExportModel:
+        """Return the export a token opens, for a caller with no account.
+
+        The caller receives where the bytes are, not the bytes: the API redirects to the object
+        store, so a report never travels through the application process and the delivery URL is the
+        provider's own, short-lived one.
+        """
+        return await self._read_shared(token=token, expected=ShareableResource.REPORT)
+
+    async def _read_shared(self, *, token: str, expected: ShareableResource) -> ReportExportModel:
+        token_hash = self._tokens.hash_bearer_token(token)
+        now = datetime.now(UTC)
+        unit_of_work = self._unit_of_work_factory()
+        async with unit_of_work:
+            session = unit_of_work.session_handle
+            link = await share_link_crud.get_by_token_hash(session, token_hash)
+            if link is None or not link.opens(at=now) or link.resource_type is not expected:
+                if link is not None:
+                    self._logger.warning(
+                        "share_link_refused",
+                        share_link_id=str(link.id),
+                        tenant_id=str(link.tenant_id),
+                        resource_type=link.resource_type.value,
+                        is_revoked=link.is_revoked(),
+                        is_expired=link.is_expired(at=now),
+                        security_event="share_link_refused",
+                    )
+                raise self._unopenable()
+            export = await report_export_crud.get_for_tenant(
+                session, tenant_id=link.tenant_id, export_id=link.resource_id
+            )
+            if export is None or not export.is_available():
+                raise self._unopenable()
+        return export
 
     # ------------------------------------------------------------------
     # Guards and readers

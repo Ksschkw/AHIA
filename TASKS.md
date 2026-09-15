@@ -1372,7 +1372,7 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 - [x] M17.1.1 Daily sales summary query surface with tenant scoping.
 - [x] M17.1.2 Product performance and low-stock reporting.
-- [ ] M17.1.3 Report export to R2 with a share token.
+- [x] M17.1.3 Report export to R2 with a share token.
 - [ ] M17.1.4 Low-stock alert evaluation as a scheduled job entry point that
       reuses the service layer rather than duplicating rules.
 - [ ] M17.1.5 In-app notification records.
@@ -1405,6 +1405,25 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - `reports.read` is enforced in the service. A test asserts a salesperson is refused on all three
   reports while a manager is allowed, and that another business sees zeros rather than another
   business's trading.
+
+- M17.1.3 complete. An export writes a CSV, stores it under the business's prefix, records the
+  artifact in `report_exports` and mints a share link in one call; `GET /share/report/{token}`
+  redirects the holder to the provider's own short-lived delivery URL, so the bytes never travel
+  through the application process. A failed upload is recorded with its reason and reported rather
+  than raised: the artifact exists, its status says what happened, and a client can offer a retry.
+- The CSV writer defuses formula injection. RFC 4180 quoting handles commas and quotes; it does not
+  handle the spreadsheet, where a field beginning `=` or `+` is executed when the file is opened. A
+  leading apostrophe is inserted and a test exports a product named `=cmd|'/C calc'!A1` to prove the
+  raw formula never reaches the file.
+- Exporting is in the audit trail with its own action and outcome, because it is the action that
+  moves a business's numbers out of the product and "who exported what, and when" is asked after a
+  file turns up somewhere it should not be. A failed export is recorded as `FAILED`.
+- The export response carries the share link's identifier as well as its token, so a business can
+  revoke the link it just created; the listing carries neither, because the server keeps a digest
+  rather than a token and cannot re-show what it did not keep.
+- `tests/storage_double.py` now holds the in-memory object store that the image suite and the export
+  suite both use: it models the port's contract, including both failure shapes, so a suite can assert
+  what happens when storage is unavailable without a network.
 
 ## M18 - Hardening, observability, deployment
 
