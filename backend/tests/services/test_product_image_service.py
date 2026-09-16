@@ -27,7 +27,6 @@ from uuid import UUID, uuid4
 import pytest
 from PIL import Image
 from sqlalchemy import text
-from tests.storage_double import RecordingStorage
 
 from ahia.core.config import (
     AppEnvironment,
@@ -56,6 +55,7 @@ from ahia.models.entities.tenant_model import TenantModel
 from ahia.services.audit_event_service import AuditEventService
 from ahia.services.product_image_service import ProductImageService
 from ahia.services.storage_quota_service import StorageQuotaService
+from storage_double import RecordingStorage
 
 DEFAULT_TEST_DATABASE_URL = (
     "postgresql+asyncpg://ksschkw:ahia_local_dev_only@127.0.0.1:5432/ahia_test"

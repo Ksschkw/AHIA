@@ -31,7 +31,6 @@ from uuid import UUID, uuid4
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
-from tests.storage_double import RecordingStorage
 
 from ahia.core.config import AppEnvironment, Settings, StorageProviderName
 from ahia.core.database import Base, Database
@@ -40,6 +39,7 @@ from ahia.main import create_application
 from ahia.models.entities.tenant_membership_model import TenantMembershipModel
 from ahia.services.iam_seed_service import IamSeedService
 from ahia.services.report_service import ReportService
+from storage_double import RecordingStorage
 
 DEFAULT_TEST_DATABASE_URL = (
     "postgresql+asyncpg://ksschkw:ahia_local_dev_only@127.0.0.1:5432/ahia_test"
