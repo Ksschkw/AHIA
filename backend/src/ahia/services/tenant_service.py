@@ -33,6 +33,7 @@ from ahia.core.permissions.tenant_permissions import (
 )
 from ahia.core.slug import normalize_slug
 from ahia.core.tenant_context import TenantContext, build_tenant_context
+from ahia.core.tenant_scope import set_tenant_scope
 from ahia.crud import tenant_crud, tenant_membership_crud
 from ahia.models.entities.negative_stock_policy import NegativeStockPolicy
 from ahia.models.entities.tenant_membership_model import TenantMembershipModel
@@ -452,6 +453,12 @@ class TenantService:
 
         An inactive business denies for everyone, including its owner: a closed
         business must stop answering on the next request, not at the next login.
+
+        Resolving also binds the Row-Level Security scope for the rest of the
+        task. Doing it here rather than in the route means every caller that
+        obtains an authorized context - a route, a job, a future CLI command -
+        also obtains the database's agreement about which rows exist, and there is
+        exactly one place where that binding happens.
         """
         user_id = _principal_user_id(principal)
 
@@ -491,6 +498,7 @@ class TenantService:
             permission_codes=membership.permission_codes,
             role_name=membership.role_name,
         )
+        set_tenant_scope(context.tenant_id)
         self._logger.info(
             "tenant_context_resolved",
             tenant_id=str(requested_tenant_id),

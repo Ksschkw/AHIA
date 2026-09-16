@@ -39,6 +39,7 @@ from ahia.core.permissions.report_permissions import REPORTS_READ
 from ahia.core.permissions.sales_permissions import SALES_READ
 from ahia.core.security import TokenService
 from ahia.core.tenant_context import TenantContext
+from ahia.core.tenant_scope import tenant_scope
 from ahia.crud import (
     report_export_crud,
     sale_crud,
@@ -264,13 +265,17 @@ class ShareLinkService:
         Every refusal is the same not-found: an unknown token, a revoked link, an expired link and
         a sale that no longer exists are indistinguishable to the person holding the link, and the
         difference between them is not theirs to learn.
+
+        Resolve, then read within the scope. The link table is deliberately outside the Row-Level
+        Security scope, because a token has to be resolved before the business it belongs to is
+        known - that is what a share link is. Everything the link opens is scoped to the link's own
+        business, so a token can only ever reach the tenant it was minted for.
         """
         token_hash = self._tokens.hash_bearer_token(token)
         now = datetime.now(UTC)
         unit_of_work = self._unit_of_work_factory()
         async with unit_of_work:
-            session = unit_of_work.session_handle
-            link = await share_link_crud.get_by_token_hash(session, token_hash)
+            link = await share_link_crud.get_by_token_hash(unit_of_work.session_handle, token_hash)
             if link is None or not link.opens(at=now):
                 if link is not None:
                     # Logged for the operator and invisible to the holder: a revoked link being
@@ -285,16 +290,20 @@ class ShareLinkService:
                         security_event="share_link_refused",
                     )
                 raise self._unopenable()
+            tenant_id = link.tenant_id
+            sale_id = link.resource_id
 
-            sale = await sale_crud.get_by_id(
-                session, tenant_id=link.tenant_id, sale_id=link.resource_id
-            )
-            if sale is None:
-                raise self._unopenable()
-            items = await sale_item_crud.list_for_sale(
-                session, tenant_id=link.tenant_id, sale_id=sale.id
-            )
-            business = await self._business_details(session, tenant_id=link.tenant_id)
+        with tenant_scope(tenant_id):
+            unit_of_work = self._unit_of_work_factory()
+            async with unit_of_work:
+                session = unit_of_work.session_handle
+                sale = await sale_crud.get_by_id(session, tenant_id=tenant_id, sale_id=sale_id)
+                if sale is None:
+                    raise self._unopenable()
+                items = await sale_item_crud.list_for_sale(
+                    session, tenant_id=tenant_id, sale_id=sale.id
+                )
+                business = await self._business_details(session, tenant_id=tenant_id)
 
         return _invoice_from(
             sale=sale,
@@ -387,12 +396,16 @@ class ShareLinkService:
         return await self._read_shared(token=token, expected=ShareableResource.REPORT)
 
     async def _read_shared(self, *, token: str, expected: ShareableResource) -> ReportExportModel:
+        """Resolve the link, then read the export inside the link's business scope.
+
+        Two transactions for the same reason the invoice path has two: the link itself is resolved
+        without a scope, and the export it opens is read with one.
+        """
         token_hash = self._tokens.hash_bearer_token(token)
         now = datetime.now(UTC)
         unit_of_work = self._unit_of_work_factory()
         async with unit_of_work:
-            session = unit_of_work.session_handle
-            link = await share_link_crud.get_by_token_hash(session, token_hash)
+            link = await share_link_crud.get_by_token_hash(unit_of_work.session_handle, token_hash)
             if link is None or not link.opens(at=now) or link.resource_type is not expected:
                 if link is not None:
                     self._logger.warning(
@@ -405,11 +418,17 @@ class ShareLinkService:
                         security_event="share_link_refused",
                     )
                 raise self._unopenable()
-            export = await report_export_crud.get_for_tenant(
-                session, tenant_id=link.tenant_id, export_id=link.resource_id
-            )
-            if export is None or not export.is_available():
-                raise self._unopenable()
+            tenant_id = link.tenant_id
+            export_id = link.resource_id
+
+        with tenant_scope(tenant_id):
+            unit_of_work = self._unit_of_work_factory()
+            async with unit_of_work:
+                export = await report_export_crud.get_for_tenant(
+                    unit_of_work.session_handle, tenant_id=tenant_id, export_id=export_id
+                )
+                if export is None or not export.is_available():
+                    raise self._unopenable()
         return export
 
     # ------------------------------------------------------------------

@@ -53,6 +53,10 @@ async def require_tenant_context(
 
     The identifier in the path is a selection hint. Membership is the proof, and
     the service is the only place that decides.
+
+    Resolving also binds the Row-Level Security scope for the rest of the request,
+    as a side effect inside the service. A route therefore cannot be authorized
+    for one business and query the database as another, or as nobody.
     """
     return await service.resolve_tenant_context(
         principal,

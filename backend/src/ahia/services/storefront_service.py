@@ -39,6 +39,7 @@ from ahia.core.logging import StructuredLogger, get_logger
 from ahia.core.permissions.product_permissions import PRODUCTS_READ
 from ahia.core.permissions.storefront_permissions import STOREFRONT_MANAGE, STOREFRONT_READ
 from ahia.core.tenant_context import TenantContext
+from ahia.core.tenant_scope import tenant_scope
 from ahia.crud import (
     inventory_crud,
     product_crud,
@@ -340,30 +341,44 @@ class StorefrontService:
 
         A slug that does not exist and a shop that is not open are the same not-found answer: a
         stranger learns nothing about which businesses exist by comparing the two.
+
+        Two transactions, because a public read begins before any business is known. The first
+        resolves the slug to a business - a table no tenant scope covers, which is what makes a
+        public address possible at all. The second reads the shop and its catalogue with that
+        business bound as the Row-Level Security scope, because those tables are visible only from
+        inside a scope. A read that spanned both inside one transaction would return an empty
+        catalogue the moment the policies are on.
         """
         self._require_publishing_enabled(operation="read_public_storefront")
         unit_of_work = self._unit_of_work_factory()
         async with unit_of_work:
-            session = unit_of_work.session_handle
-            tenant = await tenant_crud.get_by_slug(session, tenant_slug)
+            tenant = await tenant_crud.get_by_slug(unit_of_work.session_handle, tenant_slug)
             if tenant is None or not tenant.is_active:
                 raise self._closed_shop(tenant_slug)
-            shop = await storefront_crud.get_for_tenant(session, tenant.id)
-            if shop is None or not shop.is_open():
-                raise self._closed_shop(tenant_slug)
-            products = await product_crud.list_published_for_tenant(session, tenant.id)
-            catalogue = [
-                await self._public_product(
-                    session,
-                    tenant_id=tenant.id,
-                    product=product,
-                )
-                for product in products
-            ]
+            resolved_tenant_id = tenant.id
+            resolved_slug = tenant.slug
+            business_name = tenant.name
+
+        with tenant_scope(resolved_tenant_id):
+            unit_of_work = self._unit_of_work_factory()
+            async with unit_of_work:
+                session = unit_of_work.session_handle
+                shop = await storefront_crud.get_for_tenant(session, resolved_tenant_id)
+                if shop is None or not shop.is_open():
+                    raise self._closed_shop(tenant_slug)
+                products = await product_crud.list_published_for_tenant(session, resolved_tenant_id)
+                catalogue = [
+                    await self._public_product(
+                        session,
+                        tenant_id=resolved_tenant_id,
+                        product=product,
+                    )
+                    for product in products
+                ]
 
         return PublicStorefront(
-            tenant_slug=tenant.slug,
-            business_name=tenant.name,
+            tenant_slug=resolved_slug,
+            business_name=business_name,
             headline=shop.headline,
             description=shop.description,
             contact_phone=shop.contact_phone,
@@ -441,28 +456,40 @@ class StorefrontService:
         )
 
     async def read_public_product(self, *, tenant_slug: str, product_slug: str) -> PublicProduct:
-        """Return one published product of a published shop, for a caller with no identity."""
+        """Return one published product of a published shop, for a caller with no identity.
+
+        Resolve, then read within the scope, for the same reason the shop itself is read that way:
+        the slug is the only address a stranger has, and the policies are what stop that address
+        from becoming a way to read another business's rows.
+        """
         self._require_publishing_enabled(operation="read_public_product")
         unit_of_work = self._unit_of_work_factory()
         async with unit_of_work:
-            session = unit_of_work.session_handle
-            tenant = await tenant_crud.get_by_slug(session, tenant_slug)
+            tenant = await tenant_crud.get_by_slug(unit_of_work.session_handle, tenant_slug)
             if tenant is None or not tenant.is_active:
                 raise self._closed_shop(tenant_slug)
-            shop = await storefront_crud.get_for_tenant(session, tenant.id)
-            if shop is None or not shop.is_open():
-                raise self._closed_shop(tenant_slug)
-            product = await product_crud.get_by_slug(
-                session, tenant_id=tenant.id, slug=product_slug
-            )
-            if product is None or not product.is_published or not product.is_active:
-                raise NotFoundError(
-                    operation="read_public_product",
-                    entity="product",
-                    identifier=product_slug,
-                    detail="no published product matches that address in this shop",
+            resolved_tenant_id = tenant.id
+
+        with tenant_scope(resolved_tenant_id):
+            unit_of_work = self._unit_of_work_factory()
+            async with unit_of_work:
+                session = unit_of_work.session_handle
+                shop = await storefront_crud.get_for_tenant(session, resolved_tenant_id)
+                if shop is None or not shop.is_open():
+                    raise self._closed_shop(tenant_slug)
+                product = await product_crud.get_by_slug(
+                    session, tenant_id=resolved_tenant_id, slug=product_slug
                 )
-            return await self._public_product(session, tenant_id=tenant.id, product=product)
+                if product is None or not product.is_published or not product.is_active:
+                    raise NotFoundError(
+                        operation="read_public_product",
+                        entity="product",
+                        identifier=product_slug,
+                        detail="no published product matches that address in this shop",
+                    )
+                return await self._public_product(
+                    session, tenant_id=resolved_tenant_id, product=product
+                )
 
     async def _public_product(
         self,

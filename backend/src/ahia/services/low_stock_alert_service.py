@@ -39,6 +39,7 @@ from uuid import UUID
 
 from ahia.core.database import UnitOfWork
 from ahia.core.logging import StructuredLogger, get_logger
+from ahia.core.tenant_scope import tenant_scope
 from ahia.crud import tenant_crud, tenant_membership_crud
 from ahia.models.entities.notification_model import NotificationType
 from ahia.models.entities.tenant_membership_model import MembershipStatus
@@ -136,41 +137,50 @@ class LowStockAlertEvaluator:
     async def evaluate_tenant(
         self, *, tenant_id: UUID, today: date | None = None
     ) -> TenantEvaluation:
-        """Evaluate one business and tell the people who can act."""
+        """Evaluate one business and tell the people who can act.
+
+        The business is bound as the Row-Level Security scope for the whole
+        evaluation, because there is no authenticated caller here: the scheduled
+        run chose this business from the tenant list, and the scope is what makes
+        the database agree that its rows - and only its rows - are visible. The
+        binding is restored on exit so the next business in the loop starts from a
+        clean slate.
+        """
         evaluated_on = today or datetime.now(UTC).date()
-        low_stock = await self._reports.low_stock_for_tenant(tenant_id=tenant_id, limit=200)
-        recipients = await self._alert_recipients(tenant_id)
-        if not low_stock or not recipients:
+        with tenant_scope(tenant_id):
+            low_stock = await self._reports.low_stock_for_tenant(tenant_id=tenant_id, limit=200)
+            recipients = await self._alert_recipients(tenant_id)
+            if not low_stock or not recipients:
+                return TenantEvaluation(
+                    tenant_id=tenant_id,
+                    evaluated_on=evaluated_on,
+                    low_stock_products=len(low_stock),
+                    notifications_raised=0,
+                    notifications_skipped=0,
+                    recipients=len(recipients),
+                )
+
+            raised = 0
+            skipped = 0
+            for recipient_user_id in recipients:
+                outcome = await self._notifications.raise_many(
+                    tenant_id=tenant_id,
+                    recipient_user_id=recipient_user_id,
+                    notifications=[
+                        _alert_for(entry, tenant_id=tenant_id, evaluated_on=evaluated_on)
+                        for entry in low_stock
+                    ],
+                )
+                raised += outcome.raised_count
+                skipped += outcome.skipped_duplicates
             return TenantEvaluation(
                 tenant_id=tenant_id,
                 evaluated_on=evaluated_on,
                 low_stock_products=len(low_stock),
-                notifications_raised=0,
-                notifications_skipped=0,
+                notifications_raised=raised,
+                notifications_skipped=skipped,
                 recipients=len(recipients),
             )
-
-        raised = 0
-        skipped = 0
-        for recipient_user_id in recipients:
-            outcome = await self._notifications.raise_many(
-                tenant_id=tenant_id,
-                recipient_user_id=recipient_user_id,
-                notifications=[
-                    _alert_for(entry, tenant_id=tenant_id, evaluated_on=evaluated_on)
-                    for entry in low_stock
-                ],
-            )
-            raised += outcome.raised_count
-            skipped += outcome.skipped_duplicates
-        return TenantEvaluation(
-            tenant_id=tenant_id,
-            evaluated_on=evaluated_on,
-            low_stock_products=len(low_stock),
-            notifications_raised=raised,
-            notifications_skipped=skipped,
-            recipients=len(recipients),
-        )
 
     async def _active_tenant_ids(self) -> list[UUID]:
         unit_of_work = self._unit_of_work_factory()

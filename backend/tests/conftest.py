@@ -33,6 +33,7 @@ import pytest
 os.environ["AHIA_ENV_FILE"] = str(Path(tempfile.gettempdir()) / "ahia-tests-no-env-file")
 
 from ahia.core.errors import clear_correlation_id
+from ahia.core.tenant_scope import clear_tenant_scope
 from ahia.crud.table_registry import import_all_record_modules
 
 # Register every persistence module, so the metadata is complete before any test
@@ -60,8 +61,10 @@ def isolate_correlation_context() -> None:
     failures that look like product defects.
     """
     clear_correlation_id()
+    clear_tenant_scope()
     yield
     clear_correlation_id()
+    clear_tenant_scope()
 
 
 @pytest.fixture(scope="session")
