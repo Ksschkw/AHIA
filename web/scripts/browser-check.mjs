@@ -61,8 +61,12 @@ async function clickByText(page, text, { timeout = STEP_TIMEOUT_MS } = {}) {
       // behind it are still in the document, and "Record " matches both the sheet's submit and the
       // "Record a sale" tile behind the scrim.
       const roots = [document.querySelector('[role="dialog"]'), document.body].filter(Boolean);
-      const buttons = roots.flatMap((root) => [...root.querySelectorAll("button")]);
-      const button = buttons.find(
+      // Links as well as buttons: getting into the product is a navigation, and a landing page should
+      // be made of links so it works without JavaScript.
+      const controls = roots.flatMap((root) => [
+        ...root.querySelectorAll("button, a[href]"),
+      ]);
+      const button = controls.find(
         (candidate) =>
           // The accessible name first: a tile renders its glyph before its label, so matching raw
           // text would need to know the decoration. `aria-label` is what a screen reader reads.
@@ -134,10 +138,12 @@ async function main() {
   });
 
   try {
-    await step(page, "1-welcome", async () => {
+    await step(page, "1-landing", async () => {
       await page.goto(APP_URL, { waitUntil: "networkidle2" });
+      await waitForText(page, "Keep your shop in your pocket");
+      await shot(page, "web-1-landing");
+      await clickByText(page, "Open your shop");
       await waitForText(page, "Create account");
-      await shot(page, "web-1-welcome");
     });
 
     await step(page, "2-create-account", async () => {
@@ -147,7 +153,7 @@ async function main() {
       await page.type("#identifier", email);
       await page.type("#password", password);
       await shot(page, "web-2-create-account");
-      await clickByText(page, "Create my account");
+      await clickByText(page, "Create my shop");
     });
 
     await step(page, "3-name-business", async () => {

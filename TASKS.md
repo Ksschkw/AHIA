@@ -1774,3 +1774,20 @@ These apply continuously and are re-verified at each milestone boundary.
 - Branding: the wordmark is AHIA with the dotted I of Igbo orthography, rendered from an escape
   sequence so the source stays ASCII (ADR-0006) and the screen shows the correct letter, in the accent
   colour; the mark is a four-cell market grid that reads at favicon size.
+
+- The entry experience is three routes now, because one screen was doing three jobs. `/` is the public
+  page: what AHIA does, in a trader's words - a sale and a receipt to send, stock that matches the
+  shelf, the day's money - with the WhatsApp relationship stated rather than threatened. `/start` is
+  sign-in and sign-up, one screen with two modes and no lecture about where the session is kept. `/app`
+  is the dashboard, which asks once whether there is a session and either renders or sends the person
+  to sign in. The "Checking your session..." screen is gone: while the probe is in flight the page
+  shows the shape of itself, so a slow network never leaves somebody staring at a word.
+- Development now runs against the local PostgreSQL instead of Neon, and the difference is not
+  cosmetic: a tenant was created in 3023ms on Neon and in 22ms locally, and the full browser journey -
+  account, business, product, stock, sale, ten screenshots - went from most of a minute to 8.2 seconds.
+  The Neon URL is still in `.env`, commented on the line above, because that is the deployment database
+  and switching back is one line.
+- Media is verified end to end against the real Cloudinary account: a 64x64 PNG uploaded through
+  `POST /tenants/{id}/products/{pid}/images` came back as an optimised 78-byte webp stored under a
+  tenant/product path, with a delivery URL the product schema exposes. `FEATURE_MEDIA_UPLOAD` and
+  `FEATURE_STOREFRONT_PUBLIC_PUBLISHING` are enabled in `.env`, with the upload UI still to come.
