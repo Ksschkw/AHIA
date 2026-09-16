@@ -1475,7 +1475,11 @@ Goal: a business exists as a tenant with a globally unique public slug.
       invalidates, breaker trip response, correlation-ID troubleshooting, the
       Row-Level Security symptom, the scheduled job, and the incidents this
       system actually has.
-- [ ] M18.1.7 Load smoke test on the sale endpoint; record numbers.
+- [x] M18.1.7 Load smoke test on the sale endpoint, recorded in
+      `docs/LOAD_SMOKE.md`: 200 sales at 20 in flight, 25 sales/s with p95
+      1.4s and no failures, on a two-core laptop with the database on the same
+      host. The document states the environment, the three runs, what the
+      numbers mean and what they do not cover.
 
 ---
 
@@ -1559,6 +1563,20 @@ Goal: a business exists as a tenant with a globally unique public slug.
   Row-Level Security section, because a wrong or missing scope produces a successful empty response
   rather than an error, which is the failure a runbook has to name explicitly or nobody will look for
   it.
+
+- M18.1.7 complete. `scripts/load_smoke_sale.py` drives the real application over an in-process ASGI
+  transport - the real middleware, authorization, service and database, without the network - and
+  records 200 sales at 20 in flight. Three runs are recorded in `docs/LOAD_SMOKE.md` with the machine,
+  the PostgreSQL settings and the pool configuration, because a throughput number without its
+  environment is not a number anybody can compare against later.
+- The shape the numbers show is the useful part: quadrupling concurrency from 5 to 20 left throughput
+  flat at 25 to 28 sales/s while p50 latency grew five-fold, which is saturation rather than a slow
+  path - and on this machine the saturated resource is the database, not the application. The script
+  also reads the application's own request counter back and refuses to report a number if the server
+  counted fewer requests than the client sent, and it exits non-zero on any failed request.
+- What the document says the numbers do *not* cover: Row-Level Security (the local role is a
+  superuser and bypasses the policies), storage calls, multi-instance behaviour, and anything lasting
+  long enough to be a soak test.
 
 ## M19 - Web application bootstrap (Next.js)
 

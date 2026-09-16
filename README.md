@@ -96,6 +96,7 @@ with one command.
 | `docs/RUNBOOK.md` | deployment, migrations, rollback, secret rotation, breaker trips, tracing a request by correlation ID, and the incidents this system actually has |
 | `docs/HARDENING.md` | rate limiting, metrics, Row-Level Security and the error-reporting split, plus what is not in place |
 | `docs/RLS_ROLLOUT.md` | what Row-Level Security enforces, where the scope is bound, and what was verified - and what was not |
+| `docs/LOAD_SMOKE.md` | the recorded load smoke test on the sale endpoint: the numbers, the environment, and what they do and do not say |
 | `TASKS.md` | 21 milestones broken into sub-milestones and micro-milestones, with status |
 | `PRODUCT_INITIAL_DEFINITION/AHIA_PROJECT_SPECIFICATION.md` | product definition and journeys |
 | `PRODUCT_INITIAL_DEFINITION/AHIA_DATABASE_AND_DOMAIN_SPEC.md` | entities, constraints, indexes, sync semantics |

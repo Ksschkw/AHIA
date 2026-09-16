@@ -30,7 +30,7 @@ export TEST_DATABASE_URL
 
 .PHONY: help setup hooks check check-fast lint format typecheck test test-unit \
         test-integration arch secrets secrets-history audit ascii banned-names \
-        guards run migrate revision downgrade clean tools
+        guards run migrate revision downgrade load-smoke clean tools
 
 help: ## Show this help
 	@printf 'AHIA developer commands\n\n'
@@ -120,6 +120,9 @@ revision: ## Create a migration from the current models (MESSAGE="...")
 
 downgrade: ## Roll back one migration
 	@cd $(BACKEND_DIR) && $(VENV_DIR)/bin/alembic downgrade -1
+
+load-smoke: ## Record a load smoke test on the sale path (local test database)
+	@cd $(BACKEND_DIR) && $(PYTHON) scripts/load_smoke_sale.py --sales 200 --concurrency 20
 
 # ---------------------------------------------------------------------------
 # Housekeeping
