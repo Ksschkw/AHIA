@@ -31,7 +31,10 @@ from ahia.middleware.rate_limit_middleware import (
     SlidingWindowRateLimiter,
     build_default_limiter,
 )
-from ahia.middleware.security_headers_middleware import SecurityHeadersMiddleware
+from ahia.middleware.security_headers_middleware import (
+    DEFAULT_CONTENT_SECURITY_POLICY,
+    SecurityHeadersMiddleware,
+)
 
 
 class RecordingSend:
@@ -272,6 +275,38 @@ async def test_content_security_policy_is_configurable() -> None:
     await middleware(build_scope(), empty_receive, send)
 
     assert send.headers["content-security-policy"] == "default-src 'self'"
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+@pytest.mark.parametrize("path", ["/docs", "/docs/", "/redoc"])
+async def test_the_interactive_documentation_gets_a_policy_that_can_render(path: str) -> None:
+    """`default-src 'none'` on a page whose purpose is to run a CDN script renders it blank.
+
+    The page still answered 200, so the failure looked like a broken API rather than a header doing
+    its job. The documentation paths therefore allow the bundle's origin, and only those paths do.
+    """
+    middleware = SecurityHeadersMiddleware(ok_application())
+    send = RecordingSend()
+
+    await middleware(build_scope(path=path), empty_receive, send)
+
+    policy = send.headers["content-security-policy"]
+    assert "https://cdn.jsdelivr.net" in policy
+    assert "default-src 'none'" in policy
+    assert "frame-ancestors 'none'" in policy
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_every_other_path_keeps_the_strict_policy() -> None:
+    """The exception is for the documentation, not for anything that happens to be nearby."""
+    middleware = SecurityHeadersMiddleware(ok_application())
+    send = RecordingSend()
+
+    await middleware(build_scope(path="/api/v1/tenants"), empty_receive, send)
+
+    assert send.headers["content-security-policy"] == DEFAULT_CONTENT_SECURITY_POLICY
 
 
 # ---------------------------------------------------------------------------

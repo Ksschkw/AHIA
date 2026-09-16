@@ -157,6 +157,12 @@ class Database:
         Used by the readiness endpoint. It never raises and never returns the
         failure reason: a readiness probe is public, and the reason a database is
         unreachable is exactly the kind of thing not to publish.
+
+        The reason *is* logged, because the alternative is what a caller
+        eventually experiences: a readiness probe answering `not_ready` forever
+        while nothing anywhere says which of the ten ways to get a database URL
+        wrong this one is. The log line stays internal; the response says
+        nothing.
         """
         try:
             async with self._engine.connect() as connection:
@@ -165,6 +171,9 @@ class Database:
             self._logger.error(
                 "database_connectivity_check_failed",
                 error_type=type(error).__name__,
+                # Truncated rather than omitted: a driver error names the host
+                # and the parameter it rejected, and neither is a credential.
+                error_detail=str(error)[:300],
             )
             return False
         return True
