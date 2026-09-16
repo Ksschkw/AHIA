@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import { DOTTED_CAPITAL_I } from "@/components/brand";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AHIA",
+  title: `AH${DOTTED_CAPITAL_I}A`,
   description: "Record a sale, watch the stock move, see the money.",
 };
 

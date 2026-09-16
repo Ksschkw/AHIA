@@ -1,0 +1,276 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-weight: 600;
+  transition: transform 0.06s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.primary {
+  background: var(--leaf);
+  color: #fff;
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--leaf-dark);
+}
+
+.quiet {
+  background: var(--card);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.quiet:hover:not(:disabled) {
+  border-color: var(--ink-3);
+}
+
+.danger {
+  background: var(--danger-soft);
+  border-color: #eec3c1;
+  color: var(--danger);
+}
+
+.full {
+  width: 100%;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 150px;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  letter-spacing: 0.01em;
+}
+
+.input {
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  outline: none;
+}
+
+.input:focus {
+  border-color: var(--leaf);
+  box-shadow: 0 0 0 3px rgba(11, 93, 59, 0.12);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  flex: 1;
+  min-width: 150px;
+}
+
+.statLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.statValue {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.statHint {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.stat_good .statValue {
+  color: var(--leaf);
+}
+
+.stat_warn .statValue {
+  color: var(--clay);
+}
+
+.pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pill_good {
+  background: var(--leaf-soft);
+  color: var(--leaf);
+}
+
+.pill_warn {
+  background: var(--gold-soft);
+  color: var(--gold);
+}
+
+.pill_bad {
+  background: var(--clay-soft);
+  color: var(--clay);
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.cardTitle {
+  font-size: 15px;
+}
+
+.empty {
+  color: var(--ink-3);
+  font-size: 14px;
+  padding: 8px 0;
+}
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(30, 27, 22, 0.42);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  z-index: 50;
+}
+
+@media (min-width: 720px) {
+  .scrim {
+    align-items: center;
+    padding: 24px;
+  }
+}
+
+.sheet {
+  width: 100%;
+  max-width: 520px;
+  background: var(--sand);
+  border-radius: 20px 20px 0 0;
+  box-shadow: var(--shadow-lg);
+  padding: 20px;
+  max-height: 92vh;
+  overflow-y: auto;
+}
+
+@media (min-width: 720px) {
+  .sheet {
+    border-radius: 20px;
+  }
+}
+
+.sheetHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.sheetTitle {
+  font-size: 18px;
+}
+
+.close {
+  background: none;
+  border: none;
+  color: var(--ink-2);
+  font-size: 13px;
+  text-decoration: underline;
+}
+
+.sheetBody {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: min(680px, calc(100vw - 32px));
+  padding: 12px 16px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-lg);
+  font-size: 14px;
+  z-index: 60;
+}
+
+.toastGood {
+  background: var(--leaf);
+  color: #fff;
+}
+
+.toastBad {
+  background: var(--danger);
+  color: #fff;
+}
+
+.toastClose {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  opacity: 0.9;
+}

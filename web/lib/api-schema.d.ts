@@ -174,6 +174,10 @@ export interface paths {
         /**
          * Create an account and sign in
          * @description Register a user, returning a session so no second request is needed.
+         *
+         *     The session is also written to cookies, so a browser is signed in without any
+         *     client code holding a token. The body keeps carrying the tokens for clients
+         *     that have no cookie jar.
          */
         post: operations["register_api_v1_auth_register_post"];
         delete?: never;
@@ -213,7 +217,7 @@ export interface paths {
         put?: never;
         /**
          * Rotate a refresh token into a new session
-         * @description Rotate the presented refresh token.
+         * @description Rotate the presented refresh token, from the body or from the cookie.
          *
          *     The presented token is revoked as part of the exchange, so a token that is
          *     used twice is recognised as reuse and ends the whole session family.
@@ -236,10 +240,12 @@ export interface paths {
         put?: never;
         /**
          * End the session behind a refresh token
-         * @description Sign out.
+         * @description Sign out, ending the session and clearing the cookies.
          *
          *     Idempotent: an unknown or already-revoked token still produces success, so a
-         *     client that has lost track of its session can reach a signed-out state.
+         *     client that has lost track of its session can reach a signed-out state. The
+         *     cookies are cleared either way, because a browser that keeps a dead cookie
+         *     keeps looking signed in.
          */
         post: operations["logout_api_v1_auth_logout_post"];
         delete?: never;
@@ -3154,10 +3160,15 @@ export interface components {
         /**
          * RefreshSessionSchema
          * @description A refresh request.
+         *
+         *     The token is optional because a browser does not send it here: it arrives in
+         *     an HttpOnly cookie the page cannot read, and a script or a mobile client
+         *     sends it in the body as before. A request that carries neither is refused by
+         *     the route, which is the one place that can see both.
          */
         RefreshSessionSchema: {
             /** Refresh Token */
-            refresh_token: string;
+            refresh_token?: string | null;
         };
         /**
          * RegisterUserSchema
@@ -4478,9 +4489,9 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
-                "application/json": components["schemas"]["RefreshSessionSchema"];
+                "application/json": components["schemas"]["RefreshSessionSchema"] | null;
             };
         };
         responses: {
@@ -4511,9 +4522,9 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
-                "application/json": components["schemas"]["RefreshSessionSchema"];
+                "application/json": components["schemas"]["RefreshSessionSchema"] | null;
             };
         };
         responses: {
@@ -4540,9 +4551,7 @@ export interface operations {
     change_password_api_v1_auth_password_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -4575,9 +4584,7 @@ export interface operations {
     read_own_profile_api_v1_users_me_get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -4590,15 +4597,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserResponseSchema"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -4606,9 +4604,7 @@ export interface operations {
     deactivate_own_account_api_v1_users_me_delete: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -4623,23 +4619,12 @@ export interface operations {
                     "application/json": components["schemas"]["UserResponseSchema"];
                 };
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
     update_own_profile_api_v1_users_me_patch: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -4672,9 +4657,7 @@ export interface operations {
     list_tenants_api_v1_tenants_get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -4689,23 +4672,12 @@ export interface operations {
                     "application/json": components["schemas"]["TenantSummarySchema"][];
                 };
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
     create_tenant_api_v1_tenants_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -4738,9 +4710,7 @@ export interface operations {
     read_tenant_api_v1_tenants__tenant_id__get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -4771,9 +4741,7 @@ export interface operations {
     deactivate_tenant_api_v1_tenants__tenant_id__delete: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -4804,9 +4772,7 @@ export interface operations {
     update_tenant_api_v1_tenants__tenant_id__patch: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -4841,9 +4807,7 @@ export interface operations {
     update_stock_policy_api_v1_tenants__tenant_id__stock_policy_put: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -4878,9 +4842,7 @@ export interface operations {
     list_members_api_v1_tenants__tenant_id__members_get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -4911,9 +4873,7 @@ export interface operations {
     invite_member_api_v1_tenants__tenant_id__members_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -4948,9 +4908,7 @@ export interface operations {
     list_invitations_api_v1_tenants__tenant_id__invitations_get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -4981,9 +4939,7 @@ export interface operations {
     remove_member_api_v1_tenants__tenant_id__members__membership_id__delete: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 membership_id: string;
                 tenant_id: string;
@@ -5015,9 +4971,7 @@ export interface operations {
     update_member_api_v1_tenants__tenant_id__members__membership_id__patch: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 membership_id: string;
                 tenant_id: string;
@@ -5053,9 +5007,7 @@ export interface operations {
     list_my_invitations_api_v1_invitations_get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -5070,23 +5022,12 @@ export interface operations {
                     "application/json": components["schemas"]["PendingInvitationSchema"][];
                 };
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
     accept_invitation_api_v1_invitations_accept_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -5119,9 +5060,7 @@ export interface operations {
     list_permissions_api_v1_tenants__tenant_id__permissions_get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -5152,9 +5091,7 @@ export interface operations {
     list_roles_api_v1_tenants__tenant_id__roles_get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -5185,9 +5122,7 @@ export interface operations {
     create_custom_role_api_v1_tenants__tenant_id__roles_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -5222,9 +5157,7 @@ export interface operations {
     update_role_permissions_api_v1_tenants__tenant_id__roles__role_name__permissions_patch: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 role_name: string;
                 tenant_id: string;
@@ -5260,9 +5193,7 @@ export interface operations {
     list_devices_api_v1_tenants__tenant_id__devices_get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -5293,9 +5224,7 @@ export interface operations {
     register_device_api_v1_tenants__tenant_id__devices_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -5330,9 +5259,7 @@ export interface operations {
     list_own_devices_api_v1_tenants__tenant_id__devices_mine_get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -5363,9 +5290,7 @@ export interface operations {
     revoke_device_api_v1_tenants__tenant_id__devices__device_id__delete: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 device_id: string;
                 tenant_id: string;
@@ -5397,9 +5322,7 @@ export interface operations {
     list_categories_api_v1_tenants__tenant_id__categories_get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -5430,9 +5353,7 @@ export interface operations {
     create_category_api_v1_tenants__tenant_id__categories_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -5467,9 +5388,7 @@ export interface operations {
     get_category_api_v1_tenants__tenant_id__categories__category_id__get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 category_id: string;
                 tenant_id: string;
@@ -5501,9 +5420,7 @@ export interface operations {
     update_category_api_v1_tenants__tenant_id__categories__category_id__patch: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 category_id: string;
                 tenant_id: string;
@@ -5542,9 +5459,7 @@ export interface operations {
                 /** @description Include products withdrawn from sale. Defaults to yes. */
                 include_inactive?: boolean;
             };
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -5575,9 +5490,7 @@ export interface operations {
     create_product_api_v1_tenants__tenant_id__products_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -5612,9 +5525,7 @@ export interface operations {
     get_product_api_v1_tenants__tenant_id__products__product_id__get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 product_id: string;
                 tenant_id: string;
@@ -5646,9 +5557,7 @@ export interface operations {
     deactivate_product_api_v1_tenants__tenant_id__products__product_id__delete: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 product_id: string;
                 tenant_id: string;
@@ -5680,9 +5589,7 @@ export interface operations {
     update_product_api_v1_tenants__tenant_id__products__product_id__patch: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 product_id: string;
                 tenant_id: string;
@@ -5718,9 +5625,7 @@ export interface operations {
     publish_product_api_v1_tenants__tenant_id__products__product_id__publish_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 product_id: string;
                 tenant_id: string;
@@ -5752,9 +5657,7 @@ export interface operations {
     unpublish_product_api_v1_tenants__tenant_id__products__product_id__unpublish_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 product_id: string;
                 tenant_id: string;
@@ -5786,9 +5689,7 @@ export interface operations {
     activate_product_api_v1_tenants__tenant_id__products__product_id__activate_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 product_id: string;
                 tenant_id: string;
@@ -5820,9 +5721,7 @@ export interface operations {
     list_product_images_api_v1_tenants__tenant_id__products__product_id__images_get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 product_id: string;
                 tenant_id: string;
@@ -5857,9 +5756,7 @@ export interface operations {
                 /** @description Make this the product's cover. */
                 is_primary?: boolean;
             };
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 product_id: string;
                 tenant_id: string;
@@ -5891,9 +5788,7 @@ export interface operations {
     set_primary_product_image_api_v1_tenants__tenant_id__products__product_id__images__image_id__primary_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 product_id: string;
                 image_id: string;
@@ -5926,9 +5821,7 @@ export interface operations {
     reorder_product_images_api_v1_tenants__tenant_id__products__product_id__images_order_put: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 product_id: string;
                 tenant_id: string;
@@ -5964,9 +5857,7 @@ export interface operations {
     remove_product_image_api_v1_tenants__tenant_id__products__product_id__images__image_id__delete: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 product_id: string;
                 image_id: string;
@@ -5999,9 +5890,7 @@ export interface operations {
     reconcile_product_images_api_v1_tenants__tenant_id__product_images_reconcile_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -6032,9 +5921,7 @@ export interface operations {
     list_inventory_api_v1_tenants__tenant_id__inventory_get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -6070,9 +5957,7 @@ export interface operations {
                 /** @description How many movements to return. */
                 limit?: number;
             };
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -6103,9 +5988,7 @@ export interface operations {
     get_inventory_for_product_api_v1_tenants__tenant_id__inventory__product_id__get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 product_id: string;
                 tenant_id: string;
@@ -6137,9 +6020,7 @@ export interface operations {
     receive_stock_api_v1_tenants__tenant_id__inventory__product_id__receipts_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 product_id: string;
                 tenant_id: string;
@@ -6175,9 +6056,7 @@ export interface operations {
     adjust_stock_api_v1_tenants__tenant_id__inventory__product_id__adjustments_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 product_id: string;
                 tenant_id: string;
@@ -6213,9 +6092,7 @@ export interface operations {
     record_damage_api_v1_tenants__tenant_id__inventory__product_id__damage_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 product_id: string;
                 tenant_id: string;
@@ -6251,9 +6128,7 @@ export interface operations {
     transfer_stock_api_v1_tenants__tenant_id__inventory_transfers_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -6291,9 +6166,7 @@ export interface operations {
                 /** @description Include customers the business has stopped serving. */
                 include_inactive?: boolean;
             };
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -6324,9 +6197,7 @@ export interface operations {
     create_customer_api_v1_tenants__tenant_id__customers_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -6364,9 +6235,7 @@ export interface operations {
                 /** @description The number as it was typed. */
                 phone: string;
             };
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -6397,9 +6266,7 @@ export interface operations {
     get_customer_api_v1_tenants__tenant_id__customers__customer_id__get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 customer_id: string;
                 tenant_id: string;
@@ -6431,9 +6298,7 @@ export interface operations {
     deactivate_customer_api_v1_tenants__tenant_id__customers__customer_id__delete: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 customer_id: string;
                 tenant_id: string;
@@ -6465,9 +6330,7 @@ export interface operations {
     update_customer_api_v1_tenants__tenant_id__customers__customer_id__patch: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 customer_id: string;
                 tenant_id: string;
@@ -6503,9 +6366,7 @@ export interface operations {
     reactivate_customer_api_v1_tenants__tenant_id__customers__customer_id__reactivate_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 customer_id: string;
                 tenant_id: string;
@@ -6540,9 +6401,7 @@ export interface operations {
                 /** @description How many sales to return. */
                 limit?: number;
             };
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -6573,9 +6432,7 @@ export interface operations {
     complete_sale_api_v1_tenants__tenant_id__sales_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -6610,9 +6467,7 @@ export interface operations {
     get_sale_api_v1_tenants__tenant_id__sales__sale_id__get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 sale_id: string;
                 tenant_id: string;
@@ -6644,9 +6499,7 @@ export interface operations {
     cancel_sale_api_v1_tenants__tenant_id__sales__sale_id__cancel_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 sale_id: string;
                 tenant_id: string;
@@ -6691,9 +6544,7 @@ export interface operations {
                 /** @description Only expenses incurred before this moment. */
                 until?: string | null;
             };
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -6724,9 +6575,7 @@ export interface operations {
     record_expense_api_v1_tenants__tenant_id__expenses_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -6761,9 +6610,7 @@ export interface operations {
     list_expense_categories_api_v1_tenants__tenant_id__expenses_categories_get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -6799,9 +6646,7 @@ export interface operations {
                 /** @description End of the period, exclusive. Must carry a timezone. */
                 until: string;
             };
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -6832,9 +6677,7 @@ export interface operations {
     get_expense_api_v1_tenants__tenant_id__expenses__expense_id__get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 expense_id: string;
                 tenant_id: string;
@@ -6866,9 +6709,7 @@ export interface operations {
     reverse_expense_api_v1_tenants__tenant_id__expenses__expense_id__reverse_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 expense_id: string;
                 tenant_id: string;
@@ -6907,9 +6748,7 @@ export interface operations {
                 /** @description How many events to return. */
                 limit?: number;
             };
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 entity_type: string;
                 entity_id: string;
@@ -6955,9 +6794,7 @@ export interface operations {
                 /** @description Only what this person did. */
                 actor_id?: string | null;
             };
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -6988,9 +6825,7 @@ export interface operations {
     push_operations_api_v1_tenants__tenant_id__sync_push_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -7025,9 +6860,7 @@ export interface operations {
     pull_changes_api_v1_tenants__tenant_id__sync_pull_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -7062,9 +6895,7 @@ export interface operations {
     read_cursor_api_v1_tenants__tenant_id__sync_cursor_get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -7095,9 +6926,7 @@ export interface operations {
     advance_cursor_api_v1_tenants__tenant_id__sync_cursor_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -7132,9 +6961,7 @@ export interface operations {
     get_storefront_api_v1_tenants__tenant_id__storefront_get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -7165,9 +6992,7 @@ export interface operations {
     update_storefront_api_v1_tenants__tenant_id__storefront_patch: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -7202,9 +7027,7 @@ export interface operations {
     publish_storefront_api_v1_tenants__tenant_id__storefront_publish_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -7239,9 +7062,7 @@ export interface operations {
     unpublish_storefront_api_v1_tenants__tenant_id__storefront_unpublish_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -7272,9 +7093,7 @@ export interface operations {
     read_product_share_sheet_api_v1_tenants__tenant_id__products__product_id__share_sheet_get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 product_id: string;
                 tenant_id: string;
@@ -7306,9 +7125,7 @@ export interface operations {
     share_invoice_api_v1_tenants__tenant_id__sales__sale_id__share_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 sale_id: string;
                 tenant_id: string;
@@ -7344,9 +7161,7 @@ export interface operations {
     list_share_links_api_v1_tenants__tenant_id__sales__sale_id__share_links_get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 sale_id: string;
                 tenant_id: string;
@@ -7378,9 +7193,7 @@ export interface operations {
     revoke_share_link_api_v1_tenants__tenant_id__share_links__share_link_id__revoke_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 share_link_id: string;
                 tenant_id: string;
@@ -7417,9 +7230,7 @@ export interface operations {
                 /** @description End of the period, exclusive. Defaults to the end of today. */
                 until?: string | null;
             };
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -7457,9 +7268,7 @@ export interface operations {
                 /** @description How many products to return. */
                 limit?: number;
             };
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -7493,9 +7302,7 @@ export interface operations {
                 /** @description How many products to return. */
                 limit?: number;
             };
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -7526,9 +7333,7 @@ export interface operations {
     export_report_api_v1_tenants__tenant_id__reports_export_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -7566,9 +7371,7 @@ export interface operations {
                 /** @description How many exports to return. */
                 limit?: number;
             };
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -7599,9 +7402,7 @@ export interface operations {
     read_unread_count_api_v1_tenants__tenant_id__notifications_unread_count_get: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -7637,9 +7438,7 @@ export interface operations {
                 /** @description How many to return. */
                 limit?: number;
             };
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };
@@ -7670,9 +7469,7 @@ export interface operations {
     mark_notification_read_api_v1_tenants__tenant_id__notifications__notification_id__read_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 notification_id: string;
                 tenant_id: string;
@@ -7704,9 +7501,7 @@ export interface operations {
     mark_all_notifications_read_api_v1_tenants__tenant_id__notifications_read_all_post: {
         parameters: {
             query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
+            header?: never;
             path: {
                 tenant_id: string;
             };

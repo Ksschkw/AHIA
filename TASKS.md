@@ -1743,3 +1743,34 @@ These apply continuously and are re-verified at each milestone boundary.
   which asyncpg rejects outright - TLS is now requested by `DATABASE_REQUIRE_SSL=true` and the query
   string is gone - and `CORS_ALLOWED_ORIGINS` listed only `localhost:3000`, so opening the app at
   `127.0.0.1:3000` produced a 400 on the preflight. Both hostnames are now allowed.
+
+## M19 - progress log (continued)
+
+- The session is a cookie now, not a token in JavaScript. `/auth/register`, `/auth/login` and
+  `/auth/refresh` set `ahia_session` (HttpOnly, SameSite=Lax, `Secure` in production) and `ahia_refresh`
+  (the same, scoped to `/api/v1/auth`), and `/auth/logout` clears both and revokes the session. Every
+  layer above the token service accepts the cookie: `require_principal` reads the header first and the
+  cookie second, so a browser, a script, the mobile client and the documentation all work without a
+  call site remembering a header. SameSite=Lax is the CSRF control for state-changing requests, and it
+  is why a cross-site form post arrives unauthenticated rather than authenticated as somebody else.
+- Two faults the change exposed, both fixed rather than worked around. The web app called the API on
+  `127.0.0.1:8000` from `localhost:3000` - a *different site*, so a Lax cookie is never attached and
+  every request arrived signed out. `/api/...` is now proxied through the app's own origin, which also
+  removes CORS and preflights from the picture entirely. And the CORS middleware sat inside the error
+  handler, so a 401 or a 429 came back with no `Access-Control-Allow-Origin` header and the browser
+  reported a CORS failure instead of the status the API had actually returned.
+- The interactive documentation now shows the **Authorize** control: `require_principal` declares an
+  `HTTPBearer` scheme, so a token is pasted once and used for every request in the docs. A browser does
+  not need it, and the description says so.
+- The connectivity check no longer hangs: the database connection had no connect timeout, so a
+  suspended Neon compute held a request - and the pool slot, and the person - for as long as the driver
+  would wait. It is now bounded by `DATABASE_POOL_TIMEOUT_SECONDS`, which is what turned "the app is
+  broken" into "the database is waking up". Every API call in the web app is bounded too, and reads are
+  retried once, because a shop's connection drops in and out all day.
+- The dashboard shows the day's money, the four actions (`+ Sale`, `+ Product`, `Stock In`, `Expense`),
+  the shelf with stock pills, recent sales and what is running out, with a sheet per action. There is no
+  holding screen: the sign-in card appears at once and the dashboard replaces it when a session is
+  found, because a screen that says "checking..." forever is indistinguishable from a broken app.
+- Branding: the wordmark is AHIA with the dotted I of Igbo orthography, rendered from an escape
+  sequence so the source stays ASCII (ADR-0006) and the screen shows the correct letter, in the accent
+  colour; the mark is a four-cell market grid that reads at favicon size.

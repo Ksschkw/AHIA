@@ -20,6 +20,7 @@
 secrets/
 credentials.json
 service-account*.json
+project-init.md
 
 # ---------------------------------------------------------------------------
 # Python

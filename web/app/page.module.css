@@ -1,173 +1,352 @@
 .page {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 28px 20px 64px;
+  min-height: 100vh;
+  padding-bottom: 64px;
 }
 
-.header {
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
+  padding: 12px 20px;
+  background: rgba(251, 247, 240, 0.92);
+  backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--line);
-  padding-bottom: 12px;
 }
 
-.title {
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  margin: 0;
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.connection {
-  color: var(--muted);
+.brandStack {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.brandSub {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-2);
+  letter-spacing: 0;
+  font-weight: 500;
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.who {
   font-size: 13px;
+  color: var(--ink-2);
 }
 
-.panel {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 16px;
-  margin-top: 18px;
+.businessPicker {
+  min-height: 38px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  max-width: 190px;
 }
 
-.panelTitle {
-  margin: 0 0 12px;
-  font-size: 15px;
+.linkButton {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--leaf);
+  font-size: 13px;
   font-weight: 600;
+  text-decoration: underline;
+}
+
+.content {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 22px 20px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.heroRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--gap);
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--card);
+  box-shadow: var(--shadow);
+  text-align: left;
+  transition: transform 0.08s ease, border-color 0.15s ease;
+}
+
+.tile:hover:not(:disabled) {
+  border-color: var(--leaf);
+  transform: translateY(-1px);
+}
+
+.tile:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.tileGlyph {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+
+.glyph_sale {
+  background: var(--leaf-soft);
+  color: var(--leaf);
+}
+
+.glyph_product {
+  background: var(--gold-soft);
+  color: var(--gold);
+}
+
+.glyph_stock {
+  background: #e8eefc;
+  color: #2b4c9b;
+}
+
+.glyph_expense {
+  background: var(--clay-soft);
+  color: var(--clay);
+}
+
+.tileLabel {
+  font-weight: 650;
+}
+
+.tileHint {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--gap);
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  .columns {
+    grid-template-columns: 1.35fr 1fr;
+  }
+}
+
+.sideColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
 }
 
-.field {
+.row:first-child {
+  border-top: none;
+}
+
+.rowMain {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-width: 160px;
-  flex: 1;
-}
-
-.label {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.input {
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 8px 10px;
-  background: #fff;
   min-width: 0;
 }
 
-.button {
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: #fff;
-  border-radius: 6px;
-  padding: 9px 14px;
-  cursor: pointer;
+.rowName {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.button:disabled {
-  opacity: 0.5;
+.rowMeta {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.rowEnd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rowAction {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rowAction:hover:not(:disabled) {
+  border-color: var(--leaf);
+  color: var(--leaf);
+}
+
+.rowAction:disabled {
+  opacity: 0.45;
   cursor: default;
 }
 
-.buttonQuiet {
-  border: 1px solid var(--line);
-  background: #fff;
-  color: var(--ink);
-  border-radius: 6px;
-  padding: 9px 14px;
-  cursor: pointer;
+.amount {
+  font-weight: 700;
 }
 
-.choices {
+.inlineFields {
   display: flex;
+  gap: 12px;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
 }
 
-.choice {
-  border: 1px solid var(--line);
-  background: #fff;
-  border-radius: 6px;
-  padding: 6px 10px;
-  cursor: pointer;
+.totalLine {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--leaf-soft);
+  color: var(--leaf-dark);
 }
 
-.choiceActive {
-  border: 1px solid var(--accent);
-  background: #fff;
-  color: var(--accent);
-  font-weight: 600;
-  border-radius: 6px;
-  padding: 6px 10px;
-  cursor: pointer;
+.totalLine strong {
+  font-size: 20px;
 }
 
-.table {
+.hint {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.centred {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+.loading {
+  color: var(--ink-2);
+}
+
+/* Sign in ---------------------------------------------------------------- */
+
+.signInPage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px 20px;
+}
+
+.signInCard {
   width: 100%;
-  border-collapse: collapse;
-  margin-top: 8px;
-}
-
-.table th {
-  text-align: left;
-  font-size: 12px;
-  color: var(--muted);
-  font-weight: 600;
-  border-bottom: 1px solid var(--line);
-  padding: 6px 8px;
-}
-
-.table td {
-  border-bottom: 1px solid var(--line);
-  padding: 8px;
-}
-
-.numeric {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.message {
-  margin-top: 14px;
-  padding: 10px 12px;
-  border-radius: 6px;
+  max-width: 420px;
+  background: var(--card);
   border: 1px solid var(--line);
-  background: #fff;
-  white-space: pre-wrap;
-  font-size: 14px;
+  border-radius: 22px;
+  box-shadow: var(--shadow-lg);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-.error {
-  border-color: #e6b3b1;
-  color: var(--danger);
+.signInBrand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
 }
 
-.success {
-  border-color: #b6d7c3;
-  color: var(--accent);
+.signInTitle {
+  font-size: 26px;
+  letter-spacing: 0.06em;
 }
 
-.empty {
-  color: var(--muted);
-  font-size: 14px;
-  margin-top: 8px;
+.signInTagline {
+  font-size: 13px;
+  color: var(--ink-2);
+  max-width: 30ch;
 }
 
-.footnote {
-  margin-top: 22px;
-  color: var(--muted);
+.tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  background: var(--sand-2);
+  border-radius: 999px;
+}
+
+.tab,
+.tabActive {
+  flex: 1;
+  min-height: 38px;
+  border-radius: 999px;
+  border: none;
+  background: none;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.tabActive {
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.signInForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.signInFoot {
   font-size: 12px;
+  color: var(--ink-3);
+  text-align: center;
 }

@@ -1,10 +1,42 @@
+/*
+ * The design tokens for the whole interface.
+ *
+ * Warm, not corporate: this is a tool for a market stall, not a bank branch. Cream paper, deep
+ * leaf-green for anything that commits, terracotta for money leaving, and ink rather than black.
+ * Every colour is a variable so a theme is a change in one place.
+ */
+
 :root {
-  --ink: #14181f;
-  --muted: #5b6472;
-  --line: #dfe3e9;
-  --surface: #ffffff;
-  --accent: #1f6f4a;
+  --sand: #fbf7f0;
+  --sand-2: #f3ece1;
+  --card: #ffffff;
+
+  --ink: #1e1b16;
+  --ink-2: #5c5549;
+  --ink-3: #8b8377;
+
+  --leaf: #0b5d3b;
+  --leaf-dark: #084a2f;
+  --leaf-soft: #e6f1ea;
+
+  --clay: #c2571f;
+  --clay-soft: #fbe9dd;
+
+  --gold: #b7791f;
+  --gold-soft: #fdf3e0;
+
   --danger: #a3231f;
+  --danger-soft: #fbe4e3;
+
+  --line: #e7dfd2;
+  --line-strong: #d6cbb8;
+
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 1px 2px rgba(30, 27, 22, 0.04), 0 8px 24px rgba(30, 27, 22, 0.06);
+  --shadow-lg: 0 24px 60px rgba(30, 27, 22, 0.18);
+
+  --gap: 16px;
 }
 
 * {
@@ -15,17 +47,45 @@ html,
 body {
   margin: 0;
   padding: 0;
-  background: #f4f6f8;
+  background: var(--sand);
   color: var(--ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
   font-size: 15px;
   line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+p {
+  margin: 0;
 }
 
 button {
   font: inherit;
+  color: inherit;
+  cursor: pointer;
 }
 
-input {
+input,
+select,
+textarea {
   font: inherit;
+  color: inherit;
+}
+
+a {
+  color: var(--leaf);
+}
+
+/* Money and counts line up in columns; proportional digits do not. */
+.tabular {
+  font-variant-numeric: tabular-nums;
 }

@@ -1,0 +1,37 @@
+.mark {
+  display: block;
+}
+
+.markPlate {
+  fill: var(--leaf);
+}
+
+.markCell {
+  fill: rgba(255, 255, 255, 0.35);
+}
+
+.markCellFilled {
+  fill: #ffffff;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wordmark {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+}
+
+.wordmarkLarge {
+  font-size: 28px;
+  letter-spacing: 0.18em;
+}
+
+.dotted {
+  color: var(--clay);
+}
