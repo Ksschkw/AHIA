@@ -1461,11 +1461,11 @@ Goal: a business exists as a tenant with a globally unique public slug.
       and message-sending endpoints covered.
 - [x] M18.1.2 Request duration, error count, authorization denial and breaker
       state metrics exposed in a form the platform can scrape.
-- [~] M18.1.3 Row-Level Security rollout plan **done**
-      (`docs/RLS_ROLLOUT.md`); the implementation is the next step and is not
-      enabled yet. The plan states the mechanism, the table order, what is out
-      of scope, the three per-table assertions, and the two-transaction reads
-      that public paths need.
+- [x] M18.1.3 Row-Level Security enabled: twenty business-owned tables carry
+      one policy of the same shape, forced on the table's owner; the unit of
+      work binds the authorized business into each transaction; the public and
+      job paths resolve first and read inside the scope. Verified per table as
+      documented in `docs/RLS_ROLLOUT.md`, including what is *not* verified.
 - [x] M18.1.4 Dependency audit gate confirmed to fail the build on a critical
       finding, with a deliberately planted test finding.
 - [ ] M18.1.5 Northflank deployment configuration, health checks and secret
@@ -1512,14 +1512,38 @@ Goal: a business exists as a tenant with a globally unique public slug.
   the metrics endpoint and how to rotate its token, the error-reporting split, and a section that
   states what is *not* yet in place so a reader is not left to discover it.
 
-- M18.1.3's plan is written and committed, and deliberately not enabled. The plan states the
-  mechanism (`SET LOCAL app.current_tenant` per transaction, one policy shape per table, failing
-  closed because a missing setting makes `tenant_id = NULL` untrue), the order the tables are turned on
-  in, what stays out of scope and why (`tenants`, because a public read resolves a slug before any
-  scope exists; identity tables, because a person exists before a business does), the three assertions
-  every step lands with, and the two-transaction shape the public and job paths need. Enabling RLS
-  without the scope plumbing in place would return empty pages rather than errors, so the plan is the
-  first half of the micro-milestone and the plumbing is the second.
+- M18.1.3's plan was written and committed first, and deliberately not enabled at that point. The plan
+  states the mechanism (`SET LOCAL app.current_tenant` per transaction, one policy shape per table,
+  failing closed because a missing setting makes `tenant_id = NULL` untrue), the order the tables are
+  turned on in, what stays out of scope and why (`tenants`, because a public read resolves a slug
+  before any scope exists; identity tables, because a person exists before a business does), the three
+  assertions every step lands with, and the two-transaction shape the public and job paths need.
+  Enabling RLS without the scope plumbing in place would return empty pages rather than errors, so the
+  plan was the first half of the micro-milestone and the plumbing is the second.
+
+- M18.1.3 is implemented and enabled. `core/tenant_scope.py` holds the business in a context variable,
+  following the correlation-ID pattern; `SqlAlchemyUnitOfWork.__aenter__` writes it into the
+  transaction with `set_config(..., true)`. `TenantService.resolve_tenant_context` binds it, which is
+  the one place authorization is decided, so a route cannot be authorized and unscoped; the
+  low-stock evaluator binds it per business inside `tenant_scope(...)`; the public shop and share-link
+  reads were rewritten as resolve-then-read-within, in two transactions, because a public read starts
+  before any business is known.
+- The migration (`56912421e4aa`) creates one policy per business-owned table with the *same* predicate
+  and forces it on the table's owner. Two corrections to the plan, both recorded in
+  `docs/RLS_ROLLOUT.md`: the naive `current_setting('app.current_tenant', true)::uuid` is wrong,
+  because PostgreSQL leaves the placeholder defined as an *empty string* after a `SET LOCAL`
+  transaction commits, so the next request on that pooled connection would raise
+  `invalid input syntax for type uuid: ""` rather than returning no rows - `nullif(..., '')` is what
+  makes both cases mean "no scope"; and `share_links` moved out of scope, because a token has to be
+  resolved before the business it belongs to is known. The three sync tables were added, since leaving
+  them out would leave a hole of the same shape.
+- The verification runs as an unprivileged probe role, because the ordinary test connection is a
+  superuser locally and superusers bypass RLS regardless of `FORCE` - an assertion made as the owner
+  would pass with no policy present at all. It covers the three per-table assertions on `customers`,
+  `categories` and `ledger_entries`, a refused write outside a scope, the pooled-connection case, the
+  application path failing closed through the unit of work, and structural assertions for all twenty
+  scoped tables and all eleven excluded ones. What is *not* verified is listed in the same document
+  rather than left to be assumed.
 
 ## M19 - Web application bootstrap (Next.js)
 

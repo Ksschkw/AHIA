@@ -60,7 +60,26 @@ the scraper, set it here, then remove the old one.
 
 ---
 
-## 3. Error reporting
+## 3. Row-Level Security
+
+The database refuses to return another business's rows even when a query forgets to filter. Every
+business-owned table has one policy of the same shape, forced on the table's owner, and the unit of
+work binds the authorized business into each transaction. The mechanism, the twenty tables in scope,
+the tables deliberately left out and the verification - including what is *not* verified - are in
+`docs/RLS_ROLLOUT.md`.
+
+Two things are worth knowing without opening that document:
+
+- Any path that legitimately starts before a business is known - a public shop address, a share
+  token, the scheduled evaluator - resolves the business first and then reads inside its scope, in a
+  second transaction.
+- A new business-owned table needs its policy in the migration that creates it, and its name in the
+  verification test's list. A table with a `tenant_id` column and no policy is a table where a
+  forgotten filter is silent again.
+
+---
+
+## 4. Error reporting
 
 Every failure produces two views joined by a correlation ID.
 
@@ -77,12 +96,13 @@ call site that logs a field the rules forbid still produces a redacted line.
 
 ---
 
-## 4. What is not yet in place
+## 5. What is not yet in place
 
 Stated here rather than left to be discovered:
 
-- **Row-Level Security** on the highest-risk tables is planned and not implemented. The plan and its
-  preconditions are in this document as they land.
+- **Row-Level Security is not verified against a production database**, only against the local test
+  database, and the ordinary test suite runs as the owning role, which bypasses the policies. See the
+  "not verified" list in `docs/RLS_ROLLOUT.md`.
 - **Per-process rate limiting** as described above.
 - **No server-side message sending.** The WhatsApp integration builds a click-to-chat link that the
   client opens; nothing in this service sends a message on a business's behalf yet. When one lands, it
