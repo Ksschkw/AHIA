@@ -183,11 +183,15 @@ class CircuitBreaker:
             )
 
         if current_state is CircuitState.HALF_OPEN:
-            # Only a bounded number of probes are admitted while half-open.
+            # Only a bounded number of probes are admitted while half-open: the
+            # point of the state is to test the dependency with one call, not to
+            # hand it the traffic that broke it. The counter is decremented by
+            # whichever of `record_success` or `record_failure` the admitted call
+            # ends with, and every admitted call ends with exactly one of them.
             if self._half_open_probes_in_flight >= self._configuration.half_open_probe_count:
                 self.metrics.short_circuited_calls += 1
-            if self._registry is not None:
-                self._registry.record_breaker_short_circuit(dependency=self.dependency_name)
+                if self._registry is not None:
+                    self._registry.record_breaker_short_circuit(dependency=self.dependency_name)
                 raise DependencyCircuitOpenError(
                     operation="outbound_call",
                     detail=(
