@@ -1580,13 +1580,18 @@ Goal: a business exists as a tenant with a globally unique public slug.
 
 ## M19 - Web application bootstrap (Next.js)
 
-- [ ] M19.1.1 `web/` workspace with Next.js, TypeScript, strict mode, and a
-      committed lockfile.
-- [ ] M19.1.2 Typed API client generated from or aligned with the backend
-      schemas.
-- [ ] M19.1.3 Authentication flow against the real API.
-- [ ] M19.1.4 Trader dashboard shell with the operational actions
-      (`+ Sale`, `+ Product`, `Stock In`, `Expense`).
+- [x] M19.1.1 `web/` workspace with Next.js (App Router), TypeScript in strict
+      mode, and a committed lockfile.
+- [x] M19.1.2 Typed API client generated from the backend's OpenAPI document:
+      `web/openapi.json` is the specification, `npm run api:types` generates
+      `web/lib/api-schema.d.ts`, and `web/lib/api.ts` is written against it.
+      Generating caught three real mismatches on the first run.
+- [x] M19.1.3 Authentication flow against the real API: create an account and
+      sign in from the console, with the access token held client-side and the
+      correlation ID shown on every failure.
+- [~] M19.1.4 Trader dashboard shell: the console covers `+ Product`,
+      `Stock In` and `+ Sale` against the real API and shows the stock move.
+      `Expense` and a sales list are not on the screen yet.
 - [ ] M19.1.5 Public storefront rendering from the public API with correct
       metadata for sharing.
 - [ ] M19.1.6 Client-side permission awareness that hides unavailable actions
@@ -1721,3 +1726,20 @@ These apply continuously and are re-verified at each milestone boundary.
       synchronization, permissions, transactions, external dependencies or
       public/private boundaries is appended to `docs/ARCHITECTURE.md` decision
       log before implementation proceeds.
+
+## M19 - progress log
+
+- M19.1.1 to M19.1.3 complete, and M19.1.4 partly: the console at `http://localhost:3000` creates an
+  account, opens a business, adds a product, stocks it and records a sale, with the quantity on hand
+  moving from 10.000 to 9.000 as the sale lands. It was driven end to end in a real browser
+  (`web/scripts/browser-check.mjs`, screenshots per step in `.review/`), not only in tests.
+- The API types are generated from the backend's own `openapi.json` rather than hand-written, and
+  generating them immediately found three places where a hand-written client would have been wrong:
+  `/api/v1/auth/login` takes `identifier` rather than `email` (a trader types either a phone number or
+  an address), a business carries its own `currency` and `timezone`, and a sale line carries its own
+  `discount_amount`. That is the whole argument for generating them.
+- Two backend-side findings from the first real run, both fixed in the application's own configuration
+  rather than by weakening anything: `DATABASE_URL` carried `?sslmode=require&channel_binding=require`,
+  which asyncpg rejects outright - TLS is now requested by `DATABASE_REQUIRE_SSL=true` and the query
+  string is gone - and `CORS_ALLOWED_ORIGINS` listed only `localhost:3000`, so opening the app at
+  `127.0.0.1:3000` produced a 400 on the preflight. Both hostnames are now allowed.

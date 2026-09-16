@@ -126,3 +126,9 @@ logs/
 tmp/
 temp/
 .cache/
+
+# Local npm cache, kept inside the workspace when the home cache is not writable.
+.npm-cache/
+
+# Local review artifacts: browser screenshots and captured page text.
+.review/

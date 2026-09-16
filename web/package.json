@@ -1,0 +1,24 @@
+{
+  "name": "ahia-web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "api:types": "openapi-typescript openapi.json -o lib/api-schema.d.ts",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "16.3.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "openapi-typescript": "^7.13.0",
+    "puppeteer-core": "^25.11.0",
+    "typescript": "^5"
+  }
+}
