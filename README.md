@@ -93,6 +93,9 @@ with one command.
 |---|---|
 | `docs/PREREQUISITES.md` | toolchain versions, external accounts, the complete environment variable contract, feature flag register, secret rotation paths, the object storage decision |
 | `docs/ARCHITECTURE.md` | the five layers mapped onto directories, invariants, cross-cutting rules, decision log |
+| `docs/RUNBOOK.md` | deployment, migrations, rollback, secret rotation, breaker trips, tracing a request by correlation ID, and the incidents this system actually has |
+| `docs/HARDENING.md` | rate limiting, metrics, Row-Level Security and the error-reporting split, plus what is not in place |
+| `docs/RLS_ROLLOUT.md` | what Row-Level Security enforces, where the scope is bound, and what was verified - and what was not |
 | `TASKS.md` | 21 milestones broken into sub-milestones and micro-milestones, with status |
 | `PRODUCT_INITIAL_DEFINITION/AHIA_PROJECT_SPECIFICATION.md` | product definition and journeys |
 | `PRODUCT_INITIAL_DEFINITION/AHIA_DATABASE_AND_DOMAIN_SPEC.md` | entities, constraints, indexes, sync semantics |

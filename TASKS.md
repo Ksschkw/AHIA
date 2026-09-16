@@ -1470,9 +1470,11 @@ Goal: a business exists as a tenant with a globally unique public slug.
       finding, with a deliberately planted test finding.
 - [ ] M18.1.5 Northflank deployment configuration, health checks and secret
       wiring documented.
-- [ ] M18.1.6 Production runbook in `docs/`: startup, migration, rollback,
-      secret rotation, breaker trip response, correlation-ID based
-      troubleshooting.
+- [x] M18.1.6 Production runbook in `docs/RUNBOOK.md`: startup, migration
+      order, rollback, the secret inventory with what each rotation
+      invalidates, breaker trip response, correlation-ID troubleshooting, the
+      Row-Level Security symptom, the scheduled job, and the incidents this
+      system actually has.
 - [ ] M18.1.7 Load smoke test on the sale endpoint; record numbers.
 
 ---
@@ -1544,6 +1546,19 @@ Goal: a business exists as a tenant with a globally unique public slug.
   application path failing closed through the unit of work, and structural assertions for all twenty
   scoped tables and all eleven excluded ones. What is *not* verified is listed in the same document
   rather than left to be assumed.
+
+- M18.1.6 complete. `docs/RUNBOOK.md` is written against the code rather than from a template: the
+  commands are the ones the Makefile runs, the production refusals are the ones `Settings` actually
+  enforces (JSON logs, `DATABASE_REQUIRE_SSL=true`, no `DEBUG`, no wildcard CORS with credentials, the
+  active storage provider's credentials, the secret-length minimums), the metric and log names are the
+  ones the registry and the logger emit, and the incident table names the failures this system can
+  really have.
+- The two sections worth reading before an incident: the secret inventory, because rotating
+  `REFRESH_TOKEN_PEPPER` invalidates every refresh token, every pending invitation *and* every share
+  link - it is the one rotation that logs users out and breaks links at the same time; and the
+  Row-Level Security section, because a wrong or missing scope produces a successful empty response
+  rather than an error, which is the failure a runbook has to name explicitly or nobody will look for
+  it.
 
 ## M19 - Web application bootstrap (Next.js)
 
