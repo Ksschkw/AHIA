@@ -17,8 +17,11 @@ from datetime import datetime
 from typing import Final
 from uuid import UUID
 
+from fastapi import Request
+
 from ahia.core.errors import UnauthenticatedError
 from ahia.core.security import TokenClaims, TokenService
+from ahia.core.session_cookies import read_access_token
 
 _BEARER_PREFIX: Final[str] = "bearer "
 
@@ -112,5 +115,32 @@ def authenticate(authorization_header: str | None, token_service: TokenService) 
     create a second place to get it wrong.
     """
     token = extract_bearer_token(authorization_header)
+    claims = token_service.decode_access_token(token)
+    return principal_from_claims(claims)
+
+
+def authenticate_request(request: Request, token_service: TokenService) -> Principal:
+    """Authenticate a browser request from its session cookie, or any request from its header.
+
+    The header is checked first so that a script, the interactive documentation and
+    a mobile client keep working unchanged, and so that a caller who deliberately
+    presents a token is not silently overridden by a cookie from a previous login.
+
+    A cookie is not a weaker credential here: it carries exactly the same access
+    token, and the same validation decides whether it is genuine. The difference
+    is only who attaches it - the browser, automatically, rather than every call
+    site.
+    """
+    authorization_header = request.headers.get("authorization")
+    if authorization_header:
+        return authenticate(authorization_header, token_service)
+
+    token = read_access_token(request)
+    if token is None:
+        raise UnauthenticatedError(
+            operation="authenticate_request",
+            entity="session",
+            detail=("neither an Authorization header nor a session cookie was presented"),
+        )
     claims = token_service.decode_access_token(token)
     return principal_from_claims(claims)

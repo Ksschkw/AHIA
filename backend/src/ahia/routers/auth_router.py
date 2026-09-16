@@ -14,9 +14,15 @@ from __future__ import annotations
 from typing import Annotated, Final
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Response, status
 
 from ahia.core.authentication import Principal
+from ahia.core.errors import UnauthenticatedError
+from ahia.core.session_cookies import (
+    clear_session_cookies,
+    read_refresh_token,
+    set_session_cookies,
+)
 from ahia.routers.user_router import require_principal
 from ahia.schemas.auth_schema import (
     AuthenticatedSessionSchema,
@@ -68,9 +74,16 @@ def build_session_response(issued: IssuedSession) -> AuthenticatedSessionSchema:
 )
 async def register(
     payload: RegisterUserSchema,
+    request: Request,
+    response: Response,
     service: AuthServiceDependency,
 ) -> AuthenticatedSessionSchema:
-    """Register a user, returning a session so no second request is needed."""
+    """Register a user, returning a session so no second request is needed.
+
+    The session is also written to cookies, so a browser is signed in without any
+    client code holding a token. The body keeps carrying the tokens for clients
+    that have no cookie jar.
+    """
     issued = await service.register_user(
         first_name=payload.first_name,
         last_name=payload.last_name,
@@ -78,6 +91,7 @@ async def register(
         phone=payload.phone,
         password=payload.password,
     )
+    set_session_cookies(response, settings=request.app.state.settings, issued=issued)
     return build_session_response(issued)
 
 
@@ -88,6 +102,8 @@ async def register(
 )
 async def login(
     payload: LoginSchema,
+    request: Request,
+    response: Response,
     service: AuthServiceDependency,
 ) -> AuthenticatedSessionSchema:
     """Sign in with an email address or a phone number."""
@@ -95,6 +111,7 @@ async def login(
         identifier=payload.identifier,
         password=payload.password,
     )
+    set_session_cookies(response, settings=request.app.state.settings, issued=issued)
     return build_session_response(issued)
 
 
@@ -104,15 +121,25 @@ async def login(
     summary="Rotate a refresh token into a new session",
 )
 async def refresh(
-    payload: RefreshSessionSchema,
+    request: Request,
+    response: Response,
     service: AuthServiceDependency,
+    payload: RefreshSessionSchema | None = None,
 ) -> AuthenticatedSessionSchema:
-    """Rotate the presented refresh token.
+    """Rotate the presented refresh token, from the body or from the cookie.
 
     The presented token is revoked as part of the exchange, so a token that is
     used twice is recognised as reuse and ends the whole session family.
     """
-    issued = await service.refresh_session(refresh_token=payload.refresh_token)
+    presented = (payload.refresh_token if payload else None) or read_refresh_token(request)
+    if presented is None:
+        raise UnauthenticatedError(
+            operation="refresh_session",
+            entity="session",
+            detail="no refresh token was presented in the body or in the session cookie",
+        )
+    issued = await service.refresh_session(refresh_token=presented)
+    set_session_cookies(response, settings=request.app.state.settings, issued=issued)
     return build_session_response(issued)
 
 
@@ -122,15 +149,22 @@ async def refresh(
     summary="End the session behind a refresh token",
 )
 async def logout(
-    payload: RefreshSessionSchema,
+    request: Request,
+    response: Response,
     service: AuthServiceDependency,
+    payload: RefreshSessionSchema | None = None,
 ) -> LogoutSchema:
-    """Sign out.
+    """Sign out, ending the session and clearing the cookies.
 
     Idempotent: an unknown or already-revoked token still produces success, so a
-    client that has lost track of its session can reach a signed-out state.
+    client that has lost track of its session can reach a signed-out state. The
+    cookies are cleared either way, because a browser that keeps a dead cookie
+    keeps looking signed in.
     """
-    await service.revoke_session(refresh_token=payload.refresh_token)
+    presented = (payload.refresh_token if payload else None) or read_refresh_token(request)
+    if presented is not None:
+        await service.revoke_session(refresh_token=presented)
+    clear_session_cookies(response, settings=request.app.state.settings)
     return LogoutSchema()
 
 

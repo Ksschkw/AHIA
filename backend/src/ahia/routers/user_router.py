@@ -18,16 +18,30 @@ from __future__ import annotations
 
 from typing import Annotated, Final
 
-from fastapi import APIRouter, Depends, Header, Request, status
+from fastapi import APIRouter, Depends, Request, Security, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from ahia.core.authentication import Principal, authenticate
+from ahia.core.authentication import Principal, authenticate_request
 from ahia.schemas.user_schema import UserProfileUpdateSchema, UserResponseSchema
 from ahia.services.user_service import UserService
 
 _USER_ROUTER_PREFIX: Final[str] = "/users"
-_AUTHORIZATION_HEADER_NAME: Final[str] = "Authorization"
 
 router = APIRouter(prefix=_USER_ROUTER_PREFIX, tags=["users"])
+
+#: Declared so the interactive documentation shows an "Authorize" control on every
+#: route that needs a caller: the token is pasted once and used for every request
+#: from then on, instead of being copied into each call by hand. `auto_error=False`
+#: because a browser does not present a header at all - it carries the session in a
+#: cookie - and this must describe the option without demanding it.
+BEARER_SCHEME = HTTPBearer(
+    auto_error=False,
+    description=(
+        "The access_token returned by /api/v1/auth/login or /api/v1/auth/register. "
+        "A browser does not need this: it is already signed in by an HttpOnly session cookie."
+    ),
+)
+BearerCredentials = Annotated[HTTPAuthorizationCredentials | None, Security(BEARER_SCHEME)]
 
 
 def get_user_service(request: Request) -> UserService:
@@ -38,16 +52,22 @@ def get_user_service(request: Request) -> UserService:
 
 async def require_principal(
     request: Request,
-    authorization: Annotated[str | None, Header(alias=_AUTHORIZATION_HEADER_NAME)] = None,
+    credentials: BearerCredentials = None,
 ) -> Principal:
-    """Resolve the caller's authenticated identity.
+    """Resolve the caller's authenticated identity, from a header or a session cookie.
+
+    A browser carries the session in an HttpOnly cookie and attaches it by itself;
+    a script, a mobile client and the interactive documentation present a bearer
+    token. Both arrive here as the same access token and are validated the same
+    way.
 
     Authentication only. A principal with no membership is authenticated and
     authorized for nothing, which is the correct state for a person whose
     invitation has not been accepted yet.
     """
+    del credentials  # Declared for the documentation; the token itself is read below.
     token_service = request.app.state.container.token_service
-    return authenticate(authorization, token_service)
+    return authenticate_request(request, token_service)
 
 
 PrincipalDependency = Annotated[Principal, Depends(require_principal)]

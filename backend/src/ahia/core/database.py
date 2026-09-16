@@ -63,6 +63,11 @@ def build_connect_arguments(settings: Settings) -> dict[str, Any]:
     can regress without any test noticing.
     """
     connect_arguments: dict[str, Any] = {
+        # A connect that never completes is worse than one that fails: without this, a suspended
+        # database or a black-holed route holds the request, the pool slot and the caller for as
+        # long as the driver is willing to wait (a minute, by default). The bound is the same one
+        # the pool already promises a caller, because a caller cannot tell the two apart.
+        "timeout": settings.database_pool_timeout_seconds,
         "server_settings": {
             # A slow query is bounded by the server, not by hope.
             "statement_timeout": str(settings.database_statement_timeout_ms),
@@ -70,7 +75,7 @@ def build_connect_arguments(settings: Settings) -> dict[str, Any]:
             # is the difference between a five-minute and a one-hour incident
             # when something is holding a lock.
             "application_name": f"{settings.app_name.lower()}-api",
-        }
+        },
     }
     if settings.database_require_ssl:
         connect_arguments["ssl"] = "require"

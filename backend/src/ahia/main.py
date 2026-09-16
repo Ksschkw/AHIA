@@ -122,21 +122,6 @@ def create_application(settings: Settings | None = None) -> FastAPI:
     # same object the request counters live in.
     application.state.metrics = MetricsRegistry()
 
-    if resolved_settings.cors_allowed_origin_list:
-        application.add_middleware(
-            CORSMiddleware,
-            allow_origins=list(resolved_settings.cors_allowed_origin_list),
-            allow_credentials=resolved_settings.cors_allow_credentials,
-            allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-            allow_headers=[
-                "Authorization",
-                "Content-Type",
-                resolved_settings.correlation_id_header,
-            ],
-            expose_headers=[resolved_settings.correlation_id_header],
-            max_age=600,
-        )
-
     # Order matters, and Starlette applies it from the inside out: the last
     # middleware added is the outermost. The intended nesting is
     #
@@ -180,6 +165,27 @@ def create_application(settings: Settings | None = None) -> FastAPI:
         CorrelationIdMiddleware,
         header_name=resolved_settings.correlation_id_header,
     )
+
+    # Added last, so it is the outermost layer of all. That position is not cosmetic: an error
+    # response produced by the error handler never passes back through a middleware added after
+    # it, so a CORS middleware placed lower down leaves a 401 or a 429 without an
+    # `Access-Control-Allow-Origin` header. The browser then reports a CORS failure instead of the
+    # status the API actually returned, which is how a signed-out session comes to look like a
+    # broken server.
+    if resolved_settings.cors_allowed_origin_list:
+        application.add_middleware(
+            CORSMiddleware,
+            allow_origins=list(resolved_settings.cors_allowed_origin_list),
+            allow_credentials=resolved_settings.cors_allow_credentials,
+            allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+            allow_headers=[
+                "Authorization",
+                "Content-Type",
+                resolved_settings.correlation_id_header,
+            ],
+            expose_headers=[resolved_settings.correlation_id_header],
+            max_age=600,
+        )
 
     register_exception_handlers(application)
     register_routers(application, resolved_settings)

@@ -84,11 +84,17 @@ class LoginSchema(BaseModel):
 
 
 class RefreshSessionSchema(BaseModel):
-    """A refresh request."""
+    """A refresh request.
+
+    The token is optional because a browser does not send it here: it arrives in
+    an HttpOnly cookie the page cannot read, and a script or a mobile client
+    sends it in the body as before. A request that carries neither is refused by
+    the route, which is the one place that can see both.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    refresh_token: RefreshTokenString
+    refresh_token: RefreshTokenString | None = None
 
 
 class ChangePasswordSchema(BaseModel):
