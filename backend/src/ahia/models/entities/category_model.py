@@ -36,6 +36,7 @@ from uuid import UUID
 from ahia.core.errors import EntityInvariantError
 from ahia.core.slug import normalize_slug, require_slug_shape
 from ahia.models.entities.money import MAXIMUM_MONEY, ZERO_MONEY, check_money_rules
+from ahia.models.entities.price_book import PriceDefaults
 
 MAXIMUM_NAME_LENGTH: Final[int] = 120
 MAXIMUM_SLUG_LENGTH: Final[int] = 63
@@ -191,6 +192,18 @@ class CategoryModel:
     # ------------------------------------------------------------------
     # Derived state
     # ------------------------------------------------------------------
+
+    def price_defaults(self) -> PriceDefaults:
+        """Return what this group offers the items under it.
+
+        The group is a grade - "21D", "Privacy", "Grains" - and this is the one place its prices are
+        read from, so a caller never reaches into three fields and reassembles the rule itself.
+        """
+        return PriceDefaults(
+            normal_price=self.default_normal_price,
+            wholesale_price=self.default_wholesale_price,
+            pieces_per_pack=self.default_pieces_per_pack,
+        )
 
     def describe_for_audit(self) -> dict[str, str]:
         """Return the identifiers an audit record needs.

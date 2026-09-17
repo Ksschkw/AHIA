@@ -1775,13 +1775,20 @@ Each line is one commit, and the note under it is what you will be able to see a
       `products` gains `wholesale_price` and `pieces_per_pack`. All nullable, all additive, nothing that
       exists today changes meaning. Migration, entity invariants, repository mapping, tests.
       *You will see:* nothing yet - this is the shelf the price book stands on.
-- [ ] **M21.1.2 A product inherits, and an override is marked.**
+- [x] **M21.1.2 The rule, in one place: own price, else the group's, else the counter price.**
       A product's normal price, wholesale price and pack size fall back to its category's default when
       they are unset, and the API says which of the two it returned. `ProductResponseSchema` gains
       `effective_normal_price`, `effective_wholesale_price`, `inherits_normal_price`,
       `inherits_wholesale_price`. Service-level resolution, not invented in a route.
       *You will see:* an item priced at the grade, and the exception flagged when it is not.
-- [ ] **M21.1.3 The price grid, in the app.**
+- [ ] **M21.1.3 The API and the schema: an item may have no price of its own.**
+      The normal price becomes optional on a product, resolved through the rule above; the service
+      refuses an item that ends up with no price from anywhere, because that is a business rule and not
+      arithmetic. `ProductResponseSchema` gains `effective_normal_price`, `effective_wholesale_price`,
+      `effective_pieces_per_pack` and the flags saying which came from the group. Migration, service,
+      schema, tests. Sales, the shop page and reports read the effective price from here.
+      *You will see:* an item priced by its grade, and an exception visibly marked as one.
+- [ ] **M21.1.4 The price grid, in the app.**
       A screen: models down, grades across, a normal price and a wholesale price per cell. Set a column
       in one action; override a cell; overridden cells visibly differ from their column.
       *You will see:* type 350 on 21D and every model follows; type 370 on Hot 8 and only Hot 8 moves.
@@ -2171,3 +2178,15 @@ These apply continuously and are re-verified at each milestone boundary.
   `create_all` does not alter existing tables, so `ahia_test` and `ahia_ci` were migrated by hand. A
   fresh database - which is what CI builds - gets the columns from the metadata. It is the same class of
   surprise as the append-only triggers, which is why it is written down rather than just fixed.
+
+- **M21.1.2 done.** The rule is now written once, in `models/entities/price_book.py`, and it is the
+  trade's rule rather than a general one: **an item's price is its own, or else its group's**, and the
+  exception is reported as an exception because that is what he has to keep in his head when the market
+  moves. `resolve_price` also handles the awkward case honestly - nobody set a wholesale price, so the
+  counter price stands in, **flagged as a fallback** rather than presented as a price he chose. Seven
+  tests use his own example as the fixture: 21D at 350, Hot 8 and Camon 21 at 370, Camon 30 at 400.
+- **The micro-milestones were split while building.** Making the normal price optional on an item is a
+  schema-wide change - the sale, the shop page, reports and the sync payload all read it - so it gets its
+  own commit as M21.1.3 rather than riding along with the rule, and the grid moves to M21.1.4. The plan
+  says what will be built; when building shows a better seam, the plan moves and the reason is written
+  here rather than the split being done quietly.
