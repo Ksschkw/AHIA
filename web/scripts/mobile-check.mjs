@@ -20,6 +20,8 @@ const CHROME = process.env.CHROME_PATH ?? "/usr/bin/google-chrome";
 
 const stamp = Date.now();
 const email = `mobile.${stamp}@example.com`;
+// A number in the form a trader types it, with the leading zero the API has to understand.
+const phone = `0806${String(stamp).slice(-7)}`;
 const password = "Mobile-Password-2026";
 const businessName = `Mobile Shop ${stamp}`;
 
@@ -110,11 +112,27 @@ try {
     await shot(page, "2-signup-empty");
     await page.type("#first_name", "Ada");
     await page.type("#last_name", "Obi");
-    await page.type("#identifier", email);
+    await page.type("#phone", phone);
+    await page.type("#email", email);
     await page.type("#password", password);
     await page.type("#confirm_password", password);
     await shot(page, "3-signup-filled");
     await clickByText(page, "Create my account");
+  });
+
+  await step(page, "2b-sign-in-with-the-email", async () => {
+    // Both contacts were given at sign-up, so both must work at sign-in. This is the check that would
+    // have caught an account stored without its email address.
+    // Straight to the sign-in screen rather than through sign-out: this step is about whether the
+    // account can be reached by its email address, not about the sign-out button.
+    await page.goto(`${APP_URL}/start`, { waitUntil: "networkidle2" });
+    await page.waitForSelector("#identifier", { timeout: 30_000 });
+    await page.type("#identifier", email);
+    await page.type("#password", password);
+    // The submit button, not the tab: both are labelled "Sign in", and the tab only switches mode.
+    await page.click('button[type="submit"]');
+    await waitForText(page, "Sign out");
+    await shot(page, "3b-signed-in-with-email");
   });
 
   await step(page, "3-business", async () => {

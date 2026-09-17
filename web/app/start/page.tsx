@@ -37,7 +37,8 @@ function AuthScreen() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [identifier, setIdentifier] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
@@ -47,12 +48,21 @@ function AuthScreen() {
   const strength = useMemo(() => passwordStrength(password), [password]);
   const checks = useMemo(() => passwordChecks(password), [password]);
   const identifierOk = looksLikeIdentifier(identifier);
+  const phoneOk = phoneNumber.trim().length === 0 || looksLikeIdentifier(phoneNumber.trim());
+  const emailOk = emailAddress.trim().length === 0 || looksLikeEmail(emailAddress.trim());
+  const hasAContact = phoneNumber.trim().length > 0 || emailAddress.trim().length > 0;
   const passwordsMatch = confirmation.length > 0 && confirmation === password;
   const creating = mode === "create";
 
   const errors = {
     firstName: creating && touched.firstName && firstName.trim().length < 2 ? "Tell us your first name." : undefined,
     lastName: creating && touched.lastName && lastName.trim().length < 2 ? "Tell us your surname." : undefined,
+    phone: creating && touched.phone && !phoneOk ? "A phone number looks like 0803 123 4567." : undefined,
+    email: creating && touched.email && !emailOk ? "An email address looks like ada@example.com." : undefined,
+    contact:
+      creating && touched.contact && !hasAContact
+        ? "Leave us a phone number or an email address - either one is enough."
+        : undefined,
     identifier: touched.identifier
       ? identifierOk
         ? undefined
@@ -66,11 +76,15 @@ function AuthScreen() {
     confirmation: creating && touched.confirmation && !passwordsMatch ? "The two passwords are not the same." : undefined,
   };
 
-  const canSubmit =
-    (!creating || (firstName.trim().length >= 2 && lastName.trim().length >= 2)) &&
-    identifierOk &&
-    password.length >= PASSWORD_MINIMUM_LENGTH &&
-    (!creating || passwordsMatch);
+  const canSubmit = creating
+    ? firstName.trim().length >= 2 &&
+      lastName.trim().length >= 2 &&
+      hasAContact &&
+      phoneOk &&
+      emailOk &&
+      password.length >= PASSWORD_MINIMUM_LENGTH &&
+      passwordsMatch
+    : identifierOk && password.length >= PASSWORD_MINIMUM_LENGTH;
 
   const submit = useCallback(async () => {
     setBusy(true);
@@ -78,15 +92,11 @@ function AuthScreen() {
     setTouched({ firstName: true, lastName: true, identifier: true, password: true, confirmation: true });
     try {
       if (creating) {
-        // One box, two possible kinds of identifier, because a trader may have no email address and
-        // should not be stopped by a form. Which one it is decides which field the API receives.
-        const typedIdentifier = identifier.trim();
-        const isEmail = looksLikeEmail(typedIdentifier);
         await registerAccount({
           first_name: firstName.trim(),
           last_name: lastName.trim(),
-          email: isEmail ? typedIdentifier : undefined,
-          phone: isEmail ? phone.trim() || undefined : typedIdentifier,
+          phone: phoneNumber.trim() || undefined,
+          email: emailAddress.trim() || undefined,
           password,
         });
       } else {
@@ -109,7 +119,18 @@ function AuthScreen() {
     } finally {
       setBusy(false);
     }
-  }, [confirmation, creating, firstName, identifier, lastName, mode, password, phone, router]);
+  }, [
+    confirmation,
+    creating,
+    emailAddress,
+    firstName,
+    identifier,
+    lastName,
+    mode,
+    password,
+    phoneNumber,
+    router,
+  ]);
 
   return (
     <main className={styles.page}>
@@ -188,36 +209,46 @@ function AuthScreen() {
             </div>
           ) : null}
 
-          <Field
-            label="Email or phone number"
-            id="identifier"
-            value={identifier}
-            onChange={setIdentifier}
-            onBlur={() => setTouched((t) => ({ ...t, identifier: true }))}
-            inputMode={creating ? "email" : "text"}
-            autoComplete="username"
-            placeholder="ada@example.com or 0803 123 4567"
-            hint={
-              creating
-                ? "Whichever you use, that is how you sign in. Email is where receipts and reports go."
-                : undefined
-            }
-            error={errors.identifier}
-          />
-
           {creating ? (
+            <>
+              <Field
+                label="Phone number"
+                id="phone"
+                value={phoneNumber}
+                onChange={setPhoneNumber}
+                onBlur={() => setTouched((t) => ({ ...t, phone: true, contact: true }))}
+                inputMode="tel"
+                autoComplete="tel"
+                placeholder="0803 123 4567"
+                hint="How you sign in, and how customers reach you. Any form works: 0901..., 0803 123 4567, +234901..."
+                error={errors.phone}
+              />
+              <Field
+                label="Email address"
+                id="email"
+                value={emailAddress}
+                onChange={setEmailAddress}
+                onBlur={() => setTouched((t) => ({ ...t, email: true, contact: true }))}
+                inputMode="email"
+                autoComplete="email"
+                optional
+                placeholder="ada@example.com"
+                hint="Where receipts and reports are sent, if you want them by mail."
+                error={errors.email ?? errors.contact}
+              />
+            </>
+          ) : (
             <Field
-              label="Email address"
-              id="phone"
-              value={phone}
-              onChange={setPhone}
-              inputMode="email"
-              autoComplete="email"
-              optional
-              placeholder="ada@example.com"
-              hint="If you signed up with a phone number, add an email so receipts and reports can reach you."
+              label="Phone number or email"
+              id="identifier"
+              value={identifier}
+              onChange={setIdentifier}
+              onBlur={() => setTouched((t) => ({ ...t, identifier: true }))}
+              autoComplete="username"
+              placeholder="0803 123 4567 or ada@example.com"
+              error={errors.identifier}
             />
-          ) : null}
+          )}
 
           <PasswordField
             label="Password"

@@ -20,6 +20,7 @@ type Schemas = components["schemas"];
 export type AuthenticatedSession = Schemas["AuthenticatedSessionSchema"];
 export type UserProfile = Schemas["UserResponseSchema"];
 export type Tenant = Schemas["TenantResponseSchema"];
+export type TenantSummary = Schemas["TenantSummarySchema"];
 export type Product = Schemas["ProductResponseSchema"];
 export type InventoryLevel = Schemas["InventoryLevelResponseSchema"];
 export type SaleCreation = Schemas["SaleCreationResponseSchema"];
@@ -193,8 +194,57 @@ export function currentUser(): Promise<UserProfile> {
 // The business
 // ---------------------------------------------------------------------------
 
-export function listBusinesses(): Promise<Tenant[]> {
-  return request<Tenant[]>("/api/v1/tenants");
+export function listBusinesses(): Promise<TenantSummary[]> {
+  return request<TenantSummary[]>("/api/v1/tenants");
+}
+
+export function getBusiness(tenantId: string): Promise<Tenant> {
+  return request<Tenant>(`/api/v1/tenants/${tenantId}`);
+}
+
+/** The business's own details: its name, where it is, and what it trades in. */
+export function updateBusiness(
+  tenantId: string,
+  changes: {
+    name?: string;
+    business_type?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+  },
+): Promise<Tenant> {
+  return request<Tenant>(`/api/v1/tenants/${tenantId}`, {
+    method: "PATCH",
+    body: changes satisfies Schemas["TenantUpdateSchema"],
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The person's own profile
+// ---------------------------------------------------------------------------
+
+export function updateProfile(changes: {
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
+}): Promise<UserProfile> {
+  return request<UserProfile>("/api/v1/users/me", {
+    method: "PATCH",
+    body: changes satisfies Schemas["UserProfileUpdateSchema"],
+  });
+}
+
+export function changePassword(input: {
+  current_password: string;
+  new_password: string;
+}): Promise<Schemas["PasswordChangedSchema"]> {
+  return request<Schemas["PasswordChangedSchema"]>("/api/v1/auth/password", {
+    method: "POST",
+    body: input satisfies Schemas["ChangePasswordSchema"],
+  });
 }
 
 export function createBusiness(input: {

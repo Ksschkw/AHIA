@@ -12,6 +12,7 @@
  * get out of step with the server, and no header for a call site to forget.
  */
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -26,6 +27,7 @@ import { Button, Card, Empty, Field, Pill, Select, Sheet, Stat, Toast } from "@/
 import {
   ApiError,
   createBusiness,
+  getBusiness,
   createProduct,
   currentUser,
   dailySales,
@@ -54,6 +56,7 @@ import {
   type SaleCreate,
   type SaleSummary,
   type Tenant,
+  type TenantSummary,
   type UserProfile,
 } from "@/lib/api";
 import { formatCount, formatMoney, formatQuantity } from "@/lib/format";
@@ -76,7 +79,8 @@ export default function Dashboard() {
   const router = useRouter();
   const [sessionResolved, setSessionResolved] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [businesses, setBusinesses] = useState<Tenant[]>([]);
+  const [businesses, setBusinesses] = useState<TenantSummary[]>([]);
+  const [businessDetail, setBusinessDetail] = useState<Tenant | null>(null);
   const [businessId, setBusinessId] = useState<string | null>(null);
   //: Whether the list has been read yet. "No business" is a fact about the data, not an event
   //: that can be missed while a screen is mounting - which is exactly how a trader ends up on a
@@ -103,10 +107,7 @@ export default function Dashboard() {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [sheet, setSheet] = useState<SheetName>(null);
 
-  const business = useMemo(
-    () => businesses.find((candidate) => candidate.id === businessId) ?? null,
-    [businesses, businessId],
-  );
+  const business = businessDetail;
   //: Derived, not toggled: while there is no business, the sheet that asks for one is open.
   const needsBusiness = Boolean(user) && businessesLoaded && businesses.length === 0 && !businessId;
   const currency = business?.currency ?? "NGN";
@@ -185,6 +186,9 @@ export default function Dashboard() {
       if (typeof window !== "undefined") {
         window.localStorage.setItem(STORAGE_KEY, tenantId);
       }
+      // The detail first: it carries the currency, so every amount on the page is rendered in the
+      // business's own money rather than in a default that happens to be right for most shops.
+      setBusinessDetail(await getBusiness(tenantId));
       await loadBusiness(tenantId);
     },
     [loadBusiness],
@@ -322,9 +326,9 @@ export default function Dashboard() {
               </option>
             ))}
           </select>
-          <span className={styles.who}>
+          <Link className={styles.who} href="/app/profile">
             {user.first_name} {user.last_name}
-          </span>
+          </Link>
           <button
             className={styles.linkButton}
             onClick={() => {
@@ -334,6 +338,7 @@ export default function Dashboard() {
                 setBusinesses([]);
                 setBusinessesLoaded(false);
                 setBusinessId(null);
+                setBusinessDetail(null);
                 if (typeof window !== "undefined") {
                   window.localStorage.removeItem(STORAGE_KEY);
                 }

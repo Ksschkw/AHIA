@@ -67,6 +67,13 @@
 .who {
   font-size: 13px;
   color: var(--ink-2);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.who:hover {
+  color: var(--leaf);
+  border-bottom-color: var(--leaf);
 }
 
 .businessPicker {
