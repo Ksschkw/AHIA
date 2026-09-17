@@ -1628,7 +1628,9 @@ Goal: a business exists as a tenant with a globally unique public slug.
 ## M20 - Mobile application bootstrap (React Native + Expo)
 
 - [ ] M20.1.1 `mobile/` workspace with Expo, TypeScript, strict mode, and a
-      committed lockfile.
+      committed lockfile. **Sequencing decided by the product owner**: every web flow is built in the
+      web first, and the mobile app is then built to do all of it. The web is where flows are proved;
+      the mobile app mirrors a finished shape rather than an idea.
 - [ ] M20.1.2 Local SQLite schema and migrations mirroring the local entity
       list from the specification.
 - [ ] M20.1.3 Operation queue with durable pending operations and retry
@@ -1779,10 +1781,13 @@ every detail here is a decision, not a preference.
       asking, and a list that cannot hold the request is a list that gets written on paper again.
 - [ ] M21.1.4 **Phone number is collected, and the reason is said out loud**: "so we can keep track of
       whose list this is, and so you do not have to start again next time". Date and time are recorded
-      automatically.
-- [ ] M21.1.5 The list is **saved against that phone number**, so a returning customer opens the same
-      link, sees what they ordered last time, and changes a quantity, edits a line, adds something new
-      or repeats the whole thing. Never a blank page.
+      automatically. It is the only thing asked of the customer, and it is what makes the whole thing
+      remember them.
+- [ ] M21.1.5 The list is **saved against that phone number**, and the number is the identity - not the
+      link. A returning customer may well arrive on a **fresh link**, and the moment they type their
+      number the app recognises them and offers: **"use a previous list as a start?"** Then they change a
+      quantity, edit a line, add something new, and send. Never a blank page, and never a link they have
+      to keep.
 - [ ] M21.1.6 **No availability, no stock count, no "out of stock"** anywhere a customer can see. An
       Igbo trader is never truly out of stock - he goes and finds it - so the customer-facing side says
       "we will source it", not "we do not have it". The **existing shop page shows it today**
@@ -1857,15 +1862,20 @@ every detail here is a decision, not a preference.
 - [ ] M21.3.1 **Variants as a family with axes**, not a product per combination: `Screenguard` x grade
       (5D, 21D, privacy, ceramic) x phone model x colour, with a price matrix. Otherwise his catalogue is
       hundreds of near-identical rows nobody can find anything in.
-- [ ] M21.3.2 **Layered pricing, each layer optional and each overridable**: grade default, then model
-      override, then customer tier (retail or wholesale), then this customer's own price, then the line
-      he types, then the final adjustment. The system suggests; he decides.
+- [ ] M21.3.2 **Two prices per item, and both are his**: a **normal price** and a **wholesale price**,
+      set by him on the grade and overridden per model exactly as the grid above describes. Everything
+      else is an override he types when he wants to - there is no customer tier, no retail tier, no
+      pricing machinery to configure. The product owner's words: a tier system "is a feature for a
+      company that tracks all that stuff", and this is not that company's problem. What the customer
+      sees depends only on the surface: **the shop page shows the normal price, a list shows the
+      wholesale price**, and he can change any line to anything.
 - [ ] M21.3.3 **Units as first-class, and as the trader's own data**: piece, pack (x N), carton (x M),
       and whatever else a business counts in - a dozen, a crate, a bag, a kilo, a litre. Stock counted
       in the base unit, sold in any of them, priced per any of them. Screenguards are exactly this, and
       so is a bag of rice.
-- [ ] M21.3.4 **Wholesale and retail as price tiers**, so a wholesale price cannot leak to a retail
-      customer through a shared catalogue.
+- [ ] M21.3.4 **The wholesale price does not leak to a browsing stranger.** The shop page shows the
+      normal price; the wholesale price is what a list is priced with. That is the whole of the
+      separation - one column each, set by him, and no customer-by-customer configuration.
 - [ ] M21.3.5 **A generated price list** (image or PDF) from the price book, to broadcast on WhatsApp.
       Most of his customers will never open a link before they know the prices.
 - [ ] M21.3.6 **The price book is a grid: models down, grades across.** Set the price for a whole column
@@ -1876,6 +1886,9 @@ every detail here is a decision, not a preference.
 - [ ] M21.3.7 **Prices are per piece by default.** A pack price is an override, and a line price is an
       override of that. Counting happens in whichever unit the trader and the customer are speaking -
       "20 pcs" - while the price underneath is a per-piece price unless somebody has said otherwise.
+- [ ] M21.3.10 **Pieces per pack is the merchant's setting, never typed by a customer.** He sets it once
+      where it belongs and it holds: a customer counting "20 pcs" is never asked how many are in a pack,
+      because that is a fact about the goods and not a question for the buyer.
 - [ ] M21.3.9 **The price tier is chosen, not inferred, and it is switchable at any moment.** In the
       shop, a walk-in sale defaults to retail and the trader switches to wholesale when the buyer is
       buying bulk - including the buyer standing in front of him who is doing the same trade as the one
@@ -1975,26 +1988,31 @@ Every question asked and not yet answered, in one place, with the default I will
 otherwise. The defaults are chosen so that work can continue; each one is written so that overriding it
 is a sentence rather than a redesign.
 
-### Blocking the list and the price book (M21)
+### Answered by the product owner
 
-1. **Is a customer's link standing or one-off?** One link they keep, which remembers their last list, or
-   a fresh link per order? *Default: standing per phone number, because the same people order weekly and
-   the whole value is not starting again.*
-2. **Where does "pieces per pack" live?** On the group (all 21D packs are 10), on the variant, or typed
-   on the line each time? *Default: the group sets it, a line can override it, because today's pack is
-   whatever arrived today.*
-3. **How is retail derived from wholesale?** A markup he sets once per grade (a percentage or a flat
-   addition), or a second grid he fills in himself? *Default: a markup he can set per group, overridable
-   per variant, because he thinks in wholesale and should not have to type everything twice.*
-4. **What prices does a stranger see on the shop page?** Retail, or "request for wholesale pricing"?
-   *Default: retail prices shown, with wholesale on request through the list, because a stranger who
-   cannot see a price will not bother.*
-5. **When is the money collected on a list?** Before dispatch, on delivery, or later as credit? Do we
-   need a paid / part-paid / unpaid state on the list? *Default: no rule imposed - he records what was
-   paid when it was paid, and the list shows the balance. The same freedom as everything else.*
-6. **Does a list need a printable version?** He works on paper today and may want to print and tick it.
-   *Default: yes, a print view of the list and the waybill - paper is not the enemy, and handing him a
-   sheet while the app learns his trade is a bridge rather than a crutch.*
+1. **Link lifetime: the link does not matter, the phone number does.** A returning customer may arrive on
+   a fresh link; typing their number is what recognises them, and the app offers to start from a
+   previous list and edit it. Identity is the number.
+2. **Pieces per pack is set by the merchant**, never typed by a customer, at the level he decides.
+3. **No tier machinery.** He judged a retail-versus-wholesale tier system to be "a feature for a company
+   that tracks all that stuff" - and this is not that company. What replaces it is two prices he sets per
+   item: a normal price and a wholesale price, both overridable on any line.
+4. **A list shows the wholesale price he set; the shop page shows the normal price.** That is the only
+   difference between the two surfaces.
+5. **No imposed payment rule**: he records what was paid, when it was paid, and the list shows the
+   balance.
+6. **A list and a waybill print.**
+7. **English with the trade's own words**; he will say if he wants anything changed.
+8. **An avatar yes; location stays on the business.**
+9. **Middle name: add it, optional.**
+10. **Shop visits: build, after the list.**
+11. **Hide what a role cannot do**; the server stays the authority.
+12. **Deployment: not ours.** He handles it; M18.1.5 is deferred and is not to be pursued.
+13. **Cloudinary is the live provider.**
+14. **Local PostgreSQL for development**, Neon kept for deployment.
+15. **The raised local rate limits stay**; production keeps the documented values.
+16. **Web first, then the mobile app does everything the web does.** Every flow is proven in the web
+    before any of it is built for the phone.
 
 ### Shaping the screens
 
