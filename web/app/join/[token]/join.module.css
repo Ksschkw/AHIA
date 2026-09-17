@@ -1,0 +1,42 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  padding: 16px 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.card {
+  width: 100%;
+  max-width: 440px;
+  margin: 40px auto 0;
+  padding: 26px 22px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: center;
+}
+
+.title {
+  font-size: 22px;
+}
+
+.body {
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.link {
+  color: var(--leaf);
+  font-weight: 650;
+  text-decoration: none;
+  font-size: 14px;
+}

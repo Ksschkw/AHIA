@@ -43,6 +43,7 @@ from ahia.crud import (
     user_crud,
 )
 from ahia.models.entities.membership_invitation_model import MembershipInvitationModel
+from ahia.models.entities.phone_number import canonical_phone_number
 from ahia.models.entities.tenant_membership_model import TenantMembershipModel
 from ahia.models.entities.tenant_model import TenantModel
 from ahia.models.entities.user_model import UserModel
@@ -94,11 +95,16 @@ class TenantMembershipService:
         unit_of_work_factory: Callable[[], UnitOfWork],
         token_service: TokenService,
         audit_event_service: AuditEventService,
+        default_phone_country_code: str = "234",
         logger: StructuredLogger | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._token_service = token_service
         self._audit = audit_event_service
+        #: The country a locally written number belongs to. An invitation and an account must agree
+        #: on what "the same number" means, or an invitation to 0901... can never be accepted by an
+        #: account created with +234901...
+        self._default_country_code = f"+{default_phone_country_code.lstrip('+')}"
         self._logger = (logger or get_logger(_MEMBERSHIP_LOGGER_NAME)).bind(
             component="tenant_membership_service", layer="service"
         )
@@ -131,7 +137,11 @@ class TenantMembershipService:
 
         now = datetime.now(UTC)
         normalized_email = email.strip().lower() if email else None
-        normalized_phone = phone.strip() if phone else None
+        # The same rule the account uses, so the invitation is addressed to the person who will
+        # accept it rather than to the way somebody happened to type the number.
+        normalized_phone = canonical_phone_number(
+            phone, default_country_code=self._default_country_code
+        )
         token = self._token_service.generate_public_token()
 
         unit_of_work = self._unit_of_work_factory()

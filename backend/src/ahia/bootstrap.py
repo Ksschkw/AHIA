@@ -218,6 +218,7 @@ def build_application_container(
         unit_of_work_factory=database.unit_of_work_factory(),
         token_service=token_service,
         audit_event_service=audit_event_service,
+        default_phone_country_code=settings.default_phone_country_code,
         logger=logger,
     )
 

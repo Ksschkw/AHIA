@@ -1617,8 +1617,9 @@ Goal: a business exists as a tenant with a globally unique public slug.
       when switching so one shop's numbers never appear under another's name.
 - [x] M19.2.5 Mobile: every screen fits 390x844, measured rather than eyeballed
       (`mobile-check` fails on a viewport overflow).
-- [ ] M19.2.6 Team: invite a salesperson, give them a role, see who has access,
-      remove somebody. The API exists; the screen does not.
+- [x] M19.2.6 Team: invite a salesperson, give them a role, see who has access,
+      remove somebody. The invitation is a link the owner sends on WhatsApp, and
+      `/join/{token}` is where it lands.
 - [ ] M19.2.7 Shop visits: how many people opened the shop, and what they
       looked at. Needs backend work first - nothing records a view today.
 
@@ -1868,3 +1869,27 @@ These apply continuously and are re-verified at each milestone boundary.
   viewport, `shop-check` for the public shop in a browser with no cookies at all, `profile-check` for
   the profile, `businesses-check` for two businesses staying apart, `firefox-check` for the second
   browser, and the API's own suites for the phone rule, the delivery URL and the storefront routes.
+
+- M19.2.6 complete: **the team**. A `/app/team` screen that lists who is in the business with their
+  role and status, invites somebody by phone or email, promotes or suspends them, and removes them.
+  Four roles, and they are the product's own people: the owner (Oga), a manager, sales (the nwa boy or
+  nwa girl on the counter), and whoever counts stock.
+- **The invitation travels on WhatsApp, because that is where a trader's messages go.** The API returns
+  the token exactly once and stores only its digest, so the screen shows the link immediately and
+  offers to send it: the person taps it, signs up with the number the owner invited, and lands inside
+  the business. `/join/{token}` is that landing page, and `?next=` on the sign-in screen is what makes
+  the link survive a sign-up - validated to a path on this site, because an unchecked one is an open
+  redirect.
+- Two defects found by using it, both in the API rather than the screen. **An invitation to a phone
+  number could never be accepted**: the invitation stored the number as typed (`08051954235`) while the
+  account stored it canonically (`+2348051954235`), so the identity check never matched - the same
+  class of bug as the doubled country code, in the one place it had not been fixed. And **a person
+  could hold two memberships in one business**: nothing in the database said otherwise, so a
+  double-tapped invitation link - which React's development mode produces on its own - created two
+  rows twelve milliseconds apart, and removing one left the person still in. The database now has a
+  partial unique index on `(tenant_id, user_id) WHERE status <> 'removed'`, with a migration that
+  repairs existing duplicates by keeping the oldest and marking the rest removed, so the audit trail
+  survives.
+- `web/scripts/team-check.mjs` proves the whole flow: invite a phone number, take the link into a
+  browser with no cookies, sign up as the invited person, land inside with the invited role, promote
+  them, remove them.

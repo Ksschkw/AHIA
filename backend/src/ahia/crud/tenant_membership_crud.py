@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, String, func, select
+from sqlalchemy import DateTime, ForeignKey, Index, String, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
@@ -35,6 +35,22 @@ class TenantMembershipRecord(Base):
     """The persistence representation of one person's access to one business."""
 
     __tablename__ = _TABLE_NAME
+
+    #: One person, one *current* membership per business.
+    #:
+    #: This is a database constraint and not only a service check, because two requests can pass the
+    #: service's "are they already a member" test at the same time - which is exactly what a
+    #: double-tapped invitation link does - and then both insert. The partial clause is what lets
+    #: removed memberships stay as the audit trail while forbidding a second live one.
+    __table_args__ = (
+        Index(
+            "uq_tenant_memberships_current_member",
+            "tenant_id",
+            "user_id",
+            unique=True,
+            postgresql_where=text("status <> 'removed'"),
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(primary_key=True)
     # Indexed individually as well as together: a tenant-scoped query filters on

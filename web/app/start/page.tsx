@@ -27,11 +27,30 @@ import {
 import styles from "./start.module.css";
 
 type Mode = "signin" | "create";
+
+/**
+ * Where to go after signing in, but only where we said.
+ *
+ * `?next=` is how the invitation link survives a sign-up, and it is also how an open redirect gets
+ * built: a link on somebody else's site that sends a person to ours and then straight on to a page
+ * that pretends to be ours. A value that is not a path on this site is ignored.
+ */
+function safeNext(candidate: string | null): string | null {
+  if (!candidate) {
+    return null;
+  }
+  if (!candidate.startsWith("/") || candidate.startsWith("//") || candidate.includes(":")) {
+    return null;
+  }
+  return candidate;
+}
 type Touched = Record<string, boolean>;
 
 function AuthScreen() {
   const router = useRouter();
-  const intent = useSearchParams().get("intent");
+  const parameters = useSearchParams();
+  const intent = parameters.get("intent");
+  const next = safeNext(parameters.get("next"));
 
   const [mode, setMode] = useState<Mode>(intent === "create" ? "create" : "signin");
   const [firstName, setFirstName] = useState("");
@@ -102,7 +121,7 @@ function AuthScreen() {
       } else {
         await signIn({ identifier: identifier.trim(), password });
       }
-      router.replace("/app");
+      router.replace(next ?? "/app");
     } catch (caught) {
       if (caught instanceof Error && "code" in caught && caught.code === "CONFLICT") {
         setFailure({

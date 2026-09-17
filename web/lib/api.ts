@@ -34,6 +34,12 @@ export type PaymentMethod = Schemas["PaymentMethod"];
 export type ExpenseCreate = Schemas["ExpenseCreateSchema"];
 export type ProductImage = Schemas["ProductImageResponseSchema"];
 export type Storefront = Schemas["StorefrontResponseSchema"];
+export type Member = Schemas["MembershipResponseSchema"];
+export type MembershipInvitation = Schemas["InvitationResponseSchema"];
+export type PendingInvitation = Schemas["PendingInvitationSchema"];
+export type AcceptedInvitation = Schemas["AcceptedInvitationSchema"];
+export type MemberRole = Schemas["MembershipRoleUpdateSchema"]["role_name"];
+export type MemberStatus = Schemas["MembershipStatusUpdateSchema"]["status"];
 export type ProductShareSheet = Schemas["ProductShareSheetSchema"];
 
 /**
@@ -476,6 +482,83 @@ export function productShareSheet(tenantId: string, productId: string): Promise<
   return request<ProductShareSheet>(
     `/api/v1/tenants/${tenantId}/products/${productId}/share-sheet`,
   );
+}
+
+// ---------------------------------------------------------------------------
+// The team
+// ---------------------------------------------------------------------------
+
+/** The four roles the product ships with, in the order a shop thinks about them. */
+export const MEMBER_ROLES: { value: MemberRole; label: string; description: string }[] = [
+  { value: "MANAGER", label: "Manager", description: "Runs the shop day to day, and reports" },
+  { value: "SALES", label: "Sales", description: "Records sales and takes payment" },
+  { value: "INVENTORY", label: "Inventory", description: "Receives, counts and adjusts stock" },
+  { value: "OWNER", label: "Owner", description: "Everything, including staff" },
+];
+
+export function listMembers(tenantId: string): Promise<Member[]> {
+  return request<Member[]>(`/api/v1/tenants/${tenantId}/members`);
+}
+
+/**
+ * Invite somebody.
+ *
+ * The answer carries the token, which is the only moment it exists: the API stores a digest, so it
+ * cannot be read back later. That is why the screen shows the link immediately and offers to send it
+ * on WhatsApp - there is no email sender in this deployment, and there does not need to be one.
+ */
+export function inviteMember(
+  tenantId: string,
+  invitation: { role_name: MemberRole; email?: string; phone?: string },
+): Promise<MembershipInvitation> {
+  return request<MembershipInvitation>(`/api/v1/tenants/${tenantId}/members`, {
+    method: "POST",
+    body: invitation satisfies Schemas["MembershipInviteSchema"],
+  });
+}
+
+export function listIssuedInvitations(tenantId: string): Promise<MembershipInvitation[]> {
+  return request<MembershipInvitation[]>(`/api/v1/tenants/${tenantId}/invitations`);
+}
+
+export function changeMemberRole(
+  tenantId: string,
+  membershipId: string,
+  roleName: MemberRole,
+): Promise<Member> {
+  return request<Member>(`/api/v1/tenants/${tenantId}/members/${membershipId}`, {
+    method: "PATCH",
+    body: { role_name: roleName } satisfies Schemas["MembershipRoleUpdateSchema"],
+  });
+}
+
+export function changeMemberStatus(
+  tenantId: string,
+  membershipId: string,
+  status: MemberStatus,
+): Promise<Member> {
+  return request<Member>(`/api/v1/tenants/${tenantId}/members/${membershipId}`, {
+    method: "PATCH",
+    body: { status } satisfies Schemas["MembershipStatusUpdateSchema"],
+  });
+}
+
+export function removeMember(tenantId: string, membershipId: string): Promise<void> {
+  return request<void>(`/api/v1/tenants/${tenantId}/members/${membershipId}`, {
+    method: "DELETE",
+  });
+}
+
+/** Invitations addressed to the signed-in person, waiting to be accepted. */
+export function listMyInvitations(): Promise<PendingInvitation[]> {
+  return request<PendingInvitation[]>("/api/v1/invitations");
+}
+
+export function acceptInvitation(token: string): Promise<AcceptedInvitation> {
+  return request<AcceptedInvitation>("/api/v1/invitations/accept", {
+    method: "POST",
+    body: { token } satisfies Schemas["AcceptInvitationSchema"],
+  });
 }
 
 /** Exported so a page can use the generated operation shapes directly when it needs to. */
