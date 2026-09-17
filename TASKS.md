@@ -1752,9 +1752,13 @@ travel.
 
 - **A list** is what a customer builds: headings, items, counts, notes, maybe a picture. It is a wish,
   not a sale, and it becomes money only when the trader confirms it.
-- **A price tier** is retail or wholesale. It is **not** the channel: retail is somebody who comes to
-  the shop direct, and wholesale is bulk - whether they walk in and carry it away or send a list and
-  have it waybilled. The same person can be both on different days.
+- **A price tier** is retail or wholesale, and it is about **how much is being bought, not where the
+  buyer is standing**. Retail is mostly one or two pieces. Wholesale is bulk at bulk prices. A customer
+  at the counter buying a carton is wholesale, and a customer who sends a list for two pieces is retail;
+  the same person is both on different days. Presence is a **channel**, never a tier.
+- **A channel** is how the trade happens: the customer is in front of him, or the list arrives from
+  somewhere else. The counter itself has two shapes - they bring a written list, or they dictate it
+  while he stands there - and both are the same twenty minutes that the list is meant to remove.
 - **Dispatch** is how the goods leave: picked up at the shop, or sent by transporter. A waybill is the
   record of a dispatched one - transporter, phone, waybill number, cost - and only dispatched goods
   have a tracking link.
@@ -1800,6 +1804,27 @@ every detail here is a decision, not a preference.
       matte, phone cases, camera glass, charging cords - and under it the lines: "Hot 8, 20 pcs",
       "iPhone 11, 10 pcs", "13 Pro Max, 5 pcs". The heading is the trader's own word for a group of
       things, and the group is also how the market run is walked.
+
+### M21.7 At the counter, because that is where the time is lost
+
+- [ ] M21.7.1 **The whole point is time.** "Bring Hot 8 five, bring XR five 21D, bring Hot 8 universal
+      metal ten" - dictated across a counter, item by item, with him asking and the customer correcting,
+      is twenty minutes of both their day. If the list had been made at home and arrived, the goods
+      would already be packed and the customer would walk in, take them, and leave. **Order ahead and
+      collect at the shop** is therefore a first-class ending of the flow, not a workaround: the same
+      list, packed before they arrive.
+- [ ] M21.7.2 **He can build the list while they talk.** The customer dictating at the counter is still
+      the common case, so the trader needs a way to enter it at speed - add an item, a count, the next -
+      without leaving the conversation, and then read it back for confirmation. A list he entered is
+      marked as entered by him, for the same reason a price is.
+- [ ] M21.7.3 **The list can be a voice note.** People already send WhatsApp voice notes for exactly
+      this, and a customer who talks faster than they type should be able to send the list as audio
+      attached to the request. The trader plays it while he packs, as a checklist. Reading it
+      automatically is a later promise, and it is not made here.
+- [ ] M21.7.4 **The repeat list is the same list.** A wholesale customer's order changes by a count or
+      two from one week to the next, so the previous list is one tap away, pre-filled and editable, and
+      sending it takes seconds. This is where the reuse earns its place: not a convenience, the reason a
+      returning customer opens the app at all.
 
 ### M21.2 The trader's side: sourcing, packing, quoting
 
@@ -1900,9 +1925,15 @@ every detail here is a decision, not a preference.
 
 ### M21 - decisions from the product owner
 
-- **Retail is somebody who comes to the shop direct. Wholesale is bulk** - and bulk arrives two ways,
-  physically or as a list, and they are the same trade at the same prices. The price tier is therefore
-  a choice on the trade, not a consequence of how the order reached him.
+- **Retail is mostly one or two pieces; wholesale is bulk - and being in the shop does not decide it.**
+  A customer at the counter buying bulk is wholesale, and a list sent for two pieces is retail. Bulk
+  arrives two ways, physically or as a list, at the same prices. The tier is therefore a choice the
+  trader makes on this trade, never a consequence of how the order reached him, and presence is only a
+  channel.
+- **The value is the twenty minutes.** A dictated counter order - "bring Hot 8 five, bring XR five,
+  bring universal metal ten" - is item by item, with corrections, and it is the same twenty minutes
+  every visit. A list that arrived beforehand means the goods are packed before the customer walks in.
+  That is the feature: not tidiness, time.
 - **A waybill is not the name of the flow.** Bulk buyers who carry their goods away never see one, so
   the customer-facing entry is named after the list it builds, and the waybill fields belong to
   dispatch.
