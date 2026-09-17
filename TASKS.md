@@ -1967,6 +1967,71 @@ every detail here is a decision, not a preference.
 - **OCR of the photographed paper list**: later, not now. A photo attached to the request is useful on
   day one; reading it is a separate promise to keep.
 
+---
+
+## Open questions for the product owner
+
+Every question asked and not yet answered, in one place, with the default I will take if nobody says
+otherwise. The defaults are chosen so that work can continue; each one is written so that overriding it
+is a sentence rather than a redesign.
+
+### Blocking the list and the price book (M21)
+
+1. **Is a customer's link standing or one-off?** One link they keep, which remembers their last list, or
+   a fresh link per order? *Default: standing per phone number, because the same people order weekly and
+   the whole value is not starting again.*
+2. **Where does "pieces per pack" live?** On the group (all 21D packs are 10), on the variant, or typed
+   on the line each time? *Default: the group sets it, a line can override it, because today's pack is
+   whatever arrived today.*
+3. **How is retail derived from wholesale?** A markup he sets once per grade (a percentage or a flat
+   addition), or a second grid he fills in himself? *Default: a markup he can set per group, overridable
+   per variant, because he thinks in wholesale and should not have to type everything twice.*
+4. **What prices does a stranger see on the shop page?** Retail, or "request for wholesale pricing"?
+   *Default: retail prices shown, with wholesale on request through the list, because a stranger who
+   cannot see a price will not bother.*
+5. **When is the money collected on a list?** Before dispatch, on delivery, or later as credit? Do we
+   need a paid / part-paid / unpaid state on the list? *Default: no rule imposed - he records what was
+   paid when it was paid, and the list shows the balance. The same freedom as everything else.*
+6. **Does a list need a printable version?** He works on paper today and may want to print and tick it.
+   *Default: yes, a print view of the list and the waybill - paper is not the enemy, and handing him a
+   sheet while the app learns his trade is a bridge rather than a crutch.*
+
+### Shaping the screens
+
+7. **Language.** English, or Nigerian English and the words people actually use? *Default: plain English
+   with the trade's own words where they are the honest ones (list, waybill, wholesale, retail, oga),
+   and no pidgin until somebody writes the copy who speaks it.*
+8. **Profile picture and personal location.** The profile has name, phone, email and the business's
+   address; a photo and a personal city/state were asked for. *Default: build the avatar (the media
+   pipeline exists) and keep the location on the business, which is where it belongs.*
+9. **Middle name.** The database stores first and last only. *Default: add it as optional, since the
+   product owner asked for it and it is one nullable column.*
+10. **Storefront visits.** How many people opened the shop, and which products they looked at most.
+    Nothing records a view today. *Default: build it, because a shop page with no numbers is a shop page
+    he cannot judge - but after the list, not before.*
+11. **Should the app hide what a role cannot do?** *Default: yes - hide the action, and keep the server
+    as the authority, which it already is.*
+
+### Deployment and environment (carried over)
+
+12. **Northflank details** for M18.1.5: project and service names, region, and whether the migration job
+    is a separate service from the API. *Default: assume one API service plus a one-off migration job,
+    and write the configuration so both are described; the names are yours to fill in.*
+13. **Which storage provider is real for now?** Cloudinary is configured and verified end to end; the R2
+    credentials in `.env` are still placeholders. *Default: Cloudinary is the live provider, R2 stays
+    selectable and unverified until you have an account.*
+14. **Development database.** Development now runs against the local PostgreSQL (35-137x faster than
+    Neon), with the Neon URL kept commented in `.env` for deployment. *Default: keep it that way.*
+15. **Local rate limits.** Two local values were raised for testing (auth 10 to 60 per minute, message
+    sending 5 to 60 per hour). Production keeps the documented values. *Default: keep the local values.*
+
+### Order of work
+
+16. **What comes after the list and the price book?** The mobile app (M20, and its offline engine), or
+    the remaining web surfaces first (permission-aware UI, shop visits)? *Default: the list first, then
+    the mobile app, because the trader in the market is the person this is for and the web app has
+    proved the flows.*
+
 ## Cross-milestone obligations
 
 These apply continuously and are re-verified at each milestone boundary.
