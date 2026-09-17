@@ -1763,7 +1763,13 @@ every detail here is a decision, not a preference.
       or repeats the whole thing. Never a blank page.
 - [ ] M21.1.6 **No availability, no stock count, no "out of stock"** anywhere a customer can see. An
       Igbo trader is never truly out of stock - he goes and finds it - so the customer-facing side says
-      "we will source it", not "we do not have it".
+      "we will source it", not "we do not have it". The **existing shop page shows it today**
+      (`is_available`, "Out of stock" on every product card), so this is a change to code already
+      shipped, not only a rule for new work.
+- [ ] M21.1.7 **A free-text line becomes a product in one tap.** When the trader reads "screenguard for
+      iPhone 15, matte one" and knows what it is, he should be able to turn that line into a catalogue
+      entry - with its price - while he is packing. That is how the catalogue grows to match what
+      customers actually ask for, instead of the trader sitting down to type it in later.
 
 ### M21.2 The trader's side: sourcing, packing, quoting
 
@@ -1814,6 +1820,10 @@ every detail here is a decision, not a preference.
 - [ ] M21.5.1 Availability, thresholds and counts are the **owner's view** - inventory management he can
       look at if he wants to. Most traders do not count stock, and the product must not require it.
       Stock movements record what happened; nobody is asked to reconcile a shelf they never counted.
+- [ ] M21.5.2 **Never ask for a count; offer one.** On-hand is derived from the movements that were
+      recorded, and shown as "last known" rather than as a fact, because a trader who does not count
+      knows it is approximate and a trader who does count wants a way to correct it. A "count now"
+      action exists, is one screen, and is never in the way of recording a sale or a waybill.
 
 ### M21 - decisions from the product owner
 
