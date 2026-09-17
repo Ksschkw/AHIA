@@ -2227,3 +2227,24 @@ These apply continuously and are re-verified at each milestone boundary.
 - `web/scripts/prices-check.mjs` walks the decision end to end in a real browser: create two items,
   create the group 21D, set 500/350/10 on it, file both items under it, clear their own prices, and
   assert both then follow the group. It is the check that found the three defects above.
+
+## How much testing is enough, and when
+
+Asked directly, and worth a standing answer because it decides how fast everything else moves.
+
+- **Every change gets the narrowest check that could catch it.** A model or migration change gets the
+  model and migration tests (seconds). A router change gets that router's file. A screen change gets
+  `tsc` and, when a flow moved, the browser script for that flow. This is what runs on each
+  micro-milestone commit.
+- **The cheap gates run every time, because they are seconds:** `ruff`, formatting, `mypy`, `tsc`, and
+  the ASCII and banned-name guards. They have caught real mistakes every single session.
+- **The full suite runs at a sub-milestone boundary, not every commit.** It is about sixteen minutes
+  here, and a targeted suite is thirty to sixty seconds. Running everything on every commit trades
+  fourteen minutes for almost no extra signal, and sixteen minutes of waiting is sixteen minutes not
+  spent finding the defects that matter.
+- **Evidence is not the same as volume.** The browser scripts earn their place because they have found
+  real defects - a dead button, a broken image URL, a 500 on every product edit, a price that could not
+  be cleared. A test that has never failed for a reason is a test nobody needed; the ones that have are
+  the ones to keep.
+- **Never report success on a build that was not run.** If a change was not verified, it is said so
+  plainly in the commit and in the reply, and the unverified part is named.
