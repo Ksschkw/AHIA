@@ -33,6 +33,8 @@ export type ExpenseCategory = Schemas["ExpenseCategorySchema"];
 export type PaymentMethod = Schemas["PaymentMethod"];
 export type ExpenseCreate = Schemas["ExpenseCreateSchema"];
 export type ProductImage = Schemas["ProductImageResponseSchema"];
+export type Storefront = Schemas["StorefrontResponseSchema"];
+export type ProductShareSheet = Schemas["ProductShareSheetSchema"];
 
 /**
  * Empty by default, so every call goes to this app's own origin and is proxied to the API by the
@@ -282,6 +284,24 @@ export function createProduct(
   });
 }
 
+/**
+ * Publication is its own operation, not a field on an edit: a product that appears in the public shop
+ * is a decision, and it is recorded as one.
+ */
+export function publishProduct(tenantId: string, productId: string): Promise<Product> {
+  return request<Product>(`/api/v1/tenants/${tenantId}/products/${productId}/publish`, {
+    method: "POST",
+    body: {},
+  });
+}
+
+export function unpublishProduct(tenantId: string, productId: string): Promise<Product> {
+  return request<Product>(`/api/v1/tenants/${tenantId}/products/${productId}/unpublish`, {
+    method: "POST",
+    body: {},
+  });
+}
+
 export function listStock(tenantId: string): Promise<InventoryLevel[]> {
   return request<InventoryLevel[]>(`/api/v1/tenants/${tenantId}/inventory`);
 }
@@ -401,6 +421,60 @@ export function removeProductImage(
   return request<{ image_id: string; storage_released: boolean }>(
     `/api/v1/tenants/${tenantId}/products/${productId}/images/${imageId}`,
     { method: "DELETE" },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The public shop
+// ---------------------------------------------------------------------------
+
+export function getStorefront(tenantId: string): Promise<Storefront> {
+  return request<Storefront>(`/api/v1/tenants/${tenantId}/storefront`);
+}
+
+export function publishStorefront(
+  tenantId: string,
+  details: { headline?: string | null; description?: string | null; contact_phone?: string | null },
+): Promise<Storefront> {
+  return request<Storefront>(`/api/v1/tenants/${tenantId}/storefront/publish`, {
+    method: "POST",
+    body: details satisfies Schemas["StorefrontPublishSchema"],
+  });
+}
+
+export function unpublishStorefront(tenantId: string): Promise<Storefront> {
+  return request<Storefront>(`/api/v1/tenants/${tenantId}/storefront/unpublish`, {
+    method: "POST",
+    body: {},
+  });
+}
+
+/**
+ * Turn a text box into a value the API accepts.
+ *
+ * An empty string is not a headline: the field's smallest valid value is one character, so clearing
+ * one has to be sent as null. The service reads null as "set it to nothing" and an omitted field as
+ * "leave it alone", which is exactly the difference a person means when they delete what was there.
+ */
+function clearedOrText(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+export function updateStorefront(
+  tenantId: string,
+  changes: { headline?: string | null; description?: string | null; contact_phone?: string | null },
+): Promise<Storefront> {
+  return request<Storefront>(`/api/v1/tenants/${tenantId}/storefront`, {
+    method: "PATCH",
+    body: changes satisfies Schemas["StorefrontUpdateSchema"],
+  });
+}
+
+/** The public URL, the QR payload and the WhatsApp link for one product. */
+export function productShareSheet(tenantId: string, productId: string): Promise<ProductShareSheet> {
+  return request<ProductShareSheet>(
+    `/api/v1/tenants/${tenantId}/products/${productId}/share-sheet`,
   );
 }
 

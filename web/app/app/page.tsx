@@ -28,6 +28,13 @@ import {
   ApiError,
   createBusiness,
   getBusiness,
+  getStorefront,
+  productShareSheet,
+  publishProduct,
+  publishStorefront,
+  unpublishProduct,
+  unpublishStorefront,
+  updateStorefront,
   createProduct,
   currentUser,
   dailySales,
@@ -54,6 +61,7 @@ import {
   type Product,
   type ProductImage,
   type SaleCreate,
+  type Storefront,
   type SaleSummary,
   type Tenant,
   type TenantSummary,
@@ -63,7 +71,7 @@ import { formatCount, formatMoney, formatQuantity } from "@/lib/format";
 import styles from "./dashboard.module.css";
 
 type Notice = { message: string; tone: "good" | "bad" };
-type SheetName = "sale" | "product" | "stock" | "expense" | "business" | null;
+type SheetName = "sale" | "product" | "stock" | "expense" | "business" | "shop" | null;
 
 const STORAGE_KEY = "ahia.business";
 
@@ -99,6 +107,7 @@ export default function Dashboard() {
   //: business whose deployment has media switched off should not be shown buttons that cannot work.
   const [photosAvailable, setPhotosAvailable] = useState<boolean | null>(null);
   const [photoProduct, setPhotoProduct] = useState<Product | null>(null);
+  const [storefront, setStorefront] = useState<Storefront | null>(null);
 
   //: Which action is in flight, if any. A boolean would disable every control on the screen for
   //: the length of any request, which on a slow connection is a frozen interface.
@@ -189,6 +198,7 @@ export default function Dashboard() {
       // The detail first: it carries the currency, so every amount on the page is rendered in the
       // business's own money rather than in a default that happens to be right for most shops.
       setBusinessDetail(await getBusiness(tenantId));
+      setStorefront(await getStorefront(tenantId));
       await loadBusiness(tenantId);
     },
     [loadBusiness],
@@ -269,6 +279,7 @@ export default function Dashboard() {
   const runStock = useCallback((action: () => Promise<void>) => run(action, "stock"), [run]);
   const runExpense = useCallback((action: () => Promise<void>) => run(action, "expense"), [run]);
   const runPhoto = useCallback((action: () => Promise<void>) => run(action, "photo"), [run]);
+  const runShop = useCallback((action: () => Promise<void>) => run(action, "shop"), [run]);
 
   const levelFor = (productId: string) => stock.find((entry) => entry.product_id === productId);
 
@@ -467,6 +478,34 @@ export default function Dashboard() {
                         )}
                         <button
                           className={styles.rowAction}
+                          disabled={busy}
+                          title={
+                            product.is_published
+                              ? "Hide this from the public shop"
+                              : "Show this in the public shop"
+                          }
+                          onClick={() => {
+                            void runShop(async () => {
+                              if (!businessId) return;
+                              if (product.is_published) {
+                                await unpublishProduct(businessId, product.id);
+                              } else {
+                                await publishProduct(businessId, product.id);
+                              }
+                              await refresh();
+                              setNotice({
+                                message: product.is_published
+                                  ? `${product.name} is hidden from the shop.`
+                                  : `${product.name} is now in your shop.`,
+                                tone: "good",
+                              });
+                            });
+                          }}
+                        >
+                          {product.is_published ? "In shop" : "Hidden"}
+                        </button>
+                        <button
+                          className={styles.rowAction}
                           disabled={busy || out}
                           onClick={() => {
                             void run(async () => {
@@ -518,6 +557,80 @@ export default function Dashboard() {
                     </li>
                   ))}
                 </ul>
+              )}
+            </Card>
+
+            <Card
+              title="Your shop online"
+              action={
+                storefront?.is_published ? (
+                  <button className={styles.linkButton} onClick={() => setSheet("shop")}>
+                    Edit
+                  </button>
+                ) : null
+              }
+            >
+              {storefront?.is_published ? (
+                <>
+                  <p className={styles.hint}>
+                    Anyone with this link can see your shelf and what it costs.
+                  </p>
+                  <p className={styles.shopLink}>{publicShopUrl(business?.slug ?? "")}</p>
+                  <div className={styles.shopActions}>
+                    <button
+                      className={styles.rowAction}
+                      onClick={() => {
+                        void runShop(async () => {
+                          await copyToClipboard(publicShopUrl(business?.slug ?? ""));
+                          setNotice({ message: "Shop link copied.", tone: "good" });
+                        });
+                      }}
+                    >
+                      Copy link
+                    </button>
+                    <a
+                      className={styles.rowAction}
+                      href={whatsAppShareUrl(
+                        `Come and see what we have: ${publicShopUrl(business?.slug ?? "")}`,
+                      )}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                    >
+                      Share on WhatsApp
+                    </a>
+                    <button
+                      className={styles.linkButton}
+                      onClick={() =>
+                        runShop(async () => {
+                          if (!businessId) return;
+                          setStorefront(await unpublishStorefront(businessId));
+                          setNotice({ message: "Your shop is closed. The link is kept.", tone: "good" });
+                        })
+                      }
+                    >
+                      Close it for now
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className={styles.hint}>
+                    A page with your products, photos and prices that you can send to a customer.
+                    They open it, see what you have, and message you on WhatsApp.
+                  </p>
+                  <Button
+                    busy={busyAction === "shop"}
+                    onClick={() =>
+                      runShop(async () => {
+                        if (!businessId) return;
+                        setStorefront(await publishStorefront(businessId, {}));
+                        setNotice({ message: "Your shop is open.", tone: "good" });
+                      })
+                    }
+                  >
+                    Open my shop
+                  </Button>
+                </>
               )}
             </Card>
 
@@ -646,6 +759,22 @@ export default function Dashboard() {
                 : "Photo removed from the product; the file is still being cleared from storage.",
               tone: "good",
             });
+          })
+        }
+      />
+
+      <ShopSheet
+        open={sheet === "shop"}
+        busy={busyAction === "shop"}
+        storefront={storefront}
+        slug={business?.slug ?? ""}
+        onClose={() => setSheet(null)}
+        onSubmit={(details) =>
+          runShop(async () => {
+            if (!businessId) return;
+            setStorefront(await updateStorefront(businessId, details));
+            setSheet(null);
+            setNotice({ message: "Your shop page is updated.", tone: "good" });
           })
         }
       />
@@ -970,6 +1099,110 @@ function ExpenseSheet({
         }
       >
         Record spending
+      </Button>
+    </Sheet>
+  );
+}
+
+/** Where a customer opens this business's shop. Built from the browser's own address. */
+function publicShopUrl(slug: string): string {
+  if (!slug) {
+    return "";
+  }
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  return `${origin}/shop/${slug}`;
+}
+
+function whatsAppShareUrl(message: string): string {
+  return `https://wa.me/?text=${encodeURIComponent(message)}`;
+}
+
+/** An empty text box means "clear it", which the API expresses as null rather than "". */
+function clearedOrText(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+async function copyToClipboard(value: string): Promise<void> {
+  if (!value) {
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    // A browser that refuses the clipboard (an insecure origin, or a refused permission) still has
+    // the link on screen, which is enough to copy by hand.
+  }
+}
+
+/**
+ * What the shop says about itself.
+ *
+ * The address is not editable: it is on links that customers already have, so a business that wants a
+ * different one is a different decision from a profile edit.
+ */
+function ShopSheet({
+  open,
+  busy,
+  storefront,
+  slug,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  busy: boolean;
+  storefront: Storefront | null;
+  slug: string;
+  onClose: () => void;
+  onSubmit: (details: {
+    headline: string | null;
+    description: string | null;
+    contact_phone: string | null;
+  }) => void;
+}) {
+  const [headline, setHeadline] = useState(storefront?.headline ?? "");
+  const [description, setDescription] = useState(storefront?.description ?? "");
+  const [contactPhone, setContactPhone] = useState(storefront?.contact_phone ?? "");
+
+  return (
+    <Sheet open={open} title="Your shop page" onClose={onClose}>
+      <p className={styles.hint}>
+        Your address is <strong>{publicShopUrl(slug)}</strong>. It stays the same.
+      </p>
+      <Field
+        label="One line about the business"
+        id="shop_headline"
+        value={headline}
+        onChange={setHeadline}
+        placeholder="Electronics and home appliances in Alaba"
+      />
+      <Field
+        label="What you want customers to know"
+        id="shop_description"
+        value={description}
+        onChange={setDescription}
+        placeholder="We sell and install. Delivery within Lagos on the same day."
+      />
+      <Field
+        label="Number customers should message"
+        id="shop_phone"
+        value={contactPhone}
+        onChange={setContactPhone}
+        inputMode="tel"
+        hint="This is the number the WhatsApp button opens."
+      />
+      <Button
+        full
+        busy={busy}
+        onClick={() =>
+          onSubmit({
+            headline: clearedOrText(headline),
+            description: clearedOrText(description),
+            contact_phone: clearedOrText(contactPhone),
+          })
+        }
+      >
+        Save the shop page
       </Button>
     </Sheet>
   );

@@ -66,7 +66,7 @@ def build_settings(**overrides: Any) -> Settings:
         "rate_limit_auth_per_minute": 1_000,
         "rate_limit_password_reset_per_hour": 1_000,
         "rate_limit_public_read_per_minute": 1_000,
-        "feature_storetfront_public_publishing": True,
+        "feature_storefront_public_publishing": True,
     }
     baseline.update(overrides)
     return Settings(**baseline)

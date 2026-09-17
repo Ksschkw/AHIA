@@ -66,7 +66,7 @@ def build_settings(*, publishing: bool, **overrides: Any) -> Settings:
         "rate_limit_auth_per_minute": 1_000,
         "rate_limit_password_reset_per_hour": 1_000,
         "rate_limit_public_read_per_minute": 1_000,
-        "feature_storetfront_public_publishing": publishing,
+        "feature_storefront_public_publishing": publishing,
     }
     baseline.update(overrides)
     return Settings(**baseline)
@@ -188,6 +188,8 @@ async def test_one_product_of_a_shop_can_be_shared(database: Database) -> None:
         owner, tenant = await owner_with_business(client)
         product = await create_published_product(client, owner, tenant)
         await client.post(storefront_path(tenant["id"], "publish"), headers=auth(owner), json={})
+        # The session cookie is dropped with the header: an unauthenticated caller has neither.
+        client.cookies.clear()
 
         response = await client.get(f"/shop/{tenant['slug']}/product/{product['slug']}")
 
@@ -206,6 +208,8 @@ async def test_the_public_page_carries_no_private_field(database: Database) -> N
         owner, tenant = await owner_with_business(client)
         product = await create_published_product(client, owner, tenant)
         await client.post(storefront_path(tenant["id"], "publish"), headers=auth(owner), json={})
+        # The session cookie is dropped with the header: an unauthenticated caller has neither.
+        client.cookies.clear()
 
         response = await client.get(f"/shop/{tenant['slug']}")
 
@@ -338,6 +342,9 @@ async def test_a_field_that_is_not_editable_is_refused(database: Database) -> No
 async def test_managing_a_shop_requires_a_token(database: Database) -> None:
     async with running_application(publishing=True) as (client, _application):
         _owner, tenant = await owner_with_business(client)
+        # No credentials at all: the registration above left a session cookie, and a browser would
+        # send it, so the jar is emptied to describe a caller who has nothing.
+        client.cookies.clear()
 
         read = await client.get(storefront_path(tenant["id"]))
         published = await client.post(storefront_path(tenant["id"], "publish"), json={})
@@ -391,7 +398,7 @@ def test_the_public_shop_is_rate_limited_into_its_own_bucket() -> None:
 
 
 def _settings_defaults_to_off() -> bool:
-    return Settings.model_fields["feature_storetfront_public_publishing"].default is False
+    return Settings.model_fields["feature_storefront_public_publishing"].default is False
 
 
 @pytest.mark.unit
@@ -448,6 +455,8 @@ async def test_a_shop_without_a_contact_number_says_so_instead_of_a_dead_button(
         owner, tenant = await owner_with_business(client)
         product = await create_published_product(client, owner, tenant)
         await client.post(storefront_path(tenant["id"], "publish"), headers=auth(owner), json={})
+        # The session cookie is dropped with the header: an unauthenticated caller has neither.
+        client.cookies.clear()
 
         response = await client.get(
             f"/api/v1/tenants/{tenant['id']}/products/{product['id']}/share-sheet",
@@ -504,6 +513,8 @@ async def test_a_share_sheet_needs_a_token(database: Database) -> None:
         owner, tenant = await owner_with_business(client)
         product = await create_published_product(client, owner, tenant)
         await client.post(storefront_path(tenant["id"], "publish"), headers=auth(owner), json={})
+        # The session cookie is dropped with the header: an unauthenticated caller has neither.
+        client.cookies.clear()
 
         response = await client.get(
             f"/api/v1/tenants/{tenant['id']}/products/{product['id']}/share-sheet"

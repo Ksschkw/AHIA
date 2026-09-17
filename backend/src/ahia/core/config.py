@@ -118,8 +118,11 @@ FEATURE_FLAGS: Final[tuple[FeatureFlag, ...]] = (
         removal_condition="when the mobile sync engine ships to every tenant",
     ),
     FeatureFlag(
+        # The attribute name must match the variable: pydantic-settings maps one to the other, and
+        # a setting whose name is misspelled never receives its value - the flag then sits at its
+        # default for ever, and the environment variable looks like it does nothing.
         environment_variable="FEATURE_STOREFRONT_PUBLIC_PUBLISHING",
-        setting_attribute="feature_storetfront_public_publishing",
+        setting_attribute="feature_storefront_public_publishing",
         default=False,
         description="whether a tenant may publish a public storefront",
         date_added="2025-09-13",
@@ -422,7 +425,7 @@ class Settings(BaseSettings):
 
     # -- Feature flags ------------------------------------------------------
     feature_offline_sync: bool = False
-    feature_storetfront_public_publishing: bool = False
+    feature_storefront_public_publishing: bool = False
     feature_media_upload: bool = False
     feature_whatsapp_click_to_chat: bool = False
     feature_ai_insights: bool = False

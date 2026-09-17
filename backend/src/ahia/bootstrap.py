@@ -323,7 +323,7 @@ def build_application_container(
         unit_of_work_factory=database.unit_of_work_factory(),
         product_image_service=product_image_service,
         audit_event_service=audit_event_service,
-        publishing_enabled=settings.is_feature_enabled("feature_storetfront_public_publishing"),
+        publishing_enabled=settings.is_feature_enabled("feature_storefront_public_publishing"),
         default_phone_country_code=settings.default_phone_country_code,
         logger=logger,
     )
