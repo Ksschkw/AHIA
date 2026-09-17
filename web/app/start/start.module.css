@@ -2,20 +2,27 @@
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 28px 20px;
+  padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
 }
 
 .card {
   width: 100%;
   max-width: 430px;
+  min-width: 0;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 22px;
   box-shadow: var(--shadow-lg);
-  padding: 30px;
+  padding: 26px 20px;
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+@media (min-width: 520px) {
+  .card {
+    padding: 30px;
+  }
 }
 
 .brandLink {
@@ -90,8 +97,16 @@
 
 .nameRow {
   display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Side by side once there is room for two names on one line. */
+@media (min-width: 520px) {
+  .nameRow {
+    flex-direction: row;
+    gap: 12px;
+  }
 }
 
 .failure {

@@ -629,7 +629,7 @@ def _split_filename_extension(path: str) -> tuple[str, str]:
     return path[:last_dot], path[last_dot + 1 :].lower()
 
 
-def _transformation_for(key: str, presentation_width: int | None) -> str | None:
+def _transformation_for(key: str, presentation_width: int | None) -> dict[str, Any] | None:
     """Encode a requested presentation width as a Cloudinary transformation.
 
     This is the only place in the codebase that knows Cloudinary's
@@ -639,6 +639,14 @@ def _transformation_for(key: str, presentation_width: int | None) -> str | None:
 
     The scale mode is `c_limit`: down to the requested width, never up. A stored
     asset smaller than the request is delivered unchanged rather than inflated.
+
+    **Returned as a mapping, not as a string, and that is not a style choice.**
+    The SDK treats a transformation given as a string as the name of a
+    transformation *saved in the account*, and renders it as `t_w_640,c_limit` -
+    which Cloudinary answers with a 400 for an account where no such named
+    transformation exists. A mapping is rendered inline as the parameters it
+    contains, which is what a per-request width actually is. This cost a broken
+    image on every product card to find, so it is written down.
     """
     if presentation_width is None:
         return None
@@ -653,7 +661,7 @@ def _transformation_for(key: str, presentation_width: int | None) -> str | None:
         # A raw asset has no image transformation pipeline, so the stored object
         # is delivered unchanged and the client sizes it (ADR-0009).
         return None
-    return f"w_{presentation_width},c_limit"
+    return {"width": presentation_width, "crop": "limit"}
 
 
 def _positive_dimension(reported: Any) -> int | None:

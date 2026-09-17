@@ -69,7 +69,16 @@
   flex-direction: column;
   gap: 6px;
   flex: 1;
-  min-width: 150px;
+  /* `min-width: 0` matters more than it looks: an input's intrinsic width is about twenty
+     characters, and a flex item refuses to shrink below its content unless it is allowed to. That is
+     how a form ends up wider than the phone it is on and gets dragged sideways. */
+  min-width: 0;
+}
+
+@media (min-width: 520px) {
+  .field {
+    min-width: 150px;
+  }
 }
 
 .fieldLabel {
@@ -80,6 +89,8 @@
 }
 
 .input {
+  width: 100%;
+  min-width: 0;
   min-height: 44px;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
@@ -204,9 +215,11 @@
   background: var(--sand);
   border-radius: 20px 20px 0 0;
   box-shadow: var(--shadow-lg);
-  padding: 20px;
+  padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
   max-height: 92vh;
   overflow-y: auto;
+  /* A sheet that is taller than the phone has to be scrollable *and* keep its buttons reachable. */
+  overscroll-behavior: contain;
 }
 
 @media (min-width: 720px) {
@@ -243,7 +256,7 @@
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 22px;
+  bottom: 16px;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -311,6 +324,7 @@
   box-shadow: none;
   flex: 1;
   min-width: 0;
+  width: auto;
 }
 
 .inputWrap .input:focus {

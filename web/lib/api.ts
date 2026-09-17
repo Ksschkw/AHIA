@@ -31,6 +31,7 @@ export type ExpenseCategoryList = Schemas["ExpenseCategoryListSchema"];
 export type ExpenseCategory = Schemas["ExpenseCategorySchema"];
 export type PaymentMethod = Schemas["PaymentMethod"];
 export type ExpenseCreate = Schemas["ExpenseCreateSchema"];
+export type ProductImage = Schemas["ProductImageResponseSchema"];
 
 /**
  * Empty by default, so every call goes to this app's own origin and is proxied to the API by the
@@ -150,7 +151,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 export function registerAccount(input: {
   first_name: string;
   last_name: string;
-  email: string;
+  /** One of these two is required; the API refuses a registration with neither. */
+  email?: string;
   phone?: string;
   password: string;
 }): Promise<AuthenticatedSession> {
@@ -280,6 +282,76 @@ export function lowStock(tenantId: string, limit = "5"): Promise<LowStockProduct
   return request<LowStockProduct[]>(`/api/v1/tenants/${tenantId}/reports/low-stock`, {
     query: { limit },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Product photos
+// ---------------------------------------------------------------------------
+
+export function listProductImages(tenantId: string, productId: string): Promise<ProductImage[]> {
+  return request<ProductImage[]>(`/api/v1/tenants/${tenantId}/products/${productId}/images`);
+}
+
+/**
+ * Upload one photo.
+ *
+ * The API takes the image as the raw request body with its own content type, rather than as a
+ * multipart form: the bytes are the body, and the type is a claim the server checks by decoding them.
+ * Nothing here trusts the browser's word for it - the pipeline does, and refuses a mismatch.
+ */
+export async function uploadProductImage(
+  tenantId: string,
+  productId: string,
+  file: File,
+  isPrimary: boolean,
+): Promise<ProductImage> {
+  const query = isPrimary ? "?is_primary=true" : "";
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/tenants/${tenantId}/products/${productId}/images${query}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": file.type },
+      body: file,
+      credentials: "include",
+      signal: AbortSignal.timeout(60_000),
+    },
+  );
+  const payload = (await response.json().catch(() => null)) as
+    | ProductImage
+    | { error?: { code?: string; message?: string; correlation_id?: string } };
+  if (!response.ok) {
+    const error = (payload as { error?: { code?: string; message?: string; correlation_id?: string } })
+      .error;
+    throw new ApiError(
+      response.status,
+      error?.code ?? "UNKNOWN",
+      error?.message ?? `The photo could not be uploaded (${response.status}).`,
+      error?.correlation_id ?? null,
+    );
+  }
+  return payload as ProductImage;
+}
+
+export function makeProductImagePrimary(
+  tenantId: string,
+  productId: string,
+  imageId: string,
+): Promise<ProductImage> {
+  return request<ProductImage>(
+    `/api/v1/tenants/${tenantId}/products/${productId}/images/${imageId}/primary`,
+    { method: "POST" },
+  );
+}
+
+export function removeProductImage(
+  tenantId: string,
+  productId: string,
+  imageId: string,
+): Promise<{ image_id: string; storage_released: boolean }> {
+  return request<{ image_id: string; storage_released: boolean }>(
+    `/api/v1/tenants/${tenantId}/products/${productId}/images/${imageId}`,
+    { method: "DELETE" },
+  );
 }
 
 /** Exported so a page can use the generated operation shapes directly when it needs to. */

@@ -1791,3 +1791,29 @@ These apply continuously and are re-verified at each milestone boundary.
   `POST /tenants/{id}/products/{pid}/images` came back as an optimised 78-byte webp stored under a
   tenant/product path, with a delivery URL the product schema exposes. `FEATURE_MEDIA_UPLOAD` and
   `FEATURE_STOREFRONT_PUBLIC_PUBLISHING` are enabled in `.env`, with the upload UI still to come.
+
+- The web app is mobile-responsive, and that is measured rather than claimed:
+  `web/scripts/mobile-check.mjs` drives the whole journey at 390x844 and fails if any screen is wider
+  than the viewport - the one defect that makes a mobile page feel broken. It found seven: a form whose
+  inputs could not shrink below their intrinsic width, and a dashboard header with three things on one
+  row. Both are fixed at the cause (a flex item does not shrink below its content unless it is allowed
+  to; a grid instead of a wrapping flex row for the stat cards), and every screen now measures exactly
+  390/390.
+- Product photos are in the dashboard: a thumbnail on each shelf row, a sheet per product with upload
+  (the phone's camera or the gallery), cover selection and removal. The upload is verified against the
+  real Cloudinary account from the browser, with the check waiting for the picture to *decode* rather
+  than for the row to exist.
+- **A delivery-URL bug found by that verification.** The adapter asked the Cloudinary SDK for a
+  transformation as a string, and the SDK reads a string as the name of a transformation saved in the
+  account: it rendered `t_w_2000,c_limit`, which Cloudinary answers with a 400. Every product photo
+  would have been a broken image. The transformation is now a mapping, which the SDK renders inline,
+  and the invariant is written down where the next person will read it.
+- **Phone numbers were creating more than one account for one person.** `2348031234567` - the country
+  code typed without a plus - was completed a second time into `+2342348031234567`, while
+  `08031234567`, `8031234567` and `+2348031234567` all agreed. The rule also existed twice, in the
+  entity and in the auth service, which is how it drifted. It now exists once: the country code is
+  recognised with or without a plus, the international prefix `00` is handled, and a length guard stops
+  a local number that merely begins with the same digits from being read as international. Signing up
+  with a phone number and no email address works, and all four written forms reach the same account.
+- The Next.js development indicator is switched off: it is a tool for the person writing the code and
+  it sat on top of the interface for everybody else.

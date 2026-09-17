@@ -19,6 +19,7 @@ import { registerAccount, signIn } from "@/lib/api";
 import { explainFailure, type Explained } from "@/lib/errors";
 import {
   PASSWORD_MINIMUM_LENGTH,
+  looksLikeEmail,
   looksLikeIdentifier,
   passwordChecks,
   passwordStrength,
@@ -77,11 +78,15 @@ function AuthScreen() {
     setTouched({ firstName: true, lastName: true, identifier: true, password: true, confirmation: true });
     try {
       if (creating) {
+        // One box, two possible kinds of identifier, because a trader may have no email address and
+        // should not be stopped by a form. Which one it is decides which field the API receives.
+        const typedIdentifier = identifier.trim();
+        const isEmail = looksLikeEmail(typedIdentifier);
         await registerAccount({
           first_name: firstName.trim(),
           last_name: lastName.trim(),
-          email: identifier.trim(),
-          phone: phone.trim() || undefined,
+          email: isEmail ? typedIdentifier : undefined,
+          phone: isEmail ? phone.trim() || undefined : typedIdentifier,
           password,
         });
       } else {
@@ -184,17 +189,17 @@ function AuthScreen() {
           ) : null}
 
           <Field
-            label={creating ? "Email address" : "Email or phone number"}
+            label="Email or phone number"
             id="identifier"
             value={identifier}
             onChange={setIdentifier}
             onBlur={() => setTouched((t) => ({ ...t, identifier: true }))}
             inputMode={creating ? "email" : "text"}
-            autoComplete={creating ? "email" : "username"}
-            placeholder={creating ? "ada@example.com" : "ada@example.com or 08031234567"}
+            autoComplete="username"
+            placeholder="ada@example.com or 0803 123 4567"
             hint={
               creating
-                ? "This is how you will sign in, and where receipts and reports are sent."
+                ? "Whichever you use, that is how you sign in. Email is where receipts and reports go."
                 : undefined
             }
             error={errors.identifier}
@@ -202,15 +207,15 @@ function AuthScreen() {
 
           {creating ? (
             <Field
-              label="Phone number"
+              label="Email address"
               id="phone"
               value={phone}
               onChange={setPhone}
-              inputMode="tel"
-              autoComplete="tel"
+              inputMode="email"
+              autoComplete="email"
               optional
-              placeholder="0803 123 4567"
-              hint="Used for WhatsApp receipts and for customers to reach the business."
+              placeholder="ada@example.com"
+              hint="If you signed up with a phone number, add an email so receipts and reports can reach you."
             />
           ) : null}
 

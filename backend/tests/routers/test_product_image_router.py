@@ -588,6 +588,10 @@ async def test_an_image_cannot_be_read_through_another_business(database: Databa
 async def test_an_unauthenticated_upload_is_refused(database: Database) -> None:
     async with running_application() as (client, _application, _store):
         _owner, context = await owner_with_product(client)
+        # Dropping the Authorization header is no longer the same as having no credentials: the
+        # registration above left a session cookie on this client, and a browser would send it. An
+        # unauthenticated caller is one with neither, so the jar is emptied deliberately.
+        client.cookies.clear()
         response = await client.post(
             images_path(context["tenant"]["id"], context["product"]["id"]),
             headers={"Content-Type": "image/png"},

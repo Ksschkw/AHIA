@@ -61,6 +61,8 @@ def canonical_phone_number(value: str | None, *, default_country_code: str) -> s
 
         0803 123 4567   ->  +2348031234567     (trunk prefix replaced by the code)
         8031234567      ->  +2348031234567     (no trunk prefix to replace)
+        2348031234567   ->  +2348031234567     (the code typed without a plus)
+        002348031234567 ->  +2348031234567     (the international prefix dialled)
         +2348031234567  ->  +2348031234567     (already international, left alone)
         +4480812345     ->  +4480812345        (a different country is not overridden)
 
@@ -71,8 +73,19 @@ def canonical_phone_number(value: str | None, *, default_country_code: str) -> s
     normalized = normalize_phone_number(value)
     if normalized is None:
         return None
+    country_digits = default_country_code.lstrip("+")
     if normalized.startswith("+"):
         return normalized
+    if normalized.startswith("00") and normalized[2:].startswith(country_digits):
+        # The international prefix a person dials: 00234901... is the same number as
+        # +234901...
+        return f"+{normalized[2:]}"
+    if normalized.startswith(country_digits) and len(normalized) - len(country_digits) >= 7:
+        # The country code typed without a plus. `2348031234567` is the number the rest of the
+        # world calls `+2348031234567`, and storing it as `+2342348031234567` would give one
+        # trader two accounts for one phone. The length guard is what keeps a local number
+        # that merely begins with the same digits from being read as international.
+        return f"+{normalized}"
     if normalized.startswith("0"):
         # A trunk prefix is meaningful only locally, so it is replaced by the country code
         # rather than kept.

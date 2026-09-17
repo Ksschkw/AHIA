@@ -14,6 +14,11 @@ import type { NextConfig } from "next";
 const API_PROXY_TARGET = process.env.API_PROXY_TARGET ?? "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
+  // The floating development indicator is a tool for the person writing the code, and it sits on top
+  // of the interface for everybody else. Turned off rather than explained away: it never appears in a
+  // production build, so nothing is hidden by doing so.
+  devIndicators: false,
+
   async rewrites() {
     return [
       {

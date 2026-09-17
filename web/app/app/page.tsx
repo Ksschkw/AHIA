@@ -13,7 +13,7 @@
  */
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Brand, Wordmark } from "@/components/brand";
 import {
@@ -31,13 +31,17 @@ import {
   dailySales,
   listBusinesses,
   listExpenseCategories,
+  listProductImages,
   listProducts,
   listSales,
   listStock,
   lowStock,
+  makeProductImagePrimary,
   receiveStock,
   recordExpense,
   recordSale,
+  removeProductImage,
+  uploadProductImage,
   signOut,
   type DailySalesSummary,
   type ExpenseCategory,
@@ -46,6 +50,7 @@ import {
   type InventoryLevel,
   type LowStockProduct,
   type Product,
+  type ProductImage,
   type SaleCreate,
   type SaleSummary,
   type Tenant,
@@ -83,6 +88,13 @@ export default function Dashboard() {
   const [recentSales, setRecentSales] = useState<SaleSummary[]>([]);
   const [runningOut, setRunningOut] = useState<LowStockProduct[]>([]);
   const [categories, setCategories] = useState<ExpenseCategoryList | null>(null);
+  //: Photos per product, loaded after the shelf and never blocking it. An empty map means "not read
+  //: yet", which is why the shelf shows a placeholder rather than nothing while it fills in.
+  const [photos, setPhotos] = useState<Record<string, ProductImage[]>>({});
+  //: Null until the first photo request answers. False hides every photo affordance, because a
+  //: business whose deployment has media switched off should not be shown buttons that cannot work.
+  const [photosAvailable, setPhotosAvailable] = useState<boolean | null>(null);
+  const [photoProduct, setPhotoProduct] = useState<Product | null>(null);
 
   //: Which action is in flight, if any. A boolean would disable every control on the screen for
   //: the length of any request, which on a slow connection is a frozen interface.
@@ -121,11 +133,51 @@ export default function Dashboard() {
     ]);
     setProducts(foundProducts);
     setStock(foundStock);
+    void loadPhotos(
+      tenantId,
+      foundProducts.map((product) => product.id),
+    );
     setToday(summary);
     setRecentSales(sales);
     setRunningOut(low);
     setCategories(expenseCategories);
   }, []);
+
+  /**
+   * Read every product's photos, after the shelf has rendered.
+   *
+   * Deliberately not part of the page's critical path: a shop with forty products would otherwise wait
+   * for forty round trips before showing anything. The shelf draws immediately and the pictures arrive.
+   */
+  const loadPhotos = useCallback(async (tenantId: string, productIds: string[]) => {
+    if (productIds.length === 0) {
+      setPhotos({});
+      return;
+    }
+    try {
+      const entries = await Promise.all(
+        productIds.map(async (productId) => {
+          const images = await listProductImages(tenantId, productId);
+          return [productId, images] as const;
+        }),
+      );
+      setPhotos(Object.fromEntries(entries));
+      setPhotosAvailable(true);
+    } catch (error) {
+      // A 404 here means the deployment has media switched off, which is a configuration fact and not
+      // a failure to report to a trader: the buttons simply do not appear.
+      setPhotosAvailable(!(error instanceof ApiError && error.status === 404));
+    }
+  }, []);
+
+  const refreshPhotos = useCallback(
+    async (productId: string) => {
+      if (!businessId) return;
+      const images = await listProductImages(businessId, productId);
+      setPhotos((current) => ({ ...current, [productId]: images }));
+    },
+    [businessId],
+  );
 
   const selectBusiness = useCallback(
     async (tenantId: string) => {
@@ -212,6 +264,7 @@ export default function Dashboard() {
   const runSale = useCallback((action: () => Promise<void>) => run(action, "sale"), [run]);
   const runStock = useCallback((action: () => Promise<void>) => run(action, "stock"), [run]);
   const runExpense = useCallback((action: () => Promise<void>) => run(action, "expense"), [run]);
+  const runPhoto = useCallback((action: () => Promise<void>) => run(action, "photo"), [run]);
 
   const levelFor = (productId: string) => stock.find((entry) => entry.product_id === productId);
 
@@ -370,8 +423,25 @@ export default function Dashboard() {
                   const level = levelFor(product.id);
                   const quantity = Number(level?.available_quantity ?? "0");
                   const out = level?.is_out_of_stock ?? true;
+                  const cover = coverPhoto(photos[product.id]);
                   return (
                     <li key={product.id} className={styles.row}>
+                      {photosAvailable !== false ? (
+                        <button
+                          className={styles.thumb}
+                          onClick={() => setPhotoProduct(product)}
+                          aria-label={
+                            cover ? `Photos of ${product.name}` : `Add a photo of ${product.name}`
+                          }
+                        >
+                          {cover?.delivery_url ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img src={cover.delivery_url} alt="" className={styles.thumbImage} />
+                          ) : (
+                            <span className={styles.thumbEmpty}>Photo</span>
+                          )}
+                        </button>
+                      ) : null}
                       <div className={styles.rowMain}>
                         <span className={styles.rowName}>{product.name}</span>
                         <span className={`${styles.rowMeta} tabular`}>
@@ -532,6 +602,43 @@ export default function Dashboard() {
             setSheet(null);
             setNotice({
               message: `Spending recorded: ${formatMoney(input.amount, currency)}`,
+              tone: "good",
+            });
+          })
+        }
+      />
+
+      <PhotoSheet
+        product={photoProduct}
+        images={photoProduct ? (photos[photoProduct.id] ?? []) : []}
+        busy={busyAction === "photo"}
+        onClose={() => setPhotoProduct(null)}
+        onUpload={(file) =>
+          runPhoto(async () => {
+            if (!businessId || !photoProduct) return;
+            const isFirst = (photos[photoProduct.id] ?? []).length === 0;
+            await uploadProductImage(businessId, photoProduct.id, file, isFirst);
+            await refreshPhotos(photoProduct.id);
+            setNotice({ message: `${photoProduct.name}: photo added.`, tone: "good" });
+          })
+        }
+        onMakeCover={(imageId) =>
+          runPhoto(async () => {
+            if (!businessId || !photoProduct) return;
+            await makeProductImagePrimary(businessId, photoProduct.id, imageId);
+            await refreshPhotos(photoProduct.id);
+            setNotice({ message: "That is now the cover photo.", tone: "good" });
+          })
+        }
+        onRemove={(imageId) =>
+          runPhoto(async () => {
+            if (!businessId || !photoProduct) return;
+            const outcome = await removeProductImage(businessId, photoProduct.id, imageId);
+            await refreshPhotos(photoProduct.id);
+            setNotice({
+              message: outcome.storage_released
+                ? "Photo removed."
+                : "Photo removed from the product; the file is still being cleared from storage.",
               tone: "good",
             });
           })
@@ -859,6 +966,96 @@ function ExpenseSheet({
       >
         Record spending
       </Button>
+    </Sheet>
+  );
+}
+
+/** The picture that stands for a product: the chosen cover, or the first one there is. */
+function coverPhoto(images: ProductImage[] | undefined): ProductImage | undefined {
+  if (!images || images.length === 0) {
+    return undefined;
+  }
+  return images.find((image) => image.is_primary) ?? images[0];
+}
+
+/**
+ * One product's photos.
+ *
+ * A phone is a camera and a trader's catalogue is their shop window, so this is where the storefront
+ * gets its pictures. Upload takes the file straight from the picker - `capture` asks a phone for the
+ * camera - and nothing is cropped or reordered on the client: the server decodes, resizes, strips
+ * metadata and stores it, so there is one implementation of that and it is not in two places.
+ */
+function PhotoSheet({
+  product,
+  images,
+  busy,
+  onClose,
+  onUpload,
+  onMakeCover,
+  onRemove,
+}: {
+  product: Product | null;
+  images: ProductImage[];
+  busy: boolean;
+  onClose: () => void;
+  onUpload: (file: File) => void;
+  onMakeCover: (imageId: string) => void;
+  onRemove: (imageId: string) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+
+  return (
+    <Sheet open={product !== null} title={product ? `Photos of ${product.name}` : "Photos"} onClose={onClose}>
+      <input
+        ref={input}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/avif"
+        className={styles.fileInput}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            onUpload(file);
+          }
+          // Cleared so choosing the same file twice still fires a change event.
+          event.target.value = "";
+        }}
+      />
+      <Button full busy={busy} onClick={() => input.current?.click()}>
+        {images.length === 0 ? "Add a photo" : "Add another photo"}
+      </Button>
+      <p className={styles.hint}>
+        A clear picture of the item. Taken with your phone camera here, or chosen from the gallery.
+      </p>
+
+      {images.length === 0 ? (
+        <Empty>No photos yet. The first thing a customer looks at is the picture.</Empty>
+      ) : (
+        <ul className={styles.gallery}>
+          {images.map((image) => (
+            <li key={image.id} className={styles.galleryItem}>
+              {image.delivery_url ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={image.delivery_url} alt="" className={styles.galleryImage} />
+              ) : (
+                <span className={styles.galleryImage} />
+              )}
+              <div className={styles.galleryActions}>
+                {image.is_primary ? (
+                  <Pill tone="good">Cover</Pill>
+                ) : (
+                  <button className={styles.linkButton} onClick={() => onMakeCover(image.id)}>
+                    Make cover
+                  </button>
+                )}
+                <button className={styles.linkButton} onClick={() => onRemove(image.id)}>
+                  Remove
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </Sheet>
   );
 }

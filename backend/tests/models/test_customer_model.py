@@ -76,6 +76,35 @@ def test_a_number_that_states_its_country_is_never_overridden() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "+2348031234567",  # the way the rest of the world writes it
+        "2348031234567",  # the country code typed without a plus
+        "002348031234567",  # the international prefix dialled from a landline
+        "08031234567",  # the local form, with the trunk zero
+        "8031234567",  # the local form without it
+        "+234 803 123 4567",  # separated the way a person writes it
+        "0803 123 4567",
+    ],
+)
+def test_every_way_a_person_writes_a_number_is_one_number(raw: str) -> None:
+    """One trader, one account, however the number is typed.
+
+    The case that matters is the country code without a plus: reading it as a local number gives
+    `+2342348031234567`, which is a different account for the same person and is exactly the kind of
+    duplication nobody notices until a customer cannot sign in.
+    """
+    assert canonical_phone_number(raw, default_country_code="+234") == "+2348031234567"
+
+
+@pytest.mark.unit
+def test_a_local_number_beginning_with_the_country_digits_is_not_read_as_international() -> None:
+    """The guard on the country-code rule: a local number lacks the length a national one has."""
+    assert canonical_phone_number("0234567890", default_country_code="+234") == "+234234567890"
+
+
+@pytest.mark.unit
 def test_an_absent_number_stays_absent() -> None:
     assert canonical_phone_number(None, default_country_code="+234") is None
     assert canonical_phone_number("   ", default_country_code="+234") is None

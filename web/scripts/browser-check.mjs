@@ -201,6 +201,25 @@ async function main() {
       await shot(page, "web-10-sale-recorded");
     });
 
+
+    await step(page, "8-photo", async () => {
+    await clickByText(page, "Add a photo of Rice 50kg");
+    await page.waitForSelector('input[type="file"]', { timeout: 30_000 });
+    await shot(page, "10-photo-sheet-empty");
+    const input = await page.$('input[type="file"]');
+    await input.uploadFile(resolve(HERE, "..", "..", ".review", "ahia-test-photo.png"));
+    // The upload goes to the object storage provider and comes back with a delivery URL, so the wait
+    // has to allow for a real round trip to a real service.
+    await waitForText(page, "Cover", 60_000);
+    // The bytes come from Cloudinary, so "the row exists" is not "the picture is on the screen".
+    await page.waitForFunction(
+      () => [...document.images].every((image) => image.complete && image.naturalWidth > 0),
+      { timeout: 40_000 },
+    );
+    await shot(page, "11-photo-added");
+    await clickByText(page, "Close");
+    });
+
     const state = await page.evaluate(() => document.body.innerText);
     await writeFile(resolve(OUTPUT, "web-console.txt"), state, "utf8");
     steps.push(`text: ${resolve(OUTPUT, "web-console.txt")}`);

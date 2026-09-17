@@ -48,6 +48,7 @@ from ahia.core.errors import (
 from ahia.core.logging import StructuredLogger, get_logger
 from ahia.core.security import PasswordHasher, TokenService
 from ahia.crud import session_crud, user_crud
+from ahia.models.entities.phone_number import canonical_phone_number
 from ahia.models.entities.session_model import SessionModel
 from ahia.models.entities.user_model import UserModel, normalize_email, normalize_phone
 
@@ -286,16 +287,7 @@ class AuthService:
         A number already in international form is left alone: guessing a country
         for a number that states one would corrupt it.
         """
-        normalized = normalize_phone(phone)
-        if normalized is None:
-            return None
-        if normalized.startswith("+"):
-            return normalized
-        if normalized.startswith("0"):
-            # A trunk prefix is meaningful only locally, so it is replaced by the
-            # country code rather than kept.
-            return f"{self._default_country_code}{normalized[1:]}"
-        return f"{self._default_country_code}{normalized}"
+        return canonical_phone_number(phone, default_country_code=self._default_country_code)
 
     async def _find_by_identifier(
         self,

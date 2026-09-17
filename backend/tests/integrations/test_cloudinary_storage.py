@@ -73,10 +73,12 @@ PROVIDER_RESPONSE: dict[str, Any] = {
     "secure_url": "https://res.cloudinary.com/ahia-test-cloud/image/upload/hero.webp",
 }
 
-#: The transformation the adapter must encode for a requested width. Pinned
+#: The transformation the adapter must encode for a requested width. A mapping, because a string is
+#: interpreted by the SDK as the name of a saved transformation and rendered as `t_...`, which
+#: Cloudinary rejects. Pinned
 #: literally so a change to the encoding is a visible test failure rather than a
 #: silent change in what the provider is asked for.
-EXPECTED_WIDTH_TRANSFORMATION = "w_640,c_limit"
+EXPECTED_WIDTH_TRANSFORMATION = {"width": 640, "crop": "limit"}
 
 
 class FakeCloudinarySdk:
