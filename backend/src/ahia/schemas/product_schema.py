@@ -37,6 +37,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, StringConstraints, field_validator
 
+from ahia.models.entities.price_book import ResolvedPrice
 from ahia.models.entities.product_model import (
     MAXIMUM_DESCRIPTION_LENGTH,
     MAXIMUM_IDENTIFIER_LENGTH,
@@ -87,7 +88,12 @@ class ProductCreateSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: ProductName
-    selling_price: Money
+    # Optional: an item under a group that carries a price inherits it, which is how a grade is
+    # priced once. An item with no price from anywhere is refused by the service, because that is a
+    # business rule rather than a shape.
+    selling_price: Money | None = None
+    wholesale_price: Money | None = None
+    pieces_per_pack: int | None = None
     category_id: UUID | None = None
     description: ProductDescription | None = None
     sku: StockIdentifier | None = None
@@ -153,7 +159,18 @@ class ProductResponseSchema(BaseModel):
     description: str | None
     sku: str | None
     barcode: str | None
-    selling_price: str
+    # The item's own price, or None when it follows its group's. Kept, because a screen that lets
+    # him edit the price has to show what is actually stored and not what it resolves to - otherwise
+    # opening an item and saving it would silently turn an inherited price into an override.
+    selling_price: str | None
+    # What applies once the group has had its say, with the origin of each part, so a grid can mark
+    # the exceptions without resolving anything itself.
+    effective_normal_price: str | None
+    effective_wholesale_price: str | None
+    effective_pieces_per_pack: int | None
+    normal_price_from_group: bool
+    wholesale_price_from_group: bool
+    wholesale_price_uses_normal_price: bool
     cost_price: str | None
     low_stock_threshold: str
     is_active: bool
@@ -164,7 +181,16 @@ class ProductResponseSchema(BaseModel):
     updated_at: datetime
 
     @classmethod
-    def from_entity(cls, product: ProductModel) -> ProductResponseSchema:
+    def from_entity(
+        cls,
+        product: ProductModel,
+        price: ResolvedPrice,
+    ) -> ProductResponseSchema:
+        """Build the response from the item and its resolved price.
+
+        The resolved price is passed in rather than computed here because resolving it needs the
+        group, and a schema that reached for one would be doing the service layer's job.
+        """
         return cls(
             id=product.id,
             tenant_id=product.tenant_id,
@@ -174,7 +200,19 @@ class ProductResponseSchema(BaseModel):
             description=product.description,
             sku=product.sku,
             barcode=product.barcode,
-            selling_price=money_text(product.selling_price),
+            selling_price=(
+                None if product.selling_price is None else money_text(product.selling_price)
+            ),
+            effective_normal_price=(
+                None if price.normal_price is None else money_text(price.normal_price)
+            ),
+            effective_wholesale_price=(
+                None if price.wholesale_price is None else money_text(price.wholesale_price)
+            ),
+            effective_pieces_per_pack=price.pieces_per_pack,
+            normal_price_from_group=price.normal_price_from_group,
+            wholesale_price_from_group=price.wholesale_price_from_group,
+            wholesale_price_uses_normal_price=price.wholesale_price_used_the_normal_price,
             cost_price=(None if product.cost_price is None else money_text(product.cost_price)),
             low_stock_threshold=quantity_text(product.low_stock_threshold),
             is_active=product.is_active,

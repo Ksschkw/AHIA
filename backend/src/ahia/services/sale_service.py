@@ -37,12 +37,15 @@ from decimal import Decimal
 from typing import Final
 from uuid import UUID, uuid4
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from ahia.core.database import UnitOfWork
 from ahia.core.errors import DomainError, InvalidInputError, NotFoundError
 from ahia.core.logging import StructuredLogger, get_logger
 from ahia.core.permissions.sales_permissions import SALES_CANCEL, SALES_CREATE, SALES_READ
 from ahia.core.tenant_context import TenantContext
 from ahia.crud import (
+    category_crud,
     ledger_entry_crud,
     payment_crud,
     product_crud,
@@ -55,6 +58,7 @@ from ahia.models.entities.inventory_movement_model import MovementType
 from ahia.models.entities.ledger_entry_model import LedgerEntryModel, LedgerEntryType
 from ahia.models.entities.money import ZERO_MONEY, quantise_money
 from ahia.models.entities.payment_model import PaymentMethod, PaymentModel
+from ahia.models.entities.price_book import NO_DEFAULTS, ResolvedPrice, resolve_price
 from ahia.models.entities.product_model import ProductModel
 from ahia.models.entities.sale_item_model import SaleItemModel
 from ahia.models.entities.sale_model import SaleModel, SaleStatus
@@ -171,6 +175,7 @@ class SalesService:
             products = await self._load_products(
                 session, tenant_context=tenant_context, lines=lines
             )
+            prices = await self._resolve_prices(session, products=products)
             # The sale's identifier is chosen before its lines, because a line already names
             # the sale it belongs to - and the totals are derived from those lines, so the
             # order is: identify, build lines, total, issue.
@@ -180,6 +185,7 @@ class SalesService:
                 sale_id=sale_id,
                 lines=lines,
                 products=products,
+                prices=prices,
                 now=now,
             )
             subtotal = quantise_money(sum((item.line_total for item in items), ZERO_MONEY))
@@ -332,6 +338,40 @@ class SalesService:
             products[line.product_id] = product
         return products
 
+    async def _resolve_prices(
+        self,
+        session: AsyncSession,
+        *,
+        products: dict[UUID, ProductModel],
+    ) -> dict[UUID, ResolvedPrice]:
+        """Return the price that applies to each product being sold.
+
+        Reading groups once for the whole sale rather than once per line, and calling the same rule
+        a list and the shop page call: a sale priced by different arithmetic from the shelf would be
+        a discrepancy nobody could explain to a customer.
+        """
+        catalogued = list(products.values())
+        if not catalogued:
+            return {}
+
+        groups = await category_crud.list_for_tenant(session, catalogued[0].tenant_id)
+        defaults_by_group = {group.id: group.price_defaults() for group in groups}
+
+        resolved: dict[UUID, ResolvedPrice] = {}
+        for product in catalogued:
+            defaults = (
+                defaults_by_group.get(product.category_id, NO_DEFAULTS)
+                if product.category_id is not None
+                else NO_DEFAULTS
+            )
+            resolved[product.id] = resolve_price(
+                own_normal_price=product.selling_price,
+                own_wholesale_price=product.wholesale_price,
+                own_pieces_per_pack=product.pieces_per_pack,
+                defaults=defaults,
+            )
+        return resolved
+
     def _build_items(
         self,
         tenant_context: TenantContext,
@@ -339,12 +379,28 @@ class SalesService:
         sale_id: UUID,
         lines: Sequence[SaleLineRequest],
         products: dict[UUID, ProductModel],
+        prices: dict[UUID, ResolvedPrice],
         now: datetime,
     ) -> list[SaleItemModel]:
-        """Build the lines, snapshotting each product's name and the price being charged."""
+        """Build the lines, snapshotting each product's name and the price being charged.
+
+        The price is the one that applies at the counter - the item's own, or its group's when it
+        has none - and it is snapshotted onto the line rather than looked up later, because a
+        receipt is a record of an agreement and a price change must never rewrite one.
+        """
         items: list[SaleItemModel] = []
         for line in lines:
             product = products[line.product_id]
+            counter_price = prices[line.product_id].normal_price
+            if line.unit_price is None and counter_price is None:
+                raise InvalidInputError(
+                    operation="record_sale",
+                    entity="product",
+                    detail=(
+                        f"{product.name} has no price of its own and its group has none either; "
+                        "set a price before selling it"
+                    ),
+                )
             items.append(
                 SaleItemModel.for_product(
                     item_id=uuid4(),
@@ -352,7 +408,7 @@ class SalesService:
                     sale_id=sale_id,
                     product_id=product.id,
                     product_name=product.name,
-                    unit_price=line.unit_price or product.selling_price,
+                    unit_price=line.unit_price or counter_price,  # type: ignore[arg-type]
                     quantity=line.quantity,
                     discount_amount=line.discount_amount,
                     now=now,

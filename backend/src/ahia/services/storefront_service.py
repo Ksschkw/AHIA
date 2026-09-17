@@ -41,6 +41,7 @@ from ahia.core.permissions.storefront_permissions import STOREFRONT_MANAGE, STOR
 from ahia.core.tenant_context import TenantContext
 from ahia.core.tenant_scope import tenant_scope
 from ahia.crud import (
+    category_crud,
     inventory_crud,
     product_crud,
     product_image_crud,
@@ -72,7 +73,7 @@ class PublicProduct:
 
     product_slug: str
     name: str
-    selling_price: Decimal
+    selling_price: Decimal | None
     is_available: bool
     description: str | None = None
     primary_image_url: str | None = None
@@ -112,7 +113,7 @@ class ProductShareTarget:
     product_name: str
     product_slug: str
     public_path: str
-    price_text: str
+    price_text: str | None
     whatsapp_number: str | None
     #: Why there is no number, when there is none. A typed absence rather than a silent null: a
     #: screen that shows "share on WhatsApp" and does nothing is worse than one that says why.
@@ -446,7 +447,7 @@ class StorefrontService:
             product_name=product.name,
             product_slug=product.slug,
             public_path=f"/shop/{tenant.slug}/product/{product.slug}",
-            price_text=money_text(product.selling_price),
+            price_text=_optional_money_text(await self._effective_normal_price(session, product)),
             whatsapp_number=whatsapp_number,
             whatsapp_unavailable_reason=(
                 None
@@ -491,6 +492,31 @@ class StorefrontService:
                     session, tenant_id=resolved_tenant_id, product=product
                 )
 
+    async def _effective_normal_price(
+        self,
+        session: object,
+        product: ProductModel,
+    ) -> Decimal | None:
+        """Return what a stranger is shown as this item's price.
+
+        The item's own price if it has one, otherwise its group's - the same rule the counter and a
+        list use, resolved from the side a browsing customer sees. None is possible and is not
+        hidden: an item nobody has priced cannot be shown to a customer at a price, and pretending
+        otherwise would put a figure on the shop page that the trader never chose.
+        """
+        if product.selling_price is not None:
+            return product.selling_price
+        if product.category_id is None:
+            return None
+        group = await category_crud.get_by_id(
+            session,  # type: ignore[arg-type]
+            tenant_id=product.tenant_id,
+            category_id=product.category_id,
+        )
+        if group is None:
+            return None
+        return group.price_defaults().normal_price
+
     async def _public_product(
         self,
         session: object,
@@ -518,7 +544,7 @@ class StorefrontService:
         return PublicProduct(
             product_slug=product.slug,
             name=product.name,
-            selling_price=product.selling_price,
+            selling_price=await self._effective_normal_price(session, product),
             is_available=level is not None and level.quantity_on_hand > 0,
             description=product.description,
             primary_image_url=(await self._images.build_delivery_url(primary) if primary else None),
@@ -563,6 +589,12 @@ class StorefrontService:
                 detail="contact_phone is not a phone number this product can dial",
             )
         return canonical
+
+
+def _optional_money_text(amount: Decimal | None) -> str | None:
+    """Format a price that may not exist, because an item can follow a group nobody priced
+    either."""
+    return None if amount is None else money_text(amount)
 
 
 def _primary_image(images: list[ProductImageModel]) -> ProductImageModel | None:

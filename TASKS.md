@@ -1781,7 +1781,7 @@ Each line is one commit, and the note under it is what you will be able to see a
       `effective_normal_price`, `effective_wholesale_price`, `inherits_normal_price`,
       `inherits_wholesale_price`. Service-level resolution, not invented in a route.
       *You will see:* an item priced at the grade, and the exception flagged when it is not.
-- [ ] **M21.1.3 The API and the schema: an item may have no price of its own.**
+- [x] **M21.1.3 The API and the schema: an item may have no price of its own.**
       The normal price becomes optional on a product, resolved through the rule above; the service
       refuses an item that ends up with no price from anywhere, because that is a business rule and not
       arithmetic. `ProductResponseSchema` gains `effective_normal_price`, `effective_wholesale_price`,
@@ -2190,3 +2190,21 @@ These apply continuously and are re-verified at each milestone boundary.
   own commit as M21.1.3 rather than riding along with the rule, and the grid moves to M21.1.4. The plan
   says what will be built; when building shows a better seam, the plan moves and the reason is written
   here rather than the split being done quietly.
+
+- **M21.1.3 done.** An item may now have no price of its own, and the two prices reach the API in both
+  directions. The group's prices are on `CategoryCreateSchema`, `CategoryUpdateSchema` and
+  `CategoryResponseSchema`; the item's are on the product schemas, with a null `selling_price` meaning
+  "whatever my group says". `ProductResponseSchema` carries `effective_normal_price`,
+  `effective_wholesale_price`, `effective_pieces_per_pack` and the three flags saying which parts came
+  from the group, so a grid can mark the exceptions without resolving anything itself. Migration
+  `3f1c9b24d7aa` makes the column nullable, and its downgrade restores each inherited price from the
+  group before the column becomes mandatory again.
+- **The whole catalogue, a sale and the shop page now price by the same rule.** A sale snapshots the
+  counter price onto its line (an item with no price anywhere is refused with a business error, not a
+  crash), the storefront resolves the price a browsing customer sees, and groups are read **once** per
+  request rather than once per item - eight grades for a catalogue of two hundred models.
+- Two things this slice taught, both recorded because they cost a run each: the group's prices were
+  accepted by the schema and then **dropped by the service**, so a priced grade behaved like an empty
+  one; and a test asserting that the refusal's internal reason appears in the HTTP message was wrong -
+  the external view is deliberately opaque, and the reason belongs in the log next to the correlation
+  id. The test now asserts the opposite, which is the house rule.

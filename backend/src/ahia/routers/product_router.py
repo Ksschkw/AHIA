@@ -23,6 +23,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request, status
 
 from ahia.core.tenant_context import TenantContext
+from ahia.models.entities.product_model import ProductModel
 from ahia.routers.tenant_router import require_tenant_context
 from ahia.schemas.product_schema import (
     ProductCreateSchema,
@@ -46,6 +47,29 @@ ProductServiceDependency = Annotated[ProductService, Depends(get_product_service
 TenantContextDependency = Annotated[TenantContext, Depends(require_tenant_context)]
 
 
+async def _as_response(
+    service: ProductService, product: ProductModel, tenant_context: TenantContext
+) -> ProductResponseSchema:
+    """Shape one product, with its resolved price.
+
+    The price is asked for rather than computed: resolving it needs the item's group, and a route
+    that did that arithmetic itself would be the fourth place the same rule lived.
+    """
+    return ProductResponseSchema.from_entity(
+        product, await service.price_for(tenant_context, product)
+    )
+
+
+async def _as_responses(
+    service: ProductService,
+    products: list[ProductModel],
+    tenant_context: TenantContext,
+) -> list[ProductResponseSchema]:
+    """Shape a catalogue, resolving every price from groups read once."""
+    prices = await service.prices_for(tenant_context, products)
+    return [ProductResponseSchema.from_entity(product, prices[product.id]) for product in products]
+
+
 @router.post(
     "/products",
     response_model=ProductResponseSchema,
@@ -67,9 +91,11 @@ async def create_product(
         sku=payload.sku,
         barcode=payload.barcode,
         cost_price=payload.cost_price,
+        wholesale_price=payload.wholesale_price,
+        pieces_per_pack=payload.pieces_per_pack,
         low_stock_threshold=payload.low_stock_threshold,
     )
-    return ProductResponseSchema.from_entity(product)
+    return await _as_response(service, product, tenant_context)
 
 
 @router.get(
@@ -87,7 +113,7 @@ async def list_products(
 ) -> list[ProductResponseSchema]:
     """Return the catalogue. Withdrawn products are included unless asked otherwise."""
     products = await service.list_products(tenant_context, include_inactive=include_inactive)
-    return [ProductResponseSchema.from_entity(product) for product in products]
+    return await _as_responses(service, products, tenant_context)
 
 
 @router.get(
@@ -102,7 +128,7 @@ async def get_product(
 ) -> ProductResponseSchema:
     """Return one product. A product in another business is a 404, not a 403."""
     product = await service.get_product(tenant_context, product_id=product_id)
-    return ProductResponseSchema.from_entity(product)
+    return await _as_response(service, product, tenant_context)
 
 
 @router.patch(
@@ -122,7 +148,7 @@ async def update_product(
         product_id=product_id,
         changes=payload.to_entity_changes(),
     )
-    return ProductResponseSchema.from_entity(product)
+    return await _as_response(service, product, tenant_context)
 
 
 @router.post(
@@ -137,7 +163,7 @@ async def publish_product(
 ) -> ProductResponseSchema:
     """Publish. Publishing twice keeps the address customers already have."""
     product = await service.publish_product(tenant_context, product_id=product_id)
-    return ProductResponseSchema.from_entity(product)
+    return await _as_response(service, product, tenant_context)
 
 
 @router.post(
@@ -152,7 +178,7 @@ async def unpublish_product(
 ) -> ProductResponseSchema:
     """Withdraw from the storefront. The product stays in the catalogue."""
     product = await service.unpublish_product(tenant_context, product_id=product_id)
-    return ProductResponseSchema.from_entity(product)
+    return await _as_response(service, product, tenant_context)
 
 
 @router.post(
@@ -167,7 +193,7 @@ async def activate_product(
 ) -> ProductResponseSchema:
     """Return to the catalogue. It stays unpublished until it is published again."""
     product = await service.activate_product(tenant_context, product_id=product_id)
-    return ProductResponseSchema.from_entity(product)
+    return await _as_response(service, product, tenant_context)
 
 
 @router.delete(
@@ -186,4 +212,4 @@ async def deactivate_product(
     resolving to it.
     """
     product = await service.deactivate_product(tenant_context, product_id=product_id)
-    return ProductResponseSchema.from_entity(product)
+    return await _as_response(service, product, tenant_context)

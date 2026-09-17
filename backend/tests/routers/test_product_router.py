@@ -590,3 +590,114 @@ async def test_an_unauthenticated_request_is_refused(database: Database) -> None
         response = await client.get(products_path(tenant["id"]))
 
     assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# The price book: an item may follow its group, and the exception is marked
+# ---------------------------------------------------------------------------
+
+
+async def a_group(
+    client: AsyncClient,
+    owner: dict[str, Any],
+    tenant: dict[str, Any],
+    **prices: Any,
+) -> dict[str, Any]:
+    """Create a group - a grade, a heading - with whatever prices a test needs on it."""
+    created = await client.post(
+        f"/api/v1/tenants/{tenant['id']}/categories",
+        headers=auth(owner),
+        json={"name": "21D", **prices},
+    )
+    assert created.status_code == 201, created.text
+    return created.json()
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_an_item_under_a_priced_group_needs_no_price_of_its_own(
+    database: Database,
+) -> None:
+    """One number for the grade: the group carries 350 and every model under it follows."""
+    async with running_application() as (client, _application):
+        owner, tenant = await owner_with_business(client)
+        group = await a_group(
+            client,
+            owner,
+            tenant,
+            default_normal_price="500.00",
+            default_wholesale_price="350.00",
+            default_pieces_per_pack=10,
+        )
+
+        created = await client.post(
+            products_path(tenant["id"]),
+            headers=auth(owner),
+            json={"name": "Screenguard Hot 8", "category_id": group["id"]},
+        )
+        assert created.status_code == 201, created.text
+        body = created.json()
+
+    assert body["selling_price"] is None
+    assert body["effective_normal_price"] == "500.00"
+    assert body["effective_wholesale_price"] == "350.00"
+    assert body["effective_pieces_per_pack"] == 10
+    assert body["normal_price_from_group"] is True
+    assert body["wholesale_price_from_group"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_an_item_with_its_own_price_is_marked_as_the_exception(
+    database: Database,
+) -> None:
+    """Hot 8 at 370 inside a grade that is otherwise 350 - and the response says which is which."""
+    async with running_application() as (client, _application):
+        owner, tenant = await owner_with_business(client)
+        group = await a_group(
+            client,
+            owner,
+            tenant,
+            default_normal_price="500.00",
+            default_wholesale_price="350.00",
+        )
+
+        created = await client.post(
+            products_path(tenant["id"]),
+            headers=auth(owner),
+            json={
+                "name": "Screenguard Camon 30",
+                "category_id": group["id"],
+                "selling_price": "520.00",
+                "wholesale_price": "400.00",
+            },
+        )
+        assert created.status_code == 201, created.text
+        body = created.json()
+
+    assert body["selling_price"] == "520.00"
+    assert body["effective_wholesale_price"] == "400.00"
+    assert body["normal_price_from_group"] is False
+    assert body["wholesale_price_from_group"] is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_an_item_nobody_priced_is_refused(database: Database) -> None:
+    """No price of its own and no priced group: it cannot be sold, shown or listed, so it is refused."""
+    async with running_application() as (client, _application):
+        owner, tenant = await owner_with_business(client)
+        group = await a_group(client, owner, tenant)
+
+        refused = await client.post(
+            products_path(tenant["id"]),
+            headers=auth(owner),
+            json={"name": "Unpriced item", "category_id": group["id"]},
+        )
+
+    assert refused.status_code == 422, refused.text
+    # The reason is internal: the customer-facing answer says the value was invalid, and the product's
+    # name and the missing price stay in the log where the engineer can find them by correlation id.
+    message = refused.json()["error"]["message"]
+    assert "Unpriced item" not in message
+    assert "no price" not in message.lower()

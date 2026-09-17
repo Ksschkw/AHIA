@@ -48,6 +48,13 @@ from ahia.core.permissions.product_permissions import (
 from ahia.core.security import TokenService, fingerprint_for_log
 from ahia.core.tenant_context import TenantContext
 from ahia.crud import category_crud, product_crud
+from ahia.models.entities.category_model import CategoryModel
+from ahia.models.entities.price_book import (
+    NO_DEFAULTS,
+    PriceDefaults,
+    ResolvedPrice,
+    resolve_price,
+)
 from ahia.models.entities.product_model import ProductModel
 from ahia.services.audit_event_service import AuditEventService
 
@@ -97,12 +104,14 @@ class ProductService:
         tenant_context: TenantContext,
         *,
         name: str,
-        selling_price: Decimal,
+        selling_price: Decimal | None,
         category_id: UUID | None = None,
         description: str | None = None,
         sku: str | None = None,
         barcode: str | None = None,
         cost_price: Decimal | None = None,
+        wholesale_price: Decimal | None = None,
+        pieces_per_pack: int | None = None,
         low_stock_threshold: Decimal | None = None,
     ) -> ProductModel:
         """Add a product to the catalogue. It starts active and unpublished."""
@@ -118,8 +127,14 @@ class ProductService:
         unit_of_work = self._unit_of_work_factory()
         async with unit_of_work:
             session = unit_of_work.session_handle
-            await self._require_category_in_business(
+            group = await self._require_category_in_business(
                 session, tenant_context=tenant_context, category_id=category_id
+            )
+            await self._require_a_price(
+                own_normal_price=selling_price,
+                defaults=group.price_defaults() if group is not None else NO_DEFAULTS,
+                product_name=name,
+                operation="create_product",
             )
 
             creation_arguments: dict[str, Any] = {
@@ -133,6 +148,8 @@ class ProductService:
                 "sku": sku,
                 "barcode": barcode,
                 "cost_price": cost_price,
+                "wholesale_price": wholesale_price,
+                "pieces_per_pack": pieces_per_pack,
             }
             if low_stock_threshold is not None:
                 creation_arguments["low_stock_threshold"] = low_stock_threshold
@@ -211,6 +228,98 @@ class ProductService:
                 tenant_context=tenant_context,
                 product_id=product_id,
             )
+
+    async def _require_a_price(
+        self,
+        *,
+        own_normal_price: Decimal | None,
+        defaults: PriceDefaults,
+        product_name: str,
+        operation: str,
+    ) -> None:
+        """Refuse an item nobody has priced: it cannot be sold or shown to a customer.
+
+        The rule lives here and not in the entity: an entity cannot see its group, and "no price
+        anywhere" is a business rule about an item *and* its group rather than a fact about either.
+        """
+        if resolve_price(own_normal_price=own_normal_price, defaults=defaults).is_priced:
+            return
+        raise InvalidInputError(
+            operation=operation,
+            entity="product",
+            detail=(
+                f"{product_name} has no price and its group has none either; "
+                "set one on the item or on the group"
+            ),
+        )
+
+    # ------------------------------------------------------------------
+    # The price book: what an item costs, once its group has had its say
+    # ------------------------------------------------------------------
+
+    async def prices_for(
+        self,
+        tenant_context: TenantContext,
+        products: list[ProductModel],
+    ) -> dict[UUID, ResolvedPrice]:
+        """Return the resolved price for each item, reading groups once.
+
+        Batched rather than resolved item by item: a catalogue of two hundred models under eight
+        grades is eight groups to read, not two hundred, and that difference decides whether a
+        screen opens.
+
+        No permission check of its own: this reads nothing the caller has not already been allowed
+        to read, and it is called from the same use case that produced the products.
+        """
+        if not products:
+            return {}
+
+        unit_of_work = self._unit_of_work_factory()
+        async with unit_of_work:
+            groups = await category_crud.list_for_tenant(
+                unit_of_work.session_handle, tenant_context.tenant_id
+            )
+        defaults_by_group = {group.id: group.price_defaults() for group in groups}
+
+        def defaults_for(product: ProductModel) -> PriceDefaults:
+            """A product may belong to no group at all, which is a real state with no defaults."""
+            if product.category_id is None:
+                return NO_DEFAULTS
+            return defaults_by_group.get(product.category_id, NO_DEFAULTS)
+
+        return {
+            product.id: resolve_price(
+                own_normal_price=product.selling_price,
+                own_wholesale_price=product.wholesale_price,
+                own_pieces_per_pack=product.pieces_per_pack,
+                defaults=defaults_for(product),
+            )
+            for product in products
+        }
+
+    async def price_for(
+        self,
+        tenant_context: TenantContext,
+        product: ProductModel,
+    ) -> ResolvedPrice:
+        """Return the resolved price for one item."""
+        resolved = await self.prices_for(tenant_context, [product])
+        return resolved[product.id]
+
+    async def list_products_with_prices(
+        self,
+        tenant_context: TenantContext,
+        *,
+        include_inactive: bool = True,
+    ) -> list[tuple[ProductModel, ResolvedPrice]]:
+        """Return the catalogue with each item's resolved price.
+
+        A pair rather than a new type: the product is the entity this layer deals in, and the price
+        is derived from it and its group, so they travel together at this boundary.
+        """
+        products = await self.list_products(tenant_context, include_inactive=include_inactive)
+        prices = await self.prices_for(tenant_context, products)
+        return [(product, prices[product.id]) for product in products]
 
     # ------------------------------------------------------------------
     # Editing
@@ -571,8 +680,11 @@ class ProductService:
         *,
         tenant_context: TenantContext,
         category_id: UUID | None,
-    ) -> None:
-        """Refuse a category that does not belong to this business.
+    ) -> CategoryModel | None:
+        """Refuse a category that does not belong to this business, and return it.
+
+        It returns the group rather than only checking it, because the caller almost always needs
+        the group's prices next and reading it twice would be a second query for the same row.
 
         The database enforces this too, through the composite key on
         `(category_id, tenant_id)`. Checking here means a caller receives a clear
@@ -580,7 +692,7 @@ class ProductService:
         that no code path can bypass.
         """
         if category_id is None:
-            return
+            return None
         category = await category_crud.get_by_id(
             session,  # type: ignore[arg-type]
             tenant_id=tenant_context.tenant_id,
@@ -600,6 +712,7 @@ class ProductService:
                 identifier=str(category_id),
                 detail="no category matched in this business",
             )
+        return category
 
 
 # ---------------------------------------------------------------------------

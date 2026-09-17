@@ -126,7 +126,7 @@ class PublicProductSchema(BaseModel):
 
     product_slug: str
     name: str
-    selling_price: str
+    selling_price: str | None
     is_available: bool
     description: str | None
     primary_image_url: str | None

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Final
 from uuid import UUID, uuid4
 
@@ -40,7 +41,39 @@ _CATEGORY_LOGGER_NAME: Final[str] = "ahia.services.category"
 #: Fields a caller may change. An allowlist, so a new column cannot become externally
 #: writable merely by being added to the entity. The slug is absent and stays absent:
 #: it is the stable handle, and it is derived rather than set.
-_EDITABLE_FIELDS: Final[frozenset[str]] = frozenset({"name", "description"})
+_EDITABLE_FIELDS: Final[frozenset[str]] = frozenset(
+    {
+        "name",
+        "description",
+        "default_normal_price",
+        "default_wholesale_price",
+        "default_pieces_per_pack",
+    }
+)
+
+
+#: The fields that are one decision - what this group costs - and move together.
+def _money_or_none(value: object) -> Decimal | None:
+    """Return a price from a change map, which carries several types.
+
+    An explicit narrowing rather than a cast: if a caller ever put the wrong type in the map, the
+    value is treated as absent rather than being asserted into a Decimal and failing later.
+    """
+    return value if isinstance(value, Decimal) else None
+
+
+def _count_or_none(value: object) -> int | None:
+    """Return a whole count from a change map, refusing a bool, which is an int in Python."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
+
+
+_PRICE_FIELDS: Final[tuple[str, ...]] = (
+    "default_normal_price",
+    "default_wholesale_price",
+    "default_pieces_per_pack",
+)
 
 
 class CategoryService:
@@ -69,6 +102,9 @@ class CategoryService:
         *,
         name: str,
         description: str | None = None,
+        default_normal_price: Decimal | None = None,
+        default_wholesale_price: Decimal | None = None,
+        default_pieces_per_pack: int | None = None,
     ) -> CategoryModel:
         """Add a category to the caller's business.
 
@@ -90,6 +126,9 @@ class CategoryService:
             tenant_id=tenant_context.tenant_id,
             name=name,
             description=description,
+            default_normal_price=default_normal_price,
+            default_wholesale_price=default_wholesale_price,
+            default_pieces_per_pack=default_pieces_per_pack,
             now=datetime.now(UTC),
         )
 
@@ -166,7 +205,7 @@ class CategoryService:
         tenant_context: TenantContext,
         *,
         category_id: UUID,
-        changes: Mapping[str, str | None],
+        changes: Mapping[str, str | Decimal | int | None],
     ) -> CategoryModel:
         """Apply a partial edit to a category.
 
@@ -204,10 +243,28 @@ class CategoryService:
 
             updated = category
             name = changes.get("name")
-            if name is not None:
+            if isinstance(name, str):
                 updated = updated.renamed(name=name, at=now)
             if "description" in changes:
-                updated = updated.described(description=changes["description"], at=now)
+                description = changes["description"]
+                updated = updated.described(
+                    description=description if isinstance(description, str) else None, at=now
+                )
+            if any(field in changes for field in _PRICE_FIELDS):
+                # Absent means unchanged, and an explicit null means cleared - the same rule the
+                # description follows, and the reason the "was it sent" decision survives this far.
+                updated = updated.repriced_defaults(
+                    default_normal_price=_money_or_none(
+                        changes.get("default_normal_price", updated.default_normal_price)
+                    ),
+                    default_wholesale_price=_money_or_none(
+                        changes.get("default_wholesale_price", updated.default_wholesale_price)
+                    ),
+                    default_pieces_per_pack=_count_or_none(
+                        changes.get("default_pieces_per_pack", updated.default_pieces_per_pack)
+                    ),
+                    at=now,
+                )
 
             stored = await category_crud.update(session, updated)
             await self._audit.record_audit_event(

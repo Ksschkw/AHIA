@@ -78,7 +78,11 @@ class ProductModel:
     tenant_id: UUID
     name: str
     slug: str
-    selling_price: Decimal
+    #: What this item sells for at the counter. None means "whatever my group says", which is how
+    #: one number covers a whole grade with a handful of exceptions carrying their own. Whether an
+    #: item that ends up with no price anywhere may exist is a business rule, enforced by the
+    #: service - an entity cannot see its group.
+    selling_price: Decimal | None
     created_at: datetime
     updated_at: datetime
     category_id: UUID | None = None
@@ -143,13 +147,14 @@ class ProductModel:
     # ------------------------------------------------------------------
 
     def _check_money(self) -> None:
-        _require_money(
-            self.selling_price,
-            field_name="selling_price",
-            product_id=self.id,
-            minimum=ZERO_PRICE,
-            maximum=MAXIMUM_PRICE,
-        )
+        if self.selling_price is not None:
+            _require_money(
+                self.selling_price,
+                field_name="selling_price",
+                product_id=self.id,
+                minimum=ZERO_PRICE,
+                maximum=MAXIMUM_PRICE,
+            )
         if self.cost_price is not None:
             _require_money(
                 self.cost_price,
@@ -278,7 +283,7 @@ class ProductModel:
         product_id: UUID,
         tenant_id: UUID,
         name: str,
-        selling_price: Decimal,
+        selling_price: Decimal | None,
         now: datetime,
         category_id: UUID | None = None,
         description: str | None = None,
@@ -323,7 +328,11 @@ class ProductModel:
     @property
     def sells_at_a_loss(self) -> bool:
         """Return True when the cost is known and above the selling price."""
-        return self.cost_price is not None and self.cost_price > self.selling_price
+        # Unknown when the item follows its group: this entity cannot see its group's price, so it
+        # says nothing rather than guessing at a warning that may be wrong.
+        if self.cost_price is None or self.selling_price is None:
+            return False
+        return self.cost_price > self.selling_price
 
     def is_visible_to_customers(self) -> bool:
         """Return True only when the product is both active and published."""
@@ -391,7 +400,7 @@ class ProductModel:
     def repriced(
         self,
         *,
-        selling_price: Decimal,
+        selling_price: Decimal | None,
         cost_price: Decimal | None,
         at: datetime,
     ) -> ProductModel:

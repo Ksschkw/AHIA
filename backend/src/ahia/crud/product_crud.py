@@ -100,8 +100,10 @@ class ProductRecord(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     sku: Mapped[str | None] = mapped_column(String(MAXIMUM_IDENTIFIER_LENGTH), nullable=True)
     barcode: Mapped[str | None] = mapped_column(String(MAXIMUM_IDENTIFIER_LENGTH), nullable=True)
-    selling_price: Mapped[Decimal] = mapped_column(
-        Numeric(_PRICE_PRECISION, _PRICE_SCALE), nullable=False
+    #: Nullable on purpose: an item with no price of its own follows the price its group carries,
+    #: which is how "all of the 21D are 350" is one number and not twenty.
+    selling_price: Mapped[Decimal | None] = mapped_column(
+        Numeric(_PRICE_PRECISION, _PRICE_SCALE), nullable=True
     )
     cost_price: Mapped[Decimal | None] = mapped_column(
         Numeric(_PRICE_PRECISION, _PRICE_SCALE), nullable=True

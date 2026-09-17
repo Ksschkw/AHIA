@@ -57,6 +57,9 @@ async def create_category(
         tenant_context,
         name=payload.name,
         description=payload.description,
+        default_normal_price=payload.default_normal_price,
+        default_wholesale_price=payload.default_wholesale_price,
+        default_pieces_per_pack=payload.default_pieces_per_pack,
     )
     return CategoryResponseSchema.from_entity(category)
 

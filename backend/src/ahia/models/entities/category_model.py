@@ -230,6 +230,28 @@ class CategoryModel:
         """
         return replace(self, name=name.strip(), updated_at=at)
 
+    def repriced_defaults(
+        self,
+        *,
+        default_normal_price: Decimal | None,
+        default_wholesale_price: Decimal | None,
+        default_pieces_per_pack: int | None,
+        at: datetime,
+    ) -> CategoryModel:
+        """Return the group with new prices and pack size for the items under it.
+
+        All three at once, because they are the same decision - what this group costs - and a caller
+        that sent one of them would otherwise have to read the others back first. The invariants run
+        again through the constructor, so a price or a pack that cannot be stored is refused here.
+        """
+        return replace(
+            self,
+            default_normal_price=default_normal_price,
+            default_wholesale_price=default_wholesale_price,
+            default_pieces_per_pack=default_pieces_per_pack,
+            updated_at=at,
+        )
+
     def described(self, *, description: str | None, at: datetime) -> CategoryModel:
         """Return the category with its description set, or cleared.
 
