@@ -1589,15 +1589,38 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - [x] M19.1.3 Authentication flow against the real API: create an account and
       sign in from the console, with the access token held client-side and the
       correlation ID shown on every failure.
-- [~] M19.1.4 Trader dashboard shell: the console covers `+ Product`,
-      `Stock In` and `+ Sale` against the real API and shows the stock move.
-      `Expense` and a sales list are not on the screen yet.
-- [ ] M19.1.5 Public storefront rendering from the public API with correct
-      metadata for sharing.
+- [x] M19.1.4 Trader dashboard: today's money, the four actions (`+ Sale`,
+      `+ Product`, `Stock In`, `Expense`), the shelf with stock pills, recent
+      sales, what is running out, and a sheet per action.
+- [x] M19.1.5 Public shopfront from the public API with metadata for sharing:
+      `/shop/{slug}` and `/shop/{slug}/product/{productSlug}`, rendered on the
+      server so a WhatsApp link unfurls with the shop and the product.
 - [ ] M19.1.6 Client-side permission awareness that hides unavailable actions
       while never being the authority.
-- [ ] M19.1.7 End-to-end test: create product, record sale, see inventory
-      update, open the public storefront.
+- [x] M19.1.7 End-to-end run in a real browser: create a product, record a
+      sale, watch the inventory move, and open the public shop. Driven by
+      scripts (`browser-check`, `mobile-check`, `shop-check`) rather than a test
+      framework, so the evidence is a screenshot and a failing assertion.
+
+### M19.2 - The account, the photos and the shop (added while building)
+
+- [x] M19.2.1 Profile: name, phone, email, the business's own details
+      (address, city, state, currency) and a password change, each verified by
+      reading the value back from the API.
+- [x] M19.2.2 Product photos: upload from the camera or the gallery, cover
+      choice, removal, thumbnails on the shelf. Verified against the real
+      Cloudinary account, which found a broken delivery URL that would have
+      made every picture a broken image.
+- [x] M19.2.3 Shop management: open, close, edit what it says, copy the link,
+      share on WhatsApp, and show or hide each product.
+- [x] M19.2.4 More than one business on one account, with the shelf cleared
+      when switching so one shop's numbers never appear under another's name.
+- [x] M19.2.5 Mobile: every screen fits 390x844, measured rather than eyeballed
+      (`mobile-check` fails on a viewport overflow).
+- [ ] M19.2.6 Team: invite a salesperson, give them a role, see who has access,
+      remove somebody. The API exists; the screen does not.
+- [ ] M19.2.7 Shop visits: how many people opened the shop, and what they
+      looked at. Needs backend work first - nothing records a view today.
 
 ---
 
@@ -1817,3 +1840,31 @@ These apply continuously and are re-verified at each milestone boundary.
   with a phone number and no email address works, and all four written forms reach the same account.
 - The Next.js development indicator is switched off: it is a tool for the person writing the code and
   it sat on top of the interface for everybody else.
+
+## M19 - progress log (third pass)
+
+- The checklist above was stale for four commits, which is its own kind of defect: a plan nobody
+  updates stops being the record of what happened and becomes a claim. From here, each commit that
+  completes something updates this file in the same commit rather than later.
+- What the third pass covers: **the profile** (your details, the business's details, your businesses
+  and their roles, password change), **product photos** through the real Cloudinary account, **the
+  public shopfront** with its own metadata for WhatsApp previews, **shop management** (open, close,
+  edit, copy link, share, show/hide a product), **more than one business** on one account, and **a
+  mobile pass** across every screen. The only M19 items still open are client-side permission
+  awareness, the team screen, and shop visits.
+- The bugs that pass found, all of which were invisible until somebody used the product: the sign-up
+  form dropped whichever contact was in its second box, so an account could exist with no email
+  address; the phone rule doubled a country code typed without a plus, so `2348031234567` was a
+  different person from `+2348031234567`; the storefront flag's setting name was misspelled, so the
+  documented environment variable did nothing and the whole shopfront was off with no symptom; the
+  Cloudinary adapter asked for a *named* transformation, which the provider rejects, so every product
+  photo was a broken image; an empty text box was sent as an empty string where the API's smallest
+  valid value is one character; the public product payload is a wrapper rather than the product, which
+  rendered "undefined" as a name; the server-side API base used `??` where the browser-side variable is
+  deliberately empty, so the shop page 404'd for shops the API was serving; sheets kept the last values
+  typed into them; one busy flag disabled buttons while unrelated requests ran; and switching
+  businesses left the previous shop's shelf on screen under the new shop's name.
+- Each of those is now pinned by a check rather than by a note: `mobile-check` for the journey and the
+  viewport, `shop-check` for the public shop in a browser with no cookies at all, `profile-check` for
+  the profile, `businesses-check` for two businesses staying apart, `firefox-check` for the second
+  browser, and the API's own suites for the phone rule, the delivery URL and the storefront routes.
