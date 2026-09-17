@@ -1733,6 +1733,109 @@ Revocation marks the device revoked, ends every session bound to it and logs a
 security event in one transaction: the first without the second would be theatre.
 11 end-to-end tests including a lost-phone flow whose refresh token stops working.
 
+---
+
+## M21 - Waybill requests: the customer's list, and the price book
+
+Goal: replace the paper list and the market run that follows it. A customer builds a list on a link,
+without an account, and it lands with the trader tied to that customer. He sources it - some from his
+shelf, some bought in the market that morning - packs it, ticks it off, and waybills it. The app does
+the arithmetic and records what happened; it never argues with him.
+
+This milestone exists because the product owner described the workflow he grew up inside, and it is the
+first feature that sounds like the trade rather than like software. It is written down in full because
+every detail here is a decision, not a preference.
+
+### M21.1 The customer's list (no account, ever)
+
+- [ ] M21.1.1 A public **"Make a waybill list"** entry on the storefront, beside the catalogue. The
+      customer never signs up, never logs in, and never sees a password.
+- [ ] M21.1.2 **Prices are visible** while they build the list. A customer who cannot see a price
+      cannot send a sensible list, and hiding it just moves the question onto WhatsApp.
+- [ ] M21.1.3 **Anything can be added, including what is not in the catalogue.** A free-text line with a
+      note - "screenguard for iPhone 15, the matte one" - because in real life nothing stops a customer
+      asking, and a list that cannot hold the request is a list that gets written on paper again.
+- [ ] M21.1.4 **Phone number is collected, and the reason is said out loud**: "so we can keep track of
+      whose list this is, and so you do not have to start again next time". Date and time are recorded
+      automatically.
+- [ ] M21.1.5 The list is **saved against that phone number**, so a returning customer opens the same
+      link, sees what they ordered last time, and changes a quantity, edits a line, adds something new
+      or repeats the whole thing. Never a blank page.
+- [ ] M21.1.6 **No availability, no stock count, no "out of stock"** anywhere a customer can see. An
+      Igbo trader is never truly out of stock - he goes and finds it - so the customer-facing side says
+      "we will source it", not "we do not have it".
+
+### M21.2 The trader's side: sourcing, packing, quoting
+
+- [ ] M21.2.1 The request arrives in the app tied to the customer, with the list, the notes and the
+      date. Push and in-app notification, since he is walking, not sitting.
+- [ ] M21.2.2 **Market-run mode**: each line carries one of **have it / buy it / cannot get it**, and
+      while buying, **what it cost him**. This is the thing paper cannot do: at the end he knows what he
+      actually made on a mixed waybill.
+- [ ] M21.2.3 **Packing and ticking**: lines tick off as they go in the carton, with an optional photo
+      of the packed goods, visible to the customer as progress.
+- [ ] M21.2.4 **The quote**: he sets the final price per line, or just a total, and adjusts however he
+      wants - a flat amount off ("comot one thousand"), a percentage, or nothing at all. **No ceilings,
+      no floors, no approval flow.** The app computes and records; it does not restrict.
+- [ ] M21.2.5 **The adjustment is a line with a reason**, so a discount does not silently corrupt the
+      margin. "Customer is my guy" is a perfectly good reason.
+- [ ] M21.2.6 Owner-only visibility of costs and margins. A salesperson packs and ticks; he does not see
+      what the goods cost or what was made on them.
+
+### M21.3 The price book (why screenguards need more than a price field)
+
+- [ ] M21.3.1 **Variants as a family with axes**, not a product per combination: `Screenguard` x grade
+      (5D, 21D, privacy, ceramic) x phone model x colour, with a price matrix. Otherwise his catalogue is
+      hundreds of near-identical rows nobody can find anything in.
+- [ ] M21.3.2 **Layered pricing, each layer optional and each overridable**: grade default, then model
+      override, then customer tier (retail or wholesale), then this customer's own price, then the line
+      he types, then the final adjustment. The system suggests; he decides.
+- [ ] M21.3.3 **Units as first-class**: piece, pack (x N), carton (x M). Stock counted in pieces, sold in
+      packs, priced per pack. Screenguards are exactly this.
+- [ ] M21.3.4 **Wholesale and retail as price tiers**, so a wholesale price cannot leak to a retail
+      customer through a shared catalogue.
+- [ ] M21.3.5 **A generated price list** (image or PDF) from the price book, to broadcast on WhatsApp.
+      Most of his customers will never open a link before they know the prices.
+
+### M21.4 The waybill itself
+
+- [ ] M21.4.1 Waybill details captured at handover: transporter, phone, waybill number, cost. The
+      customer gets a tracking link - the Tracking module in the specification starts life as these
+      four fields.
+- [ ] M21.4.2 The request becomes money only when he confirms it: no inventory movement, no ledger
+      entry and no receipt until then. A list is a wish, not a sale.
+- [ ] M21.4.3 Repeat business in one tap: the last order and the last prices for that customer,
+      pre-filled.
+- [ ] M21.4.4 **Credit, because most of this trade runs on it**: what a customer owes, since when, with
+      a WhatsApp reminder he can edit before it is sent.
+
+### M21.5 What stock counts are for
+
+- [ ] M21.5.1 Availability, thresholds and counts are the **owner's view** - inventory management he can
+      look at if he wants to. Most traders do not count stock, and the product must not require it.
+      Stock movements record what happened; nobody is asked to reconcile a shelf they never counted.
+
+### M21 - decisions from the product owner
+
+- Prices **are** visible to the customer while they build the list.
+- A customer **can add anything**, including items not in the catalogue, as a free-text line with a note.
+- The **phone number is collected**, with the reason stated to the customer: so he knows whose list it
+  is and so they do not start from nothing next time. Date and time are recorded too.
+- A returning customer **reuses the saved list** and edits it rather than starting over.
+- The entry point is the **storefront**: a "make a waybill list" action beside the catalogue.
+- **No "out of stock" to customers, ever.** Stock figures are for the owner, and even then only if he
+  wants them.
+- The trader has **no limits** on what he can do to a price or a total. The app adds to him; it does not
+  restrict him.
+
+### M21 - open questions
+
+- Does a request link live **forever** for a customer, or expire with a fresh one per order? (Leaning to
+  a standing link per customer, because the same people order every week.)
+- How much of the price matrix does he want to maintain himself versus inherit from a grade default?
+- **OCR of the photographed paper list**: later, not now. A photo attached to the request is useful on
+  day one; reading it is a separate promise to keep.
+
 ## Cross-milestone obligations
 
 These apply continuously and are re-verified at each milestone boundary.
@@ -1746,6 +1849,9 @@ These apply continuously and are re-verified at each milestone boundary.
       is logged at startup.
 - [ ] `docs/PREREQUISITES.md` is updated whenever a new environment variable
       or provider is introduced.
+- [ ] **Everything the product owner says goes in this file.** Not a summary at the end of a
+      milestone: the decision, the wording, and the reason, added when it is said. This file is the
+      record of what was asked for and what was understood, and it is the only place that survives.
 - [ ] Any architectural decision that touches data ownership, multi-tenancy,
       synchronization, permissions, transactions, external dependencies or
       public/private boundaries is appended to `docs/ARCHITECTURE.md` decision
