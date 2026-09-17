@@ -1754,187 +1754,110 @@ travel.
 
 - **A list** is what a customer builds: headings, items, counts, notes, maybe a picture. It is a wish,
   not a sale, and it becomes money only when the trader confirms it.
-- **A price tier** is retail or wholesale, and it is about **how much is being bought, not where the
-  buyer is standing**. Retail is mostly one or two pieces. Wholesale is bulk at bulk prices. A customer
-  at the counter buying a carton is wholesale, and a customer who sends a list for two pieces is retail;
-  the same person is both on different days. Presence is a **channel**, never a tier.
+- **A price** is a value with a date. An item has two of them, both his: a **normal price** and a
+  **wholesale price**. A list is priced with the wholesale one; the shop page shows the normal one.
 - **A channel** is how the trade happens: the customer is in front of him, or the list arrives from
-  somewhere else. The counter itself has two shapes - they bring a written list, or they dictate it
-  while he stands there - and both are the same twenty minutes that the list is meant to remove.
-- **Dispatch** is how the goods leave: picked up at the shop, or sent by transporter. A waybill is the
-  record of a dispatched one - transporter, phone, waybill number, cost - and only dispatched goods
-  have a tracking link.
-- The customer-facing entry point is therefore named after the list, not the waybill.
+  somewhere else. Presence is a channel, never a price.
+- **Dispatch** is how the goods leave: picked up at the shop, or sent by transporter, in which case a
+  **waybill** records the transporter, their phone, its number and its cost.
+- **Pieces per pack** is a fact about the goods. The merchant sets it; a customer is never asked.
 
-This milestone exists because the product owner described the workflow he grew up inside, and it is the
-first feature that sounds like the trade rather than like software. It is written down in full because
-every detail here is a decision, not a preference.
+---
 
-### M21.1 The customer's list (no account, ever)
+### The micro-milestones of M21, in the order they will be built
 
-- [ ] M21.1.1 A public **"Make a waybill list"** entry on the storefront, beside the catalogue. The
-      customer never signs up, never logs in, and never sees a password.
-- [ ] M21.1.2 **Prices are visible** while they build the list. A customer who cannot see a price
-      cannot send a sensible list, and hiding it just moves the question onto WhatsApp.
-- [ ] M21.1.3 **Anything can be added, including what is not in the catalogue.** A free-text line with a
-      note - "screenguard for iPhone 15, the matte one" - because in real life nothing stops a customer
-      asking, and a list that cannot hold the request is a list that gets written on paper again.
-- [ ] M21.1.4 **Phone number is collected, and the reason is said out loud**: "so we can keep track of
-      whose list this is, and so you do not have to start again next time". Date and time are recorded
-      automatically. It is the only thing asked of the customer, and it is what makes the whole thing
-      remember them.
-- [ ] M21.1.5 The list is **saved against that phone number**, and the number is the identity - not the
-      link. A returning customer may well arrive on a **fresh link**, and the moment they type their
-      number the app recognises them and offers: **"use a previous list as a start?"** Then they change a
-      quantity, edit a line, add something new, and send. Never a blank page, and never a link they have
-      to keep.
-- [ ] M21.1.6 **No availability, no stock count, no "out of stock"** anywhere a customer can see. An
-      Igbo trader is never truly out of stock - he goes and finds it - so the customer-facing side says
-      "we will source it", not "we do not have it". The **existing shop page shows it today**
-      (`is_available`, "Out of stock" on every product card), so this is a change to code already
-      shipped, not only a rule for new work.
-- [ ] M21.1.7 **A free-text line becomes a product in one tap.** When the trader reads "screenguard for
-      iPhone 15, matte one" and knows what it is, he should be able to turn that line into a catalogue
-      entry - with its price - while he is packing. That is how the catalogue grows to match what
-      customers actually ask for, instead of the trader sitting down to type it in later.
-- [ ] M21.1.8 **A free-text line can carry a picture.** The customer photographing the thing they mean,
-      or a screenshot of a chat, is how a request is made precise without either side finding the right
-      words. The picture is on the customer's line, not on a product.
-- [ ] M21.1.9 **A line may have no price at all, and that is normal.** The customer does not price what
-      the trader has to go and find - they both know roughly, and it is the trader who works it out. An
-      unpriced line is listed and **kept out of the total** until he prices it, and the customer sees it
-      as "to be priced" rather than as a zero, because a total that is quietly missing money is a total
-      nobody trusts.
-- [ ] M21.1.10 **The list is grouped the way a list is written**: a heading - 21D, 5D, privacy, ceramic
-      matte, phone cases, camera glass, charging cords - and under it the lines: "Hot 8, 20 pcs",
-      "iPhone 11, 10 pcs", "13 Pro Max, 5 pcs". The heading is the trader's own word for a group of
-      things, and the group is also how the market run is walked.
+Each line is one commit, and the note under it is what you will be able to see and do when it is done.
 
-### M21.7 At the counter, because that is where the time is lost
+#### M21.1 The price book: two prices he sets
 
-- [ ] M21.7.1 **The whole point is time.** "Bring Hot 8 five, bring XR five 21D, bring Hot 8 universal
-      metal ten" - dictated across a counter, item by item, with him asking and the customer correcting,
-      is twenty minutes of both their day. If the list had been made at home and arrived, the goods
-      would already be packed and the customer would walk in, take them, and leave. **Order ahead and
-      collect at the shop** is therefore a first-class ending of the flow, not a workaround: the same
-      list, packed before they arrive.
-- [ ] M21.7.2 **He can build the list while they talk.** The customer dictating at the counter is still
-      the common case, so the trader needs a way to enter it at speed - add an item, a count, the next -
-      without leaving the conversation, and then read it back for confirmation. A list he entered is
-      marked as entered by him, for the same reason a price is.
-- [ ] M21.7.3 **The list can be a voice note.** People already send WhatsApp voice notes for exactly
-      this, and a customer who talks faster than they type should be able to send the list as audio
-      attached to the request. The trader plays it while he packs, as a checklist. Reading it
-      automatically is a later promise, and it is not made here.
-- [ ] M21.7.4 **The repeat list is the same list.** A wholesale customer's order changes by a count or
-      two from one week to the next, so the previous list is one tap away, pre-filled and editable, and
-      sending it takes seconds. This is where the reuse earns its place: not a convenience, the reason a
-      returning customer opens the app at all.
+- [ ] **M21.1.1 Category price defaults and product overrides in the database.**
+      `categories` gains `default_normal_price`, `default_wholesale_price`, `default_pieces_per_pack`;
+      `products` gains `wholesale_price` and `pieces_per_pack`. All nullable, all additive, nothing that
+      exists today changes meaning. Migration, entity invariants, repository mapping, tests.
+      *You will see:* nothing yet - this is the shelf the price book stands on.
+- [ ] **M21.1.2 A product inherits, and an override is marked.**
+      A product's normal price, wholesale price and pack size fall back to its category's default when
+      they are unset, and the API says which of the two it returned. `ProductResponseSchema` gains
+      `effective_normal_price`, `effective_wholesale_price`, `inherits_normal_price`,
+      `inherits_wholesale_price`. Service-level resolution, not invented in a route.
+      *You will see:* an item priced at the grade, and the exception flagged when it is not.
+- [ ] **M21.1.3 The price grid, in the app.**
+      A screen: models down, grades across, a normal price and a wholesale price per cell. Set a column
+      in one action; override a cell; overridden cells visibly differ from their column.
+      *You will see:* type 350 on 21D and every model follows; type 370 on Hot 8 and only Hot 8 moves.
 
-### M21.2 The trader's side: sourcing, packing, quoting
+#### M21.2 The customer's list, with no account
 
-- [ ] M21.2.1 The request arrives in the app tied to the customer, with the list, the notes and the
-      date. Push and in-app notification, since he is walking, not sitting.
-- [ ] M21.2.2 **Market-run mode**: each line carries one of **have it / buy it / cannot get it**, and
-      while buying, **what it cost him**. This is the thing paper cannot do: at the end he knows what he
-      actually made on a mixed waybill.
-- [ ] M21.2.3 **Packing and ticking**: lines tick off as they go in the carton, with an optional photo
-      of the packed goods, visible to the customer as progress.
-- [ ] M21.2.4 **The quote**: he sets the final price per line, or just a total, and adjusts however he
-      wants - a flat amount off ("comot one thousand"), a percentage, or nothing at all. **No ceilings,
-      no floors, no approval flow.** The app computes and records; it does not restrict.
-- [ ] M21.2.5 **The adjustment is a line with a reason**, so a discount does not silently corrupt the
-      margin. "Customer is my guy" is a perfectly good reason.
-- [ ] M21.2.6 Owner-only visibility of costs and margins. A salesperson packs and ticks; he does not see
-      what the goods cost or what was made on them.
-- [ ] M21.2.7 **He prices it, and the record says so.** When the goods are bought in the market and he
-      works out the price, that price belongs to the shop, not to the customer who never typed one. The
-      line records who priced it and when, as a fact - the customer's own additions and the trader's
-      pricing are never confused in the same field.
-- [ ] M21.2.8 **The calculator is the actual feature.** Pieces, packs, and pieces per pack: the line holds
-      a quantity, the unit it is counted in, and how many pieces are in a pack, and the total follows
-      from what was entered rather than from a price field. The trader can count in pieces and price in
-      packs, or the reverse, and the arithmetic is shown rather than hidden - a waybill is worked out in
-      his head first, and the app's job is to agree with him.
+- [ ] **M21.2.1 The request tables.**
+      `requests` (tenant, customer phone, status, note, created) and `request_lines` (item or free text,
+      quantity, unit, picture, the price the customer saw, the price the shop set later, unpriced flag).
+      A request touches no stock and no ledger - it is a wish until it is confirmed. Migration + entities.
+      *You will see:* nothing yet; the record a list is stored in.
+- [ ] **M21.2.2 A public link that builds a list.**
+      `POST /public/requests/{shop}` on the unversioned public surface, no session, rate-limited in the
+      public bucket. Nothing about stock. A stranger can add catalogue lines, or free text with a picture.
+      *You will see:* a customer building a list that reaches you as data.
+- [ ] **M21.2.3 The customer's screen: `/list/{shop}`.**
+      Headings from his own groups, wholesale prices, counts, quantities in pieces, an "add something
+      else" line, a picture. Phone number asked once, with the reason said out loud. **No availability
+      anywhere.**
+      *You will see:* a customer building the list your dad gets - the twenty minutes, gone.
+- [ ] **M21.2.4 "Start from a previous list?"**
+      Typing a known number offers the last list, pre-filled and editable; sending is one action.
+      *You will see:* a regular walking in, changing two counts, and sending.
+- [ ] **M21.2.5 The shop entry point, and the end of "out of stock".**
+      The storefront links to the list builder beside the catalogue, and the public product page stops
+      showing availability - an Igbo trader is never truly out of stock.
+      *You will see:* a shop page that invites a list instead of reporting a shelf.
 
-### M21.3 The price book (why screenguards need more than a price field)
+#### M21.3 The trader's side
 
-- [ ] M21.3.1 **Variants as a family with axes**, not a product per combination: `Screenguard` x grade
-      (5D, 21D, privacy, ceramic) x phone model x colour, with a price matrix. Otherwise his catalogue is
-      hundreds of near-identical rows nobody can find anything in.
-- [ ] M21.3.2 **Two prices per item, and both are his**: a **normal price** and a **wholesale price**,
-      set by him on the grade and overridden per model exactly as the grid above describes. Everything
-      else is an override he types when he wants to - there is no customer tier, no retail tier, no
-      pricing machinery to configure. The product owner's words: a tier system "is a feature for a
-      company that tracks all that stuff", and this is not that company's problem. What the customer
-      sees depends only on the surface: **the shop page shows the normal price, a list shows the
-      wholesale price**, and he can change any line to anything.
-- [ ] M21.3.3 **Units as first-class, and as the trader's own data**: piece, pack (x N), carton (x M),
-      and whatever else a business counts in - a dozen, a crate, a bag, a kilo, a litre. Stock counted
-      in the base unit, sold in any of them, priced per any of them. Screenguards are exactly this, and
-      so is a bag of rice.
-- [ ] M21.3.4 **The wholesale price does not leak to a browsing stranger.** The shop page shows the
-      normal price; the wholesale price is what a list is priced with. That is the whole of the
-      separation - one column each, set by him, and no customer-by-customer configuration.
-- [ ] M21.3.5 **A generated price list** (image or PDF) from the price book, to broadcast on WhatsApp.
-      Most of his customers will never open a link before they know the prices.
-- [ ] M21.3.6 **The price book is a grid: models down, grades across.** Set the price for a whole column
-      at once - "21D is 350" - and override the few cells that differ: Hot 8 and Camon 21 at 370, Camon
-      30 at 400. Setting a column is the everyday action; overriding a cell is the exception. A cell
-      that differs from its column is marked as an override, so he can see at a glance which models are
-      not on the standard price, and a column price change never silently rewrites the exceptions.
-- [ ] M21.3.7 **Prices are per piece by default.** A pack price is an override, and a line price is an
-      override of that. Counting happens in whichever unit the trader and the customer are speaking -
-      "20 pcs" - while the price underneath is a per-piece price unless somebody has said otherwise.
-- [ ] M21.3.10 **Pieces per pack is the merchant's setting, never typed by a customer.** He sets it once
-      where it belongs and it holds: a customer counting "20 pcs" is never asked how many are in a pack,
-      because that is a fact about the goods and not a question for the buyer.
-- [ ] M21.3.9 **The price tier is chosen, not inferred, and it is switchable at any moment.** In the
-      shop, a walk-in sale defaults to retail and the trader switches to wholesale when the buyer is
-      buying bulk - including the buyer standing in front of him who is doing the same trade as the one
-      who sent a list. On a request, the tier starts from what that customer usually gets and he
-      overrides it. The tier is a property of this trade, not of the customer's record and not of the
-      channel it arrived through.
-- [ ] M21.3.8 **A price is a value with a date, and history is never rewritten.** The price used on a
-      confirmed request is **copied onto its lines**, not looked up when somebody reads the waybill
-      again: when he raises the price of 21D next month, last week's waybill must still show what was
-      agreed and what was paid. The price book is current; a document is a record.
+- [ ] **M21.3.1 The request arrives.**
+      `/app/requests`: what came in, from whom, when, with the counts. Notification and unread state.
+      *You will see:* the list, waiting, instead of a paper slip.
+- [ ] **M21.3.2 Market-run mode.**
+      Each line: have it / buy it / cannot get it, and what it cost him when he buys it. Real margin per
+      waybill, which is the thing paper cannot do.
+      *You will see:* what he made on a mixed order, for the first time.
+- [ ] **M21.3.3 Packing and ticking.**
+      Lines tick as they go in the carton, with an optional photo of the packed goods.
+      *You will see:* a packed order, and a customer who can see it is being packed.
+- [ ] **M21.3.4 The quote, with his free hand.**
+      He prices what he sourced, adjusts the total by any amount or percentage, and confirms. The
+      adjustment is a line with a reason. No ceiling, no floor, no approval. Confirmation is the moment
+      a list becomes a sale: stock, ledger and receipt all follow from it, never before.
+      *You will see:* "comot one thousand" recorded as what it was.
+- [ ] **M21.3.5 Counter mode: he builds the list while they talk.**
+      Fast entry from his side during a dictated order, marked as entered by him, read back for
+      confirmation. This is the other half of the twenty minutes.
+      *You will see:* a counter order taken without breaking the conversation.
 
-### M21.4 The waybill itself
+#### M21.4 Dispatch, paper and repetition
 
-- [ ] M21.4.1 **Dispatch, chosen at handover**: picked up at the shop, or sent. For a dispatched one,
-      the transporter, their phone, the waybill number and its cost, and the customer gets a tracking
-      link - the Tracking module in the specification starts life as these four fields. A bulk buyer who
-      carries it away needs none of them, and is not asked.
-- [ ] M21.4.2 The request becomes money only when he confirms it: no inventory movement, no ledger
-      entry and no receipt until then. A list is a wish, not a sale.
-- [ ] M21.4.3 Repeat business in one tap: the last order and the last prices for that customer,
-      pre-filled.
-- [ ] M21.4.4 **Credit, because most of this trade runs on it**: what a customer owes, since when, with
-      a WhatsApp reminder he can edit before it is sent.
+- [ ] **M21.4.1 Dispatch: pickup or sent.**
+      Picked up at the shop needs nothing. Sent records transporter, phone, waybill number and cost, and
+      gives the customer a tracking link.
+      *You will see:* a waybill recorded in three fields, and a link for the customer.
+- [ ] **M21.4.2 Printing.**
+      A print view of a list and of a waybill, because paper is a bridge and not the enemy.
+      *You will see:* a sheet he can tick with a pen while the app learns his trade.
+- [ ] **M21.4.3 Free text becomes a product in one tap.**
+      Reading "screenguard for iPhone 15, matte one" and knowing what it is, he turns the line into a
+      catalogue entry, with its price, while packing.
+      *You will see:* his catalogue grow to match what customers actually ask for.
+- [ ] **M21.4.4 A voice note as a list.**
+      The customer talks the list faster than they type; the trader plays it while he packs, as a
+      checklist. Reading it automatically is a later promise, deliberately not made here.
+      *You will see:* a waybill packed against a voice, not a keyboard.
 
-### M21.6 Any business, not this one
+#### M21.5 What stock counts are for
 
-- [ ] M21.6.1 **Nothing in this milestone may be shaped like electronics.** Groups, units, grades, models
-      and price rules are the trader's own data: a heading he types, a unit he defines, a rule he sets.
-      No column, enum or screen may be named after screenguards, phone models or grades.
-- [ ] M21.6.2 The first two real users are the product owner's father (screenguards, chargers, phone
-      accessories, wholesale and waybill by road) and his mother, who is not in that trade at all. If a
-      design decision only works because "the lists look like this one", it is the wrong decision - the
-      screenguard list is one example of a list, not the shape of a list.
-- [ ] M21.6.3 The same request flow must read naturally for a foodstuff shop: headings like "grains" and
-      "provisions", units like bags and kilos, customer lists of "two bags of rice, one carton of milk",
-      priced by the shop, waybilled by road or picked up.
-
-### M21.5 What stock counts are for
-
-- [ ] M21.5.1 Availability, thresholds and counts are the **owner's view** - inventory management he can
-      look at if he wants to. Most traders do not count stock, and the product must not require it.
-      Stock movements record what happened; nobody is asked to reconcile a shelf they never counted.
-- [ ] M21.5.2 **Never ask for a count; offer one.** On-hand is derived from the movements that were
-      recorded, and shown as "last known" rather than as a fact, because a trader who does not count
-      knows it is approximate and a trader who does count wants a way to correct it. A "count now"
-      action exists, is one screen, and is never in the way of recording a sale or a waybill.
+- [ ] **M21.5.1 The owner's view, and never a demand.** Availability, thresholds and counts are his to
+      look at. Most traders do not count stock and the product must not require it.
+      *You will see:* numbers he can consult, never a form he must fill.
+- [ ] **M21.5.2 Never ask for a count; offer one.** On-hand is derived from recorded movements, shown as
+      "last known", with a one-screen "count now" that never stands between him and a sale.
+      *You will see:* approximate stock, honestly labelled.
 
 ### M21 - decisions from the product owner
 
