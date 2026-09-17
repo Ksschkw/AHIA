@@ -282,11 +282,94 @@ export function listProducts(tenantId: string): Promise<Product[]> {
 
 export function createProduct(
   tenantId: string,
-  input: { name: string; selling_price: string },
+  input: {
+    name: string;
+    selling_price?: string | null;
+    category_id?: string | null;
+    wholesale_price?: string | null;
+    pieces_per_pack?: number | null;
+  },
 ): Promise<Product> {
   return request<Product>(`/api/v1/tenants/${tenantId}/products`, {
     method: "POST",
     body: input satisfies Schemas["ProductCreateSchema"],
+  });
+}
+
+export type Category = Schemas["CategoryResponseSchema"];
+
+export function listCategories(tenantId: string): Promise<Category[]> {
+  return request<Category[]>(`/api/v1/tenants/${tenantId}/categories`);
+}
+
+export function createCategory(
+  tenantId: string,
+  input: {
+    name: string;
+    default_normal_price?: string | null;
+    default_wholesale_price?: string | null;
+    default_pieces_per_pack?: number | null;
+  },
+): Promise<Category> {
+  return request<Category>(`/api/v1/tenants/${tenantId}/categories`, {
+    method: "POST",
+    body: input satisfies Schemas["CategoryCreateSchema"],
+  });
+}
+
+/**
+ * Set what a group costs.
+ *
+ * One request for all three, because they answer one question: what do the items under this heading
+ * cost. Every item that has no price of its own follows this immediately, which is what makes "all of
+ * the 21D are 350" a single action rather than twenty.
+ */
+export function setGroupPrices(
+  tenantId: string,
+  categoryId: string,
+  prices: {
+    default_normal_price?: string | null;
+    default_wholesale_price?: string | null;
+    default_pieces_per_pack?: number | null;
+  },
+): Promise<Category> {
+  return request<Category>(`/api/v1/tenants/${tenantId}/categories/${categoryId}`, {
+    method: "PATCH",
+    body: prices satisfies Schemas["CategoryUpdateSchema"],
+  });
+}
+
+/**
+ * Set an item's own prices, or clear them back to following its group.
+ *
+ * `null` is the meaningful value here: it removes the override, and the item goes back to whatever
+ * its group says. That is the difference between "this model costs 370" and "this model costs the same
+ * as the rest of the 21D".
+ */
+export function setItemPrices(
+  tenantId: string,
+  productId: string,
+  prices: {
+    selling_price?: string | null;
+    wholesale_price?: string | null;
+    pieces_per_pack?: number | null;
+  },
+): Promise<Product> {
+  return request<Product>(`/api/v1/tenants/${tenantId}/products/${productId}`, {
+    method: "PATCH",
+    body: prices satisfies Schemas["ProductUpdateSchema"],
+  });
+}
+
+/** File an item under a group, or take it out of one, so a group's price can reach it. */
+export function moveItemToGroup(
+  tenantId: string,
+  productId: string,
+  categoryId: string | null,
+): Promise<Product> {
+  return request<Product>(`/api/v1/tenants/${tenantId}/products/${productId}`, {
+    method: "PATCH",
+    body: { category_id: categoryId } satisfies Schemas["ProductUpdateSchema"],
   });
 }
 

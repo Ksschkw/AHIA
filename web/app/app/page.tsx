@@ -67,7 +67,7 @@ import {
   type TenantSummary,
   type UserProfile,
 } from "@/lib/api";
-import { formatCount, formatMoney, formatQuantity } from "@/lib/format";
+import { formatCount, formatMoney, formatMoneyOrOnRequest, formatQuantity } from "@/lib/format";
 import styles from "./dashboard.module.css";
 
 type Notice = { message: string; tone: "good" | "bad" };
@@ -485,7 +485,7 @@ export default function Dashboard() {
                       <div className={styles.rowMain}>
                         <span className={styles.rowName}>{product.name}</span>
                         <span className={`${styles.rowMeta} tabular`}>
-                          {formatMoney(product.selling_price, currency)}
+                          {formatMoneyOrOnRequest(product.selling_price, currency)}
                         </span>
                       </div>
                       <div className={styles.rowEnd}>
@@ -543,7 +543,7 @@ export default function Dashboard() {
                                     discount_amount: "0.00",
                                   },
                                 ],
-                                payments: [{ amount: product.selling_price, method: "CASH" }],
+                                payments: [{ amount: product.effective_normal_price ?? "0.00", method: "CASH" }],
                               });
                               await refresh();
                               setNotice({
@@ -912,7 +912,7 @@ function SaleSheet({
             value={product?.id ?? ""}
             options={products.map((candidate) => ({
               value: candidate.id,
-              label: `${candidate.name} - ${formatMoney(candidate.selling_price, currency)}`,
+              label: `${candidate.name} - ${formatMoneyOrOnRequest(candidate.selling_price, currency)}`,
             }))}
             onChange={setProductId}
           />

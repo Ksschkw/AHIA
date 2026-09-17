@@ -127,6 +127,8 @@ class ProductUpdateSchema(BaseModel):
     sku: StockIdentifier | None = None
     barcode: StockIdentifier | None = None
     selling_price: Money | None = None
+    wholesale_price: Money | None = None
+    pieces_per_pack: int | None = None
     cost_price: Money | None = None
     low_stock_threshold: Quantity | None = None
 

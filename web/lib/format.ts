@@ -9,6 +9,23 @@
 
 const DEFAULT_CURRENCY = "NGN";
 
+/**
+ * A price that may not exist yet, said in words.
+ *
+ * An item with no price of its own follows its group, and a group may have no price either - so a
+ * price can genuinely be absent. Showing nothing looks like a rendering fault and showing zero is a
+ * lie about money, so it says that a price is to be asked for.
+ */
+export function formatMoneyOrOnRequest(
+  amount: string | number | null | undefined,
+  currency: string = DEFAULT_CURRENCY,
+): string {
+  if (amount === null || amount === undefined || amount === "") {
+    return "Price on request";
+  }
+  return formatMoney(amount, currency);
+}
+
 export function formatMoney(amount: string | number, currency: string = DEFAULT_CURRENCY): string {
   const value = typeof amount === "string" ? Number(amount) : amount;
   if (!Number.isFinite(value)) {

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { BrandMark, Wordmark } from "@/components/brand";
 import { fetchPublicShop, whatsAppLink } from "@/lib/server-api";
-import { formatMoney } from "@/lib/format";
+import { formatMoneyOrOnRequest, formatMoney } from "@/lib/format";
 import styles from "./shop.module.css";
 
 /**
@@ -48,7 +48,9 @@ export default async function ShopPage({ params }: Params) {
 
   const message = `Hello ${shop.business_name}, I saw your shop on AHIA.`;
   const whatsapp = whatsAppLink(shop.contact_phone, message);
-  const available = shop.products.filter((product) => product.is_available);
+  // Every published product is shown: a customer asking for something the shop does not have on
+  // the shelf today is a customer the trader can still serve tomorrow, by going to the market.
+  const available = shop.products;
 
   return (
     <main className={styles.page}>
@@ -90,10 +92,10 @@ export default async function ShopPage({ params }: Params) {
                     ) : (
                       <span className={styles.imagePlaceholder} aria-hidden />
                     )}
-                    {!product.is_available ? <span className={styles.soldOut}>Out of stock</span> : null}
+
                   </span>
                   <span className={styles.productName}>{product.name}</span>
-                  <span className={styles.price}>{formatMoney(product.selling_price)}</span>
+                  <span className={styles.price}>{formatMoneyOrOnRequest(product.selling_price)}</span>
                 </Link>
               </li>
             ))}

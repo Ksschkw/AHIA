@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { BrandMark, Wordmark } from "@/components/brand";
 import { fetchPublicProduct, whatsAppLink } from "@/lib/server-api";
-import { formatMoney } from "@/lib/format";
+import { formatMoneyOrOnRequest, formatMoney } from "@/lib/format";
 import styles from "../../shop.module.css";
 import detail from "./product.module.css";
 
@@ -45,7 +45,7 @@ export default async function ProductPage({ params }: Params) {
   }
   const { product, business_name: businessName, contact_phone: contactPhone } = page;
 
-  const message = `Hello ${businessName}, I am asking about ${product.name} (${formatMoney(product.selling_price)}).`;
+  const message = `Hello ${businessName}, I am asking about ${product.name} (${formatMoneyOrOnRequest(product.selling_price)}).`;
   const whatsapp = whatsAppLink(contactPhone, message);
 
   return (
@@ -79,10 +79,10 @@ export default async function ProductPage({ params }: Params) {
             {businessName}
           </Link>
           <h1 className={detail.name}>{product.name}</h1>
-          <p className={detail.price}>{formatMoney(product.selling_price)}</p>
-          <p className={product.is_available ? detail.available : detail.unavailable}>
-            {product.is_available ? "Available now" : "Out of stock"}
-          </p>
+          <p className={detail.price}>{formatMoneyOrOnRequest(product.selling_price)}</p>
+          {/* Availability is not a customer's business: an Igbo trader is never truly out of
+              stock - he goes and finds it. What a customer reads here is what the shop does. */}
+          <p className={detail.available}>This can be sourced for you</p>
           {product.description ? <p className={detail.description}>{product.description}</p> : null}
 
           <div className={detail.actions}>

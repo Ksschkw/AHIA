@@ -71,6 +71,8 @@ _EDITABLE_FIELDS: Final[frozenset[str]] = frozenset(
         "sku",
         "barcode",
         "selling_price",
+        "wholesale_price",
+        "pieces_per_pack",
         "cost_price",
         "low_stock_threshold",
     }
@@ -368,6 +370,9 @@ class ProductService:
                 session, tenant_context=tenant_context, product_id=product_id
             )
 
+            # False until a change says otherwise: this flag is read after the price block, and an
+            # edit that does not touch the price never enters it.
+            clearing_price = False
             if "category_id" in changes:
                 category_id = _optional_identifier(changes, "category_id")
                 await self._require_category_in_business(
@@ -395,9 +400,15 @@ class ProductService:
                     at=now,
                 )
             if "selling_price" in changes or "cost_price" in changes:
+                # A null price is a real request: it means "stop carrying my own price and follow
+                # the group", which is how an exception stops being one. The group must then have a
+                # price for the item to be sellable at all, and that is checked below.
+                clearing_price = (
+                    "selling_price" in changes and _optional_money(changes, "selling_price") is None
+                )
                 product = product.repriced(
                     selling_price=(
-                        _required_money(changes, "selling_price")
+                        _optional_money(changes, "selling_price")
                         if "selling_price" in changes
                         else product.selling_price
                     ),
@@ -407,6 +418,32 @@ class ProductService:
                         else product.cost_price
                     ),
                     at=now,
+                )
+            if "wholesale_price" in changes or "pieces_per_pack" in changes:
+                product = product.repriced_for_lists(
+                    wholesale_price=(
+                        _optional_money(changes, "wholesale_price")
+                        if "wholesale_price" in changes
+                        else product.wholesale_price
+                    ),
+                    pieces_per_pack=(
+                        _optional_count(changes, "pieces_per_pack")
+                        if "pieces_per_pack" in changes
+                        else product.pieces_per_pack
+                    ),
+                    at=now,
+                )
+            if clearing_price:
+                group = await self._require_category_in_business(
+                    session,
+                    tenant_context=tenant_context,
+                    category_id=product.category_id,
+                )
+                await self._require_a_price(
+                    own_normal_price=None,
+                    defaults=group.price_defaults() if group is not None else NO_DEFAULTS,
+                    product_name=product.name,
+                    operation="update_product",
                 )
             if "low_stock_threshold" in changes:
                 product = product.rethresholded(
@@ -754,6 +791,14 @@ def _required_money(changes: Mapping[str, Any], field_name: str) -> Decimal:
     value = changes[field_name]
     if not isinstance(value, Decimal):
         raise _bad_field(field_name, "a decimal amount")
+    return value
+
+
+def _optional_count(changes: Mapping[str, object], field_name: str) -> int | None:
+    """Return a whole count from a change map, refusing a bool, which is an int in Python."""
+    value = changes.get(field_name)
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
     return value
 
 

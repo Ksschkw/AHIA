@@ -1935,6 +1935,12 @@ export interface components {
             name: string;
             /** Description */
             description?: string | null;
+            /** Default Normal Price */
+            default_normal_price?: number | string | null;
+            /** Default Wholesale Price */
+            default_wholesale_price?: number | string | null;
+            /** Default Pieces Per Pack */
+            default_pieces_per_pack?: number | null;
         };
         /**
          * CategoryResponseSchema
@@ -1957,6 +1963,12 @@ export interface components {
             slug: string;
             /** Description */
             description: string | null;
+            /** Default Normal Price */
+            default_normal_price: string | null;
+            /** Default Wholesale Price */
+            default_wholesale_price: string | null;
+            /** Default Pieces Per Pack */
+            default_pieces_per_pack: number | null;
             /**
              * Created At
              * Format: date-time
@@ -1980,6 +1992,12 @@ export interface components {
             name?: string | null;
             /** Description */
             description?: string | null;
+            /** Default Normal Price */
+            default_normal_price?: number | string | null;
+            /** Default Wholesale Price */
+            default_wholesale_price?: number | string | null;
+            /** Default Pieces Per Pack */
+            default_pieces_per_pack?: number | null;
         };
         /**
          * ChangePasswordSchema
@@ -2876,7 +2894,11 @@ export interface components {
             /** Name */
             name: string;
             /** Selling Price */
-            selling_price: number | string;
+            selling_price?: number | string | null;
+            /** Wholesale Price */
+            wholesale_price?: number | string | null;
+            /** Pieces Per Pack */
+            pieces_per_pack?: number | null;
             /** Category Id */
             category_id?: string | null;
             /** Description */
@@ -3029,7 +3051,19 @@ export interface components {
             /** Barcode */
             barcode: string | null;
             /** Selling Price */
-            selling_price: string;
+            selling_price: string | null;
+            /** Effective Normal Price */
+            effective_normal_price: string | null;
+            /** Effective Wholesale Price */
+            effective_wholesale_price: string | null;
+            /** Effective Pieces Per Pack */
+            effective_pieces_per_pack: number | null;
+            /** Normal Price From Group */
+            normal_price_from_group: boolean;
+            /** Wholesale Price From Group */
+            wholesale_price_from_group: boolean;
+            /** Wholesale Price Uses Normal Price */
+            wholesale_price_uses_normal_price: boolean;
             /** Cost Price */
             cost_price: string | null;
             /** Low Stock Threshold */
@@ -3099,6 +3133,10 @@ export interface components {
             barcode?: string | null;
             /** Selling Price */
             selling_price?: number | string | null;
+            /** Wholesale Price */
+            wholesale_price?: number | string | null;
+            /** Pieces Per Pack */
+            pieces_per_pack?: number | null;
             /** Cost Price */
             cost_price?: number | string | null;
             /** Low Stock Threshold */
@@ -3131,7 +3169,7 @@ export interface components {
             /** Name */
             name: string;
             /** Selling Price */
-            selling_price: string;
+            selling_price: string | null;
             /** Is Available */
             is_available: boolean;
             /** Description */

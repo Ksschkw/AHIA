@@ -1788,7 +1788,7 @@ Each line is one commit, and the note under it is what you will be able to see a
       `effective_pieces_per_pack` and the flags saying which came from the group. Migration, service,
       schema, tests. Sales, the shop page and reports read the effective price from here.
       *You will see:* an item priced by its grade, and an exception visibly marked as one.
-- [ ] **M21.1.4 The price grid, in the app.**
+- [x] **M21.1.4 The price grid, in the app.**
       A screen: models down, grades across, a normal price and a wholesale price per cell. Set a column
       in one action; override a cell; overridden cells visibly differ from their column.
       *You will see:* type 350 on 21D and every model follows; type 370 on Hot 8 and only Hot 8 moves.
@@ -2208,3 +2208,22 @@ These apply continuously and are re-verified at each milestone boundary.
   one; and a test asserting that the refusal's internal reason appears in the HTTP message was wrong -
   the external view is deliberately opaque, and the reason belongs in the log next to the correlation
   id. The test now asserts the opposite, which is the house rule.
+
+- **M21.1.4 done.** `/app/prices` is the price book, reached from the shop beside Team and the profile.
+  A group carries the price everything under it uses, and the screen is built around that sentence:
+  `Normal price (shop page)`, `Wholesale price (a list)` and `Pieces in a pack` per group, one button to
+  set them, and under it the items - each showing what it sells at, whether it **follows the group** or
+  carries **its own price**, and a way to make it follow again. An item can also be filed under a group
+  from here, which is the move that makes the whole price book reach anything at all.
+- **Four defects came out of building it, and three of them were the kind a person would have hit.**
+  An item could not be filed under a group at all until this screen existed, so a group's price could
+  never reach an item - the feature was decorative until then. Clearing an item's own price was refused
+  as an invalid request, so an exception could never stop being one. A 500 on every product edit that
+  did not touch a price, from a flag I read before assigning it - the check found it as "Something went
+  wrong on our side" and the API log named it exactly. And the customer-facing pages showed "Out of
+  stock" and rendered an absent price as a blank, both of which the product owner had already decided
+  against: customers now read "This can be sourced for you" and a price nobody has set reads as "Price
+  on request" rather than as nothing.
+- `web/scripts/prices-check.mjs` walks the decision end to end in a real browser: create two items,
+  create the group 21D, set 500/350/10 on it, file both items under it, clear their own prices, and
+  assert both then follow the group. It is the check that found the three defects above.

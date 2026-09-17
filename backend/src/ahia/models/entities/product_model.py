@@ -419,6 +419,25 @@ class ProductModel:
             updated_at=at,
         )
 
+    def repriced_for_lists(
+        self,
+        *,
+        wholesale_price: Decimal | None,
+        pieces_per_pack: int | None,
+        at: datetime,
+    ) -> ProductModel:
+        """Return the product with the price it is listed at, and its pack size.
+
+        `None` in either means "follow the group", which is a real state and the one every item
+        starts in - so clearing an override is setting these to None rather than an absence.
+        """
+        return replace(
+            self,
+            wholesale_price=wholesale_price,
+            pieces_per_pack=pieces_per_pack,
+            updated_at=at,
+        )
+
     def rethresholded(self, *, low_stock_threshold: Decimal, at: datetime) -> ProductModel:
         """Return the product with a new low-stock threshold."""
         return replace(self, low_stock_threshold=low_stock_threshold, updated_at=at)
