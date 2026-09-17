@@ -1770,6 +1770,18 @@ every detail here is a decision, not a preference.
       iPhone 15, matte one" and knows what it is, he should be able to turn that line into a catalogue
       entry - with its price - while he is packing. That is how the catalogue grows to match what
       customers actually ask for, instead of the trader sitting down to type it in later.
+- [ ] M21.1.8 **A free-text line can carry a picture.** The customer photographing the thing they mean,
+      or a screenshot of a chat, is how a request is made precise without either side finding the right
+      words. The picture is on the customer's line, not on a product.
+- [ ] M21.1.9 **A line may have no price at all, and that is normal.** The customer does not price what
+      the trader has to go and find - they both know roughly, and it is the trader who works it out. An
+      unpriced line is listed and **kept out of the total** until he prices it, and the customer sees it
+      as "to be priced" rather than as a zero, because a total that is quietly missing money is a total
+      nobody trusts.
+- [ ] M21.1.10 **The list is grouped the way a list is written**: a heading - 21D, 5D, privacy, ceramic
+      matte, phone cases, camera glass, charging cords - and under it the lines: "Hot 8, 20 pcs",
+      "iPhone 11, 10 pcs", "13 Pro Max, 5 pcs". The heading is the trader's own word for a group of
+      things, and the group is also how the market run is walked.
 
 ### M21.2 The trader's side: sourcing, packing, quoting
 
@@ -1787,6 +1799,15 @@ every detail here is a decision, not a preference.
       margin. "Customer is my guy" is a perfectly good reason.
 - [ ] M21.2.6 Owner-only visibility of costs and margins. A salesperson packs and ticks; he does not see
       what the goods cost or what was made on them.
+- [ ] M21.2.7 **He prices it, and the record says so.** When the goods are bought in the market and he
+      works out the price, that price belongs to the shop, not to the customer who never typed one. The
+      line records who priced it and when, as a fact - the customer's own additions and the trader's
+      pricing are never confused in the same field.
+- [ ] M21.2.8 **The calculator is the actual feature.** Pieces, packs, and pieces per pack: the line holds
+      a quantity, the unit it is counted in, and how many pieces are in a pack, and the total follows
+      from what was entered rather than from a price field. The trader can count in pieces and price in
+      packs, or the reverse, and the arithmetic is shown rather than hidden - a waybill is worked out in
+      his head first, and the app's job is to agree with him.
 
 ### M21.3 The price book (why screenguards need more than a price field)
 
@@ -1796,8 +1817,10 @@ every detail here is a decision, not a preference.
 - [ ] M21.3.2 **Layered pricing, each layer optional and each overridable**: grade default, then model
       override, then customer tier (retail or wholesale), then this customer's own price, then the line
       he types, then the final adjustment. The system suggests; he decides.
-- [ ] M21.3.3 **Units as first-class**: piece, pack (x N), carton (x M). Stock counted in pieces, sold in
-      packs, priced per pack. Screenguards are exactly this.
+- [ ] M21.3.3 **Units as first-class, and as the trader's own data**: piece, pack (x N), carton (x M),
+      and whatever else a business counts in - a dozen, a crate, a bag, a kilo, a litre. Stock counted
+      in the base unit, sold in any of them, priced per any of them. Screenguards are exactly this, and
+      so is a bag of rice.
 - [ ] M21.3.4 **Wholesale and retail as price tiers**, so a wholesale price cannot leak to a retail
       customer through a shared catalogue.
 - [ ] M21.3.5 **A generated price list** (image or PDF) from the price book, to broadcast on WhatsApp.
@@ -1814,6 +1837,19 @@ every detail here is a decision, not a preference.
       pre-filled.
 - [ ] M21.4.4 **Credit, because most of this trade runs on it**: what a customer owes, since when, with
       a WhatsApp reminder he can edit before it is sent.
+
+### M21.6 Any business, not this one
+
+- [ ] M21.6.1 **Nothing in this milestone may be shaped like electronics.** Groups, units, grades, models
+      and price rules are the trader's own data: a heading he types, a unit he defines, a rule he sets.
+      No column, enum or screen may be named after screenguards, phone models or grades.
+- [ ] M21.6.2 The first two real users are the product owner's father (screenguards, chargers, phone
+      accessories, wholesale and waybill by road) and his mother, who is not in that trade at all. If a
+      design decision only works because "the lists look like this one", it is the wrong decision - the
+      screenguard list is one example of a list, not the shape of a list.
+- [ ] M21.6.3 The same request flow must read naturally for a foodstuff shop: headings like "grains" and
+      "provisions", units like bags and kilos, customer lists of "two bags of rice, one carton of milk",
+      priced by the shop, waybilled by road or picked up.
 
 ### M21.5 What stock counts are for
 
@@ -1842,6 +1878,9 @@ every detail here is a decision, not a preference.
 
 - Does a request link live **forever** for a customer, or expire with a fresh one per order? (Leaning to
   a standing link per customer, because the same people order every week.)
+- A pack is not always a fixed count across a whole group - is "pieces per pack" a property of the
+  group, of the variant, or typed on the line each time? (Leaning to a property that a line can
+  override, because the trader is the one who knows today's pack.)
 - How much of the price matrix does he want to maintain himself versus inherit from a grade default?
 - **OCR of the photographed paper list**: later, not now. A photo attached to the request is useful on
   day one; reading it is a separate promise to keep.
