@@ -567,3 +567,40 @@ def test_transitions_never_lose_the_tenant() -> None:
     ):
         assert changed.tenant_id == tenant_id
         assert changed.id == product.id
+
+
+# ---------------------------------------------------------------------------
+# The price book: a list price, and a pack
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_an_item_can_carry_its_own_wholesale_price_and_pack() -> None:
+    """The exception under a group: Hot 8 at 370 while the rest of the 21D follows 350."""
+    product = build_product(wholesale_price=Decimal("370.00"), pieces_per_pack=10)
+
+    assert product.wholesale_price == Decimal("370.00")
+    assert product.pieces_per_pack == 10
+
+
+@pytest.mark.unit
+def test_an_item_with_no_wholesale_price_follows_its_group() -> None:
+    """Absent means "whatever the group says", which is how one price covers a whole grade."""
+    product = build_product()
+
+    assert product.wholesale_price is None
+    assert product.pieces_per_pack is None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("pack_size", [0, -3, 1001])
+def test_an_impossible_pack_size_is_refused_on_an_item(pack_size: int) -> None:
+    """The same bound as the group's, because it is the same fact about the same goods."""
+    with pytest.raises(EntityInvariantError):
+        build_product(pieces_per_pack=pack_size)
+
+
+@pytest.mark.unit
+def test_a_negative_wholesale_price_is_refused() -> None:
+    with pytest.raises(EntityInvariantError):
+        build_product(wholesale_price=Decimal("-1.00"))

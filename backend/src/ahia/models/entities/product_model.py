@@ -60,6 +60,10 @@ MAXIMUM_IDENTIFIER_LENGTH: Final[int] = 64
 #: price, and catching it here means a validation error instead of a number nobody notices.
 MAXIMUM_PRICE: Final[Decimal] = MAXIMUM_MONEY
 
+#: The largest pack anyone sensibly counts. A pack of a thousand is a carton, and a number above
+#: this is a typo that would silently multiply every price on a list.
+MAXIMUM_PACK_PIECES: Final[int] = 1000
+
 #: The largest stock threshold, in the same unit as a quantity.
 MAXIMUM_QUANTITY: Final[Decimal] = MAXIMUM_MONEY.__class__("999999999999.999")
 
@@ -83,6 +87,13 @@ class ProductModel:
     barcode: str | None = None
     cost_price: Decimal | None = None
     low_stock_threshold: Decimal = ZERO_QUANTITY
+    #: What this item is sold for when it is not sold retail at the shop: a list, a bulk order, a
+    #: customer buying by the pack. None means "whatever the group says", which is how a whole grade
+    #: ends up on one price with a handful of exceptions.
+    wholesale_price: Decimal | None = None
+    #: How many pieces are in a pack. The merchant's fact about the goods; a customer is never
+    #: asked. None means "whatever the group says".
+    pieces_per_pack: int | None = None
     is_active: bool = True
     is_published: bool = False
     public_token: str | None = None
@@ -146,6 +157,27 @@ class ProductModel:
                 product_id=self.id,
                 minimum=ZERO_PRICE,
                 maximum=MAXIMUM_PRICE,
+            )
+        if self.wholesale_price is not None:
+            _require_money(
+                self.wholesale_price,
+                field_name="wholesale_price",
+                product_id=self.id,
+                minimum=ZERO_PRICE,
+                maximum=MAXIMUM_PRICE,
+            )
+        if (
+            self.pieces_per_pack is not None
+            and not 1 <= self.pieces_per_pack <= MAXIMUM_PACK_PIECES
+        ):
+            raise EntityInvariantError(
+                operation="build_product",
+                entity="product",
+                identifier=str(self.id),
+                detail=(
+                    f"pieces_per_pack must be between 1 and {MAXIMUM_PACK_PIECES}, "
+                    f"received {self.pieces_per_pack}"
+                ),
             )
         # Selling below cost is a clearance decision, not a defect, so it is allowed
         # and nothing here warns about it. Only the numbers' shape is enforced.
@@ -253,6 +285,8 @@ class ProductModel:
         sku: str | None = None,
         barcode: str | None = None,
         cost_price: Decimal | None = None,
+        wholesale_price: Decimal | None = None,
+        pieces_per_pack: int | None = None,
         low_stock_threshold: Decimal = ZERO_QUANTITY,
     ) -> ProductModel:
         """Create a product, deriving its slug and normalising its identifiers.
@@ -272,6 +306,8 @@ class ProductModel:
             sku=_clean_sku(sku),
             barcode=_clean_barcode(barcode),
             cost_price=cost_price,
+            wholesale_price=wholesale_price,
+            pieces_per_pack=pieces_per_pack,
             low_stock_threshold=low_stock_threshold,
             is_active=True,
             is_published=False,
@@ -365,6 +401,8 @@ class ProductModel:
         identifiers are set together: clearing the cost is an editing operation, and a
         sentinel would make "leave it" and "clear it" the same request.
         """
+        # The price book - the wholesale price and the pack size - is edited by its own operation,
+        # which arrives with the grid that shows it. This one changes what the shop sells at.
         return replace(
             self,
             selling_price=selling_price,

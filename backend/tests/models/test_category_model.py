@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -445,3 +446,52 @@ async def test_a_category_for_an_unknown_business_is_refused_by_the_database(
     with pytest.raises(NotFoundError, match="does not exist"):
         async with database.transaction_scope() as unit_of_work:
             await category_crud.create(unit_of_work.session_handle, category)
+
+
+# ---------------------------------------------------------------------------
+# The price book: a group's own prices, and the exceptions under it
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_a_group_can_carry_the_price_everything_under_it_uses() -> None:
+    """One number for a grade - "all of the 21D are 350" - instead of typing it on every model."""
+    category = CategoryModel.create(
+        category_id=uuid4(),
+        tenant_id=uuid4(),
+        name="21D",
+        now=NOW,
+        default_normal_price=Decimal("500.00"),
+        default_wholesale_price=Decimal("350.00"),
+        default_pieces_per_pack=10,
+    )
+
+    assert category.default_normal_price == Decimal("500.00")
+    assert category.default_wholesale_price == Decimal("350.00")
+    assert category.default_pieces_per_pack == 10
+
+
+@pytest.mark.unit
+def test_a_group_with_no_prices_is_still_a_group() -> None:
+    """A business that never touches the price book keeps working: the defaults are all absent."""
+    category = CategoryModel.create(
+        category_id=uuid4(), tenant_id=uuid4(), name="Charging cords", now=NOW
+    )
+
+    assert category.default_normal_price is None
+    assert category.default_wholesale_price is None
+    assert category.default_pieces_per_pack is None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("pack_size", [0, -1, 1001])
+def test_an_impossible_pack_size_is_refused(pack_size: int) -> None:
+    """A pack of nothing, or a thousand, is a typo that would multiply every list price."""
+    with pytest.raises(EntityInvariantError):
+        CategoryModel.create(
+            category_id=uuid4(),
+            tenant_id=uuid4(),
+            name="21D",
+            now=NOW,
+            default_pieces_per_pack=pack_size,
+        )

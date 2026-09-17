@@ -1770,7 +1770,7 @@ Each line is one commit, and the note under it is what you will be able to see a
 
 #### M21.1 The price book: two prices he sets
 
-- [ ] **M21.1.1 Category price defaults and product overrides in the database.**
+- [x] **M21.1.1 Category price defaults and product overrides in the database.**
       `categories` gains `default_normal_price`, `default_wholesale_price`, `default_pieces_per_pack`;
       `products` gains `wholesale_price` and `pieces_per_pack`. All nullable, all additive, nothing that
       exists today changes meaning. Migration, entity invariants, repository mapping, tests.
@@ -2156,3 +2156,18 @@ These apply continuously and are re-verified at each milestone boundary.
 - Reproduced by building a scratch database the way CI does (`ahia_ci`, metadata only) rather than by
   trusting the local one, which had a schema built by migrations and therefore hid both defects. The
   full suite passes on that scratch database: 2125 passed, 0 failed.
+
+### M21 - progress log
+
+- **M21.1.1 done.** A group now carries the price everything under it uses - `categories` gained
+  `default_normal_price`, `default_wholesale_price` and `default_pieces_per_pack` - and an item can
+  carry its own, so "all of the 21D are 350" is one number and Hot 8 at 370 is the exception.
+  `products` gained `wholesale_price` and `pieces_per_pack` for the same reason. Every column is
+  nullable and additive: a business that never opens the price book behaves exactly as it did before.
+  Migration `8705b60501ff`, entity invariants for money and for a pack between 1 and 1000 (a pack of a
+  thousand is a carton, and a bigger number is a typo that would multiply every price on a list),
+  repository mapping, and tests on both entities.
+- One thing worth knowing for later: the local test databases had tables older than this migration, and
+  `create_all` does not alter existing tables, so `ahia_test` and `ahia_ci` were migrated by hand. A
+  fresh database - which is what CI builds - gets the columns from the metadata. It is the same class of
+  surprise as the append-only triggers, which is why it is written down rather than just fixed.

@@ -40,6 +40,7 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Index,
+    Integer,
     Numeric,
     String,
     Text,
@@ -105,6 +106,13 @@ class ProductRecord(Base):
     cost_price: Mapped[Decimal | None] = mapped_column(
         Numeric(_PRICE_PRECISION, _PRICE_SCALE), nullable=True
     )
+    #: What it goes for on a list rather than at the counter. Null means the group decides, which is
+    #: how a whole grade ends up on one price with a few exceptions that carry their own.
+    wholesale_price: Mapped[Decimal | None] = mapped_column(
+        Numeric(_PRICE_PRECISION, _PRICE_SCALE), nullable=True
+    )
+    #: Pieces in a pack, when this item differs from its group. Null means the group decides.
+    pieces_per_pack: Mapped[int | None] = mapped_column(Integer, nullable=True)
     low_stock_threshold: Mapped[Decimal] = mapped_column(
         Numeric(_PRICE_PRECISION, _QUANTITY_SCALE), nullable=False, default=ZERO_QUANTITY
     )
@@ -171,6 +179,8 @@ def to_entity(record: ProductRecord) -> ProductModel:
         sku=record.sku,
         barcode=record.barcode,
         cost_price=record.cost_price,
+        wholesale_price=record.wholesale_price,
+        pieces_per_pack=record.pieces_per_pack,
         low_stock_threshold=record.low_stock_threshold,
         is_active=record.is_active,
         is_published=record.is_published,
@@ -187,6 +197,8 @@ def apply_entity(record: ProductRecord, entity: ProductModel) -> None:
     record.sku = entity.sku
     record.barcode = entity.barcode
     record.selling_price = entity.selling_price
+    record.wholesale_price = entity.wholesale_price
+    record.pieces_per_pack = entity.pieces_per_pack
     record.cost_price = entity.cost_price
     record.low_stock_threshold = entity.low_stock_threshold
     record.is_active = entity.is_active

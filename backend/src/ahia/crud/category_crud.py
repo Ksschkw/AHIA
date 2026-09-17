@@ -19,10 +19,21 @@ A category belongs to a business, and the foreign key says so
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, func, select
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    select,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
@@ -37,6 +48,12 @@ _NAME_LENGTH: Final[int] = 120
 _SLUG_LENGTH: Final[int] = 63
 
 
+#: The numeric shape a price is stored in, matching the product table so a value means the
+#: same thing wherever it is read from.
+_PRICE_PRECISION: Final[int] = 18
+_PRICE_SCALE: Final[int] = 2
+
+
 class CategoryRecord(Base):
     """The persistence representation of one product grouping."""
 
@@ -47,6 +64,15 @@ class CategoryRecord(Base):
     name: Mapped[str] = mapped_column(String(_NAME_LENGTH), nullable=False)
     slug: Mapped[str] = mapped_column(String(_SLUG_LENGTH), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: The group's own prices. A group is a grade - "21D", "Privacy", "Grains" - and this is
+    #: common price lives, so the trader sets one number instead of typing it on every item.
+    default_normal_price: Mapped[Decimal | None] = mapped_column(
+        Numeric(_PRICE_PRECISION, _PRICE_SCALE), nullable=True
+    )
+    default_wholesale_price: Mapped[Decimal | None] = mapped_column(
+        Numeric(_PRICE_PRECISION, _PRICE_SCALE), nullable=True
+    )
+    default_pieces_per_pack: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -71,6 +97,9 @@ def to_entity(record: CategoryRecord) -> CategoryModel:
         name=record.name,
         slug=record.slug,
         description=record.description,
+        default_normal_price=record.default_normal_price,
+        default_wholesale_price=record.default_wholesale_price,
+        default_pieces_per_pack=record.default_pieces_per_pack,
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
@@ -81,6 +110,9 @@ def apply_entity(record: CategoryRecord, entity: CategoryModel) -> None:
     record.name = entity.name
     record.slug = entity.slug
     record.description = entity.description
+    record.default_normal_price = entity.default_normal_price
+    record.default_wholesale_price = entity.default_wholesale_price
+    record.default_pieces_per_pack = entity.default_pieces_per_pack
     record.created_at = entity.created_at
     record.updated_at = entity.updated_at
 

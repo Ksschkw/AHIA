@@ -29,15 +29,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime
+from decimal import Decimal
 from typing import Final
 from uuid import UUID
 
 from ahia.core.errors import EntityInvariantError
 from ahia.core.slug import normalize_slug, require_slug_shape
+from ahia.models.entities.money import MAXIMUM_MONEY, ZERO_MONEY, check_money_rules
 
 MAXIMUM_NAME_LENGTH: Final[int] = 120
 MAXIMUM_SLUG_LENGTH: Final[int] = 63
 MAXIMUM_DESCRIPTION_LENGTH: Final[int] = 2_000
+
+#: The largest pack anyone sensibly counts. A pack of a thousand is a carton, and a number above
+#: this is a typo that would silently multiply every price on a list.
+MAXIMUM_PACK_PIECES: Final[int] = 1_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +57,13 @@ class CategoryModel:
     created_at: datetime
     updated_at: datetime
     description: str | None = None
+    #: The price every item in this group is sold at unless it says otherwise. This is what makes
+    #: a grade a grade: "all of them are 350" is one number here, and the exceptions are the items
+    #: that carry their own.
+    default_normal_price: Decimal | None = None
+    default_wholesale_price: Decimal | None = None
+    #: Pieces in a pack, for everything in the group. The merchant's fact about the goods.
+    default_pieces_per_pack: int | None = None
 
     def __post_init__(self) -> None:
         _require_aware(self.created_at, field_name="created_at", category_id=self.id)
@@ -91,6 +104,41 @@ class CategoryModel:
                 detail=f"invalid slug: {invalid_slug}",
             ) from invalid_slug
 
+        for field_name, price in (
+            ("default_normal_price", self.default_normal_price),
+            ("default_wholesale_price", self.default_wholesale_price),
+        ):
+            if price is None:
+                continue
+            try:
+                check_money_rules(
+                    price,
+                    field_name=field_name,
+                    minimum=ZERO_MONEY,
+                    maximum=MAXIMUM_MONEY,
+                )
+            except ValueError as invalid_money:
+                raise EntityInvariantError(
+                    operation="build_category",
+                    entity="category",
+                    identifier=str(self.id),
+                    detail=str(invalid_money),
+                ) from invalid_money
+
+        if (
+            self.default_pieces_per_pack is not None
+            and not 1 <= self.default_pieces_per_pack <= MAXIMUM_PACK_PIECES
+        ):
+            raise EntityInvariantError(
+                operation="build_category",
+                entity="category",
+                identifier=str(self.id),
+                detail=(
+                    f"default_pieces_per_pack must be between 1 and {MAXIMUM_PACK_PIECES}, "
+                    f"received {self.default_pieces_per_pack}"
+                ),
+            )
+
         if self.description is not None and len(self.description) > MAXIMUM_DESCRIPTION_LENGTH:
             raise EntityInvariantError(
                 operation="build_category",
@@ -112,6 +160,9 @@ class CategoryModel:
         name: str,
         now: datetime,
         description: str | None = None,
+        default_normal_price: Decimal | None = None,
+        default_wholesale_price: Decimal | None = None,
+        default_pieces_per_pack: int | None = None,
     ) -> CategoryModel:
         """Create a category, deriving its slug from its name.
 
@@ -130,6 +181,9 @@ class CategoryModel:
             name=trimmed_name,
             slug=normalize_slug(trimmed_name),
             description=trimmed_description or None,
+            default_normal_price=default_normal_price,
+            default_wholesale_price=default_wholesale_price,
+            default_pieces_per_pack=default_pieces_per_pack,
             created_at=now,
             updated_at=now,
         )
