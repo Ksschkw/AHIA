@@ -2248,3 +2248,19 @@ Asked directly, and worth a standing answer because it decides how fast everythi
   the ones to keep.
 - **Never report success on a build that was not run.** If a change was not verified, it is said so
   plainly in the commit and in the reply, and the unverified part is named.
+
+- **M21.2.1 in progress, and this is half of it.** The two entities exist and are tested: a
+  `RequestModel` (a customer's list, identified by their canonical phone number, moving submitted ->
+  quoted -> confirmed, with confirmation the one moment it becomes a sale) and a `RequestLineModel`
+  (either a catalogued item or free text with a picture, counted in pieces or in packs, carrying the
+  price the customer saw, the price the trader sets, and what it cost him in the market). Twelve tests,
+  using the trade's own examples.
+- **Remaining for M21.2.1**: the two tables (migration) and their repositories, then the service and the
+  public endpoint in M21.2.2. Recorded here rather than implied, because half a micro-milestone that is
+  reported as finished is the thing that costs somebody a day later.
+- Two defects the tests found in the entities themselves, both worth the note they are getting. A
+  nonsense phone number - "not a number at all" - came through the canonicaliser as *something*, so a
+  list could be taken against an address nobody can be reached on; the canonical form is now checked for
+  shape and length, not only for a leading plus. And confirming an already-confirmed list was a silent
+  no-op; it is now refused, because the caller meant to do something and a quiet success tells them it
+  happened.
