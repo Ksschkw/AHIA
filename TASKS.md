@@ -1825,6 +1825,18 @@ every detail here is a decision, not a preference.
       customer through a shared catalogue.
 - [ ] M21.3.5 **A generated price list** (image or PDF) from the price book, to broadcast on WhatsApp.
       Most of his customers will never open a link before they know the prices.
+- [ ] M21.3.6 **The price book is a grid: models down, grades across.** Set the price for a whole column
+      at once - "21D is 350" - and override the few cells that differ: Hot 8 and Camon 21 at 370, Camon
+      30 at 400. Setting a column is the everyday action; overriding a cell is the exception. A cell
+      that differs from its column is marked as an override, so he can see at a glance which models are
+      not on the standard price, and a column price change never silently rewrites the exceptions.
+- [ ] M21.3.7 **Prices are per piece by default.** A pack price is an override, and a line price is an
+      override of that. Counting happens in whichever unit the trader and the customer are speaking -
+      "20 pcs" - while the price underneath is a per-piece price unless somebody has said otherwise.
+- [ ] M21.3.8 **A price is a value with a date, and history is never rewritten.** The price used on a
+      confirmed request is **copied onto its lines**, not looked up when somebody reads the waybill
+      again: when he raises the price of 21D next month, last week's waybill must still show what was
+      agreed and what was paid. The price book is current; a document is a record.
 
 ### M21.4 The waybill itself
 
@@ -1863,6 +1875,10 @@ every detail here is a decision, not a preference.
 
 ### M21 - decisions from the product owner
 
+- Prices are **per piece**, with overrides for particular models inside a grade: a whole grade on one
+  wholesale price - "21D is 350" - and then Hot 8 and Camon 21 at 370, Camon 30 at 400. The grid above is
+  that sentence, and it is the shape of the price book rather than an example of it.
+
 - Prices **are** visible to the customer while they build the list.
 - A customer **can add anything**, including items not in the catalogue, as a free-text line with a note.
 - The **phone number is collected**, with the reason stated to the customer: so he knows whose list it
@@ -1881,6 +1897,10 @@ every detail here is a decision, not a preference.
 - A pack is not always a fixed count across a whole group - is "pieces per pack" a property of the
   group, of the variant, or typed on the line each time? (Leaning to a property that a line can
   override, because the trader is the one who knows today's pack.)
+- **How is the retail price derived from the wholesale one?** The trader thinks in wholesale - "all of
+  them are 350 wholesale" - so is retail a markup he sets once (a percentage or a flat addition), or a
+  second grid he fills in himself? The second is more work and more control, and the trade may want
+  both. Not guessed here.
 - How much of the price matrix does he want to maintain himself versus inherit from a grade default?
 - **OCR of the photographed paper list**: later, not now. A photo attached to the request is useful on
   day one; reading it is a separate promise to keep.
