@@ -151,6 +151,7 @@ export function registerAccount(input: {
   first_name: string;
   last_name: string;
   email: string;
+  phone?: string;
   password: string;
 }): Promise<AuthenticatedSession> {
   return request<AuthenticatedSession>("/api/v1/auth/register", {

@@ -3,52 +3,85 @@
 /**
  * Where somebody signs in or opens a shop.
  *
- * One screen with two modes rather than two routes: a person who came to sign in and realises they
- * have no account should not have to find the right page. The success path always ends at `/app`,
- * which owns the session check - so this screen does not have to ask the API anything before it can
- * be used.
+ * Two modes on one screen, because a person who came to sign in and turns out to have no account
+ * should not have to find the right page. Everything that can be checked here is checked here - before
+ * a request goes anywhere - because a round trip to be told the password is too short is a waste of a
+ * market trader's airtime. The server remains the authority; this is a courtesy, not a claim.
  */
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useState } from "react";
+import { Suspense, useCallback, useMemo, useState } from "react";
 
-import { Brand, BrandMark, Wordmark } from "@/components/brand";
-import { Button, Field, Toast } from "@/components/ui";
-import { ApiError, registerAccount, signIn } from "@/lib/api";
+import { BrandMark, Wordmark } from "@/components/brand";
+import { Button, CheckList, Field, PasswordField, StrengthMeter } from "@/components/ui";
+import { registerAccount, signIn } from "@/lib/api";
+import { explainFailure, type Explained } from "@/lib/errors";
+import {
+  PASSWORD_MINIMUM_LENGTH,
+  looksLikeIdentifier,
+  passwordChecks,
+  passwordStrength,
+} from "@/lib/passwords";
 import styles from "./start.module.css";
 
-function describe(error: unknown): string {
-  if (error instanceof ApiError) {
-    return `${error.code}: ${error.describe()}`;
-  }
-  return error instanceof Error ? error.message : "Something went wrong.";
-}
+type Mode = "signin" | "create";
+type Touched = Record<string, boolean>;
 
 function AuthScreen() {
   const router = useRouter();
   const intent = useSearchParams().get("intent");
-  const [mode, setMode] = useState<"signin" | "create">(
-    intent === "create" ? "create" : "signin",
-  );
-  const [name, setName] = useState("");
+
+  const [mode, setMode] = useState<Mode>(intent === "create" ? "create" : "signin");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [identifier, setIdentifier] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<Explained | null>(null);
+  const [touched, setTouched] = useState<Touched>({});
+
+  const strength = useMemo(() => passwordStrength(password), [password]);
+  const checks = useMemo(() => passwordChecks(password), [password]);
+  const identifierOk = looksLikeIdentifier(identifier);
+  const passwordsMatch = confirmation.length > 0 && confirmation === password;
+  const creating = mode === "create";
+
+  const errors = {
+    firstName: creating && touched.firstName && firstName.trim().length < 2 ? "Tell us your first name." : undefined,
+    lastName: creating && touched.lastName && lastName.trim().length < 2 ? "Tell us your surname." : undefined,
+    identifier: touched.identifier
+      ? identifierOk
+        ? undefined
+        : "Enter an email address like ada@example.com, or a phone number like 08031234567."
+      : undefined,
+    password: touched.password
+      ? password.length < PASSWORD_MINIMUM_LENGTH
+        ? `Use at least ${PASSWORD_MINIMUM_LENGTH} characters.`
+        : undefined
+      : undefined,
+    confirmation: creating && touched.confirmation && !passwordsMatch ? "The two passwords are not the same." : undefined,
+  };
 
   const canSubmit =
-    identifier.trim().length >= 3 && password.length >= 8 && (mode === "signin" || name.trim().length > 0);
+    (!creating || (firstName.trim().length >= 2 && lastName.trim().length >= 2)) &&
+    identifierOk &&
+    password.length >= PASSWORD_MINIMUM_LENGTH &&
+    (!creating || passwordsMatch);
 
   const submit = useCallback(async () => {
     setBusy(true);
-    setError(null);
+    setFailure(null);
+    setTouched({ firstName: true, lastName: true, identifier: true, password: true, confirmation: true });
     try {
-      if (mode === "create") {
+      if (creating) {
         await registerAccount({
-          first_name: name.trim(),
-          last_name: "Owner",
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
           email: identifier.trim(),
+          phone: phone.trim() || undefined,
           password,
         });
       } else {
@@ -56,11 +89,22 @@ function AuthScreen() {
       }
       router.replace("/app");
     } catch (caught) {
-      setError(describe(caught));
+      if (caught instanceof Error && "code" in caught && caught.code === "CONFLICT") {
+        setFailure({
+          message: "An account already uses that email address.",
+          hint: "Sign in instead, or use a different address.",
+        });
+      } else {
+        setFailure(explainFailure(caught));
+      }
+      // A failed password attempt most likely means the password, so put the cursor where the fix is.
+      if (mode === "signin") {
+        setPassword("");
+      }
     } finally {
       setBusy(false);
     }
-  }, [identifier, mode, name, password, router]);
+  }, [confirmation, creating, firstName, identifier, lastName, mode, password, phone, router]);
 
   return (
     <main className={styles.page}>
@@ -71,71 +115,164 @@ function AuthScreen() {
             <Wordmark size="large" />
           </h1>
         </Link>
-        <p className={styles.tagline}>
-          Sell, stock and keep the books - one screen, even when the network is not.
-        </p>
 
         <div className={styles.tabs}>
           <button
+            type="button"
             className={mode === "signin" ? styles.tabActive : styles.tab}
-            onClick={() => setMode("signin")}
+            onClick={() => {
+              setMode("signin");
+              setFailure(null);
+            }}
           >
             Sign in
           </button>
           <button
+            type="button"
             className={mode === "create" ? styles.tabActive : styles.tab}
-            onClick={() => setMode("create")}
+            onClick={() => {
+              setMode("create");
+              setFailure(null);
+            }}
           >
             Create account
           </button>
         </div>
 
+        <p className={styles.intro}>
+          {mode === "signin"
+            ? "Welcome back. Sign in with the email address or phone number you registered."
+            : "Two minutes and you are recording sales. Only your name and an email are needed."}
+        </p>
+
         <form
           className={styles.form}
+          noValidate
           onSubmit={(event) => {
             event.preventDefault();
             if (canSubmit && !busy) {
               void submit();
+            } else {
+              setTouched({ firstName: true, lastName: true, identifier: true, password: true, confirmation: true });
             }
           }}
         >
-          {mode === "create" ? (
-            <Field
-              label="Your name"
-              id="first_name"
-              value={name}
-              onChange={setName}
-              placeholder="Ada"
-              autoFocus
-            />
+          {creating ? (
+            <div className={styles.nameRow}>
+              <Field
+                label="First name"
+                id="first_name"
+                value={firstName}
+                onChange={setFirstName}
+                onBlur={() => setTouched((t) => ({ ...t, firstName: true }))}
+                placeholder="Ada"
+                autoComplete="given-name"
+                error={errors.firstName}
+                autoFocus
+              />
+              <Field
+                label="Surname"
+                id="last_name"
+                value={lastName}
+                onChange={setLastName}
+                onBlur={() => setTouched((t) => ({ ...t, lastName: true }))}
+                placeholder="Obi"
+                autoComplete="family-name"
+                error={errors.lastName}
+              />
+            </div>
           ) : null}
+
           <Field
-            label={mode === "create" ? "Email address" : "Email or phone"}
+            label={creating ? "Email address" : "Email or phone number"}
             id="identifier"
             value={identifier}
             onChange={setIdentifier}
-            inputMode={mode === "create" ? "email" : "text"}
-            placeholder={mode === "create" ? "ada@example.com" : "ada@example.com or 08031234567"}
+            onBlur={() => setTouched((t) => ({ ...t, identifier: true }))}
+            inputMode={creating ? "email" : "text"}
+            autoComplete={creating ? "email" : "username"}
+            placeholder={creating ? "ada@example.com" : "ada@example.com or 08031234567"}
+            hint={
+              creating
+                ? "This is how you will sign in, and where receipts and reports are sent."
+                : undefined
+            }
+            error={errors.identifier}
           />
-          <Field
+
+          {creating ? (
+            <Field
+              label="Phone number"
+              id="phone"
+              value={phone}
+              onChange={setPhone}
+              inputMode="tel"
+              autoComplete="tel"
+              optional
+              placeholder="0803 123 4567"
+              hint="Used for WhatsApp receipts and for customers to reach the business."
+            />
+          ) : null}
+
+          <PasswordField
             label="Password"
             id="password"
             value={password}
             onChange={setPassword}
-            type="password"
-            placeholder="at least 8 characters"
+            onBlur={() => setTouched((t) => ({ ...t, password: true }))}
+            autoComplete={creating ? "new-password" : "current-password"}
+            hint={creating ? undefined : "At least 8 characters."}
+            error={errors.password}
           />
+
+          {creating ? (
+            <>
+              <StrengthMeter score={strength.score} label={strength.label} />
+              <CheckList checks={checks} />
+              <PasswordField
+                label="Type it again"
+                id="confirm_password"
+                value={confirmation}
+                onChange={setConfirmation}
+                onBlur={() => setTouched((t) => ({ ...t, confirmation: true }))}
+                autoComplete="new-password"
+                placeholder="The same password once more"
+                error={errors.confirmation}
+              />
+            </>
+          ) : null}
+
           <Button type="submit" full busy={busy} disabled={!canSubmit}>
-            {mode === "create" ? "Create my shop" : "Sign in"}
+            {creating ? "Create my account" : "Sign in"}
           </Button>
         </form>
+
+        {failure ? (
+          <p className={styles.failure} role="alert">
+            <strong>{failure.message}</strong>
+            {failure.hint ? <span>{failure.hint}</span> : null}
+            {failure.reference ? <span className={styles.reference}>Reference {failure.reference}</span> : null}
+          </p>
+        ) : null}
+
+        <p className={styles.alternate}>
+          {creating ? "Already have an account? " : "New here? "}
+          <button
+            type="button"
+            className={styles.alternateLink}
+            onClick={() => {
+              setMode(creating ? "signin" : "create");
+              setFailure(null);
+            }}
+          >
+            {creating ? "Sign in" : "Create one"}
+          </button>
+        </p>
 
         <Link className={styles.back} href="/">
           Back to the front page
         </Link>
       </div>
-
-      {error ? <Toast message={error} tone="bad" onDismiss={() => setError(null)} /> : null}
     </main>
   );
 }

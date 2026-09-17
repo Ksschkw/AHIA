@@ -79,3 +79,54 @@
 .back:hover {
   color: var(--ink-2);
 }
+
+.intro {
+  font-size: 13px;
+  color: var(--ink-2);
+  text-align: center;
+  margin: -4px auto 0;
+  max-width: 38ch;
+}
+
+.nameRow {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.failure {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid #eec3c1;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.failure strong {
+  font-weight: 650;
+}
+
+.reference {
+  font-size: 11px;
+  opacity: 0.75;
+  letter-spacing: 0.02em;
+}
+
+.alternate {
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.alternateLink {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--leaf);
+  font-weight: 650;
+  text-decoration: underline;
+}

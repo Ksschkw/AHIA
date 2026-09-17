@@ -140,7 +140,7 @@ async function main() {
   try {
     await step(page, "1-landing", async () => {
       await page.goto(APP_URL, { waitUntil: "networkidle2" });
-      await waitForText(page, "Keep your shop in your pocket");
+      await waitForText(page, "in your pocket");
       await shot(page, "web-1-landing");
       await clickByText(page, "Open your shop");
       await waitForText(page, "Create account");
@@ -150,10 +150,12 @@ async function main() {
       await clickByText(page, "Create account");
       await page.waitForSelector("#first_name", { timeout: STEP_TIMEOUT_MS });
       await page.type("#first_name", "Ada");
+      await page.type("#last_name", "Obi");
       await page.type("#identifier", email);
       await page.type("#password", password);
+      await page.type("#confirm_password", password);
       await shot(page, "web-2-create-account");
-      await clickByText(page, "Create my shop");
+      await clickByText(page, "Create my account");
     });
 
     await step(page, "3-name-business", async () => {

@@ -9,7 +9,7 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import styles from "./ui.module.css";
 
@@ -54,6 +54,12 @@ export function Field({
   placeholder,
   autoFocus,
   inputMode,
+  hint,
+  error,
+  autoComplete,
+  optional,
+  onBlur,
+  children,
 }: {
   label: string;
   id: string;
@@ -62,22 +68,141 @@ export function Field({
   type?: string;
   placeholder?: string;
   autoFocus?: boolean;
-  inputMode?: "text" | "decimal" | "numeric" | "email";
+  inputMode?: "text" | "decimal" | "numeric" | "email" | "tel";
+  onBlur?: () => void;
+  /** What the field expects, said before it is filled in rather than after. */
+  hint?: string;
+  /** What is wrong with what is in it, said once and in the second person. */
+  error?: string;
+  autoComplete?: string;
+  optional?: boolean;
+  children?: ReactNode;
 }) {
   return (
-    <label className={styles.field} htmlFor={id}>
-      <span className={styles.fieldLabel}>{label}</span>
-      <input
-        id={id}
-        className={styles.input}
-        value={value}
-        type={type}
-        inputMode={inputMode}
-        placeholder={placeholder}
-        autoFocus={autoFocus}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </label>
+    <div className={styles.field}>
+      <label className={styles.fieldLabel} htmlFor={id}>
+        {label}
+        {optional ? <span className={styles.fieldOptional}>optional</span> : null}
+      </label>
+      <div className={`${styles.inputWrap} ${error ? styles.inputWrapError : ""}`}>
+        <input
+          id={id}
+          className={styles.input}
+          value={value}
+          type={type}
+          inputMode={inputMode}
+          placeholder={placeholder}
+          autoFocus={autoFocus}
+          autoComplete={autoComplete}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
+          onChange={(event) => onChange(event.target.value)}
+          onBlur={onBlur}
+        />
+        {children}
+      </div>
+      {error ? (
+        <span className={styles.fieldError} id={`${id}-error`}>
+          {error}
+        </span>
+      ) : hint ? (
+        <span className={styles.fieldHint} id={`${id}-hint`}>
+          {hint}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * A password field with a way to look at it.
+ *
+ * Typing a password blind on a phone keyboard is how people end up locked out of their own account,
+ * so the reveal is next to the field rather than hidden in a settings page somewhere.
+ */
+export function PasswordField({
+  label,
+  id,
+  value,
+  onChange,
+  hint,
+  error,
+  autoComplete,
+  onBlur,
+  placeholder,
+}: {
+  label: string;
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  hint?: string;
+  error?: string;
+  autoComplete?: string;
+  onBlur?: () => void;
+  placeholder?: string;
+}) {
+  const [revealed, setRevealed] = useState(false);
+  return (
+    <Field
+      label={label}
+      id={id}
+      value={value}
+      onChange={onChange}
+      type={revealed ? "text" : "password"}
+      hint={hint}
+      error={error}
+      autoComplete={autoComplete}
+      onBlur={onBlur}
+      placeholder={placeholder}
+    >
+      <button
+        type="button"
+        className={styles.reveal}
+        onClick={() => setRevealed((current) => !current)}
+        aria-label={revealed ? "Hide the password" : "Show the password"}
+        title={revealed ? "Hide the password" : "Show the password"}
+      >
+        {revealed ? "Hide" : "Show"}
+      </button>
+    </Field>
+  );
+}
+
+/** How strong the password is, as a meter and a word - not as a scolding. */
+export function StrengthMeter({ score, label }: { score: number; label: string }) {
+  return (
+    <div className={styles.strength} aria-live="polite">
+      <span className={styles.strengthTrack}>
+        {[1, 2, 3, 4].map((step) => (
+          <span
+            key={step}
+            className={`${styles.strengthStep} ${step <= score ? styles[`strength${score}`] : ""}`}
+          />
+        ))}
+      </span>
+      <span className={styles.strengthLabel}>{label}</span>
+    </div>
+  );
+}
+
+/** The requirements, ticked as they are met. */
+export function CheckList({ checks }: { checks: { label: string; satisfied: boolean }[] }) {
+  return (
+    <ul className={styles.checks}>
+      {checks.map((check) => (
+        <li key={check.label} className={check.satisfied ? styles.checkDone : styles.check}>
+          <span aria-hidden className={styles.checkMark}>
+            {check.satisfied ? (
+              // Drawn rather than typed: a tick is a shape, and the source of this project is ASCII.
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1.5 5.2 4 7.5l4.5-5" />
+              </svg>
+            ) : null}
+          </span>
+          {check.label}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -189,10 +314,14 @@ export function Sheet({
 
 export function Toast({
   message,
+  hint,
+  reference,
   tone,
   onDismiss,
 }: {
   message: string;
+  hint?: string;
+  reference?: string;
   tone: "good" | "bad";
   onDismiss: () => void;
 }) {
@@ -209,7 +338,11 @@ export function Toast({
 
   return (
     <div className={`${styles.toast} ${tone === "good" ? styles.toastGood : styles.toastBad}`}>
-      <span>{message}</span>
+      <span className={styles.toastText}>
+        <span className={styles.toastMessage}>{message}</span>
+        {hint ? <span className={styles.toastHint}>{hint}</span> : null}
+        {reference ? <span className={styles.toastReference}>Reference {reference}</span> : null}
+      </span>
       <button className={styles.toastClose} onClick={onDismiss} aria-label="Dismiss">
         Dismiss
       </button>
