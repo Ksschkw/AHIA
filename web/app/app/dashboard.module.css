@@ -27,7 +27,23 @@
     justify-content: space-between;
   }
 
-  .businessPicker {
+  .addBusiness {
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.addBusiness:hover {
+  border-color: var(--leaf);
+  color: var(--leaf);
+}
+
+.businessPicker {
     flex: 1;
     max-width: none;
   }
@@ -74,6 +90,22 @@
 .who:hover {
   color: var(--leaf);
   border-bottom-color: var(--leaf);
+}
+
+.addBusiness {
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.addBusiness:hover {
+  border-color: var(--leaf);
+  color: var(--leaf);
 }
 
 .businessPicker {

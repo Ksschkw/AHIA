@@ -195,6 +195,16 @@ export default function Dashboard() {
       if (typeof window !== "undefined") {
         window.localStorage.setItem(STORAGE_KEY, tenantId);
       }
+      // Everything that belongs to the business being left is dropped before anything about the new
+      // one is fetched. Showing the last shop's shelf under the new shop's name is worse than showing
+      // nothing: it is exactly the kind of number a trader would act on.
+      setProducts([]);
+      setStock([]);
+      setToday(null);
+      setRecentSales([]);
+      setRunningOut([]);
+      setPhotos({});
+      setStorefront(null);
       // The detail first: it carries the currency, so every amount on the page is rendered in the
       // business's own money rather than in a default that happens to be right for most shops.
       setBusinessDetail(await getBusiness(tenantId));
@@ -280,6 +290,10 @@ export default function Dashboard() {
   const runExpense = useCallback((action: () => Promise<void>) => run(action, "expense"), [run]);
   const runPhoto = useCallback((action: () => Promise<void>) => run(action, "photo"), [run]);
   const runShop = useCallback((action: () => Promise<void>) => run(action, "shop"), [run]);
+  const runBusiness = useCallback(
+    (action: () => Promise<void>) => run(action, "business"),
+    [run],
+  );
 
   const levelFor = (productId: string) => stock.find((entry) => entry.product_id === productId);
 
@@ -324,6 +338,16 @@ export default function Dashboard() {
           </Brand>
         </div>
         <div className={styles.account}>
+          {businesses.length > 0 ? (
+            <button
+              className={styles.addBusiness}
+              aria-label="Add another business"
+              title="Add another business"
+              onClick={() => setSheet("business")}
+            >
+              + New
+            </button>
+          ) : null}
           <select
             className={styles.businessPicker}
             value={businessId ?? ""}
@@ -781,11 +805,12 @@ export default function Dashboard() {
 
       <BusinessSheet
         open={sheet === "business" || needsBusiness}
-        busy={busy}
+        busy={busyAction === "business"}
+        firstOne={businesses.length === 0}
         closable={businesses.length > 0}
         onClose={() => setSheet(null)}
         onSubmit={(name) =>
-          run(async () => {
+          runBusiness(async () => {
             try {
               const created = await createBusiness({ name });
               setSheet(null);
@@ -1164,6 +1189,15 @@ function ShopSheet({
   const [description, setDescription] = useState(storefront?.description ?? "");
   const [contactPhone, setContactPhone] = useState(storefront?.contact_phone ?? "");
 
+  // Redrawn from what the shop says now, so reopening it never shows a stale edit.
+  useEffect(() => {
+    if (open) {
+      setHeadline(storefront?.headline ?? "");
+      setDescription(storefront?.description ?? "");
+      setContactPhone(storefront?.contact_phone ?? "");
+    }
+  }, [open, storefront]);
+
   return (
     <Sheet open={open} title="Your shop page" onClose={onClose}>
       <p className={styles.hint}>
@@ -1302,21 +1336,37 @@ function BusinessSheet({
   open,
   busy,
   closable,
+  firstOne,
   onClose,
   onSubmit,
 }: {
   open: boolean;
   busy: boolean;
   closable: boolean;
+  firstOne: boolean;
   onClose: () => void;
   onSubmit: (name: string) => void;
 }) {
   const [name, setName] = useState("");
 
+  // Empty every time it opens: the field is for the business about to be created, not the last one.
+  useEffect(() => {
+    if (open) {
+      setName("");
+    }
+  }, [open]);
+
   return (
-    <Sheet open={open} title="Name your business" onClose={closable ? onClose : () => {}}>
+    <Sheet
+      open={open}
+      title={firstOne ? "Name your business" : "Another business"}
+      onClose={closable ? onClose : () => {}}
+    >
       <p className={styles.hint}>
-        This is the name your customers see. You can add more businesses later.
+        This is the name your customers see.{" "}
+        {firstOne
+          ? "You can add more businesses later, and keep them apart."
+          : "It gets its own products, stock, sales and public shop address."}
       </p>
       <Field
         label="Business name"
