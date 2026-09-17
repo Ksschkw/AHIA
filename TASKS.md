@@ -1893,3 +1893,23 @@ These apply continuously and are re-verified at each milestone boundary.
 - `web/scripts/team-check.mjs` proves the whole flow: invite a phone number, take the link into a
   browser with no cookies, sign up as the invited person, land inside with the invited role, promote
   them, remove them.
+
+## M19 - progress log (gate repair after CI went red)
+
+- The GitHub job was red and the report was right about the two classes of failure, and wrong about why
+  one of them was failing. Recorded here because the diagnosis matters more than the fix.
+- **The append-only rule existed only in the migrations.** Tests and CI build the schema from the
+  SQLAlchemy metadata (`create_all`), never by running the migration chain, so `inventory_movements`
+  and `ledger_entries` had no trigger where every change is tried first and did have one in production.
+  That is exactly backwards. The guard is now declared where the table is declared
+  (`crud/append_only_guard.py`, called from the three records that need it), so every path that creates
+  a table also creates its protection. It had to be one statement per DDL object: the driver refuses
+  more than one command in a prepared statement, so a single block of SQL failed the moment a table was
+  created.
+- **The ten "unauthenticated" tests were authenticated.** Each one signed somebody in, then dropped the
+  `Authorization` header and expected `401` - but the session now travels in a cookie, and a shared test
+  client keeps it. The endpoints were right; the tests were describing a caller who no longer existed.
+  They now empty the cookie jar, which is what "no credentials at all" actually means.
+- Reproduced by building a scratch database the way CI does (`ahia_ci`, metadata only) rather than by
+  trusting the local one, which had a schema built by migrations and therefore hid both defects. The
+  full suite passes on that scratch database: 2125 passed, 0 failed.

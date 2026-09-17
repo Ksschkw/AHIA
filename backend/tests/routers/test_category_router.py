@@ -405,6 +405,9 @@ async def test_a_salesperson_can_read_but_not_create(database: Database) -> None
 async def test_an_unauthenticated_request_is_refused(database: Database) -> None:
     async with running_application() as (client, _application):
         _owner, tenant = await owner_with_business(client)
+        # No credentials at all: the setup above signed somebody in, and a browser would send that
+        # session cookie. An unauthenticated caller is one with neither a header nor a cookie.
+        client.cookies.clear()
         response = await client.get(categories_path(tenant["id"]))
 
     assert response.status_code == 401

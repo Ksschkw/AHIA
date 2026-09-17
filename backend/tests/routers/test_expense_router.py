@@ -515,6 +515,12 @@ async def test_an_unauthenticated_request_is_refused(database: Database) -> None
         owner, tenant = await owner_with_business(client)
         await record_expense(client, owner, tenant)
 
+        # No credentials at all: the setup above signed somebody in, and a browser would send that
+
+        # session cookie. An unauthenticated caller is one with neither a header nor a cookie.
+
+        client.cookies.clear()
+
         response = await client.get(expenses_path(tenant["id"]))
 
     assert response.status_code == 401

@@ -46,6 +46,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ahia.core.database import Base
+from ahia.crud.append_only_guard import declarative_table, guard_append_only
 from ahia.models.entities.ledger_entry_model import (
     MAXIMUM_REFERENCE_TYPE_LENGTH,
     LedgerDirection,
@@ -93,6 +94,12 @@ class LedgerEntryRecord(Base):
         # Revenue and expenses for a period.
         Index("ix_ledger_entries_tenant_type_occurred", "tenant_id", "entry_type", "occurred_at"),
     )
+
+
+# The table's own protection, declared where the table is defined. A schema built from
+# this metadata - which is what the test and CI databases are built from - gets the trigger
+# with the table, so the rule is enforced where the work happens and not only in production.
+guard_append_only(declarative_table(LedgerEntryRecord))
 
 
 def to_entity(record: LedgerEntryRecord) -> LedgerEntryModel:

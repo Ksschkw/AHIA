@@ -406,6 +406,12 @@ async def test_an_unauthenticated_push_is_refused(database: Database) -> None:
     async with running_application(offline_sync=True) as (client, _application):
         _owner, tenant = await owner_with_business(client)
 
+        # No credentials at all: the setup above signed somebody in, and a browser would send that
+
+        # session cookie. An unauthenticated caller is one with neither a header nor a cookie.
+
+        client.cookies.clear()
+
         response = await client.post(
             sync_path(tenant["id"], "push"),
             json={"operations": [sale_operation(str(uuid4()))]},
