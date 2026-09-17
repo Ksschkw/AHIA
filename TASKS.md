@@ -1735,12 +1735,30 @@ security event in one transaction: the first without the second would be theatre
 
 ---
 
-## M21 - Waybill requests: the customer's list, and the price book
+## M21 - Lists, wholesale and dispatch (first written as "waybill requests")
 
 Goal: replace the paper list and the market run that follows it. A customer builds a list on a link,
 without an account, and it lands with the trader tied to that customer. He sources it - some from his
-shelf, some bought in the market that morning - packs it, ticks it off, and waybills it. The app does
-the arithmetic and records what happened; it never argues with him.
+shelf, some bought in the market that morning - packs it, ticks it off, and either hands it over or
+sends it. The app does the arithmetic and records what happened; it never argues with him.
+
+**The name was wrong and is corrected here.** The product owner's own words: people also come
+physically to buy in bulk, which is the same wholesale trade without any waybill at all, so a screen
+that says "make a waybill" describes one ending of the flow as if it were the whole of it. The list is
+the thing a customer makes; a waybill is what happens to the goods afterwards, and only when they
+travel.
+
+### M21.0 The words, because they are the design
+
+- **A list** is what a customer builds: headings, items, counts, notes, maybe a picture. It is a wish,
+  not a sale, and it becomes money only when the trader confirms it.
+- **A price tier** is retail or wholesale. It is **not** the channel: retail is somebody who comes to
+  the shop direct, and wholesale is bulk - whether they walk in and carry it away or send a list and
+  have it waybilled. The same person can be both on different days.
+- **Dispatch** is how the goods leave: picked up at the shop, or sent by transporter. A waybill is the
+  record of a dispatched one - transporter, phone, waybill number, cost - and only dispatched goods
+  have a tracking link.
+- The customer-facing entry point is therefore named after the list, not the waybill.
 
 This milestone exists because the product owner described the workflow he grew up inside, and it is the
 first feature that sounds like the trade rather than like software. It is written down in full because
@@ -1833,6 +1851,12 @@ every detail here is a decision, not a preference.
 - [ ] M21.3.7 **Prices are per piece by default.** A pack price is an override, and a line price is an
       override of that. Counting happens in whichever unit the trader and the customer are speaking -
       "20 pcs" - while the price underneath is a per-piece price unless somebody has said otherwise.
+- [ ] M21.3.9 **The price tier is chosen, not inferred, and it is switchable at any moment.** In the
+      shop, a walk-in sale defaults to retail and the trader switches to wholesale when the buyer is
+      buying bulk - including the buyer standing in front of him who is doing the same trade as the one
+      who sent a list. On a request, the tier starts from what that customer usually gets and he
+      overrides it. The tier is a property of this trade, not of the customer's record and not of the
+      channel it arrived through.
 - [ ] M21.3.8 **A price is a value with a date, and history is never rewritten.** The price used on a
       confirmed request is **copied onto its lines**, not looked up when somebody reads the waybill
       again: when he raises the price of 21D next month, last week's waybill must still show what was
@@ -1840,9 +1864,10 @@ every detail here is a decision, not a preference.
 
 ### M21.4 The waybill itself
 
-- [ ] M21.4.1 Waybill details captured at handover: transporter, phone, waybill number, cost. The
-      customer gets a tracking link - the Tracking module in the specification starts life as these
-      four fields.
+- [ ] M21.4.1 **Dispatch, chosen at handover**: picked up at the shop, or sent. For a dispatched one,
+      the transporter, their phone, the waybill number and its cost, and the customer gets a tracking
+      link - the Tracking module in the specification starts life as these four fields. A bulk buyer who
+      carries it away needs none of them, and is not asked.
 - [ ] M21.4.2 The request becomes money only when he confirms it: no inventory movement, no ledger
       entry and no receipt until then. A list is a wish, not a sale.
 - [ ] M21.4.3 Repeat business in one tap: the last order and the last prices for that customer,
@@ -1875,6 +1900,12 @@ every detail here is a decision, not a preference.
 
 ### M21 - decisions from the product owner
 
+- **Retail is somebody who comes to the shop direct. Wholesale is bulk** - and bulk arrives two ways,
+  physically or as a list, and they are the same trade at the same prices. The price tier is therefore
+  a choice on the trade, not a consequence of how the order reached him.
+- **A waybill is not the name of the flow.** Bulk buyers who carry their goods away never see one, so
+  the customer-facing entry is named after the list it builds, and the waybill fields belong to
+  dispatch.
 - Prices are **per piece**, with overrides for particular models inside a grade: a whole grade on one
   wholesale price - "21D is 350" - and then Hot 8 and Camon 21 at 370, Camon 30 at 400. The grid above is
   that sentence, and it is the shape of the price book rather than an example of it.
