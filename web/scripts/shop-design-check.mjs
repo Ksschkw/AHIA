@@ -141,6 +141,67 @@ await step("a customer opens it on a phone and a desk", async () => {
         throw new Error(`the page tells a customer about "${word}"`);
       }
     }
+    // Then the page a trader actually sends: the product itself.
+    const productLink = await page.evaluate(() => {
+      const link = document.querySelector("a[href*='/product/']");
+      return link?.getAttribute("href") ?? "";
+    });
+    if (!productLink) throw new Error("the catalogue has no product to open");
+
+    const productStarted = Date.now();
+    await page.goto(`${APP_URL}${productLink}`, { waitUntil: "domcontentloaded" });
+    // Wait for something only this page has. An `h1` alone was satisfied by the *previous* page's
+    // heading before React had replaced it, so the screenshot caught the skeleton and called it the
+    // design - the same mistake as last time, one level down.
+    await page.waitForFunction(
+      () => document.querySelector('a[href*="wa.me"]') !== null && document.body.innerText.includes("Sold by"),
+      { timeout: 20000 },
+    );
+    const productElapsed = Date.now() - productStarted;
+    await page.screenshot({ path: resolve(OUTPUT, `shop-product-${label}.png`) });
+
+    const productFacts = await page.evaluate(() => {
+      // A photograph, or an honest frame that says one is available on request. What must never
+      // happen is a void where the picture belongs, which reads as a page that failed to load.
+      const image = document.querySelector("article img");
+      const honestEmpty = document.body.innerText.includes("Ask us for a photograph");
+      const heading = document.querySelector("h1");
+      const text = document.body.innerText;
+      return {
+        hasPhoto: Boolean(image) || honestEmpty,
+        name: heading?.textContent ?? "",
+        price: /\u20a6|\$|Price on request/.test(text),
+        whatsapp: Boolean(document.querySelector('a[href*="wa.me"]')),
+        // The question should arrive with the product already named, so the customer only adds what is
+        // particular to them and the trader knows what is being asked about.
+        messageNamesProduct: decodeURIComponent(
+          document.querySelector('a[href*="wa.me"]')?.getAttribute("href") ?? "",
+        ).includes(heading?.textContent ?? "###"),
+        overflow: document.documentElement.scrollWidth > window.innerWidth,
+        forbidden: ["sourced", "availability", "out of stock", "null", "undefined"].filter((word) =>
+          text.toLowerCase().includes(word),
+        ),
+      };
+    });
+
+    console.log(
+      `      ${label} product: ${productElapsed}ms, photo=${productFacts.hasPhoto}, ` +
+        `price=${productFacts.price}, whatsapp=${productFacts.whatsapp}, ` +
+        `namesProduct=${productFacts.messageNamesProduct}, overflow=${productFacts.overflow}`,
+    );
+    if (!productFacts.hasPhoto) {
+      throw new Error("the product page has neither a photograph nor a frame that says so");
+    }
+    if (!productFacts.price) throw new Error("the price is missing");
+    if (!productFacts.whatsapp) throw new Error("no way to ask about the product");
+    if (!productFacts.messageNamesProduct) {
+      throw new Error("the WhatsApp message does not name the product");
+    }
+    if (productFacts.overflow) throw new Error("the product page is wider than the phone");
+    if (productFacts.forbidden.length) {
+      throw new Error(`the product page shows a customer: ${productFacts.forbidden.join(", ")}`);
+    }
+
     await context.close();
   }
 });

@@ -2513,8 +2513,12 @@ did not know. He also asked the question that matters: **what exactly is the int
         with the message already written - the number as a second button that dials it, the promise
         stated plainly ("if you do not see it, ask for it and we will get it"), and a closing invitation
         for wholesale. The **product page** still needs the same pass.
-  - [ ] **M24.1.4b The product page** to the same standard: photograph first, price unmistakable, one
-        way to ask, and its own share card.
+  - [x] **M24.1.4b The product page** to the same standard: the photograph leads in a fixed frame, the
+        price is the second thing read, the question arrives pre-written with the product named and its
+        price in it, the shop is named and linked, and its share card carries the picture and the price.
+        A product with no photograph yet gets a **short band that says "ask us for a photograph of this
+        one"** rather than a large square of nothing - a void where a picture belongs reads as a page
+        that failed to load.
   - [x] **M24.1.6 The copy audit**: no availability, no "sourced", nothing from our side of the glass -
         and the browser check fails if any of those words reach a customer.
   - [x] **M24.1.5 The share card carries a photograph**, because a link with an image is a link people
