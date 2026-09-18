@@ -17,6 +17,8 @@ on:
 
 permissions:
   contents: read
+  # Read as well as write: the migration runs from the image this workflow pulls back down.
+  packages: read
 
 jobs:
   deploy:
@@ -29,14 +31,21 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v4
 
+      - name: Sign in to the registry
+        if: vars.NORTHFLANK_SERVICE_ID != ''
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Check the deployment is configured
         id: configured
         env:
           SERVICE_ID: ${{ vars.NORTHFLANK_SERVICE_ID }}
-          JOB_ID: ${{ vars.NORTHFLANK_JOB_ID }}
           PROJECT_ID: ${{ vars.NORTHFLANK_PROJECT_ID }}
         run: |
-          if [[ -z "${SERVICE_ID}" || -z "${JOB_ID}" || -z "${PROJECT_ID}" ]]; then
+          if [[ -z "${SERVICE_ID}" || -z "${PROJECT_ID}" ]]; then
             {
               echo "### Deployment is not configured yet"
               echo ""
@@ -46,7 +55,6 @@ jobs:
               echo 'gh secret set NORTHFLANK_API_TOKEN --body "<token>"'
               echo 'gh variable set NORTHFLANK_PROJECT_ID --body "<project id>"'
               echo 'gh variable set NORTHFLANK_SERVICE_ID --body "<service id>"'
-              echo 'gh variable set NORTHFLANK_JOB_ID --body "<job id>"'
               echo '```'
               echo ""
               echo "See docs/DEPLOYMENT.md section 3."
@@ -64,39 +72,27 @@ jobs:
           echo "tag=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
           echo "ref=ghcr.io/${OWNER}/ahia-backend:sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
 
-      - name: Run the migration job and wait for it
-        id: migrate
+      - name: Create the tables, using the image that was just built
         if: steps.configured.outputs.ready == 'true'
         env:
-          API_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
-          PROJECT_ID: ${{ vars.NORTHFLANK_PROJECT_ID }}
-          JOB_ID: ${{ vars.NORTHFLANK_JOB_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
         run: |
           set -euo pipefail
-          BASE="https://api.northflank.com/v1/projects/${PROJECT_ID}/jobs/${JOB_ID}"
-
-          echo "Starting the migration job"
-          curl --fail-with-body --silent --show-error \
-            -X POST "${BASE}/runs" \
-            -H "Authorization: Bearer ${API_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d '{}' > /dev/null
-
-          # Poll rather than sleep a fixed amount: a migration that takes longer than the guess would
-          # take the service down with it, and one that finishes early would waste the wait.
-          for attempt in $(seq 1 60); do
-            STATUS="$(curl --fail-with-body --silent --show-error \
-              "${BASE}/runs?limit=1" \
-              -H "Authorization: Bearer ${API_TOKEN}" \
-              | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["runs"][0]["status"])')"
-            echo "attempt ${attempt}: ${STATUS}"
-            case "${STATUS}" in
-              completed) echo "migration finished"; exit 0 ;;
-              failed|cancelled) echo "migration ${STATUS}"; exit 1 ;;
-            esac
-            sleep 10
-          done
-          echo "migration did not finish in ten minutes"; exit 1
+          # The migration runs from the *same image* the service is about to run, so the code that
+          # changes the schema is the code that was tested with it. No Northflank job exists, and none
+          # is needed: the ordering guarantee comes from this workflow's own step order, which is
+          # easier to read than a chain of platform triggers.
+          #
+          # It runs before the service is re-pointed, and a failure stops the deploy here - leaving the
+          # previous version serving, which is the whole point of migrating first.
+          docker run --rm \
+            -e "DATABASE_URL=${DATABASE_URL}" \
+            -e "DATABASE_REQUIRE_SSL=true" \
+            -e "JWT_SECRET=${JWT_SECRET}" \
+            -e "APP_ENV=production" \
+            "${{ steps.image.outputs.ref }}" \
+            alembic upgrade head
 
       - name: Point the service at this commit's image
         if: steps.configured.outputs.ready == 'true' && steps.migrate.outcome == 'success'
@@ -116,5 +112,5 @@ jobs:
             echo "### Deployed"
             echo ""
             echo "- image: \`${{ steps.image.outputs.ref }}\`"
-            echo "- migration: succeeded before the service was re-pointed"
+            echo "- migration: ran from that same image, before the service was re-pointed"
           } >> "$GITHUB_STEP_SUMMARY"
