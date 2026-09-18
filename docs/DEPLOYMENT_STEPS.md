@@ -281,3 +281,66 @@ cookie and the database in one go.
   production secret.
 - The Neon password and the Cloudinary secret have both sat in a gitignored file on this machine.
   Rotate both before they guard anything real, then re-run that script.
+
+---
+
+## L. Regions: putting the three pieces in one place
+
+Latency between your own layers is the cheapest thing to fix and the most expensive to ignore. The rule
+is simple: **the API and the database must be on the same side of the Atlantic**, and the web functions
+should be near the API.
+
+### The constraint
+
+| Piece | Can the region change? |
+|---|---|
+| **Northflank** | **No.** The region is bound when the project is created, and a free-tier project cannot be moved. |
+| **Neon** | **No, not in place.** A Neon project's region is fixed at creation; moving means a new project and a data copy. |
+| **Vercel** | **Yes.** `regions` in `vercel.json`, or Project -> Settings -> Functions, then redeploy. |
+
+Northflank is the immovable one, so the other two come to it.
+
+### Moving Neon to the same continent as the API
+
+1. **Create a new Neon project** in the region nearest your Northflank region. For Northflank US-Central,
+   that is **`aws-us-east-2` (Ohio)**; US-East-1 (N. Virginia) is the other sensible choice. Do not choose
+   London unless the API is in Europe.
+2. **Copy the data across.** With both connection strings to hand:
+
+   ```bash
+   # From the old project (the psql-style URL, not the asyncpg one)
+   pg_dump "postgresql://...old..." --no-owner --no-privileges --format=custom --file=ahia.dump
+
+   # Into the new one
+   pg_restore --no-owner --no-privileges --clean --if-exists \
+     --dbname "postgresql://...new..." ahia.dump
+   ```
+
+3. **Point everything at the new database.** Two places, and forgetting one is the usual mistake:
+   - GitHub secret: put the new URL in `backend/.env.deploy`, then
+     `bash backend/scripts/configure_deployment.sh`
+   - Northflank: update `DATABASE_URL` in the service's environment and let it redeploy.
+4. **Confirm before deleting anything:**
+
+   ```bash
+   curl -s https://<your-northflank-domain>/health
+   ```
+
+   Then sign in on the deployed web app and open the dashboard. Only then delete the old Neon project.
+
+**The new URL must be the asyncpg one and must not carry `?sslmode=`** - the driver rejects that
+parameter, and TLS is asked for with `DATABASE_REQUIRE_SSL=true`.
+
+### Vercel
+
+`web/vercel.json` pins the functions to a region. `cle1` (Cleveland) is the closest Vercel region to a
+US-Central API; `iad1` (Washington) is the safe default if `cle1` is unavailable on your plan. Static
+assets are already served from Vercel's global network, so this setting only moves the server-rendered
+pages and dynamic routes.
+
+### What this does and does not fix
+
+It removes every transatlantic hop **between your own layers** - which for a dashboard that makes seven
+queries per load is the largest single win available. It does not change the distance between the trader
+in Lagos and the server, which is the reason a European region would be better for the users themselves
+if Northflank ever allowed it.
