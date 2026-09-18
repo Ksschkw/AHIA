@@ -150,6 +150,7 @@ LOG_LEVEL=INFO
 DATABASE_URL=postgresql+asyncpg://...        <- from .env.deploy, WITHOUT ?sslmode=...
 DATABASE_REQUIRE_SSL=true
 JWT_SECRET=<the 64-character value from .env.deploy>
+REFRESH_TOKEN_PEPPER=<the 64-character value from .env.deploy>   <- required, easy to forget
 PHONE_COUNTRY_CODE=+234
 DEFAULT_PHONE_COUNTRY_CODE=+234
 CORS_ALLOWED_ORIGINS=http://localhost:3000   <- replaced with the Vercel URL in step H

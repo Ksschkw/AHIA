@@ -85,6 +85,9 @@ set_secret() {
 
 set_secret DATABASE_URL "$(require_value DATABASE_URL)"
 set_secret JWT_SECRET "$(require_value JWT_SECRET)"
+# The pepper signs refresh tokens. Required in every environment except development, and the one
+# value that is easy to leave out because nothing needs it until somebody signs in twice.
+set_secret REFRESH_TOKEN_PEPPER "$(require_value REFRESH_TOKEN_PEPPER)"
 set_secret CLOUDINARY_CLOUD_NAME "$(require_value CLOUDINARY_CLOUD_NAME)"
 set_secret CLOUDINARY_API_KEY "$(require_value CLOUDINARY_API_KEY)"
 set_secret CLOUDINARY_API_SECRET "$(require_value CLOUDINARY_API_SECRET)"

@@ -96,10 +96,16 @@ jobs:
           fi
 
       - name: Create the tables, using the image that was just built
+        # The id matters: the pinning step below waits for `steps.migrate.outcome`, and a step with no
+        # id makes that condition silently false - so the migration could succeed and the service never
+        # be re-pointed, which looks exactly like the pipeline doing nothing.
+        id: migrate
         if: steps.configured.outputs.ready == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          REFRESH_TOKEN_PEPPER: ${{ secrets.REFRESH_TOKEN_PEPPER }}
+          STORAGE_PROVIDER: cloudinary
           CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
           CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
           CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
@@ -119,7 +125,9 @@ jobs:
             -e "DATABASE_URL=${DATABASE_URL}" \
             -e "DATABASE_REQUIRE_SSL=true" \
             -e "JWT_SECRET=${JWT_SECRET}" \
+            -e "REFRESH_TOKEN_PEPPER=${REFRESH_TOKEN_PEPPER}" \
             -e "APP_ENV=production" \
+            -e "STORAGE_PROVIDER=${STORAGE_PROVIDER}" \
             -e "CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}" \
             -e "CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}" \
             -e "CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}" \
