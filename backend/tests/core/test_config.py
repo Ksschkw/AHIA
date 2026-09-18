@@ -428,3 +428,24 @@ def test_no_media_flag_replaces_provider_configuration() -> None:
 
     assert settings.storage_provider is StorageProviderName.CLOUDINARY
     assert not hasattr(settings, "feature_use_cloudinary")
+
+
+# ---------------------------------------------------------------------------
+# The country code, which five services used to work around locally
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_the_country_code_carries_its_plus() -> None:
+    """The canonicaliser requires a plus, so the setting must provide one.
+
+    It did not, and every service except the newest prefixed it locally - which meant the bug lived
+    in
+    the one place nobody was working around. `08029876543` became `2348029876543`: a number with no
+    way
+    to tell a country code from a national prefix, and a customer who could never be matched to it.
+    """
+    for written in ("234", "+234", " 234 "):
+        assert (
+            build_settings(default_phone_country_code=written).default_phone_country_code == "+234"
+        )

@@ -452,11 +452,18 @@ class Settings(BaseSettings):
     @field_validator("default_phone_country_code")
     @classmethod
     def _validate_country_code(cls, value: str) -> str:
-        """Reject anything that is not a plausible calling code."""
-        digits = value.lstrip("+")
-        if not digits.isdigit() or not 1 <= len(digits) <= 3:
-            raise ValueError("default phone country code must be 1 to 3 digits")
-        return digits
+        """Return the calling code in its one canonical form, with the plus.
+
+        **This used to strip the plus**, and five services worked around that locally with
+        `f"+{code.lstrip('+')}"` - except the newest one, which passed the setting straight to the
+        phone canonicaliser. That turned `08029876543` into `2348029876543`: a number with no way to
+        tell a country code from a national prefix, stored against a customer who could never be
+        matched to their own history. The workaround was in five places and the bug was in one.
+        """
+        digits = value.strip().lstrip("+")
+        if not digits.isdigit() or not 1 <= len(digits) <= 4:
+            raise ValueError("default phone country code must be 1 to 4 digits")
+        return f"+{digits}"
 
     @field_validator("jwt_algorithm")
     @classmethod

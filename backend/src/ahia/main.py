@@ -62,6 +62,7 @@ from ahia.routers import (
     product_image_router,
     product_router,
     report_router,
+    request_router,
     sale_router,
     share_link_router,
     storefront_router,
@@ -286,6 +287,8 @@ def register_routers(application: FastAPI, settings: Settings) -> None:
     # is printed on a poster and held by customers, and it must keep working while the versioned
     # contract evolves.
     application.include_router(storefront_router.public_router)
+    # A customer's list arrives at the shop's own address too: it is the same link they were given.
+    application.include_router(request_router.public_router)
     application.include_router(share_link_router.public_router)
 
     # Business routers live under the version prefix so the contract can evolve
@@ -308,6 +311,7 @@ def register_routers(application: FastAPI, settings: Settings) -> None:
         audit_event_router.router,
         sync_router.router,
         storefront_router.router,
+        request_router.router,
         share_link_router.router,
         report_router.router,
         notification_router.router,

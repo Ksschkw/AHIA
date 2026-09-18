@@ -60,6 +60,7 @@ from ahia.services.permission_service import PermissionService
 from ahia.services.product_image_service import ProductImageService
 from ahia.services.product_service import ProductService
 from ahia.services.report_service import ReportService
+from ahia.services.request_service import RequestService
 from ahia.services.sale_service import SalesService
 from ahia.services.share_link_service import ShareLinkService
 from ahia.services.storage_quota_service import StorageQuotaService
@@ -106,6 +107,7 @@ class ApplicationContainer:
     metrics: MetricsRegistry
     sync_change_service: SyncChangeService
     sync_service: SyncService
+    request_service: RequestService
     storefront_service: StorefrontService
     share_link_service: ShareLinkService
     report_service: ReportService
@@ -320,6 +322,12 @@ def build_application_container(
 
     # The public shop reads the catalogue and asks the image service for URLs; it is built after
     # both, and it is told whether publishing is released rather than reading the flag itself.
+    request_service = RequestService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        default_phone_country_code=settings.default_phone_country_code,
+        logger=logger,
+    )
+
     storefront_service = StorefrontService(
         unit_of_work_factory=database.unit_of_work_factory(),
         product_image_service=product_image_service,
@@ -357,6 +365,7 @@ def build_application_container(
         metrics=registry,
         sync_change_service=sync_change_service,
         sync_service=sync_service,
+        request_service=request_service,
         storefront_service=storefront_service,
         share_link_service=share_link_service,
         report_service=report_service,

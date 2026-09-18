@@ -40,12 +40,64 @@ from ahia.core.tenant_context import TenantContext
 from ahia.crud import product_crud, request_crud, request_line_crud, storefront_crud, tenant_crud
 from ahia.models.entities.request_line_model import RequestLineModel
 from ahia.models.entities.request_model import RequestModel
-from ahia.schemas.request_schema import PublicRequestSchema
+from ahia.schemas.money_format import money_text, quantity_text
+from ahia.schemas.request_schema import (
+    PublicRequestSchema,
+    RequestLineResponseSchema,
+    RequestResponseSchema,
+)
 
 _REQUEST_LOGGER_NAME: Final[str] = "ahia.services.request"
 
 #: The longest edge of a list, so one customer cannot fill a database with one request.
 MAXIMUM_LINES_PER_LIST: Final[int] = 200
+
+
+def request_response(
+    request: RequestModel,
+    lines: list[RequestLineModel],
+) -> RequestResponseSchema:
+    """Shape one list and its lines for the trader.
+
+    The total is None while nothing is priced, and the count of unpriced lines travels with it: a
+    figure
+    that quietly leaves out what nobody has priced is worse than no figure at all, and the screen
+    says
+    "to be priced" instead.
+    """
+    unpriced = sum(1 for line in lines if not line.is_priced)
+    priced = [line.line_total for line in lines if line.line_total is not None]
+    return RequestResponseSchema(
+        id=request.id,
+        customer_phone=request.customer_phone,
+        customer_name=request.customer_name,
+        status=request.status,
+        note=request.note,
+        created_at=request.created_at,
+        unpriced_line_count=unpriced,
+        priced_total=money_text(sum(priced, Decimal("0.00"))) if priced else None,
+        lines=[
+            RequestLineResponseSchema(
+                id=line.id,
+                position=line.position,
+                product_id=line.product_id,
+                free_text=line.free_text,
+                note=line.note,
+                quantity=quantity_text(line.quantity),
+                unit=line.unit,
+                pieces_per_pack=line.pieces_per_pack,
+                pieces=quantity_text(line.pieces),
+                customer_price=(
+                    None if line.customer_price is None else money_text(line.customer_price)
+                ),
+                shop_price=None if line.shop_price is None else money_text(line.shop_price),
+                line_total=None if line.line_total is None else money_text(line.line_total),
+                state=line.state,
+                image_key=line.image_key,
+            )
+            for line in lines
+        ],
+    )
 
 
 class RequestService:
@@ -197,6 +249,47 @@ class RequestService:
     # ------------------------------------------------------------------
     # What the trader does
     # ------------------------------------------------------------------
+
+    async def read_request(
+        self,
+        tenant_context: TenantContext,
+        *,
+        request_id: UUID,
+    ) -> RequestResponseSchema:
+        """Return one list with its lines, or refuse as if it did not exist."""
+        tenant_context.require_permission(
+            sales_permissions.SALES_READ,
+            operation="read_request",
+            resource_type="request",
+            resource_id=str(request_id),
+            logger=self._logger,
+        )
+        unit_of_work = self._unit_of_work_factory()
+        async with unit_of_work:
+            session = unit_of_work.session_handle
+            request = await request_crud.require_by_id(
+                session, tenant_id=tenant_context.tenant_id, request_id=request_id
+            )
+            lines = await request_line_crud.list_for_request(
+                session, tenant_id=tenant_context.tenant_id, request_id=request_id
+            )
+        return request_response(request, lines)
+
+    async def as_response(
+        self,
+        tenant_context: TenantContext,
+        *,
+        request: RequestModel,
+    ) -> RequestResponseSchema:
+        """Return one list with its lines, for a caller already allowed to see it."""
+        unit_of_work = self._unit_of_work_factory()
+        async with unit_of_work:
+            lines = await request_line_crud.list_for_request(
+                unit_of_work.session_handle,
+                tenant_id=tenant_context.tenant_id,
+                request_id=request.id,
+            )
+        return request_response(request, lines)
 
     async def list_requests(
         self,
