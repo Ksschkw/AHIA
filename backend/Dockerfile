@@ -58,6 +58,16 @@ WORKDIR /app
 
 COPY --from=builder /opt/venv /opt/venv
 
+# The migration environment travels with the image, on purpose.
+#
+# Without this the container can run the API and nothing else, and "migrate from the image you are about
+# to deploy" becomes impossible: `alembic upgrade head` fails with "No 'script_location' key found in
+# configuration" because there is no alembic.ini and no alembic/ directory to read. The application code
+# comes from the venv, so these files are the only thing missing - and carrying them means the schema is
+# always changed by exactly the code that was built and tested with it.
+COPY --chown=ahia:ahia alembic ./alembic
+COPY --chown=ahia:ahia alembic.ini ./alembic.ini
+
 USER ahia
 
 EXPOSE 8000

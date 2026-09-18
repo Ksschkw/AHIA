@@ -100,6 +100,9 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
         run: |
           set -euo pipefail
           # The migration runs from the *same image* the service is about to run, so the code that
@@ -109,11 +112,17 @@ jobs:
           #
           # It runs before the service is re-pointed, and a failure stops the deploy here - leaving the
           # previous version serving, which is the whole point of migrating first.
+          # Every variable the application's settings need, because the migration imports the same
+          # configuration the API does - a missing one fails here as a validation error that looks
+          # nothing like a database problem.
           docker run --rm \
             -e "DATABASE_URL=${DATABASE_URL}" \
             -e "DATABASE_REQUIRE_SSL=true" \
             -e "JWT_SECRET=${JWT_SECRET}" \
             -e "APP_ENV=production" \
+            -e "CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}" \
+            -e "CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}" \
+            -e "CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}" \
             "${{ steps.image.outputs.ref }}" \
             alembic upgrade head
 
