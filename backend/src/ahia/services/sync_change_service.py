@@ -117,6 +117,10 @@ CHANGE_TYPE_FOR_ACTION: Final[dict[str, ChangeType]] = {
     # offline changes, so no feed row is written; it is classified because this map is the action
     # vocabulary and the guard fails the build for an action nobody classified.
     "export_report": ChangeType.CREATED,
+    # A customer's list. Working a line is an update to the list a device already has; confirming it
+    # creates the sale, which is what a device actually needs to learn about.
+    "request_line_worked": ChangeType.UPDATED,
+    "request_confirmed": ChangeType.CREATED,
 }
 
 #: What a caller must hold to be told about a kind of record. Declared once, so the feed's

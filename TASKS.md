@@ -2604,3 +2604,18 @@ did not know. He also asked the question that matters: **what exactly is the int
   asserted: **that the response is `text/html`**. Every other assertion in that check passed on a JSON
   document, because a JSON document has no overflow, no missing images and no forbidden words. A check
   that does not verify it is looking at the right kind of thing is not a check.
+
+- **The seven-minute build, measured rather than guessed.** The nine gates are seconds each; **six of
+  the seven minutes is the test suite** - 2,125 tests, integration-heavy, each creating and clearing
+  schema in a real PostgreSQL. Two things were tried:
+  - **Parallelising does not help here, and it was measured rather than assumed.** `pytest -n 4` took
+    **56 seconds** over the unit and architecture subset where a single worker took **45**, because the
+    workers contend on one database. The bottleneck is the database, not the CPU, and adding a dependency
+    would have bought nothing.
+  - **Failing fast does help.** The unit and architecture tests are 1,280 of the 2,125 and take **45
+    seconds**, so CI now runs those first and reports a broken push in under a minute, then runs the full
+    gate underneath. It changes how quickly a red build says it is red, not what it checks.
+- **And that subset immediately caught a real defect**: `request_line_worked` and `request_confirmed`
+  were recorded by the service and missing from the declared change vocabulary, so the offline feed would
+  have called a confirmed list an update rather than a creation. Declared now - the guard exists precisely
+  because a map like that cannot be trusted to keep itself current.

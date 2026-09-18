@@ -92,6 +92,22 @@ jobs:
       - name: Install the checksum-verified workspace tools
         run: bash backend/scripts/install_workspace_tools.sh
 
+      # Fail fast, before the full gate.
+      #
+      # The nine gates take about seven minutes and **six of them are the test suite**, which is
+      # integration-heavy: 2,125 tests against a real PostgreSQL, each creating and clearing schema. The
+      # unit and architecture tests are 1,280 of those and take **45 seconds**, so a broken push can say
+      # so in under a minute instead of after seven. The full gate still runs underneath - this only
+      # decides how quickly a red build tells you it is red.
+      #
+      # Parallelising was measured and does not help here: `-n 4` took 56 seconds over the same subset
+      # where one worker took 45, because the workers contend on one database. The bottleneck is the
+      # database, not the CPU.
+      - name: Fail fast on the tests that need no database
+        run: |
+          cd backend
+          .venv/bin/pytest -q -m "unit or architecture" --no-header -p no:cacheprovider
+
       - name: Run the build gate
         run: bash backend/scripts/dev_check.sh
 
