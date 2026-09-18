@@ -108,10 +108,19 @@ registry" - are links into the two flows below.
 | Setting | Value |
 |---|---|
 | Name | `ahia-api` |
-| Registry | the `ghcr` integration from D |
-| Image | `ghcr.io/ksschkw/ahia-backend` |
-| Tag | `main` for now; the pipeline pins `sha-...` later |
-| Port | `8000`, protocol **HTTP** |
+| Registry credentials | the `ghcr` integration from D |
+| Image path | `ghcr.io/ksschkw/ahia-backend:main` |
+
+**The tag goes inside the image path, after a colon** - Northflank's form has no separate tag box. Leave
+it off and it means `:latest`, which does not exist in this registry: the workflow publishes `main` and
+`sha-<12 chars>`, so the deploy fails with "manifest unknown" and the cause is invisible unless you know
+that a bare path implies `latest`.
+
+`main` is right for the very first deploy, because the pipeline has not pinned anything yet. Once the
+three ids are set in step G, the workflow re-points the service at `sha-<that commit>` by itself, and
+from then on the service never follows whatever `main` happens to be.
+| Region | the one nearest you, and **the same one for the job below** |
+| Port | `8000`, protocol **HTTP** (in the networking section, further down the form) |
 | Health check path | `/health` |
 | Instances | 1 |
 
