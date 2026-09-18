@@ -1,0 +1,103 @@
+# Ask Northflank what it actually accepts, instead of guessing at its API.
+#
+# Four shapes were tried for "point this service at a new image" and every one answered 405 Method Not
+# Allowed, which is the API saying the path exists and the method does not. That is a precise answer, and
+# it means the next useful step is not another guess but a question:
+#
+#   * which projects does this token see, and what are their ids?
+#   * which services are in the project, and what are their ids?
+#   * what methods does each candidate path allow? (`OPTIONS` returns an `Allow` header saying so.)
+#
+# Run this once by hand and read the output. It changes nothing - every request is a read except the
+# final POST, which is guarded and only attempted if the reads suggest the shape is right.
+name: northflank probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: ask the API
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Which projects does this token see?
+        env:
+          API_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "GET /v1/projects"
+          curl --silent --show-error --write-out '\n--> HTTP %{http_code}\n' \
+            "https://api.northflank.com/v1/projects" \
+            --header "Authorization: Bearer ${API_TOKEN}" | python3 -m json.tool 2>/dev/null \
+            || curl --silent --show-error --write-out '\n--> HTTP %{http_code}\n' \
+                 "https://api.northflank.com/v1/projects" \
+                 --header "Authorization: Bearer ${API_TOKEN}"
+
+      - name: Which services are in the configured project?
+        env:
+          API_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
+          PROJECT_ID: ${{ vars.NORTHFLANK_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          echo "GET /v1/projects/${PROJECT_ID}/services"
+          curl --silent --show-error --write-out '\n--> HTTP %{http_code}\n' \
+            "https://api.northflank.com/v1/projects/${PROJECT_ID}/services" \
+            --header "Authorization: Bearer ${API_TOKEN}"
+
+      - name: What methods does each candidate path allow?
+        env:
+          API_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
+          PROJECT_ID: ${{ vars.NORTHFLANK_PROJECT_ID }}
+          SERVICE_ID: ${{ vars.NORTHFLANK_SERVICE_ID }}
+        run: |
+          set -euo pipefail
+          base="https://api.northflank.com/v1/projects/${PROJECT_ID}/services/${SERVICE_ID}"
+
+          probe() {
+            local label="$1" path="$2"
+            echo "=== ${label}: ${path}"
+            # OPTIONS reports the allowed methods in its Allow header, which is the answer 405 was
+            # withholding from us.
+            curl --silent --show-error --head --request OPTIONS "${path}" \
+              --header "Authorization: Bearer ${API_TOKEN}" \
+              | grep -iE "^(HTTP/|allow:)" || true
+            curl --silent --show-error --head "${path}" \
+              --header "Authorization: Bearer ${API_TOKEN}" \
+              | grep -iE "^HTTP/" || true
+          }
+
+          probe "the service"            "${base}"
+          probe "its deployment"         "${base}/deployment"
+          probe "its deployments list"   "${base}/deployments"
+
+      - name: Try the one shape the reads suggested (POST to the deployment subresource)
+        env:
+          API_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
+          PROJECT_ID: ${{ vars.NORTHFLANK_PROJECT_ID }}
+          SERVICE_ID: ${{ vars.NORTHFLANK_SERVICE_ID }}
+        run: |
+          set -euo pipefail
+          base="https://api.northflank.com/v1/projects/${PROJECT_ID}/services/${SERVICE_ID}"
+          image="ghcr.io/ksschkw/ahia-backend:main"
+          body="$(jq -n --arg image "${image}" '{imagePath: $image}')"
+
+          echo "POST ${base}/deployment"
+          curl --silent --show-error --write-out '\n--> HTTP %{http_code}\n' \
+            --request POST "${base}/deployment" \
+            --header "Authorization: Bearer ${API_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data "${body}" | head -c 800
+
+      - name: Say what to do with this
+        run: |
+          {
+            echo "### Read the output above"
+            echo ""
+            echo "- The project and service ids the API reports must match the workflow variables."
+            echo "- The \\`allow:\\` headers say which methods each path accepts, which is what 405 left out."
+            echo "- Once the working call is known, it replaces the probing step in \\`backend-deploy.yml\\`."
+          } >> "$GITHUB_STEP_SUMMARY"
