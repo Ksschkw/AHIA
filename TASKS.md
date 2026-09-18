@@ -2829,3 +2829,16 @@ tree can be as deep as the trade is.
   **string anchors plus assertions on the content of each block** - and the assertions are what would have
   caught it, had they been there the first time. Editing a large JSX file by arithmetic is guesswork;
   anchoring on the text that must be inside each block is not.
+
+- **M24.1's share card is verified, and its caching claim is bounded honestly.** A response-level check now
+  runs in a second: the link is a page, the card carries a title and a description a messaging app can
+  build a preview from ("Alaba Shop 8650 - what is on the shelf, and what it costs. Send a list of what you
+  want."), and the page has one canonical address.
+- **Edge caching is asserted against the deployment and skipped locally, with the reason printed**: a local
+  server answers `no-cache, must-revalidate` for every page it renders, so reporting that as a failure
+  would be reporting the absence of a CDN. **A check that cannot tell "not cached" from "cannot be judged
+  here" is a check that teaches people to ignore it.** Run against Vercel, the same assertion is strict.
+- **Two setup faults in the check itself, again the same shape**: it was pointed at a shop that exists only
+  on the deployed site, so it reported four failures that were all consequences of a 404 - a not-found page
+  has no share card and is never cached. The first assertion is now that the shop is really there, and the
+  slug is passed in rather than assumed.
