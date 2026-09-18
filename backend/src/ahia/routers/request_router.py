@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, Request, status
 from ahia.core.tenant_context import TenantContext
 from ahia.routers.tenant_router import require_tenant_context
 from ahia.schemas.request_schema import (
+    PublicListSchema,
     PublicRequestAcceptedSchema,
     PublicRequestSchema,
     RequestLineWorkSchema,
@@ -61,7 +62,7 @@ async def submit_public_list(
     is
     never truly out of stock, he goes and finds it.
     """
-    request, line_count = await service.submit_customer_list(
+    request, line_count, list_token = await service.submit_customer_list(
         tenant_slug=tenant_slug,
         payload=payload,
     )
@@ -69,7 +70,26 @@ async def submit_public_list(
         request_id=request.id,
         line_count=line_count,
         message="Your list has reached the shop. They will get back to you on this number.",
+        # The customer's own address for the list. They need it because they will close the page,
+        # and
+        # the trader needs it because it is the same list he works from.
+        list_path=f"/list/{tenant_slug}/{list_token}",
     )
+
+
+@public_router.get(
+    "/shop/{tenant_slug}/requests/{list_token}",
+    response_model=PublicListSchema,
+    summary="A customer's own list, at its own address",
+)
+async def read_public_list(
+    tenant_slug: str,
+    list_token: str,
+    service: RequestServiceDependency,
+) -> PublicListSchema:
+    """Return the list a token names. The token is the whole of the authority, as a share link's
+    is."""
+    return await service.read_public_list(list_token=list_token)
 
 
 @router.get(

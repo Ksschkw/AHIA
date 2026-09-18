@@ -324,6 +324,7 @@ def build_application_container(
     # both, and it is told whether publishing is released rather than reading the flag itself.
     request_service = RequestService(
         unit_of_work_factory=database.unit_of_work_factory(),
+        token_service=token_service,
         default_phone_country_code=settings.default_phone_country_code,
         audit_event_service=audit_event_service,
         logger=logger,

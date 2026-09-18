@@ -2742,3 +2742,17 @@ list he can work, price and hand over.
   and it carried a TypeScript cast into a `.mjs` file. Both are the third occurrence of their kind this
   session, and both are recorded because the pattern is the point: **the check is part of the product's
   evidence, so a broken check is a broken claim.**
+
+- **M24.2's live link exists on the server.** A submitted list now has its own address: the
+  acknowledgement carries `list_path`, and `GET /shop/{shop}/requests/{token}` returns the list to
+  whoever holds it. The token **is** the authority - no session, no tenant, no permissions - exactly as a
+  share link works, and the database keeps only its digest, so a leak of the table is not a leak of
+  everybody's lists. A wrong token answers 404.
+- **The customer's view is trimmed by construction.** It carries their lines, the shop's prices and what
+  the list comes to; it does **not** carry what the goods cost the trader or what he makes on them,
+  because a different schema is used rather than the trader's one minus a few fields. Verified: the
+  response for a two-line list reports `unpriced: 2` and `total: null`, and the first line has no cost
+  field at all.
+- **What is left of the link is the screen**: a page at `/list/{shop}/{token}` that renders this, and the
+  link travelling in the WhatsApp message and picture. The backend half is done and proven; the frontend
+  half is the next commit.

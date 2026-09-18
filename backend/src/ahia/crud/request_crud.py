@@ -125,6 +125,18 @@ async def require_by_id(
     return found
 
 
+async def get_by_token_digest(session: AsyncSession, *, token_digest: str) -> RequestModel | None:
+    """Return the list a token names, or None.
+
+    One query on a digest with an index behind it, and no tenant scope: the holder of the token does
+    not
+    have a tenant, they have the address of their own list.
+    """
+    statement = select(RequestRecord).where(RequestRecord.public_token_digest == token_digest)
+    record = (await session.execute(statement)).scalars().first()
+    return to_entity(record) if record is not None else None
+
+
 async def list_for_tenant(
     session: AsyncSession,
     tenant_id: UUID,

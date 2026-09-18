@@ -84,13 +84,22 @@ class PublicRequestSchema(BaseModel):
 
 
 class PublicRequestAcceptedSchema(BaseModel):
-    """What a customer is told: that it arrived, and nothing about the shop's own affairs."""
+    """What a customer is told: that it arrived, and nothing about the shop's own affairs.
+
+    It carries the list's own address, because the customer needs it: they will close the page, and
+    the
+    link is how they come back to their list - and how the trader opens the same one.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     request_id: UUID
     line_count: int
     message: str
+    # : The path of this list, absolute from the site root. The token is the customer's own; it is
+    # not a
+    #: secret from them, and without it they cannot return to what they built.
+    list_path: str
 
 
 class RequestLineWorkSchema(BaseModel):
@@ -109,6 +118,40 @@ class RequestLineWorkSchema(BaseModel):
     cost_price: Money | None = None
     #: What the customer pays, per piece. On the list, not on the catalogue: this is the agreement.
     shop_price: Money | None = None
+
+
+class PublicListLineSchema(BaseModel):
+    """One line of a list, as the customer who sent it sees it.
+
+    The shop's price and nothing else: what it cost the trader, and what he makes, are his business
+    and
+    never travel to a customer - the same rule the shop page follows about stock.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    position: int
+    text: str
+    group: str | None
+    quantity: str
+    pieces: str
+    shop_price: str | None
+    line_total: str | None
+    state: RequestLineState
+
+
+class PublicListSchema(BaseModel):
+    """A customer's own list, at its own address."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    business_name: str
+    tenant_slug: str
+    status: RequestStatus
+    created_at: datetime
+    lines: list[PublicListLineSchema]
+    priced_total: str | None
+    unpriced_line_count: int
 
 
 class RequestLineResponseSchema(BaseModel):

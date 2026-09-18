@@ -36,12 +36,15 @@ from ahia.core.database import UnitOfWork
 from ahia.core.errors import InvalidInputError, NotFoundError
 from ahia.core.logging import StructuredLogger, get_logger
 from ahia.core.permissions import sales_permissions
+from ahia.core.security import TokenService
 from ahia.core.tenant_context import TenantContext
 from ahia.crud import product_crud, request_crud, request_line_crud, storefront_crud, tenant_crud
 from ahia.models.entities.request_line_model import RequestLineModel
 from ahia.models.entities.request_model import RequestModel
 from ahia.schemas.money_format import money_text, quantity_text
 from ahia.schemas.request_schema import (
+    PublicListLineSchema,
+    PublicListSchema,
     PublicRequestSchema,
     RequestLineResponseSchema,
     RequestLineWorkSchema,
@@ -114,6 +117,7 @@ class RequestService:
     def __init__(
         self,
         unit_of_work_factory: Callable[[], UnitOfWork],
+        token_service: TokenService,
         default_phone_country_code: str = "+234",
         audit_event_service: AuditEventService | None = None,
         logger: StructuredLogger | None = None,
@@ -129,6 +133,10 @@ class RequestService:
             unit_of_work_factory=unit_of_work_factory
         )
         self._default_country_code = default_phone_country_code
+        # : The same token service share links use: a list's address is a credential, and the
+        # database
+        #: keeps only its digest, so a leak of the table is not a leak of everybody's lists.
+        self._tokens = token_service
         self._logger = (logger or get_logger(_REQUEST_LOGGER_NAME)).bind(
             component="request_service", layer="service"
         )
@@ -142,7 +150,7 @@ class RequestService:
         *,
         tenant_slug: str,
         payload: PublicRequestSchema,
-    ) -> tuple[RequestModel, int]:
+    ) -> tuple[RequestModel, int, str]:
         """Take a list from somebody with no account, and say only that it arrived.
 
         The shop's public address has to be open, because a link that answers nothing is a link that
@@ -152,6 +160,10 @@ class RequestService:
         """
         now = datetime.now(UTC)
         request_id = uuid4()
+        # The list gets its own address the moment it exists, because the customer will close the
+        # page:
+        # the link is how they come back to it and how the trader opens the same one.
+        list_token = self._tokens.generate_public_token()
 
         unit_of_work = self._unit_of_work_factory()
         async with unit_of_work:
@@ -182,6 +194,7 @@ class RequestService:
                 customer_name=payload.customer_name,
                 note=payload.note,
                 default_country_code=self._default_country_code,
+                public_token_digest=self._tokens.hash_bearer_token(list_token),
                 now=now,
             )
 
@@ -202,7 +215,7 @@ class RequestService:
             request_id=str(request.id),
             line_count=len(stored_lines),
         )
-        return request, len(stored_lines)
+        return request, len(stored_lines), list_token
 
     async def _build_lines(
         self,
@@ -275,6 +288,58 @@ class RequestService:
             )
         return lines
 
+    async def read_public_list(self, *, list_token: str) -> PublicListSchema:
+        """Return a list to whoever holds its address.
+
+        No session, no tenant, no permissions: the token **is** the authority, exactly as a share
+        link is.
+        The database holds only its digest, so a leak of the table is not a leak of everybody's
+        lists, and
+        what comes back is the customer's view - their lines, the shop's prices, and nothing about
+        what
+        the goods cost the trader.
+        """
+        unit_of_work = self._unit_of_work_factory()
+        async with unit_of_work:
+            session = unit_of_work.session_handle
+            request = await request_crud.get_by_token_digest(
+                session, token_digest=self._tokens.hash_bearer_token(list_token)
+            )
+            if request is None:
+                raise NotFoundError(
+                    operation="read_public_list",
+                    entity="request",
+                    identifier="list",
+                    detail="no list answers at that address",
+                )
+            lines = await request_line_crud.list_for_request(
+                session, tenant_id=request.tenant_id, request_id=request.id
+            )
+            tenant = await tenant_crud.get_by_id(session, request.tenant_id)
+
+        priced = [line.line_total for line in lines if line.line_total is not None]
+        return PublicListSchema(
+            business_name=tenant.name if tenant is not None else "",
+            tenant_slug=tenant.slug if tenant is not None else "",
+            status=request.status,
+            created_at=request.created_at,
+            unpriced_line_count=sum(1 for line in lines if not line.is_priced),
+            priced_total=money_text(sum(priced, Decimal("0.00"))) if priced else None,
+            lines=[
+                PublicListLineSchema(
+                    position=line.position,
+                    text=line.free_text or "From the shop",
+                    group=line.note,
+                    quantity=quantity_text(line.quantity),
+                    pieces=quantity_text(line.pieces),
+                    shop_price=None if line.shop_price is None else money_text(line.shop_price),
+                    line_total=None if line.line_total is None else money_text(line.line_total),
+                    state=line.state,
+                )
+                for line in lines
+            ],
+        )
+
     # ------------------------------------------------------------------
     # What the trader does
     # ------------------------------------------------------------------
@@ -339,10 +404,6 @@ class RequestService:
             return await request_crud.list_for_tenant(
                 unit_of_work.session_handle, tenant_context.tenant_id, limit=limit
             )
-
-    # ------------------------------------------------------------------
-    # What the trader does with a list: source it, price it, confirm it
-    # ------------------------------------------------------------------
 
     async def work_line(
         self,
