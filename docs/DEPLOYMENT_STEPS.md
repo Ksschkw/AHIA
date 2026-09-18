@@ -19,8 +19,18 @@ Northflank has to authenticate against GitHub to pull a private image. That need
 3. **Personal access tokens** -> **Tokens (classic)** -> **Generate new token (classic)**.
 4. Note: `northflank-pull`. Expiration: 90 days or longer (a token that expires silently breaks deploys;
    put the renewal in your calendar).
-5. Tick exactly one scope: **`read:packages`**. Nothing else. It only needs to read your images.
+5. Tick exactly one scope: **`read:packages`** - the row that reads *"Download packages from GitHub
+   Package Registry"*, in the same group as `write:packages` and `delete:packages`. Nothing else. It
+   only needs to read your images.
+   - **Untick `workflow` if it is ticked.** It is easy to catch while scrolling and it grants the right
+     to modify your workflow files, which this token has no business doing.
+   - **`repo` is not needed** to pull a public-repository image. If the Northflank integration refuses
+     with a permission error, tick `repo` as well and try again - it is the fallback for a package
+     attached to a private repository, and it is a bigger grant, so reach for it only if refused.
 6. **Generate token**, then copy it. GitHub shows it once - if you lose it, generate another.
+7. **Check the expiration.** 30 days is the default and a token that expires takes your deploys down
+   silently on a day you are not thinking about deployment. Pick the longest offered, or 90 days with
+   the renewal in your calendar.
 
 A fine-grained token also works, but classic is fewer steps and `read:packages` is exactly the
 permission needed.
