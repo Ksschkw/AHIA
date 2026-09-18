@@ -1,118 +1,133 @@
 # Deploying AHIA
 
-The product owner said he would handle the platform, so this is the guide he asked for rather than a
-configuration he has to reverse-engineer. It is written for his own free-tier setup: **GitHub Actions
-builds, the platform runs**.
+Written for the product owner's own free-tier setup, and written to be **done once, from a terminal,
+without clicking around a dashboard**. Every value below is either something you paste once or something
+a script sets for you.
 
-## 1. Why the image is built in Actions
+The shape of it: **GitHub Actions builds the image; Northflank runs it; Vercel serves the web app.**
+Nothing is compiled on the platform, because compile minutes are the scarcest thing on a free tier and
+an expensive deploy is a deploy you avoid.
 
-His suggestion, and it is the right one. The expensive half of a deployment is compiling the dependency
-closure and assembling layers. A platform's build minutes are the scarcest thing on a free tier, and
-spending them on every deploy means deploy becomes something to avoid - which is precisely the habit
-that makes a project painful.
+---
 
-So: **GitHub Actions builds the image and pushes it to the GitHub Container Registry; Northflank pulls
-it and starts it.** What that buys:
+## 0. What you need, and where each thing comes from
 
-- The platform does no building at all. A deploy is a pull and a restart, which is seconds.
-- Layer caching lives in Actions (`cache-from: type=gha`), so a build that changes one line of Python
-  reuses the dependency layer instead of reinstalling it.
-- The image is **immutable and addressed by commit**: `ghcr.io/<owner>/ahia-backend:sha-<12 chars>`.
-  A rollback is pointing the service at an earlier tag, not rebuilding an earlier commit and hoping the
-  dependencies resolve the same way. That is the difference between a rollback you can do at midnight
-  and one you cannot.
-- The same image runs wherever you point it: a staging service, a production service, or your own
-  machine, with only environment variables differing.
+| # | What | Where it comes from | Used as |
+|---|---|---|---|
+| 1 | GitHub account with this repository pushed | you already have it | the source of everything |
+| 2 | Container registry package | created automatically on the first image push | the image Northflank pulls |
+| 3 | GitHub token with `read:packages` | GitHub, Settings, Developer settings, Personal access tokens (fine-grained) | Northflank's registry credential |
+| 4 | Northflank account, one project | northflank.com | runs the API |
+| 5 | Northflank API token | Northflank, Account, API tokens | GitHub secret, so Actions can deploy |
+| 6 | Northflank project id, service id, migration job id | in the Northflank URLs once the resources exist | GitHub variables |
+| 7 | Neon database | neon.tech | the database |
+| 8 | Neon connection string | Neon console, Connection details, **asyncpg** tab | GitHub secret |
+| 9 | Cloudinary cloud name, api key, api secret | cloudinary.com dashboard | GitHub secrets |
+| 10 | Vercel account | vercel.com | serves the web app |
+| 11 | Vercel project id and org id | Vercel project settings | GitHub secrets, only if automating the web env |
+| 12 | A JWT secret, generated fresh | `openssl rand -hex 32` | GitHub secret |
 
-### Prerequisites this adds
+That is the whole list. Nothing else is needed, and nothing on it is a paid feature.
 
-Being straight about what it costs, since you asked:
+---
 
-1. **A GitHub Container Registry package.** Created automatically on the first successful push. It is
-   private by default, which is correct - keep it private.
-2. **A registry credential on Northflank.** A GitHub personal access token with `read:packages` (a
-   fine-grained token scoped to this repository/package is enough). Northflank needs it once, as a
-   registry secret, to pull a private image.
-3. **A migration step.** This is the one people forget. The image starts the API; it does **not** run
-   `alembic upgrade head` on boot, and it should not - a migration that runs inside an API container
-   races itself when the platform starts more than one replica. The schema is moved by a **separate
-   one-off job** (see section 3).
-4. **No secret in the image.** Everything arrives as environment variables at runtime, which is already
-   how the container is built.
+## 1. Everything, once, from your terminal
 
-## 2. The backend on Northflank
+### 1.1 Create the deploy values file
 
-### 2.1 The service
-
-Create a **Service**, not a Build Service: the image already exists, so there is nothing to build.
-
-| Setting | Value |
-|---|---|
-| Deployment source | **External image** |
-| Image | `ghcr.io/<your-username>/ahia-backend:sha-<the commit you want>` |
-| Registry credential | the GHCR token from section 1 |
-| Port | `8000`, HTTP |
-| Health check path | `/health` (liveness) - readiness is `/health/ready` |
-| Command | leave the image's default (`uvicorn ...`, honouring `$PORT`) |
-| Replicas | 1 to start |
-
-Pin the **sha tag**, not `main`. Pinning by commit is what makes the deployed thing identifiable, and
-`main` is a moving target that makes "what is running" an unanswerable question.
-
-### 2.2 Environment variables
-
-Everything the runtime needs, as secret or plain values in the service's configuration. The full list
-with descriptions is in `docs/PREREQUISITES.md`; the ones a deployment cannot start without:
+Create `backend/.env.deploy` (it is gitignored, and it holds real secrets - never commit it):
 
 ```
-APP_ENV=production
-DATABASE_URL=postgresql+asyncpg://<user>:<password>@<neon-host>/<database>
-DATABASE_REQUIRE_SSL=true
-JWT_SECRET=<a long random value, unique to this environment>
-PHONE_COUNTRY_CODE=+234
-CORS_ALLOWED_ORIGINS=https://<your-vercel-domain>
-STORAGE_PROVIDER=cloudinary
+DATABASE_URL=postgresql+asyncpg://USER:PASSWORD@HOST/DATABASE
+JWT_SECRET=<paste the output of openssl rand -hex 32>
 CLOUDINARY_CLOUD_NAME=...
 CLOUDINARY_API_KEY=...
 CLOUDINARY_API_SECRET=...
+```
+
+Generate the JWT secret with:
+
+```bash
+openssl rand -hex 32
+```
+
+**Three things that will cost you an hour each if you skip them:**
+
+- **No `?sslmode=require` on the URL.** This driver rejects the parameter and fails at connect time.
+  TLS is asked for with `DATABASE_REQUIRE_SSL=true` instead, which the script sets for you.
+- **The Neon URL must be the asyncpg one**, `postgresql+asyncpg://`, not the `postgres://` one the
+  console shows first.
+- **The JWT secret must be fresh.** Not copied from your development `.env`, ever.
+
+### 1.2 Push it all into GitHub
+
+```bash
+cd /home/ksschkw/kss/AHIA
+bash backend/scripts/configure_deployment.sh
+```
+
+That script reads `backend/.env.deploy` and sets every GitHub secret and variable the workflows need,
+using `gh`. It is idempotent - run it again whenever a value rotates. It prints each thing it sets, so
+you can see what exists. It needs `gh auth status` to be a signed-in session with `repo` and
+`write:packages` scope; it checks and tells you if not.
+
+**This is the "not manual" part.** After this, no secret is ever typed into a dashboard.
+
+### 1.3 Create the two Northflank resources
+
+This part is a dashboard, because it needs a service that does not exist yet - after which even this is
+scriptable, and the script for that is section 3.
+
+**The API service**
+
+| Setting | Value |
+|---|---|
+| Type | **Service** (not Build Service - the image is already built) |
+| Deployment | **External image** |
+| Image | `ghcr.io/<your-github-username>/ahia-backend:main` |
+| Registry credential | the token from item 3 above |
+| Port | `8000`, HTTP |
+| Health check | path `/health` |
+| Replicas | 1 |
+
+Point it at `:main` **first**, so the platform can start; section 3 switches it to pinning the commit
+sha automatically from then on.
+
+Then paste these into the service's environment (values from `backend/.env.deploy`, plus the rest):
+
+```
+APP_ENV=production
+DATABASE_URL=<from .env.deploy>
+DATABASE_REQUIRE_SSL=true
+JWT_SECRET=<from .env.deploy>
+PHONE_COUNTRY_CODE=+234
+CORS_ALLOWED_ORIGINS=https://<your-vercel-domain>
+STORAGE_PROVIDER=cloudinary
+CLOUDINARY_CLOUD_NAME=<from .env.deploy>
+CLOUDINARY_API_KEY=<from .env.deploy>
+CLOUDINARY_API_SECRET=<from .env.deploy>
 FEATURE_MEDIA_UPLOAD=true
 FEATURE_STOREFRONT_PUBLIC_PUBLISHING=true
 ```
 
-Three things about this list that matter:
+**The migration job**
 
-- **`CORS_ALLOWED_ORIGINS` must be the Vercel domain**, or the browser will refuse every call while
-  `curl` works perfectly - the most confusing half-hour in any deployment.
-- **`JWT_SECRET` must be different from every other environment.** Sharing it between staging and
-  production means a token minted in one is valid in the other.
-- **Do not put `?sslmode=require` on `DATABASE_URL`.** The driver this project uses rejects the
-  parameter and fails at connect time; `DATABASE_REQUIRE_SSL=true` is how TLS is asked for here.
-
-### 2.3 The migration job
-
-A second Northflank resource: a **Job**, same image, same environment, with the command overridden:
+A second resource, type **Job**, same image and same environment, with the command overridden:
 
 ```
 alembic upgrade head
 ```
 
-Run it **before** rolling the new service image. Two rules, both learned the hard way by somebody:
+This exists because the API container must never migrate: two replicas racing to change one schema is a
+corruption story, not a scaling story. The job is triggered by the deploy pipeline, once, before the
+new code serves traffic.
 
-- Migrations must be **backwards compatible with the currently running code**, because both versions
-  serve traffic during a rollout. Add columns; do not remove them in the same release that stops using
-  them.
-- The job runs **once**, never as part of the service start command. Two containers racing to migrate
-  the same database is a corruption story, not a scaling story.
+### 1.4 The web app on Vercel
 
-## 3. The web app on Vercel
-
-The web app does not need Actions or a container: Vercel builds it from the repository, and its free
-tier is generous for a Next.js app.
-
-1. **Import the repository** in Vercel, and set the **root directory to `web`**. The monorepo layout is
-   the only thing that trips this up.
-2. Framework preset: **Next.js**. Build command and output are detected.
-3. Environment variables:
+1. vercel.com, **Add New Project**, import this repository.
+2. **Root directory: `web`.** The monorepo layout is the one thing that trips this up.
+3. Framework preset: **Next.js**. Build and output settings are detected.
+4. Environment variables:
 
 ```
 NEXT_PUBLIC_API_BASE_URL=https://<your-northflank-domain>
@@ -120,46 +135,101 @@ API_PROXY_TARGET=https://<your-northflank-domain>
 NEXT_PUBLIC_SITE_URL=https://<your-vercel-domain>
 ```
 
-4. **Then go back to Northflank and put the Vercel domain in `CORS_ALLOWED_ORIGINS`.** The order
-   matters: the backend has to allow the frontend, and you only know the frontend's address after Vercel
-   gives it to you.
-5. Custom domain, when you want one: add it in Vercel, then point the DNS record it asks for.
+5. Deploy, then **copy the Vercel domain back into Northflank's `CORS_ALLOWED_ORIGINS`.**
 
-### Why the API is proxied
+**The order matters.** The backend has to allow the frontend, and you only learn the frontend's address
+after Vercel gives it to you. Getting this backwards produces the most confusing half-hour in any
+deployment: the browser refuses every call while `curl` from the same machine works perfectly.
 
-`next.config.ts` rewrites `/api/*` to `API_PROXY_TARGET`. That exists because the session lives in a
-**cookie**, and a cookie set by `api.example.com` is not sent by a page served from `www.example.com`
-unless the browsers' cross-site rules are satisfied - and on `localhost` with different ports they
-never are. Proxying means the browser sees one origin, the cookie is first-party, and none of that
-becomes a puzzle in production that it was not in development.
+**Why the API is proxied at all:** the session lives in a cookie, and a cookie set by
+`api.example.com` is not sent by a page served from `www.example.com` under the browsers' cross-site
+rules. `next.config.ts` rewrites `/api/*` to `API_PROXY_TARGET`, so the browser sees one origin and the
+cookie is first-party.
 
-## 4. What a deploy looks like once this is set up
+### 1.5 Check it
+
+```bash
+curl -s https://<your-northflank-domain>/health
+```
+
+`{"status":"ok"}` means the API, the database and the migration all agree. If it hangs, the database URL
+is wrong; if it refuses, the container did not start and the service's log will say why.
+
+---
+
+## 2. Do you have to update the sha tag every time?
+
+**Today: yes, if you are doing it by hand - one field, one service.** The pipeline publishes
+`ghcr.io/<owner>/ahia-backend:sha-<12 chars>` and `:main`, and pinning the sha by hand is what makes
+"what is running" answerable and a rollback a single field edit.
+
+**But you should not, and after section 3 you will not.** Once the Northflank API token is in GitHub,
+the deploy workflow pins the service to the new sha itself, after the migration job has finished. From
+then on a deployment is `git push origin main` and nothing else.
+
+There is a deliberate order to this. Deploy by hand two or three times **first**. Automating a sequence
+nobody has watched run produces a pipeline that deploys confidently and wrongly, and when it goes wrong
+at midnight you have no memory of what the steps are. Watch it work, then automate what you watched.
+
+---
+
+## 3. Automating the pinning, so a push is the whole deploy
+
+Once the resources exist, collect four values from their URLs:
+
+- Northflank **project id** - in the project's URL.
+- **service id** - in the service's URL.
+- **migration job id** - in the job's URL.
+- **API token** - Account, API tokens.
+
+```bash
+gh secret set NORTHFLANK_API_TOKEN --body "<the token>"
+gh variable set NORTHFLANK_PROJECT_ID --body "<project id>"
+gh variable set NORTHFLANK_SERVICE_ID --body "<service id>"
+gh variable set NORTHFLANK_JOB_ID --body "<job id>"
+```
+
+`.github/workflows/backend-deploy.yml` then does the rest on every push to `main`, in this order, and
+stops if any step fails:
+
+1. Confirm the image for this commit exists in the registry.
+2. Trigger the **migration job** and wait for it to finish.
+3. Pin the **service** to `ghcr.io/<owner>/ahia-backend:sha-<12>`.
+
+Migrations run before the new code serves traffic, and the pin happens only if the migration succeeded -
+which is the whole reason the sequence is explicit rather than three independent triggers.
+
+If the workflow is not configured yet (no `NORTHFLANK_SERVICE_ID`), it prints what to do and exits
+without failing your push. An unconfigured pipeline should not look like a broken build.
+
+---
+
+## 4. What a deploy looks like afterwards
 
 ```
 git push origin main
   |
-  +-- backend-check.yml    the gate: tests, lint, types, architecture, secrets, dependencies
-  +-- backend-image.yml    build the image, push ghcr.io/<owner>/ahia-backend:sha-<12>
-  +-- Vercel               build and deploy the web app
-        |
-        v
-  Northflank: run the migration job, then point the service at the new sha tag
+  +-- backend-check.yml     the gate: tests, lint, types, architecture, secrets, dependencies
+  +-- backend-image.yml     build and push ghcr.io/<owner>/ahia-backend:sha-<12>
+  +-- backend-deploy.yml    migrate, then pin the service to that sha
+  +-- Vercel                build and deploy the web app
 ```
 
-The last step is the one to automate later, and it can be: Northflank has an API and a CLI, so a third
-workflow can call it with a token and pin the service to `sha-${GITHUB_SHA::12}` after the migration job
-succeeds. That is deliberately **not** built yet. Deploying by hand a few times first is how you learn
-what the pipeline should do; automating a sequence nobody has run is how you get a pipeline that
-deploys confidently and wrongly.
+**Rolling back** is pointing the service at an earlier `sha-` tag. That is why the tags are immutable
+and commit-addressed: a rollback that rebuilds an old commit is a rollback that can fail, at the worst
+possible moment, for reasons unrelated to the thing you are rolling back from.
 
-## 5. Prerequisites for live testing
+---
 
-To test against a live deployment you need, in this order:
+## 5. Secrets hygiene, because this is a live product
 
-1. A **Neon database** reachable from the API (the connection string above). Its password is a secret
-   that has appeared in a gitignored file on this machine, so it should be **rotated** before it guards
-   anything real.
-2. A **Cloudinary** account. The secret currently in the local `.env` should also be rotated.
-3. The **GHCR package** and the **Northflank registry secret** from section 1.
-4. The Vercel project, and the Vercel domain copied into `CORS_ALLOWED_ORIGINS`.
-5. `JWT_SECRET` generated fresh for production - not copied from development, ever.
+- `backend/.env`, `backend/.env.deploy` and `web/.env.local` are gitignored. Confirm with
+  `git check-ignore -v backend/.env.deploy` before you paste anything into it.
+- The Neon password and the Cloudinary secret **have both appeared in a gitignored file on this
+  machine**, so rotate both before they guard anything real. Cloudinary: Settings, Security, rotate.
+  Neon: Settings, Reset password.
+- Rotating a GitHub secret is `bash backend/scripts/configure_deployment.sh` again.
+- Rotating what the service sees means editing the service's environment in Northflank; the next deploy
+  picks it up.
+- Nothing secret is ever baked into the image. Configuration arrives as environment variables at
+  runtime, which is what makes the same image usable in every environment.

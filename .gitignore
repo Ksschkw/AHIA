@@ -133,3 +133,7 @@ temp/
 
 # Local review artifacts: browser screenshots and captured page text.
 .review/
+
+# Deployment values: real secrets, never committed. Set GitHub secrets from this with
+# backend/scripts/configure_deployment.sh.
+backend/.env.deploy

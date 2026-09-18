@@ -2345,6 +2345,15 @@ Asked directly, and worth a standing answer because it decides how fast everythi
   M21.2.2 - where a round-trip test belongs anyway, because it is the service that decides what a stored
   list means. Named here rather than passed over in silence.
 
+- **Deployment fully automated, and the guide is the only thing to read.** `docs/DEPLOYMENT.md` now
+  carries the complete list of what is needed and where each thing comes from, the one terminal command
+  that pushes every secret and variable into GitHub (`backend/scripts/configure_deployment.sh`, reading
+  a gitignored `backend/.env.deploy`), and the resources to create once. After that a deploy is
+  `git push origin main`: `.github/workflows/backend-deploy.yml` triggers the Northflank migration job,
+  waits for it, and only then points the service at `sha-<12>` for that commit - so nobody edits a tag
+  again, and migrations always reach the database before the new code serves traffic. The workflow says
+  what to configure and exits cleanly when it is not configured, because an unconfigured pipeline should
+  not turn a push red.
 - **Deployment pipeline decided and written down** in `docs/DEPLOYMENT.md`: the backend image is built
   in GitHub Actions and pushed to the GitHub Container Registry, and Northflank only pulls and runs it.
   This is the product owner's own suggestion and it is the right call - compiling the dependency closure

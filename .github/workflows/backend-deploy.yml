@@ -1,0 +1,120 @@
+# Migrate first, then point the platform at the image that was just built.
+#
+# The sequence is the point. Migrations have to reach the database **before** the new code serves
+# traffic, and the service is only re-pointed if the migration succeeded - which is why this is one
+# workflow with ordered steps rather than three workflows triggered independently by the same push.
+#
+# Until the Northflank values exist, this prints what to do and exits successfully. A pipeline that was
+# never configured should not turn a push red: a red build should mean something is wrong with the code.
+name: backend deploy
+
+on:
+  workflow_run:
+    workflows: ["backend image"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: migrate, then pin
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Only after the image job succeeded: there is nothing to deploy otherwise.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Check the deployment is configured
+        id: configured
+        env:
+          SERVICE_ID: ${{ vars.NORTHFLANK_SERVICE_ID }}
+          JOB_ID: ${{ vars.NORTHFLANK_JOB_ID }}
+          PROJECT_ID: ${{ vars.NORTHFLANK_PROJECT_ID }}
+        run: |
+          if [[ -z "${SERVICE_ID}" || -z "${JOB_ID}" || -z "${PROJECT_ID}" ]]; then
+            {
+              echo "### Deployment is not configured yet"
+              echo ""
+              echo "Set these once, and this workflow takes over:"
+              echo ""
+              echo '```'
+              echo 'gh secret set NORTHFLANK_API_TOKEN --body "<token>"'
+              echo 'gh variable set NORTHFLANK_PROJECT_ID --body "<project id>"'
+              echo 'gh variable set NORTHFLANK_SERVICE_ID --body "<service id>"'
+              echo 'gh variable set NORTHFLANK_JOB_ID --body "<job id>"'
+              echo '```'
+              echo ""
+              echo "See docs/DEPLOYMENT.md section 3."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Work out which image this run is about
+        id: image
+        if: steps.configured.outputs.ready == 'true'
+        run: |
+          OWNER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "tag=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          echo "ref=ghcr.io/${OWNER}/ahia-backend:sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - name: Run the migration job and wait for it
+        id: migrate
+        if: steps.configured.outputs.ready == 'true'
+        env:
+          API_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
+          PROJECT_ID: ${{ vars.NORTHFLANK_PROJECT_ID }}
+          JOB_ID: ${{ vars.NORTHFLANK_JOB_ID }}
+        run: |
+          set -euo pipefail
+          BASE="https://api.northflank.com/v1/projects/${PROJECT_ID}/jobs/${JOB_ID}"
+
+          echo "Starting the migration job"
+          curl --fail-with-body --silent --show-error \
+            -X POST "${BASE}/runs" \
+            -H "Authorization: Bearer ${API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{}' > /dev/null
+
+          # Poll rather than sleep a fixed amount: a migration that takes longer than the guess would
+          # take the service down with it, and one that finishes early would waste the wait.
+          for attempt in $(seq 1 60); do
+            STATUS="$(curl --fail-with-body --silent --show-error \
+              "${BASE}/runs?limit=1" \
+              -H "Authorization: Bearer ${API_TOKEN}" \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["runs"][0]["status"])')"
+            echo "attempt ${attempt}: ${STATUS}"
+            case "${STATUS}" in
+              completed) echo "migration finished"; exit 0 ;;
+              failed|cancelled) echo "migration ${STATUS}"; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "migration did not finish in ten minutes"; exit 1
+
+      - name: Point the service at this commit's image
+        if: steps.configured.outputs.ready == 'true' && steps.migrate.outcome == 'success'
+        env:
+          API_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
+          PROJECT_ID: ${{ vars.NORTHFLANK_PROJECT_ID }}
+          SERVICE_ID: ${{ vars.NORTHFLANK_SERVICE_ID }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            -X PATCH "https://api.northflank.com/v1/projects/${PROJECT_ID}/services/${SERVICE_ID}" \
+            -H "Authorization: Bearer ${API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"deployment\":{\"imagePath\":\"${{ steps.image.outputs.ref }}\"}}"
+
+          {
+            echo "### Deployed"
+            echo ""
+            echo "- image: \`${{ steps.image.outputs.ref }}\`"
+            echo "- migration: succeeded before the service was re-pointed"
+          } >> "$GITHUB_STEP_SUMMARY"
