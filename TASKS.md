@@ -2416,3 +2416,17 @@ Asked directly, and worth a standing answer because it decides how fast everythi
   the client, so the API keeps its own allowlist and decodes the bytes to check the type it was told
   against the type it received. Both halves exist because "client-side validation is not security" is a
   rule this project holds to, and the conversion is an experience and bandwidth decision, not a control.
+
+- **A gate I skipped, and the hook that caught it.** The architecture violation that broke the product
+  owner's commit was introduced two commits earlier: `product_router` imported a domain entity for a
+  type annotation, and I ran ruff, mypy and the ASCII guard afterwards but **not** the architecture
+  check - the one gate that exists for exactly that mistake. It then surfaced as a failed pre-commit on
+  his machine, which is the worst place for it to surface.
+- **And a second lesson from the same failure**: I had been running `ruff` from inside `backend/`, which
+  reads `backend/pyproject.toml`; the hook runs it from the repository root over both `src` and `tests`.
+  The two disagree, so fifteen long lines passed locally and failed in the hook. The rule from here is
+  the one the hook itself follows: run the gate the way the build runs it, from the root, over
+  everything - not the narrowest invocation that happens to agree with me.
+- Both lessons are the same lesson as the append-only triggers and the `create_all` schema: **the check
+  that runs in the environment that matters is the only check that counts.** A local run that agrees with
+  the author is not evidence.
