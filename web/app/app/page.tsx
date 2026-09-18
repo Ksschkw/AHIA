@@ -23,7 +23,18 @@ import {
   SaleIcon,
   StockIcon,
 } from "@/components/icons";
-import { Button, Card, Empty, Field, Pill, Select, Sheet, Stat, Toast } from "@/components/ui";
+import {
+  Button,
+  Card,
+  Empty,
+  Field,
+  Loading,
+  Pill,
+  Select,
+  Sheet,
+  Stat,
+  Toast,
+} from "@/components/ui";
 import {
   ApiError,
   createBusiness,
@@ -95,6 +106,8 @@ export default function Dashboard() {
   //: dashboard with no business and no way to name one.
   const [businessesLoaded, setBusinessesLoaded] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
+  //: "loading" until the first answer arrives, so an empty shelf is never asserted before it is known.
+  const [shelfState, setShelfState] = useState<"loading" | "ready">("loading");
   const [stock, setStock] = useState<InventoryLevel[]>([]);
   const [today, setToday] = useState<DailySalesSummary | null>(null);
   const [recentSales, setRecentSales] = useState<SaleSummary[]>([]);
@@ -142,6 +155,9 @@ export default function Dashboard() {
       listExpenseCategories(tenantId),
     ]);
     setProducts(foundProducts);
+    // Ready only now: everything above this line is a request in flight, and a shelf that says it is
+    // empty while one is in flight is telling the trader something it does not know.
+    setShelfState("ready");
     setStock(foundStock);
     void loadPhotos(
       tenantId,
@@ -199,6 +215,7 @@ export default function Dashboard() {
       // one is fetched. Showing the last shop's shelf under the new shop's name is worse than showing
       // nothing: it is exactly the kind of number a trader would act on.
       setProducts([]);
+      setShelfState("loading");
       setStock([]);
       setToday(null);
       setRecentSales([]);
@@ -409,6 +426,11 @@ export default function Dashboard() {
                 </button>
                 .
               </Empty>
+            ) : shelfState === "loading" ? (
+              // "No products yet" before the answer arrives is a lie, and the trader caught it: he
+              // added something, and the screen had already told him it was not there. An empty list
+              // and a list nobody has fetched are different states and have to read differently.
+              <Loading label="Fetching your shelf..." />
             ) : products.length === 0 ? (
               <Empty>No products yet. Add the first thing you sell.</Empty>
             ) : (

@@ -359,6 +359,26 @@ export function Toast({
   );
 }
 
+/**
+ * Something is on its way, and the screen says so rather than guessing.
+ *
+ * This exists because of a real complaint: the shelf wrote "No products yet" while its request was
+ * still in flight, so a trader who had just added a product was told it was not there. An empty list
+ * and a list nobody has fetched are different states, and the difference is the whole point.
+ */
+export function Loading({
+  label = "Getting it ready...",
+}: {
+  label?: string;
+}) {
+  return (
+    <div className={styles.loading} aria-busy="true" aria-live="polite">
+      <span className={styles.spinner} />
+      <span>{label}</span>
+    </div>
+  );
+}
+
 export function Empty({ children }: { children: ReactNode }) {
   return <p className={styles.empty}>{children}</p>;
 }

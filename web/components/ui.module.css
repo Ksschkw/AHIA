@@ -510,3 +510,24 @@
     bottom: var(--space-5);
   }
 }
+
+/* A request in flight, said plainly: a ring that turns and a sentence. */
+.loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-1);
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--leaf);
+  animation: ahia-spin 0.7s linear infinite;
+  flex: none;
+}

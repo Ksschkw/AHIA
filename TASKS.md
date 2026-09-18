@@ -2430,3 +2430,58 @@ Asked directly, and worth a standing answer because it decides how fast everythi
 - Both lessons are the same lesson as the append-only triggers and the `create_all` schema: **the check
   that runs in the environment that matters is the only check that counts.** A local run that agrees with
   the author is not evidence.
+
+## M23 - Responsiveness, and telling the truth about state
+
+The product owner's verdict after using it against the live deployment: it is slow and unresponsive, a
+person cannot tell when something is happening, and it once wrote "No products yet" while the product he
+had just added was still arriving. He called that a lie, and it is one - the screen asserted something it
+did not know. He also asked the question that matters: **what exactly is the intention here?**
+
+### M23.1 Never claim what is not known
+
+- [x] **M23.0 The lie, fixed.** The shelf distinguishes "loading" from "empty" and shows a turning ring
+      and a sentence until the first answer arrives. The distinction is the whole point: an empty list
+      and a list nobody has fetched are different states.
+- [ ] **M23.1.1 Audit every empty state the same way.** Sales, stock, expenses, customers, lists, team:
+      each one gets a state machine of loading / ready-with-nothing / ready-with-content, and no screen
+      says "nothing here" until a request has answered.
+
+### M23.2 Every tap answers immediately
+
+- [x] **M23.2.1 A route change shows something at once.** `app/app/loading.tsx` draws a moving indicator
+      the moment navigation begins, because nearly every screen here is drawn from a network answer.
+- [ ] **M23.2.2 Every action shows its own progress.** Button labels change and a small ring appears the
+      instant it is pressed - not when the request returns. The button component already takes `busy`;
+      what is missing is that it is not always passed, and that it is not visually obvious enough.
+- [ ] **M23.2.3 Optimistic updates where the outcome is certain.** Toggling a product to Hidden, marking
+      something sold, ticking a waybill line: the screen changes first and reconciles after. A trader
+      with a customer in front of him must never watch a spinner for a switch he knows the answer to.
+- [ ] **M23.2.4 A global progress bar.** One thin line at the top of the frame while any request is in
+      flight, so "is it doing anything?" is answered by a glance.
+
+### M23.3 Twice as fast, before any of the above
+
+- [ ] **M23.3.1 Move the API to the same continent as the database.** The API runs in US-Central and
+      Neon is in eu-west-2 (London), so every query crosses the Atlantic twice and a dashboard load makes
+      seven of them. Northflank binds a region at project creation, so this means recreating the project
+      in Europe - services, environment, secrets - and pointing the domain at it. It is the single
+      largest win available and it is free.
+- [ ] **M23.3.2 Move the web functions to Europe too.** Vercel cannot move an existing deployment's
+      region, but the project's function region can be changed and redeployed, or pinned in
+      `vercel.json` with `{"regions": ["cdg1"]}`, and the static assets are already served globally.
+- [ ] **M23.3.3 Cache what has already been fetched on the client.** A small stale-while-revalidate
+      store, so a screen that has been visited renders instantly from what it had and revalidates behind
+      the person's eyes - and so a repeat visit is not seven requests again.
+- [ ] **M23.3.4 Persist it, for the offline-first promise.** The same store mirrored into local storage,
+      which is the first real step of the offline story the product claims and does not yet have.
+
+### M23.4 The interface keeps its promises
+
+- [x] **M23.4.1 The toast goes away by itself.** It had a timer that was restarted on every render,
+      because the pages pass an inline callback; the callback now lives in a ref. Both tones dismiss, and
+      it announces itself with `role="status"`.
+- [x] **M23.4.2 The toast is a card, not a pill.** "Text outside the borders" and "too circular" were
+      one problem: the box grew sideways with its content. Fixed width, fixed radius, text that wraps.
+- [ ] **M23.4.3 Say what is happening in words a trader uses.** Every waiting state gets a sentence
+      rather than a bare spinner: "Fetching your shelf", "Recording the sale", "Packing...".
