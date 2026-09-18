@@ -137,12 +137,12 @@ becomes a puzzle in production that it was not in development.
 
 ```
 git push origin main
-  │
-  ├─ backend-check.yml        the gate: tests, lint, types, architecture, secrets, dependencies
-  ├─ backend-image.yml        build the image, push ghcr.io/<owner>/ahia-backend:sha-<12>
-  └─ Vercel                   build and deploy the web app
-        │
-        ▼
+  |
+  +-- backend-check.yml    the gate: tests, lint, types, architecture, secrets, dependencies
+  +-- backend-image.yml    build the image, push ghcr.io/<owner>/ahia-backend:sha-<12>
+  +-- Vercel               build and deploy the web app
+        |
+        v
   Northflank: run the migration job, then point the service at the new sha tag
 ```
 
