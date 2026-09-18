@@ -72,6 +72,29 @@ jobs:
           echo "tag=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
           echo "ref=ghcr.io/${OWNER}/ahia-backend:sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
 
+      - name: Make sure the image for this commit exists
+        if: steps.configured.outputs.ready == 'true'
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.ref }}
+        run: |
+          set -euo pipefail
+          # The image is built by a *different* workflow, which skips itself when a push touched nothing
+          # under backend/ - so a deploy can be asked for a commit that has no image. Saying that plainly
+          # is worth more than a pull error three steps later.
+          if ! docker manifest inspect "${IMAGE_REF}" >/dev/null 2>&1; then
+            {
+              echo "### No image for this commit"
+              echo ""
+              echo "\`${IMAGE_REF}\` does not exist."
+              echo ""
+              echo "The image workflow skips a push that touches nothing under \`backend/\`, so either:"
+              echo ""
+              echo "- run **backend image** manually for this commit, or"
+              echo "- push a commit that changes \`backend/\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "no image for ${IMAGE_REF}"; exit 1
+          fi
+
       - name: Create the tables, using the image that was just built
         if: steps.configured.outputs.ready == 'true'
         env:

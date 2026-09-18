@@ -16,7 +16,9 @@ on:
     branches: [main]
     paths:
       - "backend/**"
-      - ".github/workflows/backend-image.yml"
+      # Any workflow file, not only this one: a change to the deploy workflow is exactly when somebody
+      # wants to see the pipeline run, and a push that changes it and does nothing looks broken.
+      - ".github/workflows/**"
   workflow_dispatch:
 
 # Only the permissions this workflow needs: read the code, write the package.
