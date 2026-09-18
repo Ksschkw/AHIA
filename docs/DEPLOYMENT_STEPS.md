@@ -9,6 +9,20 @@ from time to time, so if one word is different, the shape of the thing is still 
 
 ---
 
+## Before any of this: push
+
+Every step below assumes your commits are on GitHub. The image is built by a workflow that has to exist
+on the remote, so a local commit that was never pushed is an image that was never built - and the
+symptom at the end of the chain is Northflank saying "this image could not be found", which points at
+the registry rather than at the unpushed commit that is really responsible.
+
+```bash
+git status -sb        # "ahead N" means N commits are not on GitHub yet
+git push origin main
+```
+
+Then watch GitHub -> Actions -> *backend image* go green before touching the registry integration.
+
 ## A. A GitHub token that can read your image (for Northflank to pull it)
 
 Northflank has to authenticate against GitHub to pull a private image. That needs a token, and it is
@@ -223,7 +237,8 @@ cookie and the database in one go.
 | The API works from `curl` but the browser says CORS | `CORS_ALLOWED_ORIGINS` is not exactly the Vercel origin |
 | Sign-in appears to work and then everything is 401 | the cookie is being refused: the web app is not proxying `/api`, so the cookie is cross-site |
 | The registry integration will not save | token missing `read:packages`, or the username is an email |
-| The image tag is "not found" | the image job has not run yet for that commit, or the tag is `sha-` with the wrong 12 characters |
+| **"This image could not be found" on the Northflank form** | almost always that the image does not exist yet: the commits are not pushed, or the *backend image* workflow has not run for them. Check GitHub -> Actions first, then the package under GitHub -> your profile -> Packages. Only after that is it a wrong tag or a wrong repository name |
+| The image tag is "not found" and the package does exist | the tag is `sha-` with the wrong 12 characters, or the image path omits `:main` and so means `:latest` |
 
 ## K. Secrets, once more
 
