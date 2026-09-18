@@ -2506,13 +2506,19 @@ did not know. He also asked the question that matters: **what exactly is the int
         changes when the trader edits his shop and not before. Sixty seconds of edge caching with a tag
         per path: a second click is instant, a price changed a minute ago is already live, and the shop
         stays readable while the API is briefly unwell.
-  - [ ] **M24.1.2 Hover prefetch**, so the page is already there before the click.
-  - [ ] **M24.1.3 Images**: sized, lazy, and a placeholder that holds the layout so nothing jumps.
-  - [ ] **M24.1.4 A real shopfront**: the shop's name and number unmistakable, the catalogue in
-        headings the trader chose, a product page that leads with the photograph and the price, and one
-        obvious way to ask about it.
-  - [ ] **M24.1.5 The share cards**: the shop's name, its photograph and its price in the preview, so a
-        link sent on WhatsApp looks like a shop and not like a URL.
+  - [x] **M24.1.2 Prefetch**, so a product page is fetched while the thumb is still deciding.
+  - [x] **M24.1.3 Images**: lazy, and a fixed square shape per card so nothing jumps as photographs
+        arrive one by one - the thing that makes a catalogue feel unstable on a slow connection.
+  - [x] **M24.1.4 A real shopfront**: the name unmistakable, one action - send a list on WhatsApp
+        with the message already written - the number as a second button that dials it, the promise
+        stated plainly ("if you do not see it, ask for it and we will get it"), and a closing invitation
+        for wholesale. The **product page** still needs the same pass.
+  - [ ] **M24.1.4b The product page** to the same standard: photograph first, price unmistakable, one
+        way to ask, and its own share card.
+  - [x] **M24.1.6 The copy audit**: no availability, no "sourced", nothing from our side of the glass -
+        and the browser check fails if any of those words reach a customer.
+  - [x] **M24.1.5 The share card carries a photograph**, because a link with an image is a link people
+        tap; a shop with no photograph yet still gets a clean card.
 - **M24.2 The list and the waybill** - the customer builds it, the trader works it.
   - [ ] **M24.2.1 The customer's screen** at `/list/{shop}`, with headings in the trader's own words.
   - [ ] **M24.2.2 The trader's side**: have it / buy it / cannot get it, what it cost, what it comes to.
