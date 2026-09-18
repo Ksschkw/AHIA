@@ -117,6 +117,14 @@ await step("a customer opens it on a phone and a desk", async () => {
     );
     await page.screenshot({ path: resolve(OUTPUT, `shop-${label}.png`), fullPage: false });
 
+    // **The page must be a page.** A rewrite that proxied the whole `/shop/*` prefix turned this link
+    // into the API's raw JSON and every other assertion here still passed, because a JSON document has
+    // no overflow and no broken images. The content type is the first thing to check.
+    const contentType = response?.headers()["content-type"] ?? "";
+    if (!contentType.includes("text/html")) {
+      throw new Error(`a customer gets ${contentType || "no content type"} instead of a shop page`);
+    }
+
     const facts = await page.evaluate(() => ({
       overflow: document.documentElement.scrollWidth > window.innerWidth,
       text: document.body.innerText,

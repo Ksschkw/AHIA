@@ -2595,3 +2595,12 @@ did not know. He also asked the question that matters: **what exactly is the int
   `#password`) before it was committed. It was a false positive on a fixture, and the honest resolution
   was deleting the fixture rather than allowlisting the file: an allowlist entry for a whole path is how a
   real secret eventually walks through.
+
+- **The storefront was broken in production by one line of my own configuration, and the product owner
+  found it while every check stayed green.** The rewrite added for the customer's list proxied the whole
+  `/shop/*` prefix, so the *pages* went to the API too: a customer opening the link a trader sent them
+  received raw JSON. It is narrowed to the single API path the browser actually needs -
+  `/shop/:slug/requests` - and the design check now asserts the first thing it should always have
+  asserted: **that the response is `text/html`**. Every other assertion in that check passed on a JSON
+  document, because a JSON document has no overflow, no missing images and no forbidden words. A check
+  that does not verify it is looking at the right kind of thing is not a check.

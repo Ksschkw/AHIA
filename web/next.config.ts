@@ -26,11 +26,13 @@ const nextConfig: NextConfig = {
         destination: `${API_PROXY_TARGET}/api/:path*`,
       },
       {
-        // The shop's own address is unversioned, and the list a customer sends goes to it: the same
-        // link the trader gave them, and the same one printed on a poster. Proxying it here means the
-        // browser never needs to know the API lives somewhere else, at any stage of the flow.
-        source: "/shop/:path*",
-        destination: `${API_PROXY_TARGET}/shop/:path*`,
+        // **One path, not the whole prefix.** `/shop/:path*` proxied every request under it, including
+        // the pages themselves - so a customer opening the link a trader sent them got the API's raw
+        // JSON instead of the shop, and the shopfront was broken in production while every check that
+        // did not look at the content type stayed green. The only thing the browser needs from the API
+        // under this prefix is the list a customer sends.
+        source: "/shop/:slug/requests",
+        destination: `${API_PROXY_TARGET}/shop/:slug/requests`,
       },
     ];
   },
