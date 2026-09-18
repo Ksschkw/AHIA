@@ -13,6 +13,7 @@
  * client sends or reads cannot drift from what the backend validates without `tsc` failing.
  */
 
+import { normaliseImage } from "@/lib/images";
 import type { components, paths } from "./api-schema";
 
 type Schemas = components["schemas"];
@@ -461,9 +462,13 @@ export function listProductImages(tenantId: string, productId: string): Promise<
 export async function uploadProductImage(
   tenantId: string,
   productId: string,
-  file: File,
+  chosen: File,
   isPrimary: boolean,
 ): Promise<ProductImage> {
+  // Whatever the camera produced is turned into what we want to store before it leaves the browser:
+  // a phone's HEIC, or a twelve-megabyte portrait, becomes a 1600-pixel WebP. The API keeps its own
+  // allowlist and checks the bytes, because this runs in a browser and a browser is the client's.
+  const { file } = await normaliseImage(chosen);
   const query = isPrimary ? "?is_primary=true" : "";
   const response = await fetch(
     `${API_BASE_URL}/api/v1/tenants/${tenantId}/products/${productId}/images${query}`,

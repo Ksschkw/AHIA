@@ -1236,7 +1236,9 @@ function PhotoSheet({
       <input
         ref={input}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/avif"
+        // Anything the device has. The browser converts it below, so the trader is never asked to
+        // know what a WebP is, and an iPhone photograph can simply be chosen.
+        accept="image/*"
         className={styles.fileInput}
         onChange={(event) => {
           const file = event.target.files?.[0];

@@ -63,6 +63,29 @@ for (const [label, viewport] of [
   console.log(
     `${label}: ${navigation.count} destinations, current=${navigation.current}, overflow=${navigation.overflow}, bottombar=${navigation.barVisible}`,
   );
+
+  if (label === "mobile") {
+    // Everything must be reachable from the bar, and the choice of what is pinned must stick.
+    const opened = await page.evaluate(() => {
+      const more = [...document.querySelectorAll("button")].find((b) =>
+        b.textContent?.trim().startsWith("More"),
+      );
+      more?.click();
+      return Boolean(more);
+    });
+    if (!opened) {
+      throw new Error("the phone's bar has no way to reach the rest");
+    }
+    await page.waitForFunction(() => document.body.innerText.includes("Everything"), {
+      timeout: 10000,
+    });
+    await page.screenshot({ path: resolve(OUTPUT, "shell-mobile-more.png") });
+    const listed = await page.evaluate(() => {
+      const dialog = document.querySelector('[role="dialog"]');
+      return dialog ? dialog.innerText.split("\n").length : 0;
+    });
+    console.log(`mobile: the More sheet lists ${listed} lines`);
+  }
 }
 
 await context.close();

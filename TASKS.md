@@ -1947,6 +1947,17 @@ consistent elevation or radius, which is exactly what "cut and join" describes.
       matches, and a back route that does not lose the business.
       *You will see:* you always know which screen you are on.
 
+### M22.1b What the mobile bar leaves out
+
+- [x] **M22.1.5 A "More" that holds everything.** Five slots is all a 390-pixel screen gives a bar
+      without turning it into a row of small targets, so the bar holds three pinned destinations, then
+      **More** and **You**. Everything is behind More, always - a destination that cannot be reached on
+      a phone is a feature that does not exist on a phone.
+- [x] **M22.1.6 The person chooses what is pinned.** Each destination in the More sheet can be added to
+      the bar or taken out, and the choice is remembered. The one who sells all day and the one who
+      counts stock do not reach for the same screen, and a product that decides for them is a product
+      that is wrong for one of them.
+
 ### M22.2 The dashboard, once it has a frame
 
 - [ ] **M22.2.1 What is happening now, first.** Today's money, what is waiting to be packed, and what is
@@ -2386,3 +2397,22 @@ Asked directly, and worth a standing answer because it decides how fast everythi
 - The dashboard stopped drawing its own header, which is the change that matters more than it sounds:
   the brand, the business switcher and the profile now live in one place, and a page that draws its own
   frame is how a product becomes a collection of screens.
+
+- **M22.1.5 and M22.1.6 done: the phone's bar no longer hides anything.** The product owner caught the
+  real defect in the first attempt - the bar held four destinations and the other three were simply not
+  reachable on a phone. Five slots is what a 390-pixel screen gives a bar before it becomes a row of
+  small targets, so it now holds **three pinned destinations, then More, then You**, and the More sheet
+  lists everything with a control to put any of it in the bar or take it out. The choice is remembered,
+  because the person who sells all day and the person who counts stock do not reach for the same screen.
+- **Images are converted in the browser before they are sent.** The product owner's point, and it is a
+  better design than the one it replaces: the file picker now accepts anything the device has
+  (`image/*`), the browser decodes it, scales the longest edge to 1600 pixels and re-encodes it as WebP
+  (falling back to JPEG where WebP cannot be produced). So an iPhone photograph uploads instead of being
+  refused, a twelve-megabyte portrait becomes a small file that works on a market connection, and
+  storage sees one format rather than five. Version 1 of this asked the trader to know what a WebP was,
+  which he does not and should not have to.
+- **`MEDIA_ALLOWED_CONTENT_TYPES` stays, and the reason is written down rather than assumed.** It is the
+  boundary, not a user-facing restriction: the conversion happens in a browser, and a browser belongs to
+  the client, so the API keeps its own allowlist and decodes the bytes to check the type it was told
+  against the type it received. Both halves exist because "client-side validation is not security" is a
+  rule this project holds to, and the conversion is an experience and bandwidth decision, not a control.

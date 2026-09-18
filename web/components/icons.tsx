@@ -151,6 +151,17 @@ function PersonGlyph() {
   );
 }
 
+/** More: three dots, which is the one sign everybody already reads as "there is more here". */
+function MoreGlyph() {
+  return (
+    <>
+      <circle cx="5.5" cy="12" r="1.4" />
+      <circle cx="12" cy="12" r="1.4" />
+      <circle cx="18.5" cy="12" r="1.4" />
+    </>
+  );
+}
+
 const NAVIGATION_GLYPHS = {
   store: ShopGlyph,
   receipt: ReceiptGlyph,
@@ -159,6 +170,7 @@ const NAVIGATION_GLYPHS = {
   people: PeopleGlyph,
   tag: TagGlyph,
   person: PersonGlyph,
+  more: MoreGlyph,
 } as const;
 
 export type NavigationIconName = keyof typeof NAVIGATION_GLYPHS;

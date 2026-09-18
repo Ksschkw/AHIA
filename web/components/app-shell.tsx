@@ -17,10 +17,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { Icon } from "@/components/icons";
 import { Wordmark } from "@/components/brand";
+import { Sheet } from "@/components/ui";
 import styles from "./app-shell.module.css";
 
 export interface ShellBusiness {
@@ -55,6 +56,31 @@ export const DESTINATIONS: Destination[] = [
   { href: "/app/profile", label: "You", short: "You", icon: "person", primary: false },
 ];
 
+/** Where the pinned destinations are remembered, so a person's own bar survives a reload. */
+export const PINNED_DESTINATIONS_KEY = "ahia.pinned";
+
+/**
+ * How many fit in a phone's bottom bar before it stops being readable.
+ *
+ * Three, plus More and You, is five slots across 390 pixels - which is as many as a thumb can hit
+ * without looking. Four made six, and six is a row of small targets rather than a navigation bar.
+ */
+export const MAXIMUM_PINNED = 3;
+
+/**
+ * The destinations in the bar on a phone.
+ *
+ * Three fit comfortably, plus "More" and "You" - and which three is the person's choice, because the
+ * one who sells all day and the one who counts stock do not reach for the same screen. The default is
+ * the order above, which is the order most shops would pick.
+ */
+function pinnedDestinations(pinnedHrefs: string[]): Destination[] {
+  const chosen = DESTINATIONS.filter((destination) => pinnedHrefs.includes(destination.href));
+  const fallback = DESTINATIONS.filter((destination) => destination.primary);
+  const merged = [...chosen, ...fallback.filter((one) => !chosen.includes(one))];
+  return merged.slice(0, MAXIMUM_PINNED);
+}
+
 /** True when the destination is the current screen, without matching "/app" against every path. */
 function isCurrent(pathname: string, href: string): boolean {
   if (href === "/app") {
@@ -72,7 +98,37 @@ export function AppShell({
 }: AppShellProps) {
   const pathname = usePathname() ?? "/app";
   const active = businesses.find((business) => business.id === activeBusinessId) ?? businesses[0];
-  const phoneDestinations = DESTINATIONS.filter((destination) => destination.primary);
+  const [pinned, setPinned] = useState<string[]>([]);
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  useEffect(() => {
+    const remembered =
+      typeof window === "undefined" ? null : window.localStorage.getItem(PINNED_DESTINATIONS_KEY);
+    if (remembered) {
+      try {
+        const parsed = JSON.parse(remembered) as unknown;
+        if (Array.isArray(parsed)) {
+          setPinned(parsed.filter((entry): entry is string => typeof entry === "string"));
+        }
+      } catch {
+        // A remembered value that cannot be read is not worth a broken navigation: the defaults stand.
+      }
+    }
+  }, []);
+
+  const togglePinned = useCallback((href: string) => {
+    setPinned((current) => {
+      const next = current.includes(href)
+        ? current.filter((entry) => entry !== href)
+        : [...current, href].slice(-MAXIMUM_PINNED);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(PINNED_DESTINATIONS_KEY, JSON.stringify(next));
+      }
+      return next;
+    });
+  }, []);
+
+  const phoneDestinations = pinnedDestinations(pinned);
 
   return (
     <div className={styles.shell}>
@@ -176,6 +232,14 @@ export function AppShell({
             <span>{destination.short}</span>
           </Link>
         ))}
+        <button
+          className={styles.bottombarLink}
+          onClick={() => setMoreOpen(true)}
+          aria-expanded={moreOpen}
+        >
+          <Icon name="more" />
+          <span>More</span>
+        </button>
         <Link
           className={
             isCurrent(pathname, "/app/profile")
@@ -189,6 +253,45 @@ export function AppShell({
           <span>You</span>
         </Link>
       </nav>
+
+      {/* Everything, reachable from anywhere, and the place where the bar itself is chosen. A trader
+          who never opens the prices should not have Prices taking a slot from the thing he does all
+          day - and the pinning is remembered, so he only decides once. */}
+      <Sheet open={moreOpen} title="Everything" onClose={() => setMoreOpen(false)}>
+        <ul className={styles.moreList}>
+          {DESTINATIONS.map((destination) => {
+            const isPinned = phoneDestinations.some((one) => one.href === destination.href);
+            return (
+              <li className={styles.moreRow} key={destination.href}>
+                <Link
+                  className={styles.moreLink}
+                  href={destination.href}
+                  onClick={() => setMoreOpen(false)}
+                >
+                  <Icon name={destination.icon} />
+                  <span>{destination.label}</span>
+                </Link>
+                <button
+                  className={isPinned ? styles.pinOn : styles.pinOff}
+                  onClick={() => togglePinned(destination.href)}
+                  aria-label={
+                    isPinned
+                      ? `${destination.label} is in the bottom bar; tap to take it out`
+                      : `${destination.label} is not in the bottom bar; tap to put it in`
+                  }
+                  aria-pressed={isPinned}
+                >
+                  {isPinned ? "In the bar" : "Add to the bar"}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <p className={styles.moreHint}>
+          Three stay in the bar at the bottom of your screen, plus More and You. Choose the ones you
+          use most - everything is always in here either way.
+        </p>
+      </Sheet>
     </div>
   );
 }
