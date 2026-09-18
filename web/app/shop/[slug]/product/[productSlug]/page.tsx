@@ -37,6 +37,14 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   };
 }
 
+/**
+ * Regenerated in the background at most once a minute, and served from the edge in between.
+ * A shop's page changes when the trader edits it and not before, so making a customer wait for a
+ * fresh round trip on every click was paying for nothing - and it was the second of delay he felt
+ * before a product opened.
+ */
+export const revalidate = 60;
+
 export default async function ProductPage({ params }: Params) {
   const { slug, productSlug } = await params;
   const page = await fetchPublicProduct(slug, productSlug);

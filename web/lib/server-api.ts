@@ -43,8 +43,15 @@ export async function fetchPublicProduct(
 
 async function getJson<T>(path: string): Promise<T | null> {
   try {
+    // **Cached at the edge, not fetched on every click.**
+    //
+    // This was `no-store`, and it is why opening a product took over a second: every navigation made a
+    // fresh round trip from the visitor to the web server to the API and back, for a page that changes
+    // when the trader edits his shop and not before. Sixty seconds is the compromise - a customer's
+    // second click is instant, a price he changed a minute ago is already live, and the shop stays
+    // readable even while the API is briefly unwell.
     const response = await fetch(`${API_BASE_URL}${path}`, {
-      cache: "no-store",
+      next: { revalidate: 60, tags: [`shop:${path}`] },
       headers: { Accept: "application/json" },
     });
     if (!response.ok) {

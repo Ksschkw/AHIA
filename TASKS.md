@@ -2497,3 +2497,43 @@ did not know. He also asked the question that matters: **what exactly is the int
   a stale token is invisible. The refresh token's default life is a year, because a trader should not
   sign in again on a phone he owns; it is revocable, rotatable, and useless without the cookie it
   travels in, which is what makes a long life safe here.
+
+### M24.0 The four surfaces: what "perfect" means
+
+- **M24.1 The storefront** - the one screen a customer sees before anybody says a word.
+  - [x] **M24.1.1 Cached at the edge.** The public fetch was `no-store`, so every click on a product made
+        a fresh round trip from the visitor to the web server to the API and back - for a page that
+        changes when the trader edits his shop and not before. Sixty seconds of edge caching with a tag
+        per path: a second click is instant, a price changed a minute ago is already live, and the shop
+        stays readable while the API is briefly unwell.
+  - [ ] **M24.1.2 Hover prefetch**, so the page is already there before the click.
+  - [ ] **M24.1.3 Images**: sized, lazy, and a placeholder that holds the layout so nothing jumps.
+  - [ ] **M24.1.4 A real shopfront**: the shop's name and number unmistakable, the catalogue in
+        headings the trader chose, a product page that leads with the photograph and the price, and one
+        obvious way to ask about it.
+  - [ ] **M24.1.5 The share cards**: the shop's name, its photograph and its price in the preview, so a
+        link sent on WhatsApp looks like a shop and not like a URL.
+- **M24.2 The list and the waybill** - the customer builds it, the trader works it.
+  - [ ] **M24.2.1 The customer's screen** at `/list/{shop}`, with headings in the trader's own words.
+  - [ ] **M24.2.2 The trader's side**: have it / buy it / cannot get it, what it cost, what it comes to.
+  - [ ] **M24.2.3 The waybill**: transporter, number, cost, and a tracking link for the customer.
+- **M24.3 The shelf** - the screen a trader uses twenty times a day.
+  - [ ] **M24.3.1 Photo first, denser, one line per item**, with the actions where a thumb reaches.
+- **M24.4 Button states** - loading, active, disabled, conditional, visible on press rather than on
+  response, applied consistently rather than per screen.
+- **M24.5 The architectural division** - **server-render the shop, client-render the app.** Today both
+  live in one Next.js build, so an authenticated screen is rebuilt on the server and shipped again on
+  every click, which is the delay the trader feels. The cache becomes the first paint for both.
+
+### M25 - Signing in once, and a PIN for what matters
+
+- [x] **M25.1 Stay signed in.** The access token lives fifteen minutes and the refresh cookie a year; the
+      client never called refresh, so every quarter of an hour the application behaved as if the person
+      had signed out. It now renews itself silently on any 401 and repeats the original request, and the
+      refresh token's default life is a year - which is what "sign in once" means for a trader on a phone
+      he owns. Safe here because it is revocable, it rotates, and it is useless without its HttpOnly
+      cookie.
+- [ ] **M25.2 A PIN for sensitive actions.** The trader's own idea, and the right shape for this trade:
+      changing a price, removing a staff member, or confirming a payout asks for a short PIN that never
+      leaves the device, while browsing the shop all day asks for nothing. Long session, short leash on
+      the few actions that can cost money.
