@@ -134,12 +134,43 @@ that a bare path implies `latest`.
 three ids are set in step G, the workflow re-points the service at `sha-<that commit>` by itself, and
 from then on the service never follows whatever `main` happens to be.
 | Region | the one nearest you, and **the same one for the job below** |
+| Compute plan | the smallest is fine to start (`nf-compute-20`, 0.2 vCPU / 512 MB). Two caveats: a free-tier instance is small enough that a cold start is noticeable, and the migration job runs on the same plan - so if `alembic upgrade head` is ever killed for memory, raise the job's plan rather than the service's |
 | Port | `8000`, protocol **HTTP** (in the networking section, further down the form) |
 | Health check path | `/health` |
 | Instances | 1 |
 
-Then open the service's **Environment** section and add every variable from
-`docs/DEPLOYMENT.md` section 1.3. The three that break things quietly:
+Then add the environment variables - and **use a Northflank Secret group rather than typing them
+twice**, because the migration job in F needs the same ones:
+
+**Create -> Secret group**, name it `ahia-prod`, and add these:
+
+```
+APP_ENV=production
+LOG_LEVEL=INFO
+DATABASE_URL=postgresql+asyncpg://...        <- from .env.deploy, WITHOUT ?sslmode=...
+DATABASE_REQUIRE_SSL=true
+JWT_SECRET=<the 64-character value from .env.deploy>
+PHONE_COUNTRY_CODE=+234
+DEFAULT_PHONE_COUNTRY_CODE=+234
+CORS_ALLOWED_ORIGINS=http://localhost:3000   <- replaced with the Vercel URL in step H
+PUBLIC_WEB_BASE_URL=http://localhost:3000    <- likewise
+STORAGE_PROVIDER=cloudinary
+CLOUDINARY_CLOUD_NAME=<from .env.deploy>
+CLOUDINARY_API_KEY=<from .env.deploy>
+CLOUDINARY_API_SECRET=<from .env.deploy>
+FEATURE_MEDIA_UPLOAD=true
+FEATURE_STOREFRONT_PUBLIC_PUBLISHING=true
+```
+
+Then attach that secret group to both the service and the job. Two rules about this list:
+
+- **Do not paste the whole `.env`.** It carries `TEST_DATABASE_URL` pointing at a local database, and
+  two rate-limit overrides that exist only so a verification loop could run on a development machine.
+  Neither belongs in production, and tracking them down later is harder than not setting them.
+- **`CORS_ALLOWED_ORIGINS` is not a placeholder to forget.** Until it names the Vercel origin exactly,
+  the browser refuses every call while `curl` works perfectly.
+
+The three that break things quietly:
 
 - `CORS_ALLOWED_ORIGINS` must be the Vercel URL, exact, with `https://` and no trailing slash.
 - `DATABASE_URL` must be `postgresql+asyncpg://...` and must **not** carry `?sslmode=require`.
