@@ -1795,7 +1795,7 @@ Each line is one commit, and the note under it is what you will be able to see a
 
 #### M21.2 The customer's list, with no account
 
-- [ ] **M21.2.1 The request tables.**
+- [x] **M21.2.1 The request tables.**
       `requests` (tenant, customer phone, status, note, created) and `request_lines` (item or free text,
       quantity, unit, picture, the price the customer saw, the price the shop set later, unpriced flag).
       A request touches no stock and no ledger - it is a wish until it is confirmed. Migration + entities.
@@ -2264,3 +2264,17 @@ Asked directly, and worth a standing answer because it decides how fast everythi
   shape and length, not only for a leading plus. And confirming an already-confirmed list was a silent
   no-op; it is now refused, because the caller meant to do something and a quiet success tells them it
   happened.
+
+- **M21.2.1 complete.** `requests` and `request_lines` exist, with their repositories, and - the part
+  worth naming - **both tables carry the row-level-security policy in the same migration that creates
+  them**. Every tenant-owned table gets the same one shape, and the verification test asserts that the
+  deployed policies match it exactly; a new table without one is the leak that would matter most, so it
+  is not left to a follow-up nobody remembers. 58 row-level-security tests pass.
+- The repositories are deliberately thin: `request_crud` stores and returns lists (newest first,
+  filterable by customer or state), `request_line_crud` stores a list's lines in the order the customer
+  wrote them. No arithmetic, no decisions - the entity holds the arithmetic and a service will hold the
+  decisions, which is the layer boundary the whole codebase is built on.
+- **Honestly, what is not yet tested here**: the repositories have no round-trip test of their own. They
+  are covered by lint, types and the policy tests, and their first real exercise will be the service in
+  M21.2.2 - where a round-trip test belongs anyway, because it is the service that decides what a stored
+  list means. Named here rather than passed over in silence.
