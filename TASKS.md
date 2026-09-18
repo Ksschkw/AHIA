@@ -2756,3 +2756,53 @@ list he can work, price and hand over.
 - **What is left of the link is the screen**: a page at `/list/{shop}/{token}` that renders this, and the
   link travelling in the WhatsApp message and picture. The backend half is done and proven; the frontend
   half is the next commit.
+
+### M24.2c The hierarchy: group, subgroup, model - and the customer types the rest
+
+Described in the product owner's words with a worked example, and it changes the shape of the catalogue
+rather than the look of a screen.
+
+**Three levels, and only the exceptions are listed.**
+
+```
+Screenguard            <- group        (a product family)
+  21D                  <- subgroup     (the grade - the price lives here: 350 a piece)
+    Hot 8              <- model        (a SPECIAL: 370 instead of 350)
+  Privacy              <- subgroup
+  Metal                <- subgroup
+Pouches                <- another group
+```
+
+- Tapping a group shows its subgroups. Tapping a subgroup shows **its normal price and its specials**.
+- **Only specials are ever listed.** The trader does not have to type every model in: "Hot 8 at 370" is
+  listed because it differs, and the other four hundred models are not listed because they do not differ.
+- **The customer types any model in.** They pick the subgroup (21D), type the model themselves ("PO 2"),
+  and it takes the subgroup's price - 350. Type "iPhone 11", pick Privacy, set 5 pieces: allowed, priced
+  by the subgroup.
+- **Nothing is mandatory.** The point of the whole design, in his words: *there should be no limits on how
+  they want to make their list - no barrier should stop them using the app.*
+
+**And when the shop has nothing of the kind at all:**
+
+The customer **makes their own group, and a subgroup under it if they want**, then puts their items under
+it - with no price, because the trader prices what he has to go and find. Free text all the way down.
+
+**On the trader's side, the same structure, nested as far as he wants.**
+
+Adding a product must let him place it in a group, a subgroup, or a sub-sub-group - **as nested as he
+likes** - because that is how he already thinks about his stock. Today the catalogue holds one level
+(`categories`) and a product points at one of them; the model needs a parent on the category, so the
+tree can be as deep as the trade is.
+
+### What this changes
+
+- `categories` gains a **parent**, so a group can contain a subgroup and so on. The price and the pack
+  size stay where they are: on a node, inherited by everything beneath it until something overrides.
+- The **public catalogue** must expose that tree - group, subtree, specials - rather than a flat list of
+  products. It stays free of stock and of identifiers.
+- The **list builder** becomes a walk down the tree: pick a group, pick a subgroup, see its price and its
+  specials, add a special or type a model of your own, set the quantity. Then start another group.
+- The **list line** records what was chosen: group, subgroup, the item (a special or typed), the
+  quantity, and the price that applied - so the trader reads it as a list and not as a puzzle.
+- **A line the customer invented** - their own group or their own model - travels with no price, exactly
+  as a typed line does today.

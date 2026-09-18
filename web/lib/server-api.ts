@@ -26,6 +26,7 @@ type Schemas = components["schemas"];
 export type PublicProduct = Schemas["PublicProductSchema"];
 export type PublicStorefront = Schemas["PublicStorefrontSchema"];
 export type PublicProductPage = Schemas["PublicProductPageSchema"];
+export type PublicList = Schemas["PublicListSchema"];
 
 export async function fetchPublicShop(slug: string): Promise<PublicStorefront | null> {
   return getJson<PublicStorefront>(`/shop/${encodeURIComponent(slug)}`);
@@ -38,6 +39,16 @@ export async function fetchPublicProduct(
 ): Promise<PublicProductPage | null> {
   return getJson<PublicProductPage>(
     `/shop/${encodeURIComponent(slug)}/product/${encodeURIComponent(productSlug)}`,
+  );
+}
+
+/** One customer's list, at its own address. The token is the whole of the authority. */
+export async function fetchPublicList(
+  slug: string,
+  token: string,
+): Promise<PublicList | null> {
+  return getJson<PublicList>(
+    `/shop/${encodeURIComponent(slug)}/requests/${encodeURIComponent(token)}`,
   );
 }
 

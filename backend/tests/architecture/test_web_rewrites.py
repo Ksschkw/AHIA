@@ -48,6 +48,34 @@ def page_routes() -> list[str]:
     return routes
 
 
+def matches(rewrite_source: str, page_url: str) -> bool:
+    """Return True when a rewrite could answer for that page's address.
+
+    The rule is exact rather than heuristic: turn the rewrite into a pattern and ask whether it
+    matches
+    the page's URL. `/shop/:path*` matches `/shop/kosi-s-pot` - which is why it swallowed the
+    shopfront -
+    while `/shop/:slug/requests/:token*` requires a third segment and cannot match it at all. Two
+    earlier
+    versions of this guard got that wrong in opposite directions, so it now models what actually
+    happens
+    instead of reasoning about prefixes.
+    """
+    if page_url == "/":
+        return False
+    pattern = "^"
+    for segment in rewrite_source.strip("/").split("/"):
+        if segment.startswith(":"):
+            pattern += "/(?:[^/]+"
+            pattern += ".*)?" if segment.endswith("*") else ")"
+        elif "*" in segment:
+            pattern += "/.*"
+        else:
+            pattern += f"/{re.escape(segment)}"
+    pattern += "/?$"
+    return re.match(pattern, page_url) is not None
+
+
 def ends_in_a_wildcard(source: str) -> bool:
     """Return True when a rewrite's last segment is a parameter or a catch-all.
 
@@ -96,14 +124,10 @@ def test_no_rewrite_shadows_a_page_route() -> None:
 
     swallowed: list[str] = []
     for source in sources:
-        if not ends_in_a_wildcard(source):
-            # Specific to one shape of address, so it cannot be standing in front of a page.
-            continue
-        prefix = literal_prefix(source)
-        if prefix == "/":
-            continue
         for route in routes:
-            if route == prefix or route.startswith(prefix + "/"):
+            # A page address as it really appears, with its dynamic segments stood in for.
+            sample = re.sub(r"\[[^]]+\]", "sample", route)
+            if matches(source, sample):
                 swallowed.append(f"{source} covers the page at {route}")
 
     assert not swallowed, (

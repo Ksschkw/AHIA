@@ -142,6 +142,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/shop/{tenant_slug}/requests/{list_token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A customer's own list, at its own address
+         * @description Return the list a token names. The token is the whole of the authority, as a share link's
+         *     is.
+         */
+        get: operations["read_public_list_shop__tenant_slug__requests__list_token__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/share/{token}": {
         parameters: {
             query?: never;
@@ -3252,6 +3273,53 @@ export interface components {
             low_stock_threshold?: number | string | null;
         };
         /**
+         * PublicListLineSchema
+         * @description One line of a list, as the customer who sent it sees it.
+         *
+         *     The shop's price and nothing else: what it cost the trader, and what he makes, are his business
+         *     and
+         *     never travel to a customer - the same rule the shop page follows about stock.
+         */
+        PublicListLineSchema: {
+            /** Position */
+            position: number;
+            /** Text */
+            text: string;
+            /** Group */
+            group: string | null;
+            /** Quantity */
+            quantity: string;
+            /** Pieces */
+            pieces: string;
+            /** Shop Price */
+            shop_price: string | null;
+            /** Line Total */
+            line_total: string | null;
+            state: components["schemas"]["RequestLineState"];
+        };
+        /**
+         * PublicListSchema
+         * @description A customer's own list, at its own address.
+         */
+        PublicListSchema: {
+            /** Business Name */
+            business_name: string;
+            /** Tenant Slug */
+            tenant_slug: string;
+            status: components["schemas"]["RequestStatus"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Lines */
+            lines: components["schemas"]["PublicListLineSchema"][];
+            /** Priced Total */
+            priced_total: string | null;
+            /** Unpriced Line Count */
+            unpriced_line_count: number;
+        };
+        /**
          * PublicProductPageSchema
          * @description One product of a shop, with the shop it belongs to named.
          *
@@ -3289,6 +3357,10 @@ export interface components {
         /**
          * PublicRequestAcceptedSchema
          * @description What a customer is told: that it arrived, and nothing about the shop's own affairs.
+         *
+         *     It carries the list's own address, because the customer needs it: they will close the page, and
+         *     the
+         *     link is how they come back to their list - and how the trader opens the same one.
          */
         PublicRequestAcceptedSchema: {
             /**
@@ -3300,6 +3372,8 @@ export interface components {
             line_count: number;
             /** Message */
             message: string;
+            /** List Path */
+            list_path: string;
         };
         /**
          * PublicRequestLineSchema
@@ -4697,6 +4771,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicRequestAcceptedSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_public_list_shop__tenant_slug__requests__list_token__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+                list_token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicListSchema"];
                 };
             };
             /** @description Validation Error */

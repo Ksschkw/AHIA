@@ -31,8 +31,8 @@ const nextConfig: NextConfig = {
         // JSON instead of the shop, and the shopfront was broken in production while every check that
         // did not look at the content type stayed green. The only thing the browser needs from the API
         // under this prefix is the list a customer sends.
-        source: "/shop/:slug/requests",
-        destination: `${API_PROXY_TARGET}/shop/:slug/requests`,
+        source: "/shop/:slug/requests/:rest*",
+        destination: `${API_PROXY_TARGET}/shop/:slug/requests/:rest*`,
       },
     ];
   },

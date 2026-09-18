@@ -1,0 +1,124 @@
+/* The customer's list, at its own address: the same list the trader works, seen from their side.
+   Readable on a phone in one hand, and honest about what has and has not been priced. */
+
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-7);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  background: var(--sand);
+  min-height: 100vh;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.kicker {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+
+.shopName {
+  font-size: clamp(24px, 7vw, 34px);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.02em;
+}
+
+.status {
+  font-size: var(--text-sm);
+  color: var(--ink-2);
+}
+
+.section {
+  padding: var(--space-4);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.heading {
+  font-size: var(--text-sm);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--leaf-dark);
+  margin-bottom: var(--space-2);
+}
+
+.items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--line);
+}
+
+.item:first-child {
+  border-top: none;
+}
+
+.itemBody {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.itemName {
+  font-size: var(--text-base);
+  font-weight: 650;
+}
+
+.itemMeta {
+  font-size: var(--text-xs);
+  color: var(--ink-3);
+}
+
+.itemPrice {
+  font-weight: 750;
+  color: var(--leaf-dark);
+  flex: none;
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  background: var(--card);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+}
+
+.totalLabel {
+  font-size: var(--text-sm);
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.total {
+  font-size: var(--text-lg);
+  font-weight: 800;
+  color: var(--leaf-dark);
+}
+
+.updated {
+  font-size: var(--text-xs);
+  color: var(--ink-3);
+}
