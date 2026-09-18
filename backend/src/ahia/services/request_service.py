@@ -212,18 +212,29 @@ class RequestService:
 
         lines: list[RequestLineModel] = []
         for position, line in enumerate(payload.lines):
-            product_id = line.product_id
+            product_id: UUID | None = None
             free_text = line.free_text
-            if product_id is None and free_text is None:
-                free_text = "Something the shop does not list yet"
-            if product_id is not None:
-                product = await product_crud.require_by_id(
+            if line.product_slug is not None:
+                # The slug is resolved **inside this shop's own catalogue**, so a line can only ever
+                # name
+                # something this business sells - which is both a correctness rule and the shape of
+                # an
+                # attempt to read across tenants.
+                product = await product_crud.get_by_slug(
                     session,  # type: ignore[arg-type]
                     tenant_id=tenant_id,
-                    product_id=product_id,
+                    slug=line.product_slug,
                 )
-                # The catalogue names it, so the list reads the way the shop reads.
-                free_text = None if product is not None else free_text
+                if product is None:
+                    raise InvalidInputError(
+                        operation="submit_customer_list",
+                        entity="request_line",
+                        identifier=line.product_slug,
+                        detail="that item is not in this shop's catalogue",
+                    )
+                product_id = product.id
+            if product_id is None and free_text is None:
+                free_text = "Something the shop does not list yet"
 
             unit = line.unit
             pieces_per_pack = line.pieces_per_pack

@@ -93,6 +93,9 @@ export default async function ShopPage({ params }: Params) {
         {shop.description ? <p className={styles.description}>{shop.description}</p> : null}
 
         <div className={styles.heroActions}>
+          <Link className={styles.primary} href={`/list/${shop.tenant_slug}`}>
+            Build your list here
+          </Link>
           {whatsapp ? (
             <a className={styles.primary} href={whatsapp} rel="noreferrer noopener" target="_blank">
               Send your list on WhatsApp
@@ -160,11 +163,16 @@ export default async function ShopPage({ params }: Params) {
           Send us a list - a photograph of a written one works too - and we will find it, pack it and
           send it to you. Wholesale prices are available for bulk orders.
         </p>
-        {whatsapp ? (
-          <a className={styles.primary} href={whatsapp} rel="noreferrer noopener" target="_blank">
-            Send your list on WhatsApp
-          </a>
-        ) : null}
+        <div className={styles.heroActions}>
+          <Link className={styles.primary} href={`/list/${shop.tenant_slug}`}>
+            Build your list here
+          </Link>
+          {whatsapp ? (
+            <a className={styles.secondary} href={whatsapp} rel="noreferrer noopener" target="_blank">
+              Or send it on WhatsApp
+            </a>
+          ) : null}
+        </div>
       </section>
 
       <footer className={styles.footer}>

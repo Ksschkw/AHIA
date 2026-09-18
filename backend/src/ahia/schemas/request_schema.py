@@ -55,7 +55,10 @@ class PublicRequestLineSchema(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    product_id: UUID | None = None
+    #: The catalogue is addressed by slug in public, because a slug is what appears in a link and an
+    #: internal identifier must never be handed to a stranger. The service resolves it inside the
+    #: shop's own catalogue.
+    product_slug: Annotated[str, StringConstraints(min_length=1, max_length=200)] | None = None
     free_text: LineText | None = None
     quantity: Quantity = Decimal("1")
     unit: RequestLineUnit = RequestLineUnit.PIECE

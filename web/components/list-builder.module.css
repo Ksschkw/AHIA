@@ -1,0 +1,286 @@
+/* The list a customer builds.
+   Counts first, prices as context, and one button that sends it. Big targets, because this is used on
+   a phone, often while standing. */
+
+.page {
+  min-height: 100vh;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-4) var(--space-7);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  background: var(--sand);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-top: var(--space-3);
+}
+
+.kicker {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+
+.shopName {
+  font-size: clamp(24px, 7vw, 34px);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.02em;
+}
+
+.headline {
+  font-size: var(--text-base);
+  color: var(--ink-2);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.sectionTitle {
+  font-size: var(--text-lg);
+}
+
+.sectionHint {
+  font-size: var(--text-sm);
+  color: var(--ink-2);
+  line-height: var(--leading-normal);
+}
+
+.items {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.item,
+.itemChosen {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--line);
+}
+
+.item:first-child,
+.itemChosen:first-child {
+  border-top: none;
+}
+
+.itemChosen {
+  background: var(--leaf-soft);
+  margin: 0 calc(-1 * var(--space-3));
+  padding-inline: var(--space-3);
+  border-radius: var(--radius-sm);
+  border-top-color: transparent;
+}
+
+.itemBody {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.itemName {
+  font-size: var(--text-base);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.itemPrice {
+  font-size: var(--text-xs);
+  color: var(--ink-3);
+}
+
+/* The stepper is the primary control: a customer knows "twenty of these", so counting is the interface
+   and the price is context. */
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+}
+
+.stepButton {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.stepButton:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.stepValue {
+  width: 56px;
+  height: 40px;
+  text-align: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  font-size: var(--text-md);
+  font-weight: 700;
+  font-family: inherit;
+}
+
+.extraRow {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.extraInput {
+  flex: 1;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  font-family: inherit;
+  font-size: var(--text-base);
+}
+
+.addButton {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--leaf);
+  background: var(--leaf-soft);
+  color: var(--leaf-dark);
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.removeButton {
+  border: none;
+  background: none;
+  color: var(--danger);
+  font-weight: 700;
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.field,
+.textarea {
+  width: 100%;
+  min-height: 46px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  font-family: inherit;
+  font-size: var(--text-md);
+  background: var(--card);
+}
+
+.textarea {
+  min-height: 82px;
+  padding-top: var(--space-3);
+  resize: vertical;
+}
+
+.summary {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--card);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.summaryCount {
+  font-size: var(--text-sm);
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.summaryTotal {
+  font-size: var(--text-lg);
+  font-weight: 800;
+  color: var(--leaf-dark);
+}
+
+.summaryNote {
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--ink-3);
+  line-height: var(--leading-normal);
+}
+
+.primary,
+.send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--leaf);
+  color: #fff;
+  font-size: var(--text-md);
+  font-weight: 700;
+  text-decoration: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.send:disabled {
+  background: var(--ink-3);
+  cursor: progress;
+}
+
+.problem {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.done {
+  margin-top: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.doneTitle {
+  font-size: var(--text-xl);
+  line-height: var(--leading-tight);
+}
+
+.doneText {
+  font-size: var(--text-base);
+  color: var(--ink-2);
+  line-height: var(--leading-normal);
+}

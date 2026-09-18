@@ -25,6 +25,13 @@ const nextConfig: NextConfig = {
         source: "/api/:path*",
         destination: `${API_PROXY_TARGET}/api/:path*`,
       },
+      {
+        // The shop's own address is unversioned, and the list a customer sends goes to it: the same
+        // link the trader gave them, and the same one printed on a poster. Proxying it here means the
+        // browser never needs to know the API lives somewhere else, at any stage of the flow.
+        source: "/shop/:path*",
+        destination: `${API_PROXY_TARGET}/shop/:path*`,
+      },
     ];
   },
 };
