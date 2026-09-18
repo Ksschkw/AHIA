@@ -2806,3 +2806,13 @@ tree can be as deep as the trade is.
   quantity, and the price that applied - so the trader reads it as a list and not as a puzzle.
 - **A line the customer invented** - their own group or their own model - travels with no price, exactly
   as a typed line does today.
+
+- **The list page is verified in a browser at both sizes**, including the part that matters most: **the
+  trader priced a line and the page noticed by itself** - 350 set, state moved to "the shop is finding
+  it", within the polling window, with no refresh by the customer. The check also asserts what must
+  *never* appear: after the shop recorded a cost of 280 and a price of 350, the customer's page shows the
+  price and **nothing** about the cost or the margin, because the API sends a different shape to that
+  address rather than relying on a screen to omit a field.
+- Measured: `html=true, lines=true, honestTotal=true, selfUpdating=true, overflow=false, leaks=0` at
+  390x844 and 1440x900. The page says "2 lines still to be priced" and "Nothing priced yet" rather than
+  inventing a total, and tells the customer it updates on its own.
