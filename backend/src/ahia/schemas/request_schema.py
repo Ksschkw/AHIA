@@ -93,6 +93,24 @@ class PublicRequestAcceptedSchema(BaseModel):
     message: str
 
 
+class RequestLineWorkSchema(BaseModel):
+    """What the trader says about one line: where he got it, what it cost, what he charges.
+
+    Every field is optional and the difference between "not sent" and "sent as null" is preserved: a
+    price sent as null is not a price, a cost sent as null clears what he had recorded, and a state
+    sent
+    as null leaves it where it is.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    state: RequestLineState | None = None
+    #: What it cost him, when he had to go and buy it. Null clears it.
+    cost_price: Money | None = None
+    #: What the customer pays, per piece. On the list, not on the catalogue: this is the agreement.
+    shop_price: Money | None = None
+
+
 class RequestLineResponseSchema(BaseModel):
     """One line of a list, as the trader sees it."""
 
@@ -109,7 +127,14 @@ class RequestLineResponseSchema(BaseModel):
     pieces: str
     customer_price: str | None
     shop_price: str | None
+    # : What it cost him when he had to go and buy it. The one number paper can never give him: at
+    # the
+    #: end of a mixed list, this is what tells him what he actually made on it.
+    cost_price: str | None
     line_total: str | None
+    #: What he made on this line, when both numbers are known. None while one of them is missing,
+    #: because a margin computed from half the facts is a number somebody would act on.
+    margin: str | None
     state: RequestLineState
     image_key: str | None
 

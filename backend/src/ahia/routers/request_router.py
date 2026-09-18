@@ -19,6 +19,7 @@ from ahia.routers.tenant_router import require_tenant_context
 from ahia.schemas.request_schema import (
     PublicRequestAcceptedSchema,
     PublicRequestSchema,
+    RequestLineWorkSchema,
     RequestResponseSchema,
 )
 from ahia.services.request_service import RequestService
@@ -97,3 +98,39 @@ async def read_request(
 ) -> RequestResponseSchema:
     """Return one list, or refuse as if it did not exist."""
     return await service.read_request(tenant_context, request_id=request_id)
+
+
+@router.patch(
+    "/requests/{request_id}/lines/{line_id}",
+    response_model=RequestResponseSchema,
+    summary="Record what was done with one line of a list",
+)
+async def work_request_line(
+    request_id: UUID,
+    line_id: UUID,
+    payload: RequestLineWorkSchema,
+    tenant_context: TenantContextDependency,
+    service: RequestServiceDependency,
+) -> RequestResponseSchema:
+    """Say where the item came from, what it cost, and what the customer pays for it."""
+    return await service.work_line(
+        tenant_context,
+        request_id=request_id,
+        line_id=line_id,
+        changes=payload,
+    )
+
+
+@router.post(
+    "/requests/{request_id}/confirm",
+    response_model=RequestResponseSchema,
+    summary="Turn a list into a sale",
+)
+async def confirm_request(
+    request_id: UUID,
+    tenant_context: TenantContextDependency,
+    service: RequestServiceDependency,
+) -> RequestResponseSchema:
+    """Confirm the list. Refused while any line is unpriced, because a total with holes is not a
+    deal."""
+    return await service.confirm_request(tenant_context, request_id=request_id)

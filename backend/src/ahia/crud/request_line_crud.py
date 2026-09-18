@@ -138,6 +138,30 @@ async def update(session: AsyncSession, line: RequestLineModel) -> RequestLineMo
     return to_entity(record)
 
 
+async def require_by_id(
+    session: AsyncSession,
+    *,
+    tenant_id: UUID,
+    request_id: UUID,
+    line_id: UUID,
+) -> RequestLineModel:
+    """Return one line of one list, or refuse as if it did not exist.
+
+    Scoped by both the business and the list: a line identifier from another shop's list is not a
+    line
+    this caller may touch, and the refusal is the same as for one that was never there.
+    """
+    record = await session.get(RequestLineRecord, line_id)
+    if record is None or record.tenant_id != tenant_id or record.request_id != request_id:
+        raise NotFoundError(
+            operation="get_request_line",
+            entity="request_line",
+            identifier=str(line_id),
+            detail="no line matched in this list",
+        )
+    return to_entity(record)
+
+
 async def list_for_request(
     session: AsyncSession, *, tenant_id: UUID, request_id: UUID
 ) -> list[RequestLineModel]:

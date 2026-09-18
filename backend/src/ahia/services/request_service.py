@@ -44,6 +44,7 @@ from ahia.schemas.money_format import money_text, quantity_text
 from ahia.schemas.request_schema import (
     PublicRequestSchema,
     RequestLineResponseSchema,
+    RequestLineWorkSchema,
     RequestResponseSchema,
 )
 
@@ -91,7 +92,13 @@ def request_response(
                     None if line.customer_price is None else money_text(line.customer_price)
                 ),
                 shop_price=None if line.shop_price is None else money_text(line.shop_price),
+                cost_price=None if line.cost_price is None else money_text(line.cost_price),
                 line_total=None if line.line_total is None else money_text(line.line_total),
+                margin=(
+                    None
+                    if line.cost_price is None or line.line_total is None
+                    else money_text(line.line_total - line.cost_price * line.pieces)
+                ),
                 state=line.state,
                 image_key=line.image_key,
             )
@@ -321,3 +328,124 @@ class RequestService:
             return await request_crud.list_for_tenant(
                 unit_of_work.session_handle, tenant_context.tenant_id, limit=limit
             )
+
+    # ------------------------------------------------------------------
+    # What the trader does with a list: source it, price it, confirm it
+    # ------------------------------------------------------------------
+
+    async def work_line(
+        self,
+        tenant_context: TenantContext,
+        *,
+        request_id: UUID,
+        line_id: UUID,
+        changes: RequestLineWorkSchema,
+    ) -> RequestResponseSchema:
+        """Record what he did with one line: where he got it, what it cost, what he charges.
+
+        All of it in one call because it is one action at a counter - he picks the thing up,
+        decides, and
+        types the price. Three round trips for one decision would make the screen unusable in the
+        market,
+        where the connection is the reason he is standing there.
+        """
+        tenant_context.require_permission(
+            sales_permissions.SALES_CREATE,
+            operation="work_request_line",
+            resource_type="request_line",
+            resource_id=str(line_id),
+            logger=self._logger,
+        )
+        unit_of_work = self._unit_of_work_factory()
+        async with unit_of_work:
+            session = unit_of_work.session_handle
+            request = await request_crud.require_by_id(
+                session, tenant_id=tenant_context.tenant_id, request_id=request_id
+            )
+            if request.is_confirmed:
+                raise InvalidInputError(
+                    operation="work_request_line",
+                    entity="request",
+                    identifier=str(request_id),
+                    detail="this list is already a sale; a change to it is a return, not an edit",
+                )
+            line = await request_line_crud.require_by_id(
+                session,
+                tenant_id=tenant_context.tenant_id,
+                line_id=line_id,
+                request_id=request_id,
+            )
+            sent = changes.model_fields_set
+            if {"state", "cost_price"} & sent:
+                line = line.sourced_for(
+                    cost_price=changes.cost_price if "cost_price" in sent else line.cost_price,
+                    state=changes.state if changes.state is not None else line.state,
+                )
+            if "shop_price" in sent and changes.shop_price is not None:
+                line = line.priced_at(unit_price=changes.shop_price)
+            stored = await request_line_crud.update(session, line)
+            lines = await request_line_crud.list_for_request(
+                session, tenant_id=tenant_context.tenant_id, request_id=request_id
+            )
+            await unit_of_work.commit()
+
+        self._logger.info(
+            "request_line_worked",
+            tenant_id=str(tenant_context.tenant_id),
+            request_id=str(request_id),
+            line_id=str(stored.id),
+            state=stored.state.value,
+        )
+        return request_response(request, lines)
+
+    async def confirm_request(
+        self,
+        tenant_context: TenantContext,
+        *,
+        request_id: UUID,
+    ) -> RequestResponseSchema:
+        """Turn a list into a sale - the one moment money exists.
+
+        Refused while any line is unpriced, because a total with holes in it is not an agreement,
+        and
+        confirming one would write a sale nobody agreed to. The trader can still confirm a list he
+        never
+        priced line by line by pricing every line to zero, which is his business.
+        """
+        tenant_context.require_permission(
+            sales_permissions.SALES_CREATE,
+            operation="confirm_request",
+            resource_type="request",
+            resource_id=str(request_id),
+            logger=self._logger,
+        )
+        unit_of_work = self._unit_of_work_factory()
+        async with unit_of_work:
+            session = unit_of_work.session_handle
+            request = await request_crud.require_by_id(
+                session, tenant_id=tenant_context.tenant_id, request_id=request_id
+            )
+            lines = await request_line_crud.list_for_request(
+                session, tenant_id=tenant_context.tenant_id, request_id=request_id
+            )
+            unpriced = [line for line in lines if not line.is_priced]
+            if unpriced:
+                raise InvalidInputError(
+                    operation="confirm_request",
+                    entity="request",
+                    identifier=str(request_id),
+                    detail=(
+                        f"{len(unpriced)} line(s) have no price; price them first, "
+                        "because a total with holes is not an agreement"
+                    ),
+                )
+            confirmed = await request_crud.update(session, request.confirmed(at=datetime.now(UTC)))
+            await unit_of_work.commit()
+
+        self._logger.info(
+            "request_confirmed",
+            tenant_id=str(tenant_context.tenant_id),
+            request_id=str(request_id),
+            line_count=len(lines),
+        )
+        return request_response(confirmed, lines)
