@@ -2619,3 +2619,18 @@ did not know. He also asked the question that matters: **what exactly is the int
   were recorded by the service and missing from the declared change vocabulary, so the offline feed would
   have called a confirmed list an update rather than a creation. Declared now - the guard exists precisely
   because a map like that cannot be trusted to keep itself current.
+
+- **The storefront bug now has a guard in the repository's own tests**, not only in a browser script that
+  has to be run by hand. `tests/architecture/test_web_rewrites.py` reads `web/next.config.ts` and the
+  page tree and fails when a rewrite could swallow a page.
+- **It took two attempts to make the guard honest, and each wrong version is instructive.** The first
+  compared literal prefixes and passed the broken configuration it was written to catch, because
+  `literal_prefix` split on the leading slash and returned `/` for everything - a guard that never fires.
+  The second flagged the *correct* configuration, because a path like `/shop/:slug/requests` stops at its
+  parameter and its prefix covers the pages; a check that cries wolf is a check somebody deletes. The rule
+  that is actually true is about what a rewrite can **match**: one ending in a parameter or a wildcard can
+  swallow a whole subtree, and one ending in a literal cannot.
+- **Proven in both directions**: with the correct configuration it passes; with the old `/shop/:path*` it
+  fails, naming `/shop/[slug]` and `/shop/[slug]/product/[productSlug]` as the pages that would have
+  become JSON; restored, it passes again. A guard that has never failed for the right reason is a guard
+  nobody should trust.
