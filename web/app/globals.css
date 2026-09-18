@@ -121,3 +121,19 @@ a {
 .tabular {
   font-variant-numeric: tabular-nums;
 }
+
+
+/* The one animation in the product: a small ring that turns while something is being fetched. */
+@keyframes ahia-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

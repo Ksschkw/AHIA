@@ -9,7 +9,7 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import styles from "./ui.module.css";
 
@@ -325,19 +325,28 @@ export function Toast({
   tone: "good" | "bad";
   onDismiss: () => void;
 }) {
+  // Kept in a ref so the timer is not restarted by a re-render.
+  //
+  // This was the bug behind "it never goes away": the pages pass an inline arrow for `onDismiss`, so
+  // every render produced a new function, the effect re-ran, and the countdown began again. A toast
+  // that has to be dismissed by hand is a toast people learn to ignore, and then they miss the one
+  // that mattered.
+  const dismiss = useRef(onDismiss);
+  dismiss.current = onDismiss;
+
   useEffect(() => {
-    // A success can fade; a failure should not. A trader who missed the message has no way to find
-    // out what happened, and a message that disappears while a screenshot is taken is a message that
-    // cannot be diagnosed either.
-    if (tone !== "good") {
-      return;
-    }
-    const timer = window.setTimeout(onDismiss, 6000);
+    // Both tones disappear now. A failure stays a little longer, because it is the one worth reading,
+    // but nothing on this screen requires a tap to continue.
+    const timer = window.setTimeout(() => dismiss.current(), tone === "good" ? 4000 : 8000);
     return () => window.clearTimeout(timer);
-  }, [message, tone, onDismiss]);
+  }, [message, tone]);
 
   return (
-    <div className={`${styles.toast} ${tone === "good" ? styles.toastGood : styles.toastBad}`}>
+    <div
+      className={`${styles.toast} ${tone === "good" ? styles.toastGood : styles.toastBad}`}
+      role="status"
+      aria-live={tone === "good" ? "polite" : "assertive"}
+    >
       <span className={styles.toastText}>
         <span className={styles.toastMessage}>{message}</span>
         {hint ? <span className={styles.toastHint}>{hint}</span> : null}

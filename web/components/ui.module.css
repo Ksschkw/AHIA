@@ -457,3 +457,56 @@
   opacity: 0.75;
   letter-spacing: 0.02em;
 }
+
+/* The toast is a card, not a pill.
+   It sits at the bottom on a phone and in a corner on a desk; the text wraps inside it instead of
+   pushing the box wider, and the radius stays the same whatever the message says. A notification whose
+   shape changes with its content reads as a rendering fault, which is exactly how the trader described
+   it - and "sometimes the text is outside the borders" was the same problem seen from the other side. */
+.toast {
+  position: fixed;
+  left: var(--space-4);
+  right: var(--space-4);
+  bottom: calc(var(--bottombar-height) + var(--space-4));
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  max-width: min(440px, calc(100vw - 2 * var(--space-4)));
+  margin-inline: auto;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  box-shadow: var(--shadow-lg);
+  text-align: left;
+}
+
+.toastText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.toastMessage,
+.toastHint,
+.toastReference {
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-height: var(--leading-normal);
+}
+
+.toastClose {
+  flex: none;
+  align-self: flex-start;
+}
+
+@media (min-width: 900px) {
+  .toast {
+    left: auto;
+    right: var(--space-5);
+    bottom: var(--space-5);
+  }
+}
