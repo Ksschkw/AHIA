@@ -2547,3 +2547,20 @@ did not know. He also asked the question that matters: **what exactly is the int
       changing a price, removing a staff member, or confirming a payout asks for a short PIN that never
       leaves the device, while browsing the shop all day asks for nothing. Long session, short leash on
       the few actions that can cost money.
+
+- **M24.2 trader's screen, in progress, with one defect named.** `/app/lists` is built: it lists what
+  customers sent, opens one for work, shows each line with its counts, the three state buttons, the cost
+  and the price fields, the line total, the margin, a free-form "take off" and the confirm button.
+  **Verified in a browser at 390x844 and 1440x900**: the list renders with the customer's name, number,
+  note and counts; pressing **"I will buy it"** sends a real PATCH and the row changes to "Going to the
+  market"; the confirm is refused with 422 while a line is unpriced; the phone layout does not overflow.
+- **Open defect, and it is not small: the "Save this line" control did not fire a request in the browser
+  run.** Clicking it (synthetically, natively, and by keyboard activation) produced no PATCH, and no
+  browser console or page error either. The same service call is proven working against the API - a line
+  costs 280, sells at 350, and reports `margin: "1400.00"` - so the fault is in the screen, not the
+  service. **Six attempts to diagnose it by changing the check were wasted**: the honest lesson is that a
+  control which does not fire needs reading the component, not re-clicking it harder. It is the first
+  thing to fix next round, and the trader's screen is not finished until it works.
+- Also found while testing, and worth fixing in the same pass: **the sticky summary bar can sit over a
+  line's controls** on a short screen. A click aimed at a line lands on the summary instead. That is a
+  real interface fault on a phone, not only a testing artefact.

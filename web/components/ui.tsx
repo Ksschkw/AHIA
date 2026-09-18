@@ -23,6 +23,7 @@ export function Button({
   busy,
   type = "button",
   full,
+  id,
 }: {
   children: ReactNode;
   onClick?: () => void;
@@ -31,9 +32,12 @@ export function Button({
   busy?: boolean;
   type?: "button" | "submit";
   full?: boolean;
+  /** A stable name for the control, for a screen reader and for whoever is debugging the page. */
+  id?: string;
 }) {
   return (
     <button
+      id={id}
       type={type}
       className={`${styles.button} ${styles[tone]} ${full ? styles.full : ""}`}
       onClick={onClick}

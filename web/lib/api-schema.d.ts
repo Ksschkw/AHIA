@@ -114,6 +114,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/shop/{tenant_slug}/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a list to a shop
+         * @description Take a customer's list. No account, and no answer about the shop's own affairs.
+         *
+         *     The response says the list arrived and how many lines it has. It does not say whether anything
+         *     is in
+         *     stock, what anything costs the shop, or whether this customer has ordered before - none of which
+         *     is a
+         *     customer's business, and the first of which the product owner settled explicitly: an Igbo trader
+         *     is
+         *     never truly out of stock, he goes and finds it.
+         */
+        post: operations["submit_public_list_shop__tenant_slug__requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/share/{token}": {
         parameters: {
             query?: never;
@@ -1548,6 +1576,87 @@ export interface paths {
         get: operations["read_product_share_sheet_api_v1_tenants__tenant_id__products__product_id__share_sheet_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{tenant_id}/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lists customers have sent this business
+         * @description Return this business's lists, newest first, with their lines.
+         */
+        get: operations["list_requests_api_v1_tenants__tenant_id__requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{tenant_id}/requests/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One list, with its lines
+         * @description Return one list, or refuse as if it did not exist.
+         */
+        get: operations["read_request_api_v1_tenants__tenant_id__requests__request_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{tenant_id}/requests/{request_id}/lines/{line_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Record what was done with one line of a list
+         * @description Say where the item came from, what it cost, and what the customer pays for it.
+         */
+        patch: operations["work_request_line_api_v1_tenants__tenant_id__requests__request_id__lines__line_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/tenants/{tenant_id}/requests/{request_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn a list into a sale
+         * @description Confirm the list. Refused while any line is unpriced, because a total with holes is not a
+         *     deal.
+         */
+        post: operations["confirm_request_api_v1_tenants__tenant_id__requests__request_id__confirm_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3178,6 +3287,66 @@ export interface components {
             primary_image_url: string | null;
         };
         /**
+         * PublicRequestAcceptedSchema
+         * @description What a customer is told: that it arrived, and nothing about the shop's own affairs.
+         */
+        PublicRequestAcceptedSchema: {
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            /** Line Count */
+            line_count: number;
+            /** Message */
+            message: string;
+        };
+        /**
+         * PublicRequestLineSchema
+         * @description One thing a customer is asking for.
+         *
+         *     Either something from the catalogue - which carries a price they could see - or free text with
+         *     their
+         *     own words, because in real life nothing stops a customer asking for what the shop has not
+         *     listed.
+         *     An unpriced line is normal: the customer does not price what the trader has to go and find.
+         */
+        PublicRequestLineSchema: {
+            /** Product Slug */
+            product_slug?: string | null;
+            /** Free Text */
+            free_text?: string | null;
+            /**
+             * Quantity
+             * @default 1
+             */
+            quantity: number | string;
+            /** @default piece */
+            unit: components["schemas"]["RequestLineUnit"];
+            /** Pieces Per Pack */
+            pieces_per_pack?: number | null;
+            /** Note */
+            note?: string | null;
+            /** Customer Price */
+            customer_price?: number | string | null;
+            /** Image Key */
+            image_key?: string | null;
+        };
+        /**
+         * PublicRequestSchema
+         * @description A list as it arrives from somebody with no account.
+         */
+        PublicRequestSchema: {
+            /** Customer Phone */
+            customer_phone: string;
+            /** Customer Name */
+            customer_name?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Lines */
+            lines: components["schemas"]["PublicRequestLineSchema"][];
+        };
+        /**
          * PublicStorefrontSchema
          * @description A shop, as a stranger sees it.
          */
@@ -3289,6 +3458,118 @@ export interface components {
          * @enum {string}
          */
         ReportType: "DAILY_SALES" | "PRODUCT_PERFORMANCE" | "LOW_STOCK";
+        /**
+         * RequestLineResponseSchema
+         * @description One line of a list, as the trader sees it.
+         */
+        RequestLineResponseSchema: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Position */
+            position: number;
+            /** Product Id */
+            product_id: string | null;
+            /** Free Text */
+            free_text: string | null;
+            /** Note */
+            note: string | null;
+            /** Quantity */
+            quantity: string;
+            unit: components["schemas"]["RequestLineUnit"];
+            /** Pieces Per Pack */
+            pieces_per_pack: number | null;
+            /** Pieces */
+            pieces: string;
+            /** Customer Price */
+            customer_price: string | null;
+            /** Shop Price */
+            shop_price: string | null;
+            /** Cost Price */
+            cost_price: string | null;
+            /** Line Total */
+            line_total: string | null;
+            /** Margin */
+            margin: string | null;
+            state: components["schemas"]["RequestLineState"];
+            /** Image Key */
+            image_key: string | null;
+        };
+        /**
+         * RequestLineState
+         * @description What the trader found when he went looking.
+         *
+         *     `SOMEWHERE` is the state everything starts in and it is not a promise of stock: an Igbo trader
+         *     is
+         *     never truly out of stock, and a customer is never shown whether something is on the shelf.
+         * @enum {string}
+         */
+        RequestLineState: "somewhere" | "have_it" | "buy_it" | "cannot_get";
+        /**
+         * RequestLineUnit
+         * @description How a line is counted. A piece or a pack of them, and nothing in between.
+         * @enum {string}
+         */
+        RequestLineUnit: "piece" | "pack";
+        /**
+         * RequestLineWorkSchema
+         * @description What the trader says about one line: where he got it, what it cost, what he charges.
+         *
+         *     Every field is optional and the difference between "not sent" and "sent as null" is preserved: a
+         *     price sent as null is not a price, a cost sent as null clears what he had recorded, and a state
+         *     sent
+         *     as null leaves it where it is.
+         */
+        RequestLineWorkSchema: {
+            state?: components["schemas"]["RequestLineState"] | null;
+            /** Cost Price */
+            cost_price?: number | string | null;
+            /** Shop Price */
+            shop_price?: number | string | null;
+        };
+        /**
+         * RequestResponseSchema
+         * @description A list, as the business sees it - with its lines and what they come to.
+         */
+        RequestResponseSchema: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Customer Phone */
+            customer_phone: string;
+            /** Customer Name */
+            customer_name: string | null;
+            status: components["schemas"]["RequestStatus"];
+            /** Note */
+            note: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Lines */
+            lines: components["schemas"]["RequestLineResponseSchema"][];
+            /** Priced Total */
+            priced_total: string | null;
+            /** Unpriced Line Count */
+            unpriced_line_count: number;
+        };
+        /**
+         * RequestStatus
+         * @description Where a list has got to.
+         *
+         *     A customer sends it, the trader prices it, and then he confirms it - which is the single moment
+         *     a
+         *     wish becomes a sale. Cancelling is possible until it is confirmed, and not after: a confirmed
+         *     list
+         *     is a record of an agreement, and ending it is a refund or a return rather than a cancellation.
+         * @enum {string}
+         */
+        RequestStatus: "submitted" | "quoted" | "confirmed" | "cancelled";
         /**
          * RolePermissionsUpdateSchema
          * @description A replacement permission set for a role.
@@ -4381,6 +4662,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicProductPageSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_public_list_shop__tenant_slug__requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicRequestSchema"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicRequestAcceptedSchema"];
                 };
             };
             /** @description Validation Error */
@@ -7147,6 +7463,138 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProductShareSheetSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_requests_api_v1_tenants__tenant_id__requests_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestResponseSchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_request_api_v1_tenants__tenant_id__requests__request_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestResponseSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    work_request_line_api_v1_tenants__tenant_id__requests__request_id__lines__line_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+                line_id: string;
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestLineWorkSchema"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestResponseSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_request_api_v1_tenants__tenant_id__requests__request_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestResponseSchema"];
                 };
             };
             /** @description Validation Error */

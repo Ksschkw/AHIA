@@ -36,6 +36,9 @@ export type ExpenseCreate = Schemas["ExpenseCreateSchema"];
 export type ProductImage = Schemas["ProductImageResponseSchema"];
 export type Storefront = Schemas["StorefrontResponseSchema"];
 export type Member = Schemas["MembershipResponseSchema"];
+export type CustomerList = Schemas["RequestResponseSchema"];
+export type CustomerListLine = Schemas["RequestLineResponseSchema"];
+export type ListLineState = Schemas["RequestLineWorkSchema"]["state"];
 export type MembershipInvitation = Schemas["InvitationResponseSchema"];
 export type PendingInvitation = Schemas["PendingInvitationSchema"];
 export type AcceptedInvitation = Schemas["AcceptedInvitationSchema"];
@@ -819,6 +822,52 @@ export function acceptInvitation(token: string): Promise<AcceptedInvitation> {
   return request<AcceptedInvitation>("/api/v1/invitations/accept", {
     method: "POST",
     body: { token } satisfies Schemas["AcceptInvitationSchema"],
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The lists customers send
+// ---------------------------------------------------------------------------
+
+/** What the three buttons mean, in the trader's own words rather than the machine's. */
+export const LINE_STATES: { value: NonNullable<ListLineState>; label: string; hint: string }[] = [
+  { value: "have_it", label: "I have it", hint: "It is on the shelf" },
+  { value: "buy_it", label: "I will buy it", hint: "Go and find it in the market" },
+  { value: "cannot_get", label: "Cannot get it", hint: "Not available anywhere today" },
+];
+
+/** Every list this business has been sent, newest first, with its lines. */
+export function listCustomerLists(tenantId: string): Promise<CustomerList[]> {
+  return request<CustomerList[]>(`/api/v1/tenants/${tenantId}/requests`);
+}
+
+/**
+ * Say what was done with one line: where it came from, what it cost, what it is sold for.
+ *
+ * One call for the whole decision, because that is one action at a counter - and because the connection
+ * in a market is the reason the trader is standing there with a phone in his hand.
+ */
+export function workListLine(
+  tenantId: string,
+  requestId: string,
+  lineId: string,
+  changes: {
+    state?: NonNullable<ListLineState>;
+    cost_price?: string | null;
+    shop_price?: string | null;
+  },
+): Promise<CustomerList> {
+  return request<CustomerList>(
+    `/api/v1/tenants/${tenantId}/requests/${requestId}/lines/${lineId}`,
+    { method: "PATCH", body: changes satisfies Schemas["RequestLineWorkSchema"] },
+  );
+}
+
+/** Turn a list into a sale. The API refuses while any line is unpriced, and says so. */
+export function confirmCustomerList(tenantId: string, requestId: string): Promise<CustomerList> {
+  return request<CustomerList>(`/api/v1/tenants/${tenantId}/requests/${requestId}/confirm`, {
+    method: "POST",
+    body: {},
   });
 }
 
