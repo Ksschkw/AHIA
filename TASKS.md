@@ -2634,3 +2634,63 @@ did not know. He also asked the question that matters: **what exactly is the int
   fails, naming `/shop/[slug]` and `/shop/[slug]/product/[productSlug]` as the pages that would have
   become JSON; restored, it passes again. A guard that has never failed for the right reason is a guard
   nobody should trust.
+
+### M24.2 rewritten: how a list actually works, in the product owner's words
+
+Asked directly whether the in-person story was written down, and whether the list was understood. Parts
+were; the important parts were not, and two of them change the design. This replaces the sketch above.
+
+**1. A list is built like a cart, not like a form.**
+
+A customer **searches** for what the shop has and adds it, the way a cart works anywhere else. Not a
+stepper against every catalogue row - that was my design and it was wrong: a shop with two hundred models
+would be two hundred controls, and searching is how a person finds "21D Hot 8" among them.
+
+Anything the shop does not have is added the same way, in words, **with the price left blank** - and a
+picture if they have one.
+
+**2. Every line can say what it is, not only how many.**
+
+Quantity, and **group** - the heading a trader thinks in, 21D or privacy or charging cords. The list is
+readable the way a written one is: headings, then lines under them, then counts.
+
+**3. The list is shared as a picture, not as a message.**
+
+"Send on WhatsApp" should produce **a generated image of the list** - a picture of the paper slip, drawn
+from what they built - and send that, optionally with a short message. The list itself is not typed into
+the message: a typed list is unreadable, gets truncated, and cannot be forwarded as a list. The image can.
+
+**4. The same list is sent as a link, and both sides see the same thing.**
+
+The message carries a **link to the list on AHIA**. The trader opens it and does his work on it - prices,
+costs, what he makes - and **every change reaches both sides**. The customer adds a line while the trader
+is looking at it; the trader prices a line while the customer is still on the page. One list, two views,
+live.
+
+**5. The buyer is remembered by a cookie, because they have no account and will close the page.**
+
+The phone number identifies them in the trader's history, and a **browser cookie** keeps them attached to
+their open list: closing the tab, coming back tomorrow, or following the link again returns them to the
+same list rather than a blank one. That is the answer to "what if the buyer leaves the site" - and it is
+also why the link must be resumable rather than a one-time submission.
+
+**6. The in-person list, which was under-specified.**
+
+The product owner described two counter situations, and both belong in the design:
+
+- **They bring a written list.** The trader photographs it, or types it in while they stand there - the
+  same lines, entered by him instead of by them. It lives in the same place as a customer-built list, and
+  follows the same path: sourced, priced, packed, handed over.
+- **They dictate it.** "Bring Hot 8 five, bring XR five 21D, bring universal metal ten" - item by item,
+  with corrections, for twenty minutes. The trader enters the lines at speed while they talk and reads it
+  back. **A list he entered is marked as entered by him**, for the same reason a price is.
+
+Both are the *same* twenty minutes that a list sent from home removes, and both end in the same place: a
+list he can work, price and hand over.
+
+### Still true from before
+
+- No account for the customer; the phone number is the identity, and the reason is said out loud.
+- **Nothing about stock, ever**: an Igbo trader is never truly out of stock, he goes and finds it.
+- Prices are his, on the line, with no ceiling and no rule about a discount.
+- The market run is where the money is made visible: have it, buy it, cannot get it, and what it cost.

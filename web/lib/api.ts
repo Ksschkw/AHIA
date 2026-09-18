@@ -104,8 +104,6 @@ type RequestOptions = {
  * This is deliberately small and boring. It is not a data layer; it is the difference between a screen
  * that answers and a screen that makes somebody wait for something it already knew.
  */
-/** How long a read is trusted before it is fetched again. Short: a shop's numbers move. */
-const READ_FRESH_MS = 30_000;
 
 declare global {
   interface Window {
@@ -249,15 +247,14 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const method = options.method ?? "GET";
   const key = cacheKey(path, search);
 
-  // A read that has just been made is answered from what we have. This is the difference between a
-  // screen that opens and a screen that makes somebody watch a spinner for information the browser
-  // already holds.
-  if (method === "GET") {
-    const held = recall<T>(key);
-    if (held && Date.now() - held.at < READ_FRESH_MS) {
-      return held.value;
-    }
-  } else {
+  // **The cache seeds the first paint; it never replaces the network.**
+  //
+  // This used to answer a read made in the last thirty seconds from memory and skip the request
+  // entirely, which looked like a win and was a lie: a trader who added a product and came back to the
+  // dashboard within half a minute was shown his old shelf, and the screen had no way to discover
+  // otherwise. The screens already paint from `cachedRead` before they ask (see the dashboard), so
+  // removing the shortcut costs nothing visible and guarantees the answer is always current.
+  if (method !== "GET") {
     // A write invalidates everything: the only reliable moment to know a read is stale is right after
     // something changed.
     forgetEverythingFetched();

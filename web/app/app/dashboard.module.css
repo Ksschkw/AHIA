@@ -582,3 +582,188 @@
   text-decoration: none;
   color: inherit;
 }
+
+/* ---------------------------------------------------------------------------
+   The shelf.
+
+   The screen a trader uses twenty times a day, so it is built for scanning rather than for reading: a
+   photograph to recognise the thing by, the price and the count beside it, and the two actions that
+   matter where a thumb already is. Rows are short, the divider does the separating, and nothing is
+   hidden behind a menu.
+   --------------------------------------------------------------------------- */
+
+.shelf {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.shelfRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "thumb main"
+    "actions actions";
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--line);
+}
+
+.shelfRow:first-child {
+  border-top: none;
+}
+
+/* One row of controls on a phone and one line on a desk: a trader with a customer in front of him
+   should not be reaching past the goods to find the button. */
+@media (min-width: 620px) {
+  .shelfRow {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "thumb main actions";
+  }
+}
+
+.shelfThumb {
+  grid-area: thumb;
+  position: relative;
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--sand-2);
+  overflow: hidden;
+  padding: 0;
+  cursor: pointer;
+}
+
+.shelfThumbImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.shelfThumbEmpty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+
+.shelfMain {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.shelfName {
+  font-size: var(--text-base);
+  font-weight: 650;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.shelfFacts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: var(--text-xs);
+}
+
+.shelfPrice {
+  font-weight: 750;
+  color: var(--leaf-dark);
+}
+
+.shelfCount {
+  color: var(--ink-3);
+  font-weight: 600;
+}
+
+.shelfLow {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.shelfOut {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.shelfLive,
+.shelfHidden {
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+}
+
+.shelfLive {
+  background: var(--leaf-soft);
+  color: var(--leaf-dark);
+}
+
+.shelfHidden {
+  background: var(--sand-2);
+  color: var(--ink-3);
+}
+
+.shelfActions {
+  grid-area: actions;
+  display: flex;
+  gap: var(--space-2);
+}
+
+@media (min-width: 620px) {
+  .shelfActions {
+    justify-content: flex-end;
+  }
+}
+
+/* Both are 40px or taller: a target a thumb hits while somebody is waiting. */
+.shelfSell {
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--leaf);
+  background: var(--leaf);
+  color: #fff;
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.shelfSell:disabled {
+  background: var(--sand-2);
+  border-color: var(--line-strong);
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.shelfToggle {
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.shelfToggle[aria-pressed="true"] {
+  border-color: var(--leaf);
+  color: var(--leaf-dark);
+}

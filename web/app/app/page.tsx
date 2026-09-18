@@ -451,17 +451,20 @@ export default function Dashboard() {
             ) : products.length === 0 ? (
               <Empty>No products yet. Add the first thing you sell.</Empty>
             ) : (
-              <ul className={styles.list}>
+              <ul className={styles.shelf}>
                 {products.map((product) => {
                   const level = levelFor(product.id);
                   const quantity = Number(level?.available_quantity ?? "0");
                   const out = level?.is_out_of_stock ?? true;
                   const cover = coverPhoto(photos[product.id]);
                   return (
-                    <li key={product.id} className={styles.row}>
+                    <li key={product.id} className={styles.shelfRow}>
+                      {/* The photograph is the anchor of the row: a trader recognises his stock by
+                          sight long before he reads a name, and a shelf of photographs is a shelf
+                          somebody can scan while a customer waits. */}
                       {photosAvailable !== false ? (
                         <button
-                          className={styles.thumb}
+                          className={styles.shelfThumb}
                           onClick={() => setPhotoProduct(product)}
                           aria-label={
                             cover ? `Photos of ${product.name}` : `Add a photo of ${product.name}`
@@ -469,33 +472,69 @@ export default function Dashboard() {
                         >
                           {cover?.delivery_url ? (
                             /* eslint-disable-next-line @next/next/no-img-element */
-                            <img src={cover.delivery_url} alt="" className={styles.thumbImage} />
+                            <img src={cover.delivery_url} alt="" className={styles.shelfThumbImage} />
                           ) : (
-                            <span className={styles.thumbEmpty}>Photo</span>
+                            <span className={styles.shelfThumbEmpty}>+</span>
                           )}
                         </button>
                       ) : null}
-                      <div className={styles.rowMain}>
-                        <span className={styles.rowName}>{product.name}</span>
-                        <span className={`${styles.rowMeta} tabular`}>
-                          {formatMoneyOrOnRequest(product.selling_price, currency)}
+
+                      <span className={styles.shelfMain}>
+                        <span className={styles.shelfName}>{product.name}</span>
+                        <span className={styles.shelfFacts}>
+                          <span className={`${styles.shelfPrice} tabular`}>
+                            {formatMoneyOrOnRequest(product.selling_price, currency)}
+                          </span>
+                          {out ? (
+                            <span className={styles.shelfOut}>Out</span>
+                          ) : (
+                            <span className={quantity <= 3 ? styles.shelfLow : styles.shelfCount}>
+                              {formatQuantity(level?.available_quantity ?? "0")} left
+                            </span>
+                          )}
+                          <span className={product.is_published ? styles.shelfLive : styles.shelfHidden}>
+                            {product.is_published ? "In shop" : "Hidden"}
+                          </span>
                         </span>
-                      </div>
-                      <div className={styles.rowEnd}>
-                        {out ? (
-                          <Pill tone="bad">Out</Pill>
-                        ) : quantity <= 3 ? (
-                          <Pill tone="warn">
-                            {formatQuantity(level?.available_quantity ?? "0")} left
-                          </Pill>
-                        ) : (
-                          <Pill tone="good">
-                            {formatQuantity(level?.available_quantity ?? "0")} in stock
-                          </Pill>
-                        )}
+                      </span>
+
+                      <span className={styles.shelfActions}>
                         <button
-                          className={styles.rowAction}
+                          className={styles.shelfSell}
+                          disabled={busy || out}
+                          onClick={() => {
+                            void run(async () => {
+                              if (!businessId) return;
+                              const receipt = await recordSale(businessId, {
+                                discount_amount: "0.00",
+                                lines: [
+                                  {
+                                    product_id: product.id,
+                                    quantity: "1.000",
+                                    discount_amount: "0.00",
+                                  },
+                                ],
+                                payments: [
+                                  {
+                                    amount: product.effective_normal_price ?? "0.00",
+                                    method: "CASH",
+                                  },
+                                ],
+                              });
+                              await refresh();
+                              setNotice({
+                                message: `Sold one ${product.name} - ${receipt.sale.receipt_number} for ${formatMoney(receipt.sale.total_amount, currency)}`,
+                                tone: "good",
+                              });
+                            });
+                          }}
+                        >
+                          Sell one
+                        </button>
+                        <button
+                          className={styles.shelfToggle}
                           disabled={busy}
+                          aria-pressed={product.is_published}
                           title={
                             product.is_published
                               ? "Hide this from the public shop"
@@ -504,12 +543,11 @@ export default function Dashboard() {
                           onClick={() => {
                             void runShop(async () => {
                               if (!businessId) return;
-                              // **The switch moves first, the request follows.** Hiding something is
-                              // a decision the trader has already made, with a customer possibly
-                              // standing in front of him; making him wait for a round trip to a
-                              // server in another continent to see his own decision is the kind of
-                              // lag that makes a product feel broken. If the request fails, the
-                              // change comes back and the notice says so.
+                              // **The switch moves first, the request follows.** Hiding something is a
+                              // decision the trader has already made, with a customer possibly standing
+                              // in front of him; waiting for a round trip to another continent to see his
+                              // own decision is what makes a product feel broken. If it fails, the change
+                              // comes back and the notice says so.
                               const wasPublished = product.is_published;
                               setProducts((current) =>
                                 current.map((candidate) =>
@@ -544,36 +582,9 @@ export default function Dashboard() {
                             });
                           }}
                         >
-                          {product.is_published ? "In shop" : "Hidden"}
+                          {product.is_published ? "Hide" : "Show"}
                         </button>
-                        <button
-                          className={styles.rowAction}
-                          disabled={busy || out}
-                          onClick={() => {
-                            void run(async () => {
-                              if (!businessId) return;
-                              const receipt = await recordSale(businessId, {
-                                discount_amount: "0.00",
-                                lines: [
-                                  {
-                                    product_id: product.id,
-                                    quantity: "1.000",
-                                    discount_amount: "0.00",
-                                  },
-                                ],
-                                payments: [{ amount: product.effective_normal_price ?? "0.00", method: "CASH" }],
-                              });
-                              await refresh();
-                              setNotice({
-                                message: `Sold one ${product.name} - ${receipt.sale.receipt_number} for ${formatMoney(receipt.sale.total_amount, currency)}`,
-                                tone: "good",
-                              });
-                            });
-                          }}
-                        >
-                          Sell one
-                        </button>
-                      </div>
+                      </span>
                     </li>
                   );
                 })}
