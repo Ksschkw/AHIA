@@ -28,7 +28,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from ahia.core.config import load_settings
-from ahia.core.database import Base
+from ahia.core.database import Base, build_connect_arguments
 from ahia.crud.table_registry import import_all_record_modules
 
 # Importing every record module registers its table on Base.metadata. Without this,
@@ -88,10 +88,18 @@ async def run_async_migrations() -> None:
     configuration = dict(config.get_section(config.config_ini_section) or {})
     configuration["sqlalchemy.url"] = _settings_url()
 
+    # The same connect arguments the application uses, from the same function.
+    #
+    # Without this the migration engine ignored `DATABASE_REQUIRE_SSL` entirely: the API connected
+    # over TLS while the migration, in the same image with the same environment, was refused by the
+    # server for connecting insecurely. Reading a setting in one place and applying it in another is
+    # the shape of that bug, and the fix is to have only one place.
+    settings = load_settings()
     connectable = async_engine_from_config(
         configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=build_connect_arguments(settings),
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
