@@ -43,11 +43,21 @@ GUIDE
 fi
 
 # Read the file without exporting it into this shell's environment, and without printing values.
+# The values file is a copy of .env, which carries inline comments and sometimes quotes. Pushing
+# "postgresql://... # local dev only" into a production secret is the kind of mistake that looks like a
+# database outage, so the value is unwrapped here: everything after a " #" is a comment, and a value
+# wrapped in quotes loses them.
 value_of() {
   local key="$1"
   local line
   line="$(grep -E "^${key}=" "${VALUES_FILE}" | tail -1 || true)"
-  printf '%s' "${line#*=}"
+  local value="${line#*=}"
+  value="${value%%[[:space:]]#*}"
+  value="${value%"${value##*[![:space:]]}"}"
+  if [[ "${value}" == \"*\" || "${value}" == \'*\' ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+  printf '%s' "${value}"
 }
 
 require_value() {

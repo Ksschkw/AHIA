@@ -1,5 +1,10 @@
 # Deploying AHIA
 
+> **Doing this for the first time? Read `docs/DEPLOYMENT_STEPS.md` instead.** That one is the same
+> setup at the click level - where the Northflank API token lives, what the registry integration's
+> fields want, which of the three SSH identities pages to ignore, and what to try when a step fails.
+> This file is the reference: why each piece is the way it is.
+
 Written for the product owner's own free-tier setup, and written to be **done once, from a terminal,
 without clicking around a dashboard**. Every value below is either something you paste once or something
 a script sets for you.
