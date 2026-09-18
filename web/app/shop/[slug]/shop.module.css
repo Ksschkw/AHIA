@@ -1,26 +1,35 @@
+/* The shop a customer sees.
+   Written for a phone in one hand and daylight behind it: large type, generous targets, a photograph
+   that holds its shape whether or not the picture has loaded, and one unmistakable way to ask about
+   something. Everything here is a customer's screen, so nothing here mentions stock, prices we have not
+   set, or any word of the software's own vocabulary. */
+
 .page {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding-bottom: var(--space-6);
   background: var(--sand);
-  padding-bottom: 40px;
 }
 
 .header {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: rgba(251, 247, 240, 0.94);
-  backdrop-filter: blur(8px);
+  background: rgba(251, 247, 240, 0.92);
+  backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
 }
 
 .headerInner {
-  max-width: 1080px;
+  max-width: 900px;
   margin: 0 auto;
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .brand {
@@ -29,54 +38,110 @@
   gap: 8px;
 }
 
-.whatsapp {
-  display: inline-flex;
-  align-items: center;
-  min-height: 42px;
-  padding: 0 18px;
-  border-radius: 999px;
-  background: #1f9d55;
+.headerCta {
+  flex: none;
+  padding: 10px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--leaf);
   color: #fff;
-  font-weight: 650;
-  font-size: 14px;
+  font-size: var(--text-sm);
+  font-weight: 700;
   text-decoration: none;
 }
 
 .hero {
-  max-width: 1080px;
+  max-width: 900px;
+  width: 100%;
   margin: 0 auto;
-  padding: 28px 16px 20px;
-  text-align: center;
+  padding: var(--space-5) var(--space-4) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.kicker {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: var(--ink-3);
 }
 
 .shopName {
-  font-size: clamp(26px, 6vw, 40px);
+  font-size: clamp(28px, 8vw, 44px);
+  line-height: var(--leading-tight);
   letter-spacing: -0.02em;
 }
 
 .headline {
-  margin-top: 10px;
-  font-size: 17px;
-  color: var(--clay);
-  font-weight: 600;
+  font-size: var(--text-md);
+  font-weight: 650;
+  color: var(--ink);
 }
 
 .description {
-  margin: 12px auto 0;
-  max-width: 52ch;
+  font-size: var(--text-base);
   color: var(--ink-2);
+  max-width: 62ch;
+  line-height: var(--leading-normal);
 }
 
-.contact {
-  margin-top: 14px;
-  font-size: 13px;
-  color: var(--ink-3);
+.heroActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-md);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.primary {
+  background: var(--leaf);
+  color: #fff;
+  flex: 1 1 260px;
+}
+
+.primary:active {
+  background: var(--leaf-dark);
+}
+
+.secondary {
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  color: var(--ink);
+  flex: 1 1 200px;
+}
+
+.promise {
+  font-size: var(--text-sm);
+  color: var(--ink-2);
+  padding: var(--space-3);
+  border-left: 3px solid var(--leaf);
+  background: var(--leaf-soft);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 
 .catalogue {
-  max-width: 1080px;
+  max-width: 900px;
+  width: 100%;
   margin: 0 auto;
-  padding: 8px 16px 32px;
+  padding: 0 var(--space-4);
+}
+
+.sectionTitle {
+  font-size: var(--text-lg);
+  margin-bottom: var(--space-4);
 }
 
 .grid {
@@ -85,45 +150,53 @@
   padding: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: var(--space-3);
 }
 
-@media (min-width: 700px) {
+@media (min-width: 620px) {
   .grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-4);
   }
 }
 
-@media (min-width: 1000px) {
+@media (min-width: 900px) {
   .grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
 .card {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  overflow: hidden;
-  transition: transform 0.08s ease, box-shadow 0.15s ease;
-}
-
-.card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow);
+  min-width: 0;
 }
 
 .cardLink {
   display: flex;
   flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  padding: var(--space-2);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   text-decoration: none;
   color: inherit;
+  box-shadow: var(--shadow-sm);
 }
 
+.cardLink:active {
+  transform: scale(0.985);
+}
+
+/* A fixed shape, so a grid of products does not jump as photographs arrive one by one - which is what
+   makes a catalogue feel unstable on a slow connection. */
 .imageWrap {
   position: relative;
   display: block;
+  width: 100%;
   aspect-ratio: 1 / 1;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
   background: var(--sand-2);
 }
 
@@ -135,53 +208,70 @@
 }
 
 .imagePlaceholder {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, var(--sand-2), #e9e0d1);
-}
-
-.soldOut {
-  position: absolute;
-  left: 8px;
-  top: 8px;
-  background: rgba(30, 27, 22, 0.82);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 8px;
-  border-radius: 999px;
+  color: var(--ink-3);
 }
 
 .productName {
-  padding: 12px 12px 2px;
+  font-size: var(--text-sm);
   font-weight: 650;
-  font-size: 15px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .price {
-  padding: 0 12px 14px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  color: var(--leaf);
+  font-size: var(--text-md);
+  font-weight: 750;
+  color: var(--leaf-dark);
 }
 
 .empty {
-  text-align: center;
-  color: var(--ink-3);
-  padding: 40px 0;
+  font-size: var(--text-base);
+  color: var(--ink-2);
+  padding: var(--space-4);
+  background: var(--card);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+}
+
+.closing {
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--card);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.closingTitle {
+  font-size: var(--text-lg);
+}
+
+.closingText {
+  font-size: var(--text-base);
+  color: var(--ink-2);
+  max-width: 62ch;
+  line-height: var(--leading-normal);
 }
 
 .footer {
-  max-width: 1080px;
+  max-width: 900px;
+  width: 100%;
   margin: 0 auto;
-  padding: 16px;
+  padding: 0 var(--space-4);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  border-top: 1px solid var(--line);
-  font-size: 12px;
+  gap: var(--space-3);
+  font-size: var(--text-xs);
   color: var(--ink-3);
 }
 
@@ -189,4 +279,6 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  font-weight: 650;
+  color: var(--ink-2);
 }
