@@ -52,6 +52,7 @@ import {
   listBusinesses,
   listExpenseCategories,
   listProductImages,
+  cachedRead,
   listProducts,
   listSales,
   listStock,
@@ -146,6 +147,22 @@ export default function Dashboard() {
   }, []);
 
   const loadBusiness = useCallback(async (tenantId: string) => {
+    // **Everything already known is painted first, before a single request is made.** This is the
+    // difference the trader was describing: before, a refresh showed an empty shelf while the same
+    // data sat in local storage, and the screen looked like it had forgotten his shop. What follows
+    // replaces it if anything changed, silently - no spinner, because there is something to show.
+    const rememberedProducts = cachedRead<Product[]>(
+      `/api/v1/tenants/${tenantId}/products`,
+    );
+    const rememberedStock = cachedRead<InventoryLevel[]>(`/api/v1/tenants/${tenantId}/inventory`);
+    if (rememberedProducts) {
+      setProducts(rememberedProducts);
+      setShelfState("ready");
+    }
+    if (rememberedStock) {
+      setStock(rememberedStock);
+    }
+
     const [foundProducts, foundStock, summary, sales, low, expenseCategories] = await Promise.all([
       listProducts(tenantId),
       listStock(tenantId),

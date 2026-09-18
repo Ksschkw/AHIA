@@ -382,7 +382,14 @@ class StorefrontService:
             business_name=business_name,
             headline=shop.headline,
             description=shop.description,
-            contact_phone=shop.contact_phone,
+            # The shop's own number if it has one, otherwise the business's - which is where a
+            # trader
+            # actually put it. Reading only the shop's field meant a customer on a product page was
+            # told "this shop has no number to message yet" while the trader had already saved one
+            # on
+            # his business, which is the one thing that must never happen: a shop nobody can ask a
+            # question is a shop nobody buys from.
+            contact_phone=shop.contact_phone or tenant.phone,
             products=tuple(catalogue),
         )
 

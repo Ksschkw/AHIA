@@ -82,7 +82,7 @@ export default async function ProductPage({ params }: Params) {
           <p className={detail.price}>{formatMoneyOrOnRequest(product.selling_price)}</p>
           {/* Availability is not a customer's business: an Igbo trader is never truly out of
               stock - he goes and finds it. What a customer reads here is what the shop does. */}
-          <p className={detail.available}>This can be sourced for you</p>
+          <p className={detail.available}>We will get it for you</p>
           {product.description ? <p className={detail.description}>{product.description}</p> : null}
 
           <div className={detail.actions}>
@@ -92,7 +92,7 @@ export default async function ProductPage({ params }: Params) {
               </a>
             ) : (
               <span className={detail.noContact}>
-                This shop has no number to message yet.
+                Message the shop to order this.
               </span>
             )}
           </div>
