@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #
 # Set every GitHub secret and variable the deployment workflows need, from one local file.
-#
 #   bash backend/scripts/configure_deployment.sh
 #
 # Why a script rather than a list of click-by-click instructions: a secret typed into a dashboard is a
