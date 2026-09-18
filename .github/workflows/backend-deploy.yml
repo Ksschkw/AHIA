@@ -143,44 +143,39 @@ jobs:
           IMAGE_REF: ${{ steps.image.outputs.ref }}
         run: |
           set -euo pipefail
+          service="https://api.northflank.com/v1/projects/${PROJECT_ID}/services/${SERVICE_ID}"
 
-          # A 405 is a precise answer: the URL exists and the method does not. The candidates below are
-          # the documented shapes for changing a service's image, tried in order, and the one that works
-          # is printed - because guessing a payload shape and hoping is how a pipeline becomes something
-          # nobody trusts. Once the working call is known, this collapses to a single curl.
-          base="https://api.northflank.com/v1/projects/${PROJECT_ID}/services/${SERVICE_ID}"
+          # The endpoint, established by asking rather than guessing. Four shapes returned 405, and an
+          # `OPTIONS` request settled why: the service resource allows only HEAD, GET and DELETE, while
+          # its deployment subresource allows HEAD, GET and **POST**. A deployment is created, not a
+          # service patched - which is the opposite of what the API shape suggests from the outside.
+          echo "POST ${service}/deployment"
+          curl --fail-with-body --silent --show-error \
+            --request POST "${service}/deployment" \
+            --header "Authorization: Bearer ${API_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data "$(jq -n --arg image "${IMAGE_REF}" '{imagePath: $image}')"
+          echo
 
-          attempt() {
-            local label="$1" method="$2" url="$3" body="$4"
-            local status
-            status="$(curl --silent --output /tmp/reply.json --write-out '%{http_code}' \
-              --request "${method}" "${url}" \
-              --header "Authorization: Bearer ${API_TOKEN}" \
-              --header "Content-Type: application/json" \
-              --data "${body}" || true)"
-            echo "${label}: HTTP ${status}"
-            if [[ "${status}" == 2* ]]; then
-              echo "worked=${label}" >> "${GITHUB_OUTPUT}"
-              return 0
-            fi
-            head -c 400 /tmp/reply.json; echo
-            return 1
-          }
-
-          image_body="$(jq -n --arg image "${IMAGE_REF}" '{imagePath: $image}')"
-          docker_body="$(jq -n --arg image "${IMAGE_REF}" '{deployment: {docker: {imagePath: $image}}}')"
-          external_body="$(jq -n --arg image "${IMAGE_REF}" '{deployment: {external: {imagePath: $image}}}')"
-
-          attempt "PATCH ${base}/deployment (imagePath)"     PATCH "${base}/deployment" "${image_body}" \
-            || attempt "PUT ${base} (deployment.docker)"      PUT   "${base}"             "${docker_body}" \
-            || attempt "PUT ${base} (deployment.external)"    PUT   "${base}"             "${external_body}" \
-            || attempt "PATCH ${base} (deployment.docker)"    PATCH "${base}"             "${docker_body}" \
-            || { echo "none of the documented shapes worked"; exit 1; }
+          # Then check what the service is actually running, because a 200 only says the request was
+          # accepted. If the image path came back unchanged, the body is ignored and this service follows
+          # whatever tag it was configured with - which is worth knowing from the log rather than
+          # discovering during an incident.
+          sleep 5
+          running="$(curl --fail-with-body --silent --show-error "${service}" \
+            --header "Authorization: Bearer ${API_TOKEN}" \
+            | jq -r '.data.service.deployment.imagePath // "unknown"')"
+          echo "the service now runs: ${running}"
+          echo "this commit's image:  ${IMAGE_REF}"
 
           {
             echo "### Deployed"
             echo ""
-            echo "- image: \`${IMAGE_REF}\`"
-            echo "- migration: ran from that same image, before the service was re-pointed"
-            echo "- api call: \`${{ steps.migrate.outcome }}\` after ${{ steps.image.outputs.tag }}"
+            echo "- asked for: \`${IMAGE_REF}\`"
+            echo "- the service reports: \`${running}\`"
+            echo "- migration: ran from that image, before the service was re-pointed"
           } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "${running}" != "${IMAGE_REF}" ]]; then
+            echo "note: the service reports a different image; it is following its configured tag"
+          fi
