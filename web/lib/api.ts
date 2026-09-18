@@ -176,6 +176,49 @@ export function forgetEverythingFetched(): void {
  * and this module is imported by everything: a counter plus an event is the whole contract, and it
  * cannot be forgotten by a new caller the way a per-page loading flag can.
  */
+/**
+ * Trade the refresh cookie for a new session, silently.
+ *
+ * The access token lives fifteen minutes; the refresh cookie lives a year. Only the first one was ever
+ * being used, so every quarter of an hour the application behaved as if the person had signed out -
+ * which is the single most annoying thing a product can do, and the opposite of how WhatsApp or GitHub
+ * feel. This is the whole fix: when something answers 401, ask once for a new session, then do the
+ * original thing again. The person sees their screen, not a login form.
+ *
+ * A direct `fetch` rather than `request`, because this is called from inside `request` and a recursive
+ * refresh on a failing refresh would loop.
+ */
+let refreshInFlight: Promise<boolean> | null = null;
+
+function refreshSession(): Promise<boolean> {
+  refreshInFlight ??= (async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // The body is optional on the API, because the refresh token travels in its own cookie.
+        body: "{}",
+        credentials: "include",
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+      return response.ok;
+    } catch {
+      return false;
+    } finally {
+      // Cleared on the next tick so concurrent callers share one attempt rather than racing.
+      setTimeout(() => {
+        refreshInFlight = null;
+      }, 0);
+    }
+  })();
+  return refreshInFlight;
+}
+
+/** The paths that must never trigger a refresh: signing in is how a session is created, not renewed. */
+function isSessionPath(path: string): boolean {
+  return path.startsWith("/api/v1/auth/");
+}
+
 function announceInFlight(delta: number): void {
   if (typeof window === "undefined") {
     return;
@@ -252,6 +295,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   announceInFlight(-1);
+
+  // A session that has quietly expired, restored without the person noticing.
+  if (response.status === 401 && !isSessionPath(path)) {
+    if (await refreshSession()) {
+      response = await send();
+    }
+  }
 
   if (response.status === 204) {
     return undefined as T;

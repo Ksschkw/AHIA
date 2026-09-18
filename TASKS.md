@@ -2485,3 +2485,15 @@ did not know. He also asked the question that matters: **what exactly is the int
       one problem: the box grew sideways with its content. Fixed width, fixed radius, text that wraps.
 - [ ] **M23.4.3 Say what is happening in words a trader uses.** Every waiting state gets a sentence
       rather than a bare spinner: "Fetching your shelf", "Recording the sale", "Packing...".
+
+- **M24: the four surfaces that decide whether this feels like a product.** The product owner's
+  instruction, in his words: pour heart and soul into the storefront, the waybill and the list, and the
+  shelf. Nothing else gets attention until those are clean. They are also the four things a customer or a
+  trader actually touches, which is why the priority is right.
+- **The login problem had a specific cause, and it was a missing call.** The access token lives fifteen
+  minutes, the refresh cookie a year, and the web client **never called refresh at all** - so every
+  quarter of an hour the application behaved as if the person had signed out. The client now renews
+  itself: a 401 on any non-auth request asks once for a new session and repeats the original request, so
+  a stale token is invisible. The refresh token's default life is a year, because a trader should not
+  sign in again on a phone he owns; it is revocable, rotatable, and useless without the cookie it
+  travels in, which is what makes a long life safe here.

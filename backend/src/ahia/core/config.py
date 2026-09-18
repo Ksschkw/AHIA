@@ -336,7 +336,10 @@ class Settings(BaseSettings):
     jwt_issuer: str = "ahia-api"
     jwt_audience: str = "ahia-clients"
     access_token_ttl_minutes: int = Field(default=15, ge=1, le=1_440)
-    refresh_token_ttl_days: int = Field(default=30, ge=1, le=365)
+    #: A year by default. A trader should not have to sign in again on a phone he owns, and the
+    #: refresh token is revocable, rotatable and useless without the cookie it travels in - which is
+    #: what makes a long life safe here in a way it would not be for a bearer token.
+    refresh_token_ttl_days: int = Field(default=365, ge=1, le=365)
     refresh_token_pepper: SecretStr
     argon2_time_cost: int = Field(default=3, ge=1, le=10)
     argon2_memory_cost_kib: int = Field(default=65_536, ge=8_192, le=1_048_576)
