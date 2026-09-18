@@ -1,0 +1,85 @@
+# Build the backend's container image here, and let the platform only run it.
+#
+# Why the image is built in Actions rather than on the host: compiling the dependency closure and
+# assembling layers is the expensive half of a deployment, and a platform's build minutes are the
+# scarcest resource on a free tier. Building once here, caching the layers between runs, and pushing to
+# the GitHub Container Registry means the host pulls a finished image and does nothing but start it -
+# which is also what makes a rollout fast enough to be worth doing often.
+#
+# The build does not run the test suite. `backend-check.yml` is the gate and it runs on the same push;
+# this workflow's job is to produce an artifact, and an image that exists but failed the gate is not
+# deployed because Northflank deploys the tag the gate passed, which is the commit's own tag.
+name: backend image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-image.yml"
+  workflow_dispatch:
+
+# Only the permissions this workflow needs: read the code, write the package.
+permissions:
+  contents: read
+  packages: write
+
+env:
+  # Lowercase, because a container reference may not carry capitals and GitHub logins often do.
+  IMAGE: ghcr.io/${{ github.repository_owner }}/ahia-backend
+
+jobs:
+  image:
+    name: build and push
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Sign in to the GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Work out the tags
+        id: tags
+        run: |
+          # The commit sha is the tag that matters: it is what the platform pins, and what makes a
+          # rollback a matter of pointing at an earlier sha rather than rebuilding anything.
+          echo "sha=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile
+          push: true
+          # Both tags on one build: the immutable one the platform deploys, and the moving one that
+          # says what the latest main looks like.
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.tags.outputs.sha }}
+            ${{ env.IMAGE }}:main
+          # Layer caching is the difference between a two-minute build and a fifteen-minute one,
+          # because the dependency installation is the layer that rarely changes.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      - name: Say what was published
+        run: |
+          {
+            echo "### Backend image published"
+            echo ""
+            echo "- \`${{ env.IMAGE }}:${{ steps.tags.outputs.sha }}\`"
+            echo "- \`${{ env.IMAGE }}:main\`"
+            echo ""
+            echo "Deploy by pointing the Northflank service at the sha tag above."
+          } >> "$GITHUB_STEP_SUMMARY"

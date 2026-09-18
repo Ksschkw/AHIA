@@ -1912,6 +1912,72 @@ Each line is one commit, and the note under it is what you will be able to see a
 
 ---
 
+---
+
+## M22 - The interface, rebuilt to a professional standard
+
+The product owner's verdict, in his words: the dashboard does not feel right, the interface is
+"cut and join", and it is not the standard of a product people pay for. He asked for a bottom navigation
+bar on mobile, a side bar on desktop, and for his profile to be findable. This is that work, and it is
+a rebuild rather than a repaint.
+
+**What is wrong, stated plainly, because the fix depends on naming it.** Every screen invents its own
+layout: padding, card shapes, button sizes and heading weights differ page to page, so the product reads
+as a collection of screens rather than one application. Navigation is invisible - the way to the team,
+the prices or the profile is a word in a corner, and on a phone some of it is not reachable at all. The
+dashboard shows everything at equal weight, so a trader scanning it for "what is happening now" has to
+read all of it to find out. And the visual vocabulary is thin: no type scale, no spacing rhythm, no
+consistent elevation or radius, which is exactly what "cut and join" describes.
+
+### M22.1 The shell: one frame for every screen
+
+- [ ] **M22.1.1 Design tokens in one place.** A type scale, a spacing scale, radii, elevation, and the
+      colour roles with contrast checked. Every later decision refers to these rather than to magic
+      numbers, so the application stops having a different idea of "16px" on every page.
+      *You will see:* nothing yet; the vocabulary the rest is written in.
+- [ ] **M22.1.2 The application shell.** A persistent frame with the business name and switcher, the
+      primary destinations (Home, Sales, Items, Lists, Team, Prices, Profile) and a clear "record
+      something" action.
+      *You will see:* the same frame on every screen, so it stops being a set of pages.
+- [ ] **M22.1.3 A bottom bar on a phone, a side bar on a desk.** The same destinations, placed where the
+      thumb and the eye expect them: a bottom bar with icons and labels on mobile, a side bar with room
+      for longer labels on desktop.
+      *You will see:* your profile and everything else reachable with one tap, on either device.
+- [ ] **M22.1.4 Where you are, and how you got there.** The current destination marked, a page title that
+      matches, and a back route that does not lose the business.
+      *You will see:* you always know which screen you are on.
+
+### M22.2 The dashboard, once it has a frame
+
+- [ ] **M22.2.1 What is happening now, first.** Today's money, what is waiting to be packed, and what is
+      running out - in that order, because that is the order a trader asks.
+      *You will see:* the answer to "how is today going" in one look.
+- [ ] **M22.2.2 One primary action, the rest secondary.** "Record" is the thing he does twenty times a
+      day; everything else is behind it.
+      *You will see:* less on screen, less to read, less to get wrong under time pressure.
+- [ ] **M22.2.3 The shelf, as a list that reads like a shelf.** Denser, with the photograph, the price
+      and the stock in one line, and the row actions where the thumb reaches.
+      *You will see:* more of the shop on one screen, and no hunting for the toggle.
+
+### M22.3 Every other screen, to the same standard
+
+- [ ] **M22.3.1 The forms**: sale, product, stock, expense, photo, shop, business - one sheet pattern,
+      one field pattern, one error position.
+- [ ] **M22.3.2 The public shopfront and product page**: the shop a customer sees first, which is the
+      only screen that has to sell without anybody explaining it.
+- [ ] **M22.3.3 The team, prices, profile and join screens**: fitted to the shell rather than each
+      carrying its own header.
+- [ ] **M22.3.4 Empty and loading states**: every screen says what to do when it has nothing to show,
+      and says it without a spinner over the whole page.
+
+### M22.4 Verified the way the product owner will use it
+
+- [ ] **M22.4.1 Mobile at 390x844 and desktop at 1440x900**, screenshotted, with the mobile check failing
+      on any viewport overflow - the existing standard, applied to the new frame.
+- [ ] **M22.4.2 Contrast, focus states and keyboard reach**, because a professional interface is one a
+      person can operate without a mouse, and the product owner's own phone is the least forgiving
+      device it runs on.
+
 ## Open questions for the product owner
 
 Every question asked and not yet answered, in one place, with the default I will take if nobody says
@@ -2278,3 +2344,19 @@ Asked directly, and worth a standing answer because it decides how fast everythi
   are covered by lint, types and the policy tests, and their first real exercise will be the service in
   M21.2.2 - where a round-trip test belongs anyway, because it is the service that decides what a stored
   list means. Named here rather than passed over in silence.
+
+- **Deployment pipeline decided and written down** in `docs/DEPLOYMENT.md`: the backend image is built
+  in GitHub Actions and pushed to the GitHub Container Registry, and Northflank only pulls and runs it.
+  This is the product owner's own suggestion and it is the right call - compiling the dependency closure
+  on the platform would spend the scarcest resource on a free tier on every deploy, which makes
+  deploying something to avoid. The image is immutable and addressed by commit sha, so a rollback is
+  pointing at an earlier tag rather than rebuilding an earlier commit. The web app needs no container:
+  Vercel builds it from the repository, with the API proxied so the session cookie stays first-party.
+  The prerequisites that adds - a GHCR package, a Northflank registry credential, and a **separate
+  migration job** run once before the rollout - are all named in the guide, because finding them out by
+  failure is the expensive way.
+- **The four append-only ledger tests reported as failing on CI were already fixed.** The report was
+  analysed against `fb9c828`, which is an ancestor of nothing - the guard fix landed later in `dd90dac`.
+  Re-verified by dropping the schema in a scratch database and running exactly those four tests against
+  a database built the way CI builds one: all four pass. The lesson is worth keeping: a failure report
+  is only about a commit if you check which commit it came from.
