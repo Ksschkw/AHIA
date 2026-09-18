@@ -326,65 +326,19 @@ export default function Dashboard() {
 
   return (
     <main className={styles.page}>
-      <header className={styles.topbar}>
-        <div className={styles.brand}>
-          <Brand>
-            <span className={styles.brandStack}>
-              <Wordmark />
-              <span className={styles.brandSub}>
-                {business ? business.name : "No business yet"}
-              </span>
-            </span>
-          </Brand>
-        </div>
-        <div className={styles.account}>
-          {businesses.length > 0 ? (
-            <button
-              className={styles.addBusiness}
-              aria-label="Add another business"
-              title="Add another business"
-              onClick={() => setSheet("business")}
-            >
-              + New
-            </button>
-          ) : null}
-          <select
-            className={styles.businessPicker}
-            value={businessId ?? ""}
-            onChange={(event) => {
-              void run(() => selectBusiness(event.target.value));
-            }}
-          >
-            {businesses.map((candidate) => (
-              <option key={candidate.id} value={candidate.id}>
-                {candidate.name}
-              </option>
-            ))}
-          </select>
-          <Link className={styles.who} href="/app/profile">
-            {user.first_name} {user.last_name}
-          </Link>
-          <button
-            className={styles.linkButton}
-            onClick={() => {
-              void run(async () => {
-                await signOut();
-                setUser(null);
-                setBusinesses([]);
-                setBusinessesLoaded(false);
-                setBusinessId(null);
-                setBusinessDetail(null);
-                if (typeof window !== "undefined") {
-                  window.localStorage.removeItem(STORAGE_KEY);
-                }
-                router.replace("/");
-              });
-            }}
-          >
-            Sign out
-          </button>
-        </div>
-      </header>
+      {/* The shell owns the frame now: the brand, the business switcher and the way to the profile
+          all live there, so this page carries only what is particular to it - and the one action the
+          frame cannot offer, which is starting another business. */}
+      <div className={styles.pageActions}>
+        <button
+          className={styles.addBusiness}
+          aria-label="Add another business"
+          title="Add another business"
+          onClick={() => setSheet("business")}
+        >
+          + New business
+        </button>
+      </div>
 
       <div className={styles.content}>
         <section className={styles.heroRow}>

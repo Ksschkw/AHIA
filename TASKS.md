@@ -1931,15 +1931,15 @@ consistent elevation or radius, which is exactly what "cut and join" describes.
 
 ### M22.1 The shell: one frame for every screen
 
-- [ ] **M22.1.1 Design tokens in one place.** A type scale, a spacing scale, radii, elevation, and the
+- [x] **M22.1.1 Design tokens in one place.** A type scale, a spacing scale, radii, elevation, and the
       colour roles with contrast checked. Every later decision refers to these rather than to magic
       numbers, so the application stops having a different idea of "16px" on every page.
       *You will see:* nothing yet; the vocabulary the rest is written in.
-- [ ] **M22.1.2 The application shell.** A persistent frame with the business name and switcher, the
+- [x] **M22.1.2 The application shell.** A persistent frame with the business name and switcher, the
       primary destinations (Home, Sales, Items, Lists, Team, Prices, Profile) and a clear "record
       something" action.
       *You will see:* the same frame on every screen, so it stops being a set of pages.
-- [ ] **M22.1.3 A bottom bar on a phone, a side bar on a desk.** The same destinations, placed where the
+- [x] **M22.1.3 A bottom bar on a phone, a side bar on a desk.** The same destinations, placed where the
       thumb and the eye expect them: a bottom bar with icons and labels on mobile, a side bar with room
       for longer labels on desktop.
       *You will see:* your profile and everything else reachable with one tap, on either device.
@@ -2369,3 +2369,20 @@ Asked directly, and worth a standing answer because it decides how fast everythi
   Re-verified by dropping the schema in a scratch database and running exactly those four tests against
   a database built the way CI builds one: all four pass. The lesson is worth keeping: a failure report
   is only about a commit if you check which commit it came from.
+
+- **M22.1.1 to M22.1.3 done: the frame exists, and it is one frame.** The scales are in `globals.css` -
+  a type scale, a spacing rhythm, radii, two elevations, and the two numbers that decide the layout
+  (`--rail-width`, `--bottombar-height`). `components/app-shell.tsx` draws the navigation from a single
+  list of destinations, ordered by how often a trader uses them rather than by how they were built, and
+  `app/app/layout.tsx` puts it around every screen - as a layout rather than a component each page
+  imports, so a page cannot forget it and a new page gets navigation for free.
+- **The rail is not rendered on a phone at all**, rather than hidden with CSS: nothing off-screen can
+  hold a tap or a keyboard focus. On a desk the bottom bar is not rendered, for the same reason
+  inverted. The measurement proves both: at 390px the bottom bar is visible and the rail is not, at
+  1440px the reverse, and neither size overflows its viewport.
+- The destination set answers "where is my profile": **Shop, Sales, Items, Lists, Team, Prices, You** -
+  on a desk all seven with room for the words, on a phone the four that get used standing up plus
+  **You**, because a profile that is only reachable by knowing where to look is a profile nobody finds.
+- The dashboard stopped drawing its own header, which is the change that matters more than it sounds:
+  the brand, the business switcher and the profile now live in one place, and a page that draws its own
+  frame is how a product becomes a collection of screens.
