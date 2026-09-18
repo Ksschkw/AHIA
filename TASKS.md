@@ -2723,3 +2723,22 @@ list he can work, price and hand over.
   WhatsApp, and a remembered buyer - is written down in "M24.2 rewritten" above. A partial rewrite was
   started this round and reverted rather than committed, because a half-changed screen fails to compile
   and the tree has to stay green: **unfinished work belongs in the plan, not in the commit history.**
+
+- **M24.2's customer screen is now the cart the product owner described, and it is verified end to end.**
+  Search the shop and add what you need; ask for what it has not got with the price left blank; read the
+  list under the **trader's own headings**; see the count and an honest total; give a phone number whose
+  reason is said out loud; and send it.
+- **And it is sent as a picture.** The list is drawn to a canvas - headings, lines, counts, total, the
+  shop's name, the customer's - and offered to WhatsApp as an image, which is what the customer would
+  have sent as a photograph of paper. A typed list is unreadable on a phone, arrives truncated and cannot
+  be forwarded as a list; an image can, and the trader can print it and tick it off with a pen.
+- **Verified in a browser at 390x844 against a real API and a published shop**: searching "21D" finds the
+  screenguards grouped under that heading; two catalogue lines and one asked-for line are added; the
+  asked-for line reads "price to be confirmed"; a `blob:` image of the list is produced and a share
+  control appears; and the trader receives three lines, all unpriced, with the phone canonicalised
+  (`+2348029876543`) and **the heading "21D" travelling with its line**.
+- **Two faults in the check itself, both the same mistake as before**: it published the shop but not the
+  products, so the catalogue was empty and the search found nothing - a setup that quietly proved nothing;
+  and it carried a TypeScript cast into a `.mjs` file. Both are the third occurrence of their kind this
+  session, and both are recorded because the pattern is the point: **the check is part of the product's
+  evidence, so a broken check is a broken claim.**

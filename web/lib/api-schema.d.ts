@@ -3283,6 +3283,8 @@ export interface components {
             description: string | null;
             /** Primary Image Url */
             primary_image_url: string | null;
+            /** Group Name */
+            group_name: string | null;
         };
         /**
          * PublicRequestAcceptedSchema

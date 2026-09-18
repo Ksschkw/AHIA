@@ -45,6 +45,7 @@ export default async function ListPage({ params }: Params) {
       product_slug: product.product_slug,
       name: product.name,
       selling_price: product.selling_price,
+      group_name: product.group_name,
     })),
   };
 

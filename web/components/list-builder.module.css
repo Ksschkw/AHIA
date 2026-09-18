@@ -284,3 +284,22 @@
   color: var(--ink-2);
   line-height: var(--leading-normal);
 }
+
+/* The list as the customer reads it: a heading in the trader's words, and the lines beneath it. */
+.groupName {
+  margin-top: var(--space-3);
+  margin-bottom: var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--leaf-dark);
+}
+
+.preview {
+  width: 100%;
+  max-width: 420px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
