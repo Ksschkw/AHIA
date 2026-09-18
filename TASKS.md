@@ -2712,3 +2712,14 @@ list he can work, price and hand over.
   trader scrolling on a phone reaches his stock only after the things he uses least. The shelf is what he
   touches twenty times a day; it belongs above the fold, with the statistics compact enough to sit above
   it rather than push it down.
+
+- **M24.2's group headings reach the browser.** A list is read the way a written one is - headings in the
+  trader's own words, lines beneath them - so the public product now carries `group_name`: the heading
+  its item sits under. It is not sensitive (it is the word he writes on the paper he hands over) and it
+  costs one lookup per product that is already being made for the price.
+- **The cart rewrite is the next piece, and it is specified rather than half-built.** The customer's list
+  screen is currently the stepper design the product owner corrected; the replacement - search, add,
+  headings, blank prices for what the shop has not got, a generated **image** of the list to send on
+  WhatsApp, and a remembered buyer - is written down in "M24.2 rewritten" above. A partial rewrite was
+  started this round and reverted rather than committed, because a half-changed screen fails to compile
+  and the tree has to stay green: **unfinished work belongs in the plan, not in the commit history.**

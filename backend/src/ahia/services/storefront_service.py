@@ -75,6 +75,12 @@ class PublicProduct:
     selling_price: Decimal | None
     description: str | None = None
     primary_image_url: str | None = None
+    # : The heading this item sits under in the trader's own words. Sent because a customer building
+    # a
+    # : list reads it the way they read a written one - "21D" and the models beneath it - and
+    # because it
+    #: is not sensitive: it is the word he writes on the paper he hands over.
+    group_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -544,12 +550,21 @@ class StorefrontService:
             product_id=product.id,
         )
         primary = _primary_image(images)
+        group = None
+        if product.category_id is not None:
+            found = await category_crud.get_by_id(
+                session,  # type: ignore[arg-type]
+                tenant_id=tenant_id,
+                category_id=product.category_id,
+            )
+            group = found.name if found is not None else None
         return PublicProduct(
             product_slug=product.slug,
             name=product.name,
             selling_price=await self._effective_normal_price(session, product),
             description=product.description,
             primary_image_url=(await self._images.build_delivery_url(primary) if primary else None),
+            group_name=group,
         )
 
     # ------------------------------------------------------------------

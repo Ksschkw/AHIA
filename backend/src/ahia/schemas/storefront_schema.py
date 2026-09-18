@@ -129,6 +129,7 @@ class PublicProductSchema(BaseModel):
     selling_price: str | None
     description: str | None
     primary_image_url: str | None
+    group_name: str | None
 
     @classmethod
     def from_projection(cls, product: Any) -> PublicProductSchema:
@@ -136,6 +137,7 @@ class PublicProductSchema(BaseModel):
             product_slug=product.product_slug,
             name=product.name,
             selling_price=money_text(Decimal(product.selling_price)),
+            group_name=product.group_name,
             description=product.description,
             primary_image_url=product.primary_image_url,
         )
