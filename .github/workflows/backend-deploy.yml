@@ -140,17 +140,47 @@ jobs:
           API_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
           PROJECT_ID: ${{ vars.NORTHFLANK_PROJECT_ID }}
           SERVICE_ID: ${{ vars.NORTHFLANK_SERVICE_ID }}
+          IMAGE_REF: ${{ steps.image.outputs.ref }}
         run: |
           set -euo pipefail
-          curl --fail-with-body --silent --show-error \
-            -X PATCH "https://api.northflank.com/v1/projects/${PROJECT_ID}/services/${SERVICE_ID}" \
-            -H "Authorization: Bearer ${API_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "{\"deployment\":{\"imagePath\":\"${{ steps.image.outputs.ref }}\"}}"
+
+          # A 405 is a precise answer: the URL exists and the method does not. The candidates below are
+          # the documented shapes for changing a service's image, tried in order, and the one that works
+          # is printed - because guessing a payload shape and hoping is how a pipeline becomes something
+          # nobody trusts. Once the working call is known, this collapses to a single curl.
+          base="https://api.northflank.com/v1/projects/${PROJECT_ID}/services/${SERVICE_ID}"
+
+          attempt() {
+            local label="$1" method="$2" url="$3" body="$4"
+            local status
+            status="$(curl --silent --output /tmp/reply.json --write-out '%{http_code}' \
+              --request "${method}" "${url}" \
+              --header "Authorization: Bearer ${API_TOKEN}" \
+              --header "Content-Type: application/json" \
+              --data "${body}" || true)"
+            echo "${label}: HTTP ${status}"
+            if [[ "${status}" == 2* ]]; then
+              echo "worked=${label}" >> "${GITHUB_OUTPUT}"
+              return 0
+            fi
+            head -c 400 /tmp/reply.json; echo
+            return 1
+          }
+
+          image_body="$(jq -n --arg image "${IMAGE_REF}" '{imagePath: $image}')"
+          docker_body="$(jq -n --arg image "${IMAGE_REF}" '{deployment: {docker: {imagePath: $image}}}')"
+          external_body="$(jq -n --arg image "${IMAGE_REF}" '{deployment: {external: {imagePath: $image}}}')"
+
+          attempt "PATCH ${base}/deployment (imagePath)"     PATCH "${base}/deployment" "${image_body}" \
+            || attempt "PUT ${base} (deployment.docker)"      PUT   "${base}"             "${docker_body}" \
+            || attempt "PUT ${base} (deployment.external)"    PUT   "${base}"             "${external_body}" \
+            || attempt "PATCH ${base} (deployment.docker)"    PATCH "${base}"             "${docker_body}" \
+            || { echo "none of the documented shapes worked"; exit 1; }
 
           {
             echo "### Deployed"
             echo ""
-            echo "- image: \`${{ steps.image.outputs.ref }}\`"
+            echo "- image: \`${IMAGE_REF}\`"
             echo "- migration: ran from that same image, before the service was re-pointed"
+            echo "- api call: \`${{ steps.migrate.outcome }}\` after ${{ steps.image.outputs.tag }}"
           } >> "$GITHUB_STEP_SUMMARY"
