@@ -166,7 +166,12 @@ def test_the_response_publishes_the_derived_slug() -> None:
 
 @pytest.mark.unit
 def test_the_response_carries_no_field_the_entity_does_not_have() -> None:
-    """A response schema may not invent state, or a client will depend on a guess."""
+    """A response schema may not invent state, or a client will depend on a guess.
+
+    The three prices are the exception that proves the rule: they are not invented, they are the
+    entity's own fields - the price everything under this group uses, and how many pieces are in a
+    pack. A group that could not report them would be a group a price grid could not draw.
+    """
     fields = set(CategoryResponseSchema.model_fields)
 
     assert fields == {
@@ -175,6 +180,9 @@ def test_the_response_carries_no_field_the_entity_does_not_have() -> None:
         "name",
         "slug",
         "description",
+        "default_normal_price",
+        "default_wholesale_price",
+        "default_pieces_per_pack",
         "created_at",
         "updated_at",
     }

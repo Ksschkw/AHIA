@@ -1,7 +1,9 @@
 """A customer's list: what it holds, and what it refuses to be.
 
-The fixtures are the product owner's own example, because the rule is about his trade: a list is a wish
-until the trader confirms it, a line is either something in the catalogue or something somebody asked
+The fixtures are the product owner's own example, because the rule is about his trade: a list is a
+wish
+until the trader confirms it, a line is either something in the catalogue or something somebody
+asked
 for in words, and a price may genuinely be absent until he has gone and found the thing.
 """
 
@@ -112,7 +114,8 @@ def test_a_line_asks_for_something() -> None:
 
 @pytest.mark.unit
 def test_a_pack_counts_pieces_and_says_how_many() -> None:
-    """The calculator is the feature: 2 packs of 10 is 20 pieces, and a pack with no size is refused."""
+    """The calculator is the feature: 2 packs of 10 is 20 pieces, and a pack with no size is
+    refused."""
     packed = a_line(quantity=Decimal("2"), unit=RequestLineUnit.PACK, pieces_per_pack=10)
     assert packed.pieces == Decimal("20")
     with pytest.raises(EntityInvariantError):

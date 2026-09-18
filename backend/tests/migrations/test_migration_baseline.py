@@ -74,6 +74,11 @@ EXPECTED_TABLES = frozenset(
         "share_links",
         "report_exports",
         "notifications",
+        # Added by the customer-list migration. Every table the schema creates has to be dropped
+        # here too, or the next upgrade finds it already present and fails with "relation already
+        # exists".
+        "requests",
+        "request_lines",
     }
 )
 

@@ -32,17 +32,16 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, Any
+from typing import Annotated, Any, Protocol
 from uuid import UUID
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, StringConstraints, field_validator
 
-from ahia.models.entities.price_book import ResolvedPrice
+from ahia.models.entities.price_book import resolve_price
 from ahia.models.entities.product_model import (
     MAXIMUM_DESCRIPTION_LENGTH,
     MAXIMUM_IDENTIFIER_LENGTH,
     MAXIMUM_NAME_LENGTH,
-    ProductModel,
     coerce_money,
     coerce_quantity,
 )
@@ -144,6 +143,104 @@ class ProductUpdateSchema(BaseModel):
         return self.model_dump(exclude_unset=True)
 
 
+class ProductForResponse(Protocol):
+    """What a product has to look like to be rendered as a response.
+
+    A structural type rather than the entity itself, because the transport layer may not name a
+    domain entity - the architecture contract draws that line, and this stays on the right side of
+    it without giving up the checking. A `ProductModel` satisfies it by having these members, and
+    the type checker proves that at each call site instead of trusting an annotation.
+
+    **Properties, not plain attributes**, and that is not decoration: the entity is a frozen
+    dataclass, whose members are read-only, and a protocol that asked for mutable attributes would
+    reject it. Asking for what a reader needs - the values - is both more accurate and the only
+    version that type-checks."""
+
+    @property
+    def id(self) -> UUID: ...
+
+    @property
+    def tenant_id(self) -> UUID: ...
+
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def slug(self) -> str: ...
+
+    @property
+    def category_id(self) -> UUID | None: ...
+
+    @property
+    def description(self) -> str | None: ...
+
+    @property
+    def sku(self) -> str | None: ...
+
+    @property
+    def barcode(self) -> str | None: ...
+
+    @property
+    def selling_price(self) -> Decimal | None: ...
+
+    @property
+    def wholesale_price(self) -> Decimal | None: ...
+
+    @property
+    def pieces_per_pack(self) -> int | None: ...
+
+    @property
+    def cost_price(self) -> Decimal | None: ...
+
+    @property
+    def low_stock_threshold(self) -> Decimal: ...
+
+    @property
+    def is_active(self) -> bool: ...
+
+    @property
+    def is_published(self) -> bool: ...
+
+    @property
+    def public_token(self) -> str | None: ...
+
+    @property
+    def created_at(self) -> datetime: ...
+
+    @property
+    def updated_at(self) -> datetime: ...
+
+    def is_visible_to_customers(self) -> bool:
+        """Whether a customer may see this item."""
+        ...
+
+
+class PriceForResponse(Protocol):
+    """What a resolved price has to look like to be rendered.
+
+    Structural for the same reason as `ProductForResponse`: the rule that decides these values lives
+    in the entity layer, the service hands the result over, and the transport layer should be able
+    to render it without importing the module it came from."""
+
+    @property
+    def normal_price(self) -> Decimal | None: ...
+
+    @property
+    def wholesale_price(self) -> Decimal | None: ...
+
+    @property
+    def pieces_per_pack(self) -> int | None: ...
+
+    @property
+    def normal_price_from_group(self) -> bool: ...
+
+    @property
+    def wholesale_price_from_group(self) -> bool: ...
+
+    @property
+    def wholesale_price_used_the_normal_price(self) -> bool: ...
+
+
 class ProductResponseSchema(BaseModel):
     """One product, as the business sees it.
 
@@ -161,12 +258,7 @@ class ProductResponseSchema(BaseModel):
     description: str | None
     sku: str | None
     barcode: str | None
-    # The item's own price, or None when it follows its group's. Kept, because a screen that lets
-    # him edit the price has to show what is actually stored and not what it resolves to - otherwise
-    # opening an item and saving it would silently turn an inherited price into an override.
     selling_price: str | None
-    # What applies once the group has had its say, with the origin of each part, so a grid can mark
-    # the exceptions without resolving anything itself.
     effective_normal_price: str | None
     effective_wholesale_price: str | None
     effective_pieces_per_pack: int | None
@@ -185,14 +277,26 @@ class ProductResponseSchema(BaseModel):
     @classmethod
     def from_entity(
         cls,
-        product: ProductModel,
-        price: ResolvedPrice,
+        product: ProductForResponse,
+        price: PriceForResponse | None = None,
     ) -> ProductResponseSchema:
-        """Build the response from the item and its resolved price.
+        """Build the response from the item, and the price that applies to it.
 
-        The resolved price is passed in rather than computed here because resolving it needs the
-        group, and a schema that reached for one would be doing the service layer's job.
+        The resolved price is passed in rather than computed here because resolving it properly
+        needs
+        the item's **group**, and a schema that reached for the database would be doing the service
+        layer's job. When a caller has no group to hand - a unit test, a job - the item speaks for
+        itself instead: its own prices, and nothing claimed as inherited, which is true.
         """
+        effective = (
+            price
+            if price is not None
+            else resolve_price(
+                own_normal_price=product.selling_price,
+                own_wholesale_price=product.wholesale_price,
+                own_pieces_per_pack=product.pieces_per_pack,
+            )
+        )
         return cls(
             id=product.id,
             tenant_id=product.tenant_id,
@@ -206,15 +310,15 @@ class ProductResponseSchema(BaseModel):
                 None if product.selling_price is None else money_text(product.selling_price)
             ),
             effective_normal_price=(
-                None if price.normal_price is None else money_text(price.normal_price)
+                None if effective.normal_price is None else money_text(effective.normal_price)
             ),
             effective_wholesale_price=(
-                None if price.wholesale_price is None else money_text(price.wholesale_price)
+                None if effective.wholesale_price is None else money_text(effective.wholesale_price)
             ),
-            effective_pieces_per_pack=price.pieces_per_pack,
-            normal_price_from_group=price.normal_price_from_group,
-            wholesale_price_from_group=price.wholesale_price_from_group,
-            wholesale_price_uses_normal_price=price.wholesale_price_used_the_normal_price,
+            effective_pieces_per_pack=effective.pieces_per_pack,
+            normal_price_from_group=effective.normal_price_from_group,
+            wholesale_price_from_group=effective.wholesale_price_from_group,
+            wholesale_price_uses_normal_price=effective.wholesale_price_used_the_normal_price,
             cost_price=(None if product.cost_price is None else money_text(product.cost_price)),
             low_stock_threshold=quantity_text(product.low_stock_threshold),
             is_active=product.is_active,

@@ -54,9 +54,14 @@ def validation_errors(payload: dict[str, object]) -> list[str]:
 
 
 @pytest.mark.unit
-def test_a_price_is_required() -> None:
-    with pytest.raises(ValidationError):
-        ProductCreateSchema(name="Coca Cola 50cl")
+def test_a_price_may_be_left_to_the_group() -> None:
+    """An item under a priced group needs no price of its own - "all of the 21D are 350".
+
+    The schema accepts the absence; the **service** refuses an item that ends up with no price from
+    anywhere, because "no price at all" is a business rule about an item and its group together and
+    a shape check cannot see the group. That refusal is tested where it lives, against the real API.
+    """
+    assert ProductCreateSchema(name="Coca Cola 50cl").selling_price is None
 
 
 @pytest.mark.unit
@@ -303,6 +308,16 @@ def test_the_response_carries_no_field_the_entity_does_not_have() -> None:
         "is_published",
         "is_visible_to_customers",
         "public_token",
+        # What applies once the item's group has had its say, and which parts came from the group.
+        # The entity does not hold these - they are derived from it and its group - so a screen can
+        # mark an exception without doing the arithmetic itself, which is the one place the rule may
+        # live.
+        "effective_normal_price",
+        "effective_wholesale_price",
+        "effective_pieces_per_pack",
+        "normal_price_from_group",
+        "wholesale_price_from_group",
+        "wholesale_price_uses_normal_price",
         "created_at",
         "updated_at",
     }

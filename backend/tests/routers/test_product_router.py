@@ -684,7 +684,8 @@ async def test_an_item_with_its_own_price_is_marked_as_the_exception(
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_an_item_nobody_priced_is_refused(database: Database) -> None:
-    """No price of its own and no priced group: it cannot be sold, shown or listed, so it is refused."""
+    """No price of its own and no priced group: it cannot be sold, shown or listed, so it is
+    refused."""
     async with running_application() as (client, _application):
         owner, tenant = await owner_with_business(client)
         group = await a_group(client, owner, tenant)
@@ -696,7 +697,8 @@ async def test_an_item_nobody_priced_is_refused(database: Database) -> None:
         )
 
     assert refused.status_code == 422, refused.text
-    # The reason is internal: the customer-facing answer says the value was invalid, and the product's
+    # The reason is internal: the customer-facing answer says the value was invalid, and the
+    # product's
     # name and the missing price stay in the log where the engineer can find them by correlation id.
     message = refused.json()["error"]["message"]
     assert "Unpriced item" not in message
