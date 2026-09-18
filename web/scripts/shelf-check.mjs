@@ -133,6 +133,27 @@ await step("every size shows the same shelf", async () => {
         `smallest ${facts.shortestControl}px, overflow=${facts.overflow}`,
     );
     console.log(`        reads: ${facts.text}`);
+
+    // The order a phone user actually experiences: the shelf he works from every day must come before
+    // the tiles, not after them. A trader should not scroll past what he touches least.
+    const order = await page.evaluate(() => {
+      const heading = [...document.querySelectorAll("h2, h3, div")].find(
+        (node) => node.textContent?.trim().startsWith("The shelf"),
+      );
+      const tile = [...document.querySelectorAll("button")].find((node) =>
+        node.textContent?.includes("Record a sale"),
+      );
+      if (!heading || !tile) return null;
+      return {
+        shelfTop: Math.round(heading.getBoundingClientRect().top + window.scrollY),
+        tileTop: Math.round(tile.getBoundingClientRect().top + window.scrollY),
+      };
+    });
+    if (!order) throw new Error("could not find the shelf or the tiles to compare");
+    console.log(`        shelf at ${order.shelfTop}px, tiles at ${order.tileTop}px`);
+    if (order.shelfTop > order.tileTop) {
+      throw new Error("the shelf is below the tiles");
+    }
     if (facts.overflow) throw new Error("the shelf is wider than the phone");
     if (facts.shortestControl < 36) {
       throw new Error(`a control is only ${facts.shortestControl}px tall, too small for a thumb`);

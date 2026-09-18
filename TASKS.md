@@ -2816,3 +2816,16 @@ tree can be as deep as the trade is.
 - Measured: `html=true, lines=true, honestTotal=true, selfUpdating=true, overflow=false, leaks=0` at
   390x844 and 1440x900. The page says "2 lines still to be priced" and "Nothing priced yet" rather than
   inventing a total, and tells the customer it updates on its own.
+
+- **The shelf is above the fold.** It sat below three stat cards and four action tiles, so a trader on a
+  phone scrolled past what he touches least to reach what he touches twenty times a day. It now comes
+  directly after the three figures and before the tiles.
+- **Measured rather than eyeballed, and the check now asserts the order**: at 390x844 the shelf begins at
+  **381px** and the tiles at **1620px** - the shelf is inside the first screen and the tiles are a scroll
+  away; at 1440x900, 282px and 780px. The row measurements are unchanged by the move (128px a row on a
+  phone, 80px on a desk, 40px controls, no overflow).
+- **And one self-inflicted error worth recording**: the reorder was first attempted by line numbers, which
+  was wrong and broke the JSX outright. It was restored from git within the same command and redone with
+  **string anchors plus assertions on the content of each block** - and the assertions are what would have
+  caught it, had they been there the first time. Editing a large JSX file by arithmetic is guesswork;
+  anchoring on the text that must be inside each block is not.

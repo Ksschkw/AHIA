@@ -395,37 +395,6 @@ export default function Dashboard() {
           />
         </section>
 
-        <section className={styles.actions}>
-          <ActionTile
-            label="Record a sale"
-            hint="Money in"
-            glyph="sale"
-            onClick={() => setSheet("sale")}
-            disabled={!businessId || products.length === 0}
-          />
-          <ActionTile
-            label="Add a product"
-            hint="New line on the shelf"
-            glyph="product"
-            onClick={() => setSheet("product")}
-            disabled={!businessId}
-          />
-          <ActionTile
-            label="Stock in"
-            hint="Goods received"
-            glyph="stock"
-            onClick={() => setSheet("stock")}
-            disabled={!businessId || products.length === 0}
-          />
-          <ActionTile
-            label="Record spending"
-            hint="Money out"
-            glyph="expense"
-            onClick={() => setSheet("expense")}
-            disabled={!businessId}
-          />
-        </section>
-
         <div className={styles.columns}>
           <Card
             title="The shelf"
@@ -705,6 +674,36 @@ export default function Dashboard() {
             </Card>
           </div>
         </div>
+        <section className={styles.actions}>
+          <ActionTile
+            label="Record a sale"
+            hint="Money in"
+            glyph="sale"
+            onClick={() => setSheet("sale")}
+            disabled={!businessId || products.length === 0}
+          />
+          <ActionTile
+            label="Add a product"
+            hint="New line on the shelf"
+            glyph="product"
+            onClick={() => setSheet("product")}
+            disabled={!businessId}
+          />
+          <ActionTile
+            label="Stock in"
+            hint="Goods received"
+            glyph="stock"
+            onClick={() => setSheet("stock")}
+            disabled={!businessId || products.length === 0}
+          />
+          <ActionTile
+            label="Record spending"
+            hint="Money out"
+            glyph="expense"
+            onClick={() => setSheet("expense")}
+            disabled={!businessId}
+          />
+        </section>
       </div>
 
       <SaleSheet
