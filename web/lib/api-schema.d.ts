@@ -3279,8 +3279,6 @@ export interface components {
             name: string;
             /** Selling Price */
             selling_price: string | null;
-            /** Is Available */
-            is_available: boolean;
             /** Description */
             description: string | null;
             /** Primary Image Url */

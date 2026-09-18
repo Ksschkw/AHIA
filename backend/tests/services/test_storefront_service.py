@@ -344,8 +344,12 @@ async def test_a_public_read_returns_the_shop_and_its_catalogue(
     assert shop.headline == "Obi Electronics"
     assert {product.name for product in shop.products} == {"Rice 50kg", "Beans 10kg"}
     by_name = {product.name: product for product in shop.products}
-    assert by_name["Rice 50kg"].is_available is True
-    assert by_name["Beans 10kg"].is_available is False, "a boolean, never a count"
+    # A stranger's copy of a product says nothing about stock. It was sent once - filled from an
+    # inventory query - and a field that travels is a field somebody eventually renders, which is
+    # how a
+    # customer ends up reading "out of stock" from a trader who would simply go and find the thing.
+    assert not hasattr(by_name["Rice 50kg"], "is_available")
+    # Neither product reports one, whether it is in stock or not: the field is not sent.
     assert by_name["Rice 50kg"].primary_image_url is not None
 
 

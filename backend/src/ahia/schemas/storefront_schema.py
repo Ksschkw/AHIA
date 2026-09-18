@@ -127,7 +127,6 @@ class PublicProductSchema(BaseModel):
     product_slug: str
     name: str
     selling_price: str | None
-    is_available: bool
     description: str | None
     primary_image_url: str | None
 
@@ -137,7 +136,6 @@ class PublicProductSchema(BaseModel):
             product_slug=product.product_slug,
             name=product.name,
             selling_price=money_text(Decimal(product.selling_price)),
-            is_available=product.is_available,
             description=product.description,
             primary_image_url=product.primary_image_url,
         )

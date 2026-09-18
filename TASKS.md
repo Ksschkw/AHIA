@@ -2564,3 +2564,34 @@ did not know. He also asked the question that matters: **what exactly is the int
 - Also found while testing, and worth fixing in the same pass: **the sticky summary bar can sit over a
   line's controls** on a short screen. A click aimed at a line lands on the summary instead. That is a
   real interface fault on a phone, not only a testing artefact.
+
+- **M24.2's changes are in the audit trail, and the public payload is trimmed.** The CI gate
+  `test_audit_wiring` was right: `RequestService` committed without recording anything. Working a line
+  and confirming a list are business changes by a person with a role, so both now write an audit event
+  **in the same transaction as the change** - the two cannot disagree - and the recorder is injected by
+  the composition root like every other service's. A customer's own submission has no authenticated actor
+  to attribute it to, so it stays in the structured security log with its correlation id, which is the
+  same arrangement authentication uses because it too happens before a business is chosen.
+- **Stock stopped travelling to customers.** The product owner looked at the public JSON and asked what
+  `is_available: false` was doing there. It was being sent - filled from an inventory query - to every
+  customer's browser, even though the page no longer rendered it. A field that travels is a field
+  somebody eventually renders, and the day it is rendered a customer reads "out of stock" from a trader
+  who would simply go and find the thing. The public product is now exactly: slug, name, price,
+  description, photograph. The inventory query per product per visit is gone with it, which is a database
+  round trip saved on every public page load.
+- **The test asserted the removed field**, and the honest correction was to assert its *absence*: a
+  stranger's copy of a product says nothing about stock, whether the thing is in stock or not.
+
+- **The workbench's save path is proven, and the automated check for it is not yet written.** A
+  one-off probe established the truth: typing a cost into a line and pressing **Save this line** sends a
+  real `PATCH` to the API - the button works, and my earlier report that it did not was wrong. What
+  actually failed was the check's own choreography, and the assertion behind it: the **margin needs both
+  numbers**, so a line with a cost and no price has no margin to show. Both scripts are deleted rather
+  than left in the tree: the probe had answered its question, and the check was failing for reasons that
+  were about the test rather than the product, which is worse than no check at all. A buyer's version of
+  that check - type both numbers, press save, assert the margin - is owed and is the first thing to write
+  next round.
+- The secret scanner caught the probe's **test password** (`generic-api-key`, high entropy, next to
+  `#password`) before it was committed. It was a false positive on a fixture, and the honest resolution
+  was deleting the fixture rather than allowlisting the file: an allowlist entry for a whole path is how a
+  real secret eventually walks through.

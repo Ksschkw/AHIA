@@ -42,7 +42,6 @@ from ahia.core.tenant_context import TenantContext
 from ahia.core.tenant_scope import tenant_scope
 from ahia.crud import (
     category_crud,
-    inventory_crud,
     product_crud,
     product_image_crud,
     storefront_crud,
@@ -74,7 +73,6 @@ class PublicProduct:
     product_slug: str
     name: str
     selling_price: Decimal | None
-    is_available: bool
     description: str | None = None
     primary_image_url: str | None = None
 
@@ -537,11 +535,9 @@ class StorefrontService:
         publication token are not removed from this object, they are never added to it. A field
         nobody thought about therefore cannot appear here by default.
         """
-        level = await inventory_crud.get_for_product(
-            session,  # type: ignore[arg-type]
-            tenant_id=tenant_id,
-            product_id=product.id,
-        )
+        # No stock read at all: it was fetched, used to fill a field that then stopped being sent,
+        # and left behind as a query per product on every visit. The allowlist above says the stock
+        # count is never added to this object, and now nothing fetches it either.
         images = await product_image_crud.list_for_product(
             session,  # type: ignore[arg-type]
             tenant_id=tenant_id,
@@ -552,7 +548,6 @@ class StorefrontService:
             product_slug=product.slug,
             name=product.name,
             selling_price=await self._effective_normal_price(session, product),
-            is_available=level is not None and level.quantity_on_hand > 0,
             description=product.description,
             primary_image_url=(await self._images.build_delivery_url(primary) if primary else None),
         )

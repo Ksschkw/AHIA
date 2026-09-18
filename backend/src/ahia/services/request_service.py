@@ -47,6 +47,7 @@ from ahia.schemas.request_schema import (
     RequestLineWorkSchema,
     RequestResponseSchema,
 )
+from ahia.services.audit_event_service import AuditEventService
 
 _REQUEST_LOGGER_NAME: Final[str] = "ahia.services.request"
 
@@ -114,9 +115,19 @@ class RequestService:
         self,
         unit_of_work_factory: Callable[[], UnitOfWork],
         default_phone_country_code: str = "+234",
+        audit_event_service: AuditEventService | None = None,
         logger: StructuredLogger | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
+        #: What he did with a list is a business change and belongs in the trail. A customer's own
+        # : submission has no authenticated actor to attribute it to, so it is written to the
+        # structured
+        # : security log with its correlation id instead - the arrangement authentication already
+        # uses,
+        #: because it too happens before a business is chosen.
+        self._audit = audit_event_service or AuditEventService(
+            unit_of_work_factory=unit_of_work_factory
+        )
         self._default_country_code = default_phone_country_code
         self._logger = (logger or get_logger(_REQUEST_LOGGER_NAME)).bind(
             component="request_service", layer="service"
@@ -387,6 +398,19 @@ class RequestService:
             lines = await request_line_crud.list_for_request(
                 session, tenant_id=tenant_context.tenant_id, request_id=request_id
             )
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="request_line_worked",
+                entity_type="request_line",
+                entity_id=stored.id,
+                now=datetime.now(UTC),
+                detail={
+                    "request_id": str(request_id),
+                    "state": stored.state.value,
+                    "priced": "yes" if stored.is_priced else "no",
+                },
+            )
             await unit_of_work.commit()
 
         self._logger.info(
@@ -419,6 +443,7 @@ class RequestService:
             resource_id=str(request_id),
             logger=self._logger,
         )
+        now = datetime.now(UTC)
         unit_of_work = self._unit_of_work_factory()
         async with unit_of_work:
             session = unit_of_work.session_handle
@@ -439,7 +464,19 @@ class RequestService:
                         "because a total with holes is not an agreement"
                     ),
                 )
-            confirmed = await request_crud.update(session, request.confirmed(at=datetime.now(UTC)))
+            confirmed = await request_crud.update(session, request.confirmed(at=now))
+            # The moment a list becomes a sale is the change most in need of a record: it is the
+            # one that creates money, and it is written in the same transaction as the change, so
+            # the two cannot disagree.
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="request_confirmed",
+                entity_type="request",
+                entity_id=confirmed.id,
+                now=now,
+                detail={"line_count": str(len(lines))},
+            )
             await unit_of_work.commit()
 
         self._logger.info(

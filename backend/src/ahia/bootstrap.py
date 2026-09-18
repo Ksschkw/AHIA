@@ -325,6 +325,7 @@ def build_application_container(
     request_service = RequestService(
         unit_of_work_factory=database.unit_of_work_factory(),
         default_phone_country_code=settings.default_phone_country_code,
+        audit_event_service=audit_event_service,
         logger=logger,
     )
 
