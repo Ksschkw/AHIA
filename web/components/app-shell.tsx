@@ -100,6 +100,8 @@ export function AppShell({
   const active = businesses.find((business) => business.id === activeBusinessId) ?? businesses[0];
   const [pinned, setPinned] = useState<string[]>([]);
   const [moreOpen, setMoreOpen] = useState(false);
+  //: Non-zero while any request is in flight, from the one counter in the API client.
+  const [inFlight, setInFlight] = useState(0);
 
   useEffect(() => {
     const remembered =
@@ -114,6 +116,15 @@ export function AppShell({
         // A remembered value that cannot be read is not worth a broken navigation: the defaults stand.
       }
     }
+  }, []);
+
+  useEffect(() => {
+    const listener = (event: Event) => {
+      setInFlight(Number((event as CustomEvent<number>).detail ?? 0));
+    };
+    window.addEventListener("ahia:inflight", listener);
+    setInFlight(Number(window.__ahiaInFlight ?? 0));
+    return () => window.removeEventListener("ahia:inflight", listener);
   }, []);
 
   const togglePinned = useCallback((href: string) => {
@@ -132,6 +143,15 @@ export function AppShell({
 
   return (
     <div className={styles.shell}>
+      {/* One thin line, present the instant anything starts and gone the instant it finishes, so
+          "is it doing anything?" is answered by a glance rather than by a guess. */}
+      <div
+        className={inFlight > 0 ? styles.progressActive : styles.progress}
+        role="progressbar"
+        aria-label="Working"
+        aria-hidden={inFlight === 0}
+      />
+
       <a className={styles.skip} href="#main">
         Skip to the content
       </a>

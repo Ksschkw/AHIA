@@ -284,3 +284,34 @@
   font-size: var(--text-sm);
   color: var(--ink-2);
 }
+
+/* The progress line: fixed, one pixel of movement at the top of the window, invisible when idle.
+   It never blocks anything - a click while it shows still works, because a progress indicator that
+   takes away your ability to act is worse than no indicator at all. */
+.progress,
+.progressActive {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 80;
+  pointer-events: none;
+  background: transparent;
+}
+
+.progressActive {
+  background: linear-gradient(90deg, transparent, var(--leaf), transparent);
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  animation: ahia-progress 1.1s ease-in-out infinite;
+}
+
+@keyframes ahia-progress {
+  0% {
+    background-position: -40% 0;
+  }
+  100% {
+    background-position: 140% 0;
+  }
+}

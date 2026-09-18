@@ -487,10 +487,35 @@ export default function Dashboard() {
                           onClick={() => {
                             void runShop(async () => {
                               if (!businessId) return;
-                              if (product.is_published) {
-                                await unpublishProduct(businessId, product.id);
-                              } else {
-                                await publishProduct(businessId, product.id);
+                              // **The switch moves first, the request follows.** Hiding something is
+                              // a decision the trader has already made, with a customer possibly
+                              // standing in front of him; making him wait for a round trip to a
+                              // server in another continent to see his own decision is the kind of
+                              // lag that makes a product feel broken. If the request fails, the
+                              // change comes back and the notice says so.
+                              const wasPublished = product.is_published;
+                              setProducts((current) =>
+                                current.map((candidate) =>
+                                  candidate.id === product.id
+                                    ? { ...candidate, is_published: !wasPublished }
+                                    : candidate,
+                                ),
+                              );
+                              try {
+                                if (wasPublished) {
+                                  await unpublishProduct(businessId, product.id);
+                                } else {
+                                  await publishProduct(businessId, product.id);
+                                }
+                              } catch (error) {
+                                setProducts((current) =>
+                                  current.map((candidate) =>
+                                    candidate.id === product.id
+                                      ? { ...candidate, is_published: wasPublished }
+                                      : candidate,
+                                  ),
+                                );
+                                throw error;
                               }
                               await refresh();
                               setNotice({

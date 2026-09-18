@@ -89,6 +89,108 @@ type RequestOptions = {
   query?: Record<string, string>;
 };
 
+/**
+ * What has already been fetched, so a screen does not ask twice.
+ *
+ * Kept in memory and mirrored into local storage: the memory copy makes a second visit instant within
+ * a session, and the stored copy means the first paint after a reload has something to show instead of
+ * an empty shelf. A read cache is only safe if it cannot outlive the change that invalidates it, so
+ * **every write clears all of it** - a shop's own edit must never be answered from a stale copy of
+ * before that edit.
+ *
+ * This is deliberately small and boring. It is not a data layer; it is the difference between a screen
+ * that answers and a screen that makes somebody wait for something it already knew.
+ */
+/** How long a read is trusted before it is fetched again. Short: a shop's numbers move. */
+const READ_FRESH_MS = 30_000;
+
+declare global {
+  interface Window {
+    /** How many requests this tab has in flight. Read by the progress line in the frame. */
+    __ahiaInFlight?: number;
+  }
+}
+
+const CACHE_PREFIX = "ahia.cache.";
+const READ_CACHE = new Map<string, { at: number; value: unknown }>();
+
+function cacheKey(path: string, search: string): string {
+  return `${path}${search}`;
+}
+
+function recall<T>(key: string): { at: number; value: T } | null {
+  const held = READ_CACHE.get(key);
+  if (held) {
+    return held as { at: number; value: T };
+  }
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const raw = window.localStorage.getItem(`${CACHE_PREFIX}${key}`);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as { at: number; value: T };
+    READ_CACHE.set(key, parsed);
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function remember(key: string, value: unknown): void {
+  const entry = { at: Date.now(), value };
+  READ_CACHE.set(key, entry);
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(entry));
+  } catch {
+    // A full or unavailable store is not a reason to fail a read.
+  }
+}
+
+/** Forget everything. Called after any write, because a write is the only thing that invalidates a read. */
+export function forgetEverythingFetched(): void {
+  READ_CACHE.clear();
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    for (const key of Object.keys(window.localStorage)) {
+      if (key.startsWith(CACHE_PREFIX)) {
+        window.localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // As above: nothing here is worth breaking a screen over.
+  }
+}
+
+/**
+ * Tell the frame that something is in flight.
+ *
+ * A window event rather than a store the shell subscribes to, because the shell is a client component
+ * and this module is imported by everything: a counter plus an event is the whole contract, and it
+ * cannot be forgotten by a new caller the way a per-page loading flag can.
+ */
+function announceInFlight(delta: number): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const current = Number(window.__ahiaInFlight ?? 0) + delta;
+  window.__ahiaInFlight = Math.max(0, current);
+  window.dispatchEvent(new CustomEvent("ahia:inflight", { detail: window.__ahiaInFlight }));
+}
+
+/** Read what has been cached without asking the server, for a first paint. */
+export function cachedRead<T>(path: string, query?: Record<string, string>): T | null {
+  const search = query ? `?${new URLSearchParams(query).toString()}` : "";
+  return recall<T>(cacheKey(path, search))?.value ?? null;
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {};
   if (options.body !== undefined) {
@@ -99,6 +201,21 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
   const search = options.query ? `?${new URLSearchParams(options.query).toString()}` : "";
   const method = options.method ?? "GET";
+  const key = cacheKey(path, search);
+
+  // A read that has just been made is answered from what we have. This is the difference between a
+  // screen that opens and a screen that makes somebody watch a spinner for information the browser
+  // already holds.
+  if (method === "GET") {
+    const held = recall<T>(key);
+    if (held && Date.now() - held.at < READ_FRESH_MS) {
+      return held.value;
+    }
+  } else {
+    // A write invalidates everything: the only reliable moment to know a read is stale is right after
+    // something changed.
+    forgetEverythingFetched();
+  }
 
   const send = () =>
     fetch(`${API_BASE_URL}${path}${search}`, {
@@ -111,6 +228,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     });
 
   let response: Response;
+  announceInFlight(1);
   try {
     response = await send();
   } catch (error) {
@@ -133,6 +251,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     }
   }
 
+  announceInFlight(-1);
+
   if (response.status === 204) {
     return undefined as T;
   }
@@ -151,6 +271,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     );
   }
 
+  if (method === "GET") {
+    remember(key, payload);
+  }
   return payload as T;
 }
 
