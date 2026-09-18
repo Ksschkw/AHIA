@@ -62,24 +62,36 @@ await step("a shelf with things on it", async () => {
       ["Camera glass - Samsung A54", "350.00", "25.000"],
     ];
     for (const [name, price, quantity] of catalogue) {
-      const created = await (
-        await fetch(`/api/v1/tenants/${tenant.id}/products`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, selling_price: price }),
-        })
-      ).json();
-      if (Number(quantity) > 0) {
-        await fetch(`/api/v1/tenants/${tenant.id}/inventory/receive`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            product_id: created.id,
-            quantity,
-            note: "Opening stock",
-          }),
-        });
+      const created = await fetch(`/api/v1/tenants/${tenant.id}/products`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, selling_price: price }),
+      });
+      // **Every step asserts its own answer.** The previous version ignored all of this, so a wrong
+      // stock path answered 404 in silence and the check went on to photograph an empty shelf and call
+      // it a shelf. A setup that cannot fail is a setup that proves nothing.
+      if (!created.ok) {
+        throw new Error(`creating ${name} answered ${created.status}: ${await created.text()}`);
       }
+      const product = await created.json();
+      if (Number(quantity) > 0) {
+        const received = await fetch(
+          `/api/v1/tenants/${tenant.id}/inventory/${product.id}/receipts`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ quantity, note: "Opening stock" }),
+          },
+        );
+        if (!received.ok) {
+          throw new Error(`stocking ${name} answered ${received.status}: ${await received.text()}`);
+        }
+      }
+    }
+    // And the shelf is only judged once the API agrees there is something on it.
+    const shelf = await (await fetch(`/api/v1/tenants/${tenant.id}/products`)).json();
+    if (shelf.length !== catalogue.length) {
+      throw new Error(`the catalogue holds ${shelf.length} of ${catalogue.length} products`);
     }
     return tenant.id;
   });

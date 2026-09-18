@@ -2694,3 +2694,21 @@ list he can work, price and hand over.
 - **Nothing about stock, ever**: an Igbo trader is never truly out of stock, he goes and finds it.
 - Prices are his, on the line, with no ceiling and no rule about a discount.
 - The market run is where the money is made visible: have it, buy it, cannot get it, and what it cost.
+
+- **M24.3 done and measured.** The shelf is rebuilt: a 56-pixel photograph as the anchor of every row
+  (a trader recognises his own stock by sight before he reads a name, and a shelf of photographs can be
+  scanned while a customer waits), the name with **price, count and whether it is in the shop** on the
+  line beneath it, and the two actions that matter - **Sell one** and **Show/Hide** - as 40-pixel targets
+  a thumb hits rather than 12-pixel links. Hidden stock reads as "Out" in red, three or fewer as "3 left"
+  in amber, and publication is a word on the row rather than a state to hunt for.
+- **Measured, not eyeballed**: at 390x844 a row is 128px with the controls wrapped to their own line and
+  the smallest control is 40px; at 1440x900 the same row is 80px on one line. No horizontal overflow at
+  either size. The row reads, in order: photograph, name, price, count, publication, Sell one, Show.
+- **The check that should have caught the empty shelf did not, and the reason is instructive**: its setup
+  posted stock to a path that does not exist, ignored the 404, and then photographed an empty shelf and
+  reported success. It now asserts every step of its own setup and refuses to judge the shelf until the
+  API agrees there is stock on it - a setup that cannot fail proves nothing.
+- **Next, from looking at the result**: the shelf sits below three stat cards and four action tiles, so a
+  trader scrolling on a phone reaches his stock only after the things he uses least. The shelf is what he
+  touches twenty times a day; it belongs above the fold, with the statistics compact enough to sit above
+  it rather than push it down.
