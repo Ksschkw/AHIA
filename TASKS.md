@@ -3184,3 +3184,14 @@ lesson four times - so dispatch is recorded here as **half built and not usable*
 - **The manifest check stays.** It is the reason this surfaced as a clear failure rather than as a deploy of
   something that was never built - an image that does not exist is a rollback waiting to happen, and the guard
   turning a wrong reference into a red build is the guard doing its job.
+
+- **M24.2d's screen is verified in a browser at 390x844**: the trader opens a confirmed list, writes the
+  transporter, the waybill number and what the trip cost, presses **Record the waybill**, and the list reads it
+  back - `Emeka Motors - waybill WB-4471 - N1,500.00 to send`. `[OK] no problems`, exit 0. Dispatch is done from
+  the API to the screen.
+- **And the first attempt failed at sign-up because the API was down**, not because of anything in the page:
+  `openapi: 000`. The detached server I had started two rounds earlier had died, exactly as it did in round 38.
+  **A background job keeps a server alive; a detached shell process does not** - and from inside a check, a dead
+  server is indistinguishable from a broken feature. That is now the fourth instance of this same trap
+  (the stale API, the stale build, the dead server twice), and the rule is written where it will be read: before
+  believing a browser check that fails, confirm the server answers.
