@@ -3317,3 +3317,15 @@ about **somebody else's work**, repeated to his face, and it was wrong.
 
 **The rule, sharper than the one already here: re-check before repeating.** An inference is true once, at the
 moment it is measured; repeating it later is a new claim and needs a new measurement.
+
+## M24 and M25.2 complete, with what was actually run recorded underneath
+
+| Item | Evidence |
+|---|---|
+| (1) Storefront | Page and product page verified in a browser at **390x844 and 1440x900**; share card carries title and description; **server-rendered with its prices in the markup**; product links use `prefetch`, so a tap is already in flight; edge caching asserted against the deployment and skipped locally with the reason printed |
+| (2) Customer's list and the trader's side | Cart, headings walk, picture of the list, list address and live page verified; the workbench verified end to end (**`Comes to N7,000.00 - you make N1,400.00`**); dispatch verified through the API **and** the screen (**`Emeka Motors - waybill WB-4471 - N1,500.00 to send`**) |
+| (3) Shelf | Photo-first rows measured at **128px on a phone and 80px on a desk**, 40px controls, no overflow, shelf **above the fold** (381px against the tiles at 1620px) |
+| (4) Button states | Every shared button carries a busy state; the raw controls that ran requests are guarded; and the guard was measured - **a double press caused two requests, then one** |
+| (5) Render split | Shop server-rendered (asserted from the raw response); the app's first paint **measured against a five-second network delay: on screen in 1198ms** |
+| M25.2 PIN | All three named actions gated and verified: **price changes**, **staff removal** (`removals sent so far: 0` before the gate was answered), and **confirming the sale**, which is what confirming a payout is in this product |
+| Gates | 1281 fast tests green in 44 seconds; ruff, format, mypy, ASCII, architecture and secret scan green on every commit |
