@@ -3207,3 +3207,15 @@ lesson four times - so dispatch is recorded here as **half built and not usable*
   ever since.
 - **The rule that took five false alarms to learn is now the shape of every check in this repository**: ask the
   page for an **element** or a **value**, never for a sentence; set values the way React hears them; press by id.
+
+- **M24.5's first half is verified: the shop is server-rendered, with its goods in the markup.** Asked of the
+  raw response, before any script runs: the heading is `"Alaba Shop 3892"` and the **prices are in the HTML**
+  (`N1,500` style), not fetched afterwards. A customer on a market connection reads the shop instead of watching
+  a spinner fill in a page that was already paid for.
+- **The assertion was too weak when first written and was tightened, not kept.** It originally tested for "a
+  digit anywhere in the markup", which any page satisfies - a check that passes for the wrong reason is worse
+  than one that fails, because it buys false confidence. It now requires an actual money pattern.
+- **Still open in M24.5**: the client half - every authenticated screen painting from the cache before it asks.
+  The dashboard and the lists screen both do (`cachedRead`), and the cache was changed this session to **seed
+  the first paint only and never replace the network**, but the *evidence* for "first paint comes from the
+  cache" is the code and that fix, not a browser measurement - and that is the honest description of it.

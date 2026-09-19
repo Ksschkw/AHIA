@@ -67,5 +67,18 @@ if (/s-maxage|stale-while-revalidate/.test(cache)) {
 const canonical = (html.match(/<link rel="canonical" href="([^"]+)"/) ?? [])[1];
 check("the page has one address", Boolean(canonical), "no canonical link");
 
+// **Server-rendered, which is the whole of M24.5's first half.** The shop's own name and its goods must be in
+// the HTML as it arrives, before any script runs: a customer on a market connection should read the shop, not
+// watch a spinner fill in the page that was already paid for. Asking the raw response is the only way to know.
+const shopName = html.match(/<h1[^>]*>([^<]*)<\/h1>/)?.[1]?.trim();
+check("the shop is in the HTML itself", Boolean(shopName), "no h1 in the response");
+console.log(`      server-rendered heading: ${JSON.stringify(shopName)}`);
+const withoutScripts = html.replace(/<script[\s\S]*?<\/script>/g, "");
+check(
+  "the goods are in the HTML too, not fetched afterwards",
+  /₦\s?\d|NGN\s?\d/.test(withoutScripts.replace(/<[^>]+>/g, " ")),
+  "no price is in the markup",
+);
+
 console.log(failures.length ? `[FAIL] ${failures.length} problem(s)` : "[OK] no problems");
 process.exitCode = failures.length ? 1 : 0;
