@@ -3553,3 +3553,29 @@ nobody could explain. **A version matrix belongs in a file the toolchain ships, 
 Also fixed while there: a `babel.config.js` with `babel-preset-expo`, which the blank template ships and a
 hand-written skeleton does not, and `@types/react` in devDependencies, without which `tsc` cannot type a JSX
 file at all.
+
+## The first real use of the mobile app found three things, and one of them was a bug
+
+Opened in Expo Go on the product owner's phone. It bundled, it ran, and signing in answered
+**"a request contained an invalid value"**.
+
+**The bug was mine, and it was the field name.** The login body takes **`identifier`** - one field for whichever
+a trader remembers, phone or email - not `phone`, and the schema forbids extra fields, so the request was
+refused before anything was looked up. Proven before fixing:
+
+    {"phone": "...", "password": "..."}       -> INVALID_REQUEST     (what the app sent)
+    {"identifier": "...", "password": "..."}  -> accepted            (what the API takes)
+    {"identifier": "09011112222", ...}        -> INVALID_CREDENTIALS (the local format parses fine)
+
+**The other two things were absences he noticed straight away, and both were right.** There was no way to
+create an account, and no way to see a password while typing it. Now there is a **welcome screen** that says what
+the product does before asking for anything and offers sign in or create an account; the password fields have a
+**Show/Hide** that is named for a screen reader; and registration asks for the password twice, which the API does
+not require but which stops somebody locking themselves out of an account they made a minute ago.
+
+**And the mobile code type-checks for the first time**: `tsc --noEmit` passes against the real installed
+dependencies. Until this round it had never been compiled at all.
+
+**On his question about the backend: yes, it is the deployed one.** `BASE_URL` defaults to the Northflank
+address, and `/health` answers 200. Pointing a build at a different API is `EXPO_PUBLIC_API_URL`, which exists so
+that no build carries a hostname that happens to be right today.

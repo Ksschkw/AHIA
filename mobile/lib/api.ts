@@ -1,4 +1,4 @@
-import { currentAccessToken, forgetSession, readRefreshToken, rememberAccessToken, rememberSession } from "./session";
+import { currentAccessToken, forgetSession, readRefreshToken, rememberSession } from "./session";
 
 /**
  * The same API the web app calls, from a phone.
@@ -78,11 +78,37 @@ export async function request<T>(
   return payload as T;
 }
 
-/** Sign in and keep the session where a phone keeps secrets. */
-export async function signIn(phone: string, password: string): Promise<void> {
+/**
+ * Sign in and keep the session where a phone keeps secrets.
+ *
+ * The field is **`identifier`**, not `phone`: one field for whichever a trader remembers, phone or email, and
+ * the service decides which it is. The schema forbids extra fields, so sending `phone` is refused with
+ * `INVALID_REQUEST` before anything is looked up - which is exactly what happened the first time this app was
+ * opened on a phone.
+ */
+export async function signIn(identifier: string, password: string): Promise<void> {
   const session = await request<{ access_token: string; refresh_token: string }>("/api/v1/auth/login", {
     method: "POST",
-    body: { phone, password },
+    body: { identifier, password },
+  });
+  await rememberSession(session);
+}
+
+/** Create an account, and be signed in with it. */
+export async function registerAccount(details: {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  password: string;
+}): Promise<void> {
+  const session = await request<{ access_token: string; refresh_token: string }>("/api/v1/auth/register", {
+    method: "POST",
+    body: {
+      first_name: details.firstName,
+      ...(details.lastName.trim() ? { last_name: details.lastName } : {}),
+      phone: details.phone,
+      password: details.password,
+    },
   });
   await rememberSession(session);
 }
