@@ -3279,3 +3279,17 @@ lesson four times - so dispatch is recorded here as **half built and not usable*
   (the API answered 422 with a correlation id, which is how that was found). **A setup that fails at its own
   first step reports nothing about the product** - and this is the seventh time this session that a check's
   setup, not the code, was what needed fixing.
+
+- **M25.2's second sensitive action is gated and verified: removing somebody from the team.** Measured at
+  390x844, and the measurement is the whole point: **`the gate is up, and removals sent so far: 0`** - nothing
+  reaches the network until the question is answered. Then `the gate was answered: answered`, the removal goes
+  through, and the double-press guard still holds afterwards (`requests caused: 1`).
+- **It is the right action to have chosen for this treatment.** Changing a price costs money; taking somebody
+  off the team costs them their income, and it happens on a phone that is often in somebody else's hand.
+- **And the second half of this round's lesson is in the check's own history**: the step after the gate failed
+  first time round *because the gate was working* - it pressed remove and nothing happened, since the check had
+  never answered the PIN. **A passing gate looks like a failing feature to a check that does not use it** - the
+  same confusion as the dead server and the stale build, from the opposite direction.
+- **M25.2 now covers two of the three actions the objective names** - price changes and staff removal. The third,
+  **confirming payouts**, is not a gap in the gate: payouts do not exist as a feature yet, and that is a
+  milestone of its own rather than a missing lock on a door that is not there.

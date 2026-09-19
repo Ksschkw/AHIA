@@ -76,7 +76,47 @@ await step("a team with somebody on it", async () => {
   console.log("      somebody is on the team to remove");
 });
 
+await step("a removal asks who is holding the phone, and sends nothing until it is told", async () => {
+  await page.goto(`${APP_URL}/app/team`, { waitUntil: "networkidle2" });
+  await page.waitForFunction(
+    () => document.querySelectorAll("button[id^='member_remove_']").length > 0,
+    { timeout: 30000 },
+  );
+  const before = removals.length;
+  await page.evaluate(() => {
+    document.querySelector("button[id^='member_remove_']").click();
+  });
+  await page.waitForSelector("#device-pin", { timeout: 15000 });
+  await new Promise((resolve_) => setTimeout(resolve_, 1500));
+  console.log(`      the gate is up, and removals sent so far: ${removals.length - before}`);
+  if (removals.length !== before) {
+    throw new Error("the removal went through without the PIN");
+  }
+});
+
 await step("a double press sends one request, not two", async () => {
+  // The gate is still up from the step before, which is the point of it: nothing happens until it is answered.
+  // Setting the PIN here lets the removal through, and only then is the double press worth measuring.
+  await page.waitForSelector("#pin-field" + "", { timeout: 5000 }).catch(() => {});
+  const answered = await page.evaluate(() => {
+    const first = document.querySelector("#device-pin");
+    const again = document.querySelector("#device-pin-again");
+    if (!first) return "no gate";
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+    for (const input of [first, again]) {
+      if (!input) continue;
+      setter?.call(input, "1234");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    const button = [...document.querySelectorAll("button")].find((candidate) =>
+      candidate.textContent?.trim().startsWith("Set it and continue"),
+    );
+    button?.click();
+    return button ? "answered" : "no button";
+  });
+  console.log(`      the gate was answered: ${answered}`);
+  await new Promise((resolve_) => setTimeout(resolve_, 3000));
+
   await page.goto(`${APP_URL}/app/team`, { waitUntil: "networkidle2" });
   await page.waitForFunction(() => document.querySelectorAll("button[id^='member_remove_']").length > 0, {
     timeout: 30000,

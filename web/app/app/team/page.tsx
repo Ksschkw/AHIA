@@ -41,6 +41,8 @@ import {
   type Tenant,
 } from "@/lib/api";
 import { explainFailure } from "@/lib/errors";
+import { PinGate } from "@/components/pin-gate";
+import { hasDevicePin } from "@/lib/device-pin";
 import styles from "./team.module.css";
 
 type Notice = { message: string; tone: "good" | "bad"; hint?: string };
@@ -60,6 +62,8 @@ export default function Team() {
   const [issued, setIssued] = useState<MembershipInvitation[]>([]);
   const [mine, setMine] = useState<PendingInvitation[]>([]);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  //: The action waiting on the question, if the person holding the phone has not answered yet.
+  const [gated, setGated] = useState<{ run: () => void } | null>(null);
   //: True from the instant a handler starts to the instant it finishes, which state cannot be.
   const inFlight = useRef(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -70,11 +74,18 @@ export default function Team() {
   const [inviteLink, setInviteLink] = useState<string | null>(null);
 
   const run = useCallback(
-    async (key: string, action: () => Promise<void>) => {
+    async (key: string, action: () => Promise<void>, skipGate = false) => {
       // **A synchronous guard, because `disabled` is not one.** React applies the disabled attribute on the
       // next render, which is a tick after the press - so two presses inside that tick both get through, and
       // the measurement found exactly that: a double press on a removal caused **two** requests. A ref is read
       // and written in the same tick the handler runs in, so the second press never reaches the request.
+      // **Removing somebody from the team is one of the three things the objective names for the PIN**,
+      // alongside changing a price and confirming a payout: it is the only action here that takes a person's
+      // livelihood away with a tap, and it is done on a phone that is often in somebody else's hand.
+      if (!skipGate && key.startsWith("remove-")) {
+        setGated({ run: () => void run(key, action, true) });
+        return;
+      }
       if (inFlight.current) return;
       inFlight.current = true;
       setBusyAction(key);
@@ -386,6 +397,18 @@ export default function Team() {
           onDismiss={() => setNotice(null)}
         />
       ) : null}
+
+      {/* Taking somebody off the team is the one action on this screen that removes a person's livelihood
+          with a tap, and it is done on a phone that is often in somebody else's hand. */}
+      <PinGate
+        open={gated !== null}
+        reason="remove somebody from the team"
+        onConfirmed={() => {
+          gated?.run();
+          setGated(null);
+        }}
+        onClose={() => setGated(null)}
+      />
     </main>
   );
 }
