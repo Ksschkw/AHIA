@@ -3496,3 +3496,20 @@ analysis: look for the thing that exists before saying it is missing.**
 
 The correction cannot reach the commit message that announced the gap - it is in the history and stays there.
 This note is the only place it can be fixed, which is why it is here and not in a silent amendment.
+
+## M20 step one: the mobile foundation is committed, and has not been run
+
+What is there: `mobile/` with an Expo SDK 57 app identity (`app.json`), the sign-in screen that calls the same
+endpoint the web calls, and the two files that had to be right before anything else -
+`lib/session.ts` (refresh token in the keychain, access token in memory, with a docstring that says what that
+protects against and what it does not) and `lib/api.ts` (bearer header, refresh once on 401, never a loop).
+
+Dependencies are **not** pinned by hand: only `expo` is fixed, and the rest are left to `npx expo install`,
+because only Expo knows which react-native a given SDK expects. Pinning them from `npm view` would be inventing
+a compatibility matrix, and the first symptom of getting that wrong is a build failure nobody can explain.
+
+**And the honest part: it has never been run.** This environment cannot install the dependencies - the npm cache
+is read-only here and the Node version trips `create-expo-app` - so the code is written but **not type-checked,
+not bundled and not seen on a device**. The README says so, and says that the first person to run
+`npm install` should expect to fix something small. The sign-in screen is deliberately the only screen until
+that happens, because a foundation that does not run is not a foundation.

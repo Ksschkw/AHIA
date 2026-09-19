@@ -1,0 +1,18 @@
+{
+  "name": "ahia-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "expo": "~57.0.24"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.0"
+  }
+}
