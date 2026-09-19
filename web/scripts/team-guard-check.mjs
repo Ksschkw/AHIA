@@ -58,16 +58,21 @@ await step("a team with somebody on it", async () => {
   const invited = await page.evaluate(async () => {
     const tenants = await (await fetch("/api/v1/tenants")).json();
     const tenant = tenants[0];
-    const invitation = await (
-      await fetch(`/api/v1/tenants/${tenant.id}/invitations`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: "08111111111", role_name: "SALESPERSON" }),
-      })
-    ).json();
-    return Boolean(invitation.token ?? invitation.id);
+    // The path and the body the app itself uses: `/members`, with a role and a phone. The first version of
+    // this asked for `/invitations`, which answered nothing useful, so the setup quietly measured a guard
+    // against whoever was already there instead of somebody it had added.
+    const response = await fetch(`/api/v1/tenants/${tenant.id}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: "08111111111", role_name: "SALES" }),
+    });
+    if (!response.ok) return `the invitation was refused: ${response.status} ${await response.text()}`;
+    const invitation = await response.json();
+    return Boolean(invitation.id ?? invitation.token);
   });
-  if (!invited) throw new Error("nobody was invited, so there is nothing to remove");
+  if (invited !== true) {
+    throw new Error(typeof invited === "string" ? invited : "nobody was invited");
+  }
   console.log("      somebody is on the team to remove");
 });
 

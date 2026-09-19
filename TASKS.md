@@ -3269,3 +3269,13 @@ lesson four times - so dispatch is recorded here as **half built and not usable*
 - **Owed and named**: the check's setup cannot invite somebody yet (the invitation call answers nothing useful),
   so it measures the guard against whoever is already on the team rather than a person it added. The measurement
   is sound; the setup is not yet doing what it says.
+
+- **M24.4 is verified with a proper setup.** The check now invites somebody the way the app does and removes
+  them: `somebody is on the team to remove`, then **`requests caused by a double press: 1`** - `[OK] no
+  problems`, exit 0. The synchronous guard holds against a person the check actually added, rather than against
+  whoever happened to be on the team.
+- **Two setup faults on the way, both mine, both the same shape as the others**: the invitation path was
+  `/invitations` when the app uses `/members`, and the role was `SALESPERSON` when the registry knows `SALES`
+  (the API answered 422 with a correlation id, which is how that was found). **A setup that fails at its own
+  first step reports nothing about the product** - and this is the seventh time this session that a check's
+  setup, not the code, was what needed fixing.
