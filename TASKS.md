@@ -3293,3 +3293,13 @@ lesson four times - so dispatch is recorded here as **half built and not usable*
 - **M25.2 now covers two of the three actions the objective names** - price changes and staff removal. The third,
   **confirming payouts**, is not a gap in the gate: payouts do not exist as a feature yet, and that is a
   milestone of its own rather than a missing lock on a door that is not there.
+
+- **M25.2's third action is gated and verified: confirming a list.** *Confirming a list is confirming money* -
+  it is the moment a total stops being a suggestion and becomes what a customer owes, and in this product it is
+  what "confirming a payout" means. Verified at 390x844: `the confirmation asked for the PIN, and then the list
+  became a sale`, `[OK] no problems`, exit 0.
+- **Pricing a line is deliberately left ungated.** A trader prices thirty lines in a morning with a customer
+  waiting, and a PIN asked for that often is a PIN people share with whoever is nearest - which is worse than
+  none. The gate stands in front of the three actions that change money or people, and nothing else.
+- **So all three actions the objective names are gated**: price changes, staff removal, and the confirmation
+  that turns a list into what the customer owes.

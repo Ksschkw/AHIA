@@ -144,12 +144,30 @@ await step("he marks the line, costs it, prices it, and sees what he makes", asy
   console.log(`      ${facts.total} - ${facts.made}`);
   await page.screenshot({ path: resolve(OUTPUT, "workbench-priced.png") });
 
-  // And the whole list can become a sale, because everything on it is priced.
+  // And the whole list can become a sale, because everything on it is priced - which asks who is holding the
+  // phone, because confirming a list is confirming money.
   await pressById(`#confirm_${ids.requestId}`);
+  await page.waitForSelector("#device-pin", { timeout: 20000 });
+  const answered = await page.evaluate(() => {
+    const first = document.querySelector("#device-pin");
+    const again = document.querySelector("#device-pin-again");
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+    for (const input of [first, again]) {
+      if (!input) continue;
+      setter?.call(input, "1234");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    const button = [...document.querySelectorAll("button")].find((candidate) =>
+      candidate.textContent?.trim().startsWith("Set it and continue"),
+    );
+    button?.click();
+    return Boolean(button);
+  });
+  if (!answered) throw new Error("the gate was up but could not be answered");
   await page.waitForFunction(() => document.body.innerText.includes("is confirmed"), {
     timeout: 30000,
   });
-  console.log("      and the list became a sale");
+  console.log("      the confirmation asked for the PIN, and then the list became a sale");
 });
 
 console.log(failures.length ? `[FAIL] ${failures.length} step(s)` : "[OK] no problems");

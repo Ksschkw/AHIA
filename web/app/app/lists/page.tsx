@@ -37,6 +37,7 @@ import {
   type ListLineState,
   type Tenant,
 } from "@/lib/api";
+import { PinGate } from "@/components/pin-gate";
 import { explainFailure } from "@/lib/errors";
 import { formatMoneyOrOnRequest } from "@/lib/format";
 import styles from "./lists.module.css";
@@ -56,6 +57,8 @@ export default function Lists() {
   const [state, setState] = useState<"loading" | "ready">("loading");
   const [openId, setOpenId] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  //: The action waiting on the question, if the person holding the phone has not answered yet.
+  const [gated, setGated] = useState<{ run: () => void } | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   //: Keyed by **line**, not by list. One draft per list meant two fields on the same line shared one
   //: object, and the second keystroke was written from a stale copy of the first - so a cost typed
@@ -72,7 +75,15 @@ export default function Lists() {
   });
   const [adjustments, setAdjustments] = useState<Record<string, string>>({});
 
-  const run = useCallback(async (key: string, action: () => Promise<void>) => {
+  const run = useCallback(async (key: string, action: () => Promise<void>, skipGate = false) => {
+    // **Confirming a list is confirming money.** It is the moment a total stops being a suggestion and becomes
+    // what a customer owes, so it is the third of the three actions the objective names for the PIN - and in
+    // this product it is what "confirming a payout" means. Pricing a line stays ungated: a trader prices thirty
+    // lines in a morning with a customer waiting, and a PIN asked for that often is a PIN people share.
+    if (!skipGate && key.startsWith("confirm-")) {
+      setGated({ run: () => void run(key, action, true) });
+      return;
+    }
     setBusyAction(key);
     setNotice(null);
     try {
@@ -476,6 +487,17 @@ export default function Lists() {
           Back to the shop
         </Link>
       </p>
+
+      {/* The moment the list becomes a sale, and the moment money exists. */}
+      <PinGate
+        open={gated !== null}
+        reason="confirm this list - it is what the customer owes"
+        onConfirmed={() => {
+          gated?.run();
+          setGated(null);
+        }}
+        onClose={() => setGated(null)}
+      />
 
       {notice ? (
         <Toast
