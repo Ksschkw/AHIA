@@ -130,6 +130,9 @@ class PublicProductSchema(BaseModel):
     description: str | None
     primary_image_url: str | None
     group_name: str | None
+    #: True when the item carries its own price rather than the one its group sets. Only these are
+    #: shown to a customer by name; everything else they type in and the group prices it.
+    is_special: bool
 
     @classmethod
     def from_projection(cls, product: Any) -> PublicProductSchema:
@@ -138,6 +141,7 @@ class PublicProductSchema(BaseModel):
             name=product.name,
             selling_price=money_text(Decimal(product.selling_price)),
             group_name=product.group_name,
+            is_special=product.is_special,
             description=product.description,
             primary_image_url=product.primary_image_url,
         )

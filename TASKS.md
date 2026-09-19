@@ -2904,3 +2904,17 @@ builder walking it.
   Screenguard dragged under Hot 8 is refused, and Hot 8 moved up next to Screenguard succeeds. A guard that
   refuses every move would pass a naive test and break the product. **19 tests pass** in the file, with
   ruff, formatting and mypy clean.
+
+- **M24.2c: the catalogue now says which items are exceptions.** `is_special` is true when an item carries
+  its own price that differs from the one its group sets - "Hot 8 is 370, the rest of the 21D are 350".
+  **These are the only models a customer is shown by name**, which is the whole point of the hierarchy: the
+  trader does not type in four hundred models for the four hundred that are all the same number. Everything
+  else the customer types themselves and the group prices it. An item that simply inherits is not an
+  exception. Verified by an assertion inside the public-catalogue test and 124 storefront and schema tests.
+- **And a piece of rewrap damage was found in the file and repaired**: a comment had been mangled by one of
+  my line-wrapping scripts into `# :` fragments, left in the source since the round that did it. It is the
+  third casualty of those scripts, and the rule against them is already recorded; this is the evidence that
+  the damage outlives the round unless somebody looks.
+- Still to do for M24.2c: the group **tree** in the public payload (name, parent, price - so the builder can
+  walk it), placing a product at any depth, the list builder walking the tree, and the nested Add-product
+  screen.

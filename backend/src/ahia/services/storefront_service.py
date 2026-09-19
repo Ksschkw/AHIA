@@ -75,12 +75,13 @@ class PublicProduct:
     selling_price: Decimal | None
     description: str | None = None
     primary_image_url: str | None = None
-    # : The heading this item sits under in the trader's own words. Sent because a customer building
-    # a
-    # : list reads it the way they read a written one - "21D" and the models beneath it - and
-    # because it
-    #: is not sensitive: it is the word he writes on the paper he hands over.
+    #: The heading this item sits under in the trader's own words: "21D", and the models under it.
     group_name: str | None = None
+    #: True when the item carries its own price rather than the one its group sets. Only these are
+    #: shown to a customer by name - "Hot 8 is 370, the rest of the 21D are 350" - because the
+    #: trader should not have to type four hundred models in for the four hundred that are all the
+    #: same price.
+    is_special: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -551,13 +552,21 @@ class StorefrontService:
         )
         primary = _primary_image(images)
         group = None
+        group_default_price = None
         if product.category_id is not None:
             found = await category_crud.get_by_id(
                 session,  # type: ignore[arg-type]
                 tenant_id=tenant_id,
                 category_id=product.category_id,
             )
-            group = found.name if found is not None else None
+            if found is not None:
+                group = found.name
+                group_default_price = found.price_defaults().normal_price
+        # An exception carries its own price and it differs from the group's. An
+        # item with no price of its own inherits, and inheriting is the ordinary case.
+        is_special = (
+            product.selling_price is not None and product.selling_price != group_default_price
+        )
         return PublicProduct(
             product_slug=product.slug,
             name=product.name,
@@ -565,6 +574,7 @@ class StorefrontService:
             description=product.description,
             primary_image_url=(await self._images.build_delivery_url(primary) if primary else None),
             group_name=group,
+            is_special=is_special,
         )
 
     # ------------------------------------------------------------------

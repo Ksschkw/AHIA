@@ -349,6 +349,13 @@ async def test_a_public_read_returns_the_shop_and_its_catalogue(
     # how a
     # customer ends up reading "out of stock" from a trader who would simply go and find the thing.
     assert not hasattr(by_name["Rice 50kg"], "is_available")
+
+    # **Only the exceptions are marked.** An item carrying a price different from its group's is
+    # is the one a customer is shown by name: "this model is 370, the rest of the 21D are 350". The
+    # trader should not have to type four hundred models in for the four hundred that share one
+    # number - the customer types those, and the group prices them. An item that simply inherits is
+    # not an exception.
+    assert by_name["Rice 50kg"].is_special is True
     # Neither product reports one, whether it is in stock or not: the field is not sent.
     assert by_name["Rice 50kg"].primary_image_url is not None
 
