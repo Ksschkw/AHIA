@@ -3414,3 +3414,42 @@ price nobody set.
 2. The shelf and "sell one", offline, with the outbox and the not-yet-sent markings.
 3. The lists workbench and dispatch, which is where the money story lives.
 4. Push notifications, web first and then mobile.
+
+## Three answers: CORS, iOS, and the installable web app
+
+### CORS: the phone does not need it, and the thing the phone *does* need is not CORS
+
+**CORS is a browser mechanism.** It exists so a page from one origin cannot quietly read another origin's
+answers. A React Native app is not a browser page: its HTTP client sends no `Origin` and honours no preflight.
+**So mobile needs no CORS change at all**, in either direction.
+
+The web app does not need one either, and that is by design rather than by luck: the browser calls
+`/api/...` **on its own origin** and Next proxies it to the API, so there is no cross-origin request to
+permit. The configuration that exists is correct for the case that does arise - a direct call from a browser -
+and it is correct in the way that matters: `cors_allowed_origins` is an explicit list, credentials are allowed,
+and **`*` with credentials is refused** (there is a validator for exactly that in `config.py`).
+
+**What mobile actually needs instead is authentication that is not a cookie.** The web session is an
+**HttpOnly cookie**, which a browser attaches to every request on its own - and which React Native's `fetch`
+does not manage reliably. So M20 step one includes a real backend addition: **an `Authorization: Bearer` path
+for the app's own authenticated routes**, with the access token short-lived and the refresh token stored in the
+device's secure storage (`expo-secure-store`), not in local storage. Today the only bearer user is the metrics
+endpoint. **This is the first piece of mobile work, because sign-in depends on it.**
+
+### iOS: built, and shipped by the only route Apple allows
+
+**Both platforms are built from the same codebase.** iOS is not skipped, and the reason is not sentiment: the
+product owner's family uses iPhones. Distribution is where they differ - Android as an APK on a GitHub Release
+that he downloads, iOS through **TestFlight** (or an Ad Hoc build with registered device identifiers). That
+needs his Apple account to invite testers; there is no way around it, and no amount of engineering changes it.
+
+### The web app is installable now
+
+Done and verified: a manifest at `/manifest.webmanifest` (name, short name, `start_url: /app`, standalone
+display, the product's own sand and leaf colours, and three icons including a maskable one), the Apple
+web-app metadata that iOS reads instead of the manifest, and the icons served - `200` for both. **A trader can
+add it to his home screen today and it opens without browser chrome**, on the same page and the same build.
+
+Still to come for the full picture: the **service worker**, which is what makes a push notification possible in
+a browser and what keeps the shell alive on a dead connection. It belongs with the push work rather than here,
+because what it caches is a decision about a trader's data.
