@@ -15,7 +15,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Brand, Wordmark } from "@/components/brand";
 import { Button, Card, Field, Pill, Select, Toast } from "@/components/ui";
@@ -60,6 +60,8 @@ export default function Team() {
   const [issued, setIssued] = useState<MembershipInvitation[]>([]);
   const [mine, setMine] = useState<PendingInvitation[]>([]);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  //: True from the instant a handler starts to the instant it finishes, which state cannot be.
+  const inFlight = useRef(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const [inviteRole, setInviteRole] = useState<MemberRole>("SALES");
@@ -69,6 +71,12 @@ export default function Team() {
 
   const run = useCallback(
     async (key: string, action: () => Promise<void>) => {
+      // **A synchronous guard, because `disabled` is not one.** React applies the disabled attribute on the
+      // next render, which is a tick after the press - so two presses inside that tick both get through, and
+      // the measurement found exactly that: a double press on a removal caused **two** requests. A ref is read
+      // and written in the same tick the handler runs in, so the second press never reaches the request.
+      if (inFlight.current) return;
+      inFlight.current = true;
       setBusyAction(key);
       setNotice(null);
       try {
@@ -77,6 +85,7 @@ export default function Team() {
         const explained = explainFailure(error);
         setNotice({ message: explained.message, hint: explained.hint, tone: "bad" });
       } finally {
+        inFlight.current = false;
         setBusyAction(null);
       }
     },

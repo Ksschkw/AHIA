@@ -3252,3 +3252,20 @@ lesson four times - so dispatch is recorded here as **half built and not usable*
   so the next omission fails at the moment it happens rather than in a feed that quietly told a device the wrong
   thing. The test and the runtime now enforce the same rule, which is the only way a declared vocabulary stays
   declared.
+
+- **M24.4's measurement found a real defect, and the guard I had written did not fix it.** Counting the requests
+  a **fast double press** causes on a removal: **two**. `disabled={busyAction !== null}` is applied by React on
+  the **next render**, which is a tick after the press - so two presses inside that tick both reach the network.
+  The team page now carries a **synchronous ref guard** (`if (inFlight.current) return;`), which is read and
+  written in the tick the handler runs in. Re-measured: **one request**.
+- **This is the first time this session that a check found a defect and the defect was real** - the other six
+  findings were my instruments. It is worth saying plainly, because the rule "prove your instrument first" must
+  not become "assume the product is fine": the instrument was proven on the previous run (it caught two
+  requests), and then it caught something true.
+- **Sixth instrument fault, for the record**: the check originally read `control.disabled` in the same tick as
+  the click, which is always `false` because the attribute is applied on the next render. The assertion now
+  measures **the request count and nothing else** - a fact about behaviour, rather than about a moment that has
+  not happened yet.
+- **Owed and named**: the check's setup cannot invite somebody yet (the invitation call answers nothing useful),
+  so it measures the guard against whoever is already on the team rather than a person it added. The measurement
+  is sound; the setup is not yet doing what it says.
