@@ -93,9 +93,17 @@ assertion in a commit message.
 | M15 | Offline synchronization and idempotency | `[x]` | M12 |
 | M16 | Public storefront, sharing, WhatsApp click-to-chat, QR | `[x]` | M9 |
 | M17 | Reports, insights, low-stock alerts, notifications | `[x]` | M12 |
-| M18 | Hardening, observability, deployment | `[ ]` | M16 |
-| M19 | Web application bootstrap (Next.js) | `[ ]` | M16 |
-| M20 | Mobile application bootstrap (React Native + Expo) | `[ ]` | M15 |
+| M18 | Hardening, observability, deployment | `[x]` | M16 |
+| M19 | Web application bootstrap (Next.js) | `[x]` | M16 |
+| M20 | Mobile application (React Native + Expo), offline-first | `[ ]` | M15 |
+| M21 | Lists and waybills: the customer's list and the trader's side | `[x]` | M19 |
+| M22 | Interface rebuild | `[x]` | M19 |
+| M23 | Responsiveness, truthful loading states, perceived speed | `[x]` | M22 |
+| M24 | Storefront, lists, shelf, button states, render split | `[x]` | M23 |
+| M25 | Authentication continuity and the device PIN | `[ ]` in part | M19 |
+
+M25.2 - the device PIN for sensitive actions - is complete and verified. The rest of
+M25 is open. M20 is the next piece of work.
 
 Deferred by design, not planned here: AI forecasting, community/network module,
 supplier marketplace, fleet tracking, automated bank integrations, full WhatsApp
@@ -1468,7 +1476,7 @@ Goal: a business exists as a tenant with a globally unique public slug.
       documented in `docs/RLS_ROLLOUT.md`, including what is *not* verified.
 - [x] M18.1.4 Dependency audit gate confirmed to fail the build on a critical
       finding, with a deliberately planted test finding.
-- [ ] M18.1.5 Northflank deployment configuration, health checks and secret
+- [x] M18.1.5 Northflank deployment configuration, health checks and secret
       wiring documented.
 - [x] M18.1.6 Production runbook in `docs/RUNBOOK.md`: startup, migration
       order, rollback, the secret inventory with what each rotation
@@ -3329,3 +3337,80 @@ moment it is measured; repeating it later is a new claim and needs a new measure
 | (5) Render split | Shop server-rendered (asserted from the raw response); the app's first paint **measured against a five-second network delay: on screen in 1198ms** |
 | M25.2 PIN | All three named actions gated and verified: **price changes**, **staff removal** (`removals sent so far: 0` before the gate was answered), and **confirming the sale**, which is what confirming a payout is in this product |
 | Gates | 1281 fast tests green in 44 seconds; ruff, format, mypy, ASCII, architecture and secret scan green on every commit |
+
+## M20 - the mobile application, and the answers to the four questions asked of it
+
+The phone is the trader's actual tool. Everything below is the plan for it, written
+before the code so the decisions are reviewable rather than discovered.
+
+### Does it connect to the same backend? Yes, and the offline machinery is already there
+
+**The same API, the same contracts, the same five layers.** Nothing is duplicated for
+mobile: the phone is another client of the endpoints the web app uses, and the public
+shop and list pages stay where they are.
+
+And the backend is not merely capable of offline - **it was built for it and it is
+already there** (verified, not assumed):
+
+- `POST /sync/push` - the device sends the operations it performed while offline.
+- `GET /sync/pull` - the device fetches what changed since the cursor it last held.
+- `GET|POST /sync/cursor` - where this device has read to.
+- All three behind the offline-sync guard, and `sync_service` already dispatches a
+  pushed operation into the use case that owns it (a sale, an expense, a customer).
+
+### How reconciliation works, and why it is tractable here
+
+**Both directions carry the same two ideas: an operation log and a cursor.**
+
+- **Upward**: the phone never writes a row, it sends an **operation** with a stable
+  operation id. The server applies it once and remembers the id, so a retry after a
+  lost reply is not a second sale. That is idempotency by construction rather than by
+  hoping the network was honest.
+- **Downward**: the phone asks "what changed after my cursor" and applies the answer,
+  in order, remembering the new cursor only when it has applied everything.
+
+**Why conflicts are rare rather than merely handled**: the things a trader does all
+day - sales, expenses, stock movements, payments - are **append-only**. Two devices
+cannot disagree about a fact if neither of them ever rewrites it. Where a genuine
+two-writer conflict can happen, it is the **catalogue**: a price edited on the phone
+and on the web at once. The rule there is **last writer wins per field, with the
+server as the arbiter of the order**, and a change that loses is not lost silently -
+it is visible in the audit trail and can be seen.
+
+What is deliberately **not** attempted: merging two different values into one. A
+price is one number chosen by one person; a product that averaged them would be a
+price nobody set.
+
+### Offline-first, concretely
+
+- **A local store on the device** (SQLite via `expo-sqlite`) holding the shelf, the
+  lists, and the outbox.
+- **An outbox of operations**: pressing "Sell one" writes the operation locally,
+  shows it as done, and adds it to the queue. The queue drains when there is a
+  connection, and **nothing is dropped** - a queued operation survives a restart, a
+  dead battery and an app update.
+- **The screen never lies about it.** Anything not yet sent is marked as not yet sent;
+  a trader who has sold twelve things in a market with no signal must be able to see
+  which twelve have reached the shop and which are still in his hand.
+- **The same rule the web learned**: no empty state before the answer arrives, and no
+  "out of stock" ever shown to a customer.
+
+### Releases, so he can test them
+
+- **Android**: GitHub Actions builds an **APK** and attaches it to a **GitHub Release**.
+  He taps the asset, installs it, tests it. That is a download, and it works.
+- **iOS**: the honest answer is that a downloadable build is **not** possible. Apple
+  allows TestFlight or an Ad Hoc build with registered device identifiers. It will be
+  a TestFlight link, and it needs his Apple account to invite testers.
+- **Web push** and **mobile push** are separate roads to the same person: a service
+  worker with VAPID keys for the browser, and Expo push (FCM for Android, APNs for
+  iOS) for the phone. The backend already has a notification service to build the
+  sending side on, and it needs one new table: the device tokens, one row per phone,
+  tied to a person and a business.
+
+### The order of work
+
+1. Skeleton and sign-in against the same API, on a phone, in a release he can install.
+2. The shelf and "sell one", offline, with the outbox and the not-yet-sent markings.
+3. The lists workbench and dispatch, which is where the money story lives.
+4. Push notifications, web first and then mobile.
