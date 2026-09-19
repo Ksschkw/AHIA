@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime
+from decimal import Decimal
 from enum import StrEnum
 from typing import Final
 from uuid import UUID
@@ -76,6 +77,42 @@ class RequestModel:
     #: the database, exactly as the shop's own share links are. None once the list is confirmed,
     #: because by then it is a sale and the link has no more work to do.
     public_token_digest: str | None = None
+    #: Who is carrying it, their number, the waybill number, what the trip cost, and where it can be
+    #: Who is carrying it, the waybill number, what the trip cost, and where it can be followed.
+    #: way for this trade to work, and the cost is worth having separately, because it comes
+    #: having separately, because it comes off what the list made.
+    transporter_name: str | None = None
+    transporter_phone: str | None = None
+    waybill_number: str | None = None
+    dispatch_cost: Decimal | None = None
+    tracking_url: str | None = None
+    dispatched_at: datetime | None = None
+
+    def dispatched(
+        self,
+        *,
+        transporter_name: str | None,
+        transporter_phone: str | None,
+        waybill_number: str | None,
+        dispatch_cost: Decimal | None,
+        tracking_url: str | None,
+        at: datetime,
+    ) -> RequestModel:
+        """Return the list with how it was sent recorded.
+
+        Every field is optional and none of them has a default meaning "unchanged": this is called
+        with what the trader wrote down, and what he left out stays out.
+        """
+        return replace(
+            self,
+            transporter_name=transporter_name,
+            transporter_phone=transporter_phone,
+            waybill_number=waybill_number,
+            dispatch_cost=dispatch_cost,
+            tracking_url=tracking_url,
+            dispatched_at=at,
+            updated_at=at,
+        )
 
     def __post_init__(self) -> None:
         for field_name, moment in (

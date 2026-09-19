@@ -8,10 +8,11 @@ whether a customer is new belongs to a service; this file only stores and return
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text, select
+from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, Text, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -41,6 +42,12 @@ class RequestRecord(Base):
     status: Mapped[str] = mapped_column(String(_STATUS_LENGTH), nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     public_token_digest: Mapped[str | None] = mapped_column(String(_DIGEST_LENGTH), nullable=True)
+    transporter_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    transporter_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    waybill_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    dispatch_cost: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    tracking_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -59,6 +66,12 @@ def to_entity(record: RequestRecord) -> RequestModel:
         status=RequestStatus(record.status),
         note=record.note,
         public_token_digest=record.public_token_digest,
+        transporter_name=record.transporter_name,
+        transporter_phone=record.transporter_phone,
+        waybill_number=record.waybill_number,
+        dispatch_cost=record.dispatch_cost,
+        tracking_url=record.tracking_url,
+        dispatched_at=record.dispatched_at,
         created_at=record.created_at,
         updated_at=record.updated_at,
     )

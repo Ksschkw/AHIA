@@ -3123,3 +3123,23 @@ and it is the first thing next, because a gate nobody has walked through is a ga
   the same correction as the assertion before it. Two assertions in a row were fixed by measuring the
   interface's state instead of its prose, which is the whole of the lesson this session keeps teaching: a
   check should ask for the element, and only then for the words.
+
+### M24.2d Dispatch: the data layer is in, and it is only the data layer
+
+A confirmed list becomes a parcel on a road, and the trader writes down **who is carrying it, under what
+waybill number, what the trip cost, and where it can be followed**. The cost is kept separately because it
+comes off what the list made - and because a man who has to remember what a trip cost him is a man who will
+guess.
+
+All six fields are **nullable on purpose**: a customer collecting their own goods, or a boy taking it on the
+bus, is a normal way for this trade to work, and recording a transporter for that would be bookkeeping nobody
+asked for.
+
+**Done and verified**: the entity carries them and has a single `dispatched(...)` method that records what
+was written down and leaves out what was not; the store maps all six both ways; the migration
+(`5d2f7a1c8e34`) ran (`9c1d2e3f4a5b -> 5d2f7a1c8e34`); ruff, formatting and mypy are clean; and **240
+migration and crud tests pass**.
+
+**Not done, and it is the whole of the feature as a trader would see it**: the service method, the endpoint,
+and the screen. A column that nothing can write through is not a feature - this project has paid for that
+lesson four times - so dispatch is recorded here as **half built and not usable**, not as done.
