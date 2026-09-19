@@ -2968,3 +2968,17 @@ builder walking it.
   prove something untrue.** The right next step is to create the headings in the test the way the passing
   category tests do - through the service - and see whether the shop then reports them. That distinguishes
   a real defect from a test-fixture difference in one run.
+
+- **RESOLVED, and there was never a defect: the headings travel correctly.** The test now passes as a
+  plain test (18 passed, no xfail), created through `CategoryService` the way the product creates them. My
+  original fixture built them with the crud in a raw transaction scope, and **that** was the whole of it.
+- **The cost of not checking the fixture first: two rounds.** Round 23 concluded "the headings are built and
+  never arrive". Round 24 concluded the fault was in the write or in row-level security. Round 25 withdrew
+  the second conclusion as unsound. Round 26 ran the decisive experiment - create them the way the passing
+  tests do - and the test **XPASSed**, which is what a test says when the product was right all along.
+- **The lesson, now the first rule to apply when a new test fails: check that the test does what the product
+  does before believing it.** Every false alarm this session came from that one omission: the button that
+  never fired (my click), the red build (my overlapping runs), the invisible headings (my fixture). The
+  product was fine each time.
+- The test keeps a comment recording the two rounds, so the next reader knows why the setup looks the way
+  it does.

@@ -40,7 +40,6 @@ from ahia.core.permissions.permissions_registry import permission_codes_for_role
 from ahia.core.tenant_context import TenantContext, build_tenant_context
 from ahia.crud import (
     audit_event_crud,
-    category_crud,
     inventory_crud,
     product_crud,
     product_image_crud,
@@ -48,11 +47,11 @@ from ahia.crud import (
     sync_change_crud,
     tenant_crud,
 )
-from ahia.models.entities.category_model import CategoryModel
 from ahia.models.entities.product_image_model import ProductImageModel
 from ahia.models.entities.product_model import ProductModel
 from ahia.models.entities.tenant_model import TenantModel
 from ahia.services.audit_event_service import AuditEventService
+from ahia.services.category_service import CategoryService
 from ahia.services.storefront_service import StorefrontService
 
 DEFAULT_TEST_DATABASE_URL = (
@@ -331,17 +330,11 @@ async def test_a_contact_number_that_could_not_be_dialled_is_refused(
 
 
 @pytest.mark.integration
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the headings come back empty from read_public_storefront, while the products read in the "
-        "the read path, or in how this test creates its headings - and the latter is likely "
-        "the read path or in how this test creates its headings - and the second is likely, "
-        "the category tests that pass create them through CategoryService, not through the crud. "
-        "Strict, so this turns green when it is fixed and fails loudly if it starts passing "
-        "for another reason."
-    ),
-)
+#: This sat behind a strict xfail for two rounds while I looked for a defect that was not there. The
+#: headings were always arriving; the test was creating them through the crud in a raw transaction
+#: while every passing category test creates them through CategoryService.
+#: Written the way the product writes them it passes - and those two rounds are the
+#: the fixture first.
 @pytest.mark.integration
 async def test_the_shop_says_which_heading_each_group_hangs_under(
     service: StorefrontService, database: Database, tenant_id: UUID
@@ -353,24 +346,12 @@ async def test_the_shop_says_which_heading_each_group_hangs_under(
     family - and that is the whole shape of a written list.
     """
     owner = context_for(tenant_id, "OWNER")
-    async with database.transaction_scope() as unit_of_work:
-        session = unit_of_work.session_handle
-        family = await category_crud.create(
-            session,
-            CategoryModel.create(
-                category_id=uuid4(), tenant_id=tenant_id, name="Screenguard", now=NOW
-            ),
-        )
-        await category_crud.create(
-            session,
-            CategoryModel.create(
-                category_id=uuid4(),
-                tenant_id=tenant_id,
-                name="21D",
-                parent_id=family.id,
-                now=NOW,
-            ),
-        )
+    categories = CategoryService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        audit_event_service=AuditEventService(unit_of_work_factory=database.unit_of_work_factory()),
+    )
+    family = await categories.create_category(owner, name="Screenguard")
+    await categories.create_category(owner, name="21D", parent_id=family.id)
     await service.publish_storefront(owner, headline="Screenguards", contact_phone="08031234567")
     slug = await stored_slug(database, tenant_id)
 
