@@ -3513,3 +3513,23 @@ is read-only here and the Node version trips `create-expo-app` - so the code is 
 not bundled and not seen on a device**. The README says so, and says that the first person to run
 `npm install` should expect to fix something small. The sign-in screen is deliberately the only screen until
 that happens, because a foundation that does not run is not a foundation.
+
+## The product owner's own phone number was being used as an example, and it is gone
+
+It was in three source files and the task log: the phone-number entity's comments, two test files that
+canonicalise numbers, and a progress note here. **Seventeen occurrences, including the spaced forms** - my first
+pass replaced the unspaced ones and left `+234 803 123 4567` and `0803 123 4567` behind, which the tests caught
+immediately, because that test exists to prove every way of writing one number is one number.
+
+Replaced with `08031234567` - **the example this codebase's own docstrings already use** - so there is one
+placeholder in the project rather than a new one invented for the cleanup. 538 model tests pass, and a
+repository-wide search finds zero occurrences.
+
+**Two places it legitimately remains, and neither is an example:**
+
+- **His shop's contact number in the deployed database.** That is his business's real number, in the field that
+  exists to hold it, and removing it would break the thing that lets a customer call him.
+- **The git history.** Every commit before this one still contains the number, and rewriting that means
+  rewriting published history - `git filter-repo` or BFG, a force-push, and every clone re-cloned. **That is the
+  product owner's decision, not mine**, and the honest position is that removing it from the working tree does
+  not remove it from the repository's past.
