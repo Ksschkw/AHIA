@@ -3049,3 +3049,19 @@ same rule through the page's single action runner.
 **Verified**: `tsc` clean across the web app and the production build compiles. **Not yet verified in a
 browser** - the gate's own journey (set a PIN, be asked, be refused without it, proceed with it) is owed,
 and it is the first thing next, because a gate nobody has walked through is a gate nobody knows is locked.
+
+- **M25.2's gate, walked in a browser: the first-time journey is verified, the re-ask is half-verified.**
+  Observed in a browser at 390x844: changing a group price opens the gate reading **"Set a PIN for this
+  phone"**; entering a PIN twice and pressing continue **lets the change through** ("Everything under 21D
+  follows this now"). In an earlier run of the same check, a **wrong PIN was refused and the gate stayed
+  open** rather than closing - the behaviour that matters most, because a gate that closes on failure looks
+  like success.
+- **What is NOT verified, and it is named rather than glossed**: the two halves have not yet both happened in
+  one clean run. The current check's second step waits for "Enter your PIN" after a second price change and
+  times out - so a phone that has a PIN may not be asking for it on the next sensitive action, which would
+  make the gate decorative after its first use. That is a **possible real defect**, it is the first thing
+  next, and it is written down as a possibility rather than as a finding because I have been wrong about
+  exactly this kind of thing three times already in this session.
+- **And the check's own fault in that run, recorded for the same reason**: it typed into a price field that
+  already held a value, so the number became `350.00360` and the API refused it - which read as "the gate did
+  not let the action through" when the gate was fine. Typing appends; a field must be replaced, not added to.
