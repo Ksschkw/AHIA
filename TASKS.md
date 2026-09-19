@@ -3533,3 +3533,23 @@ repository-wide search finds zero occurrences.
   rewriting published history - `git filter-repo` or BFG, a force-push, and every clone re-cloned. **That is the
   product owner's decision, not mine**, and the honest position is that removing it from the working tree does
   not remove it from the repository's past.
+
+## The `expo install` timeout, and why the versions are now in the repository
+
+`npm install` succeeded on the product owner's machine - 496 packages - and then `npx expo install ...` died with
+`ETIMEDOUT`. The npm registry was fine; **Expo's version-resolution API was not reachable from his connection**,
+and that is the only thing `expo install` adds: it asks Expo which versions suit the SDK.
+
+**So the answer is not to retry it.** The list it was going to fetch is already on disk, inside the `expo`
+package: `node_modules/expo/bundledNativeModules.json`. Every version this app needs is now pinned in
+`mobile/package.json` **from that file**, and `expo install` is no longer part of the instructions - one
+`npm install` does it.
+
+**And the list proved its worth immediately.** `npm view react-native version` answers **0.87.1**; SDK 57 wants
+**0.86.3**. React: 19.3.0 published, **19.2.3** wanted. Had I pinned from the registry - which is what I was
+tempted to do an hour ago - the install would have looked successful and the app would have failed in a way
+nobody could explain. **A version matrix belongs in a file the toolchain ships, not in anybody's memory.**
+
+Also fixed while there: a `babel.config.js` with `babel-preset-expo`, which the blank template ships and a
+hand-written skeleton does not, and `@types/react` in devDependencies, without which `tsc` cannot type a JSX
+file at all.

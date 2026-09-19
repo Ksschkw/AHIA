@@ -4,39 +4,39 @@ The phone app, for the trader who is standing in the market with a customer wait
 
 ## What it is
 
-**The same backend, the same endpoints, the same account.** Nothing is duplicated for mobile: sign-in is
-`POST /api/v1/auth/login`, and every authenticated call carries `Authorization: Bearer <access token>` - a path
-the API has always supported, and which its own `authenticate_request` checks before it looks for the session
-cookie a browser would send.
+**The same backend, the same endpoints, the same account.** Sign-in is `POST /api/v1/auth/login`, and every
+authenticated call carries `Authorization: Bearer <access token>` - a path the API has always supported, and
+which its own `authenticate_request` checks before it looks for the session cookie a browser would send.
 
-The only thing that differs is **where the credential is kept**: the refresh token goes to the device keychain
-or keystore (`expo-secure-store`), and the access token lives in memory. See `lib/session.ts`, which also says
-plainly what that does and does not protect against.
+What differs is **where the credential is kept**: the refresh token goes to the device keychain or keystore
+(`expo-secure-store`), and the access token lives in memory. See `lib/session.ts`, which also says plainly what
+that protects against and what it does not.
 
-## Getting it running
-
-Dependencies are resolved by Expo rather than pinned by hand, because only Expo knows which `react-native` and
-`react` a given SDK expects:
+## Running it
 
     cd mobile
     npm install
-    npx expo install expo-router expo-secure-store expo-sqlite expo-status-bar react-native react react-dom
     npx expo start
 
-Then press `a` for an Android emulator or device, or `i` for iOS on a Mac.
+Then press `a` for an Android emulator or device, `i` for iOS on a Mac.
+
+**No `npx expo install` step, and that is deliberate.** It resolves versions by asking Expo's API, which times
+out on a slow connection - and it is not needed, because every version this app wants is already pinned in
+`package.json` **from the list Expo ships inside the `expo` package** (`bundledNativeModules.json`). That list is
+the authority: `npm view react-native version` says 0.87.1, and SDK 57 wants **0.86.3**. A version matrix kept
+in somebody's head is a build failure waiting to happen.
 
 ## Status, honestly
 
-The foundation is committed and **has not been run**: this environment cannot install the dependencies (its npm
-cache is read-only and the Node version here trips the scaffolder), so the code has been written but never
-type-checked on a device. The first person to run `npm install` should expect to fix something small, and the
-sign-in screen is deliberately the only screen until that is done.
+The foundation is committed and **has not yet run on a device**: the environment this was written in cannot
+install the dependencies, so the code is written but never bundled. The sign-in screen is deliberately the only
+screen until it does, because a foundation that does not run is not a foundation.
 
 ## Releases he can test
 
-Android: a workflow builds an APK and attaches it to a **GitHub Release**, so it is a download and an install -
-no store, no account, no waiting. iOS cannot work that way: Apple allows TestFlight or an Ad Hoc build with
-registered device identifiers, and the plan says so rather than promising a download that cannot exist.
+Android: a workflow builds an APK and attaches it to a **GitHub Release** - a download and an install, no store
+and no account. iOS cannot work that way: Apple allows TestFlight or an Ad Hoc build with registered device
+identifiers, and this says so rather than promising a download that cannot exist.
 
 ## What comes next, in order
 
