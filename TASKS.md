@@ -3173,3 +3173,14 @@ lesson four times - so dispatch is recorded here as **half built and not usable*
   new schema missing. Restarting it made `DispatchSchema` appear in the spec immediately. **A dead server and a
   missing feature look identical from inside a check** - the same lesson as the stale build in round 28, and
   the third time this session that "the code is wrong" was "the thing I was talking to was not the code".
+
+- **The deploy workflow was looking for an image nobody had built, and the deploy's own SHA logic was the
+  cause.** The guard that refuses to deploy a missing image worked exactly as intended; what was wrong was
+  the reference. For a `workflow_run` event, **`github.sha` is not the head of the workflow that finished** -
+  it is where the default branch was when this run started. So a web-only commit could become the SHA the
+  deploy asked for, while the image job had built an earlier backend commit. The job now carries
+  `DEPLOY_SHA` (`github.event.workflow_run.head_sha` for a workflow run, `github.sha` for a manual dispatch),
+  checks that commit out, and derives the tag and the image reference from it.
+- **The manifest check stays.** It is the reason this surfaced as a clear failure rather than as a deploy of
+  something that was never built - an image that does not exist is a rollback waiting to happen, and the guard
+  turning a wrong reference into a red build is the guard doing its job.

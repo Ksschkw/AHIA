@@ -27,9 +27,18 @@ jobs:
     timeout-minutes: 20
     # Only after the image job succeeded: there is nothing to deploy otherwise.
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    env:
+      # **The commit the image was built from, which is not always the commit this workflow is running
+      # on.** For a workflow_run event, `github.sha` is the SHA of the default branch at the time - not
+      # the head of the workflow that just finished. Using it meant looking for an image nobody had
+      # built, and the guard below correctly refused to deploy a missing image. A manual dispatch keeps
+      # `github.sha`, because there is no upstream run to ask.
+      DEPLOY_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
 
       - name: Sign in to the registry
         if: vars.NORTHFLANK_SERVICE_ID != ''
@@ -68,9 +77,14 @@ jobs:
         id: image
         if: steps.configured.outputs.ready == 'true'
         run: |
+          set -euo pipefail
+
+          # The same commit the image job built, so the image this deploys is the one that exists.
           OWNER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
-          echo "tag=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
-          echo "ref=ghcr.io/${OWNER}/ahia-backend:sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          SHORT_SHA="${DEPLOY_SHA:0:12}"
+
+          echo "tag=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "ref=ghcr.io/${OWNER}/ahia-backend:sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Make sure the image for this commit exists
         if: steps.configured.outputs.ready == 'true'
