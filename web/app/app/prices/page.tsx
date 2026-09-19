@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { Brand, Wordmark } from "@/components/brand";
+import { PinGate } from "@/components/pin-gate";
 import { Button, Card, Field, Pill, Select, Toast } from "@/components/ui";
 import {
   createCategory,
@@ -56,19 +57,33 @@ export default function Prices() {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [newGroup, setNewGroup] = useState("");
+  //: The action waiting on the question, if the person holding the phone has not answered yet.
+  const [gated, setGated] = useState<{ run: () => void } | null>(null);
 
-  const run = useCallback(async (key: string, action: () => Promise<void>) => {
-    setBusyAction(key);
+  //: The keys whose action moves money. A price can be changed by a tap and cost real money by the end of
+  //: the day, so these ask who is holding the phone first. Everything else goes straight through, because a
+  //: PIN asked for too much becomes a PIN people share with whoever is nearest.
+  const MOVES_MONEY = /^(group-|item-|clear-)/;
+
+  const run = useCallback(
+    async (key: string, action: () => Promise<void>, skipGate = false) => {
+      if (!skipGate && MOVES_MONEY.test(key)) {
+        setGated({ run: () => void run(key, action, true) });
+        return;
+      }
+        setBusyAction(key);
     setNotice(null);
-    try {
+      try {
       await action();
-    } catch (error) {
-      const explained = explainFailure(error);
-      setNotice({ message: explained.message, hint: explained.hint, tone: "bad" });
-    } finally {
-      setBusyAction(null);
-    }
-  }, []);
+      } catch (error) {
+        const explained = explainFailure(error);
+        setNotice({ message: explained.message, hint: explained.hint, tone: "bad" });
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [],
+  );
 
   const load = useCallback(async (tenantId: string) => {
     const [foundGroups, foundItems] = await Promise.all([
@@ -391,6 +406,18 @@ export default function Prices() {
           onDismiss={() => setNotice(null)}
         />
       ) : null}
+
+      {/* What everything costs is the one thing a tap can change and cost real money by the end of the
+          day, so it asks who is holding the phone before it happens. */}
+      <PinGate
+        open={gated !== null}
+        reason="change a price"
+        onConfirmed={() => {
+          gated?.run();
+          setGated(null);
+        }}
+        onClose={() => setGated(null)}
+      />
     </main>
   );
 }

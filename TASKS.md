@@ -3022,3 +3022,30 @@ builder walking it.
   grew their own Add buttons. The check now presses the Add **beside the input**, and the failure it produced
   before that was a reminder that a test written against a page's shape breaks when the shape changes - which
   is legitimate, and is why the assertion it broke was re-read rather than deleted.
+
+### M25.2 started: the PIN that stands in front of what matters
+
+The device PIN exists, and it guards the first sensitive action - **changing a price**.
+
+**What it is.** A trader's phone is picked up by an assistant, a customer, a nephew. This is the difference
+between "the app is open" and "the person holding it is the owner".
+
+**What it is not, said in the file itself.** It is not a security boundary and must never be described as
+one: it lives on the device, anybody who can read the browser's storage can bypass it, and it adds nothing
+to the server's own authorization, which already decides what a signed-in person may do on every call. A
+device PIN defends against the person standing next to you and nobody else. A later reader who mistakes it
+for access control would make a decision that costs money, so the file says so at the top.
+
+**How it works**: only a **salted digest** is stored, never the PIN; the gate asks once when a phone has no
+PIN and sets one, then asks for it before each money-moving action. It is a question, not a lock screen -
+the app stays open and a trader keeps using it, because a PIN asked for too often becomes a PIN people share.
+The wrong-PIN message deliberately says nothing about how close it was, and does not distinguish a mistyped
+digit from anything else.
+
+**Wired to the one action that moves the most money**: the group price, because "everything under Screenguard
+follows this now" moves every item that follows it. Item prices and clearing an exception are gated by the
+same rule through the page's single action runner.
+
+**Verified**: `tsc` clean across the web app and the production build compiles. **Not yet verified in a
+browser** - the gate's own journey (set a PIN, be asked, be refused without it, proceed with it) is owed,
+and it is the first thing next, because a gate nobody has walked through is a gate nobody knows is locked.
