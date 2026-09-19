@@ -85,6 +85,19 @@ class PublicProduct:
 
 
 @dataclass(frozen=True, slots=True)
+class PublicGroup:
+    """One heading in the trader's catalogue, as a stranger sees it.
+
+    Sent as a flat list with each node naming its parent, which is what a builder needs to walk down
+    the tree one tap at a time - and it stays free of identifiers, like everything else here.
+    """
+
+    name: str
+    parent_name: str | None
+    normal_price: Decimal | None
+
+
+@dataclass(frozen=True, slots=True)
 class PublicStorefront:
     """A shop as a stranger sees it, with its catalogue.
 
@@ -98,6 +111,7 @@ class PublicStorefront:
     description: str | None
     contact_phone: str | None
     products: tuple[PublicProduct, ...]
+    groups: tuple[PublicGroup, ...] = ()
 
     @property
     def is_open(self) -> bool:
@@ -381,6 +395,21 @@ class StorefrontService:
                     )
                     for product in products
                 ]
+                # The headings, flat, each naming its parent: what a builder walks down one tap at a
+                # time - Screenguard, then 21D, then the exceptions under it. Read in one query and
+                # resolved from the same list rather than one lookup per node.
+                headings = await category_crud.list_for_tenant(session, resolved_tenant_id)
+                names_by_id = {heading.id: heading.name for heading in headings}
+                groups = [
+                    PublicGroup(
+                        name=heading.name,
+                        parent_name=names_by_id.get(heading.parent_id)
+                        if heading.parent_id is not None
+                        else None,
+                        normal_price=heading.price_defaults().normal_price,
+                    )
+                    for heading in headings
+                ]
 
         return PublicStorefront(
             tenant_slug=resolved_slug,
@@ -396,6 +425,7 @@ class StorefrontService:
             # question is a shop nobody buys from.
             contact_phone=shop.contact_phone or tenant.phone,
             products=tuple(catalogue),
+            groups=tuple(groups),
         )
 
     async def share_target_for_product(

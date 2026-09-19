@@ -2918,3 +2918,14 @@ builder walking it.
 - Still to do for M24.2c: the group **tree** in the public payload (name, parent, price - so the builder can
   walk it), placing a product at any depth, the list builder walking the tree, and the nested Add-product
   screen.
+
+- **M24.2c: the public catalogue now carries the trader's headings.** `groups` is a flat list on the shop
+  payload - each node's name, the group it hangs under, and the price it carries - read in **one query** and
+  resolved from the same list rather than one lookup per node. A builder walks down that one tap at a time:
+  Screenguard, then 21D, then the exceptions under it. Like everything else on this projection it carries no
+  identifiers.
+- **The tree has no test yet, and that is the first thing to write next.** The storefront suite passes
+  (124), but it passes with the headings untested: the file has no category helper, and adding one was more
+  than the remaining budget could do safely. A field that is sent and never asserted is a field that breaks
+  quietly, which this project has now paid for three times - so it is named here rather than left to look
+  finished.

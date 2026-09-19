@@ -119,6 +119,16 @@ class StorefrontResponseSchema(BaseModel):
         )
 
 
+class PublicGroupSchema(BaseModel):
+    """One heading: its name, the group it hangs under, and the price it carries."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    parent_name: str | None
+    normal_price: str | None
+
+
 class PublicProductSchema(BaseModel):
     """One product, as a stranger sees it."""
 
@@ -158,6 +168,9 @@ class PublicStorefrontSchema(BaseModel):
     description: str | None
     contact_phone: str | None
     products: list[PublicProductSchema]
+    #: The trader's headings, flat, each naming the group it hangs under. A customer walking down
+    #: the tree one tap at a time needs exactly this and nothing more.
+    groups: list[PublicGroupSchema] = []
 
     @classmethod
     def from_projection(cls, storefront: Any) -> PublicStorefrontSchema:
@@ -169,6 +182,16 @@ class PublicStorefrontSchema(BaseModel):
             contact_phone=storefront.contact_phone,
             products=[
                 PublicProductSchema.from_projection(product) for product in storefront.products
+            ],
+            groups=[
+                PublicGroupSchema(
+                    name=group.name,
+                    parent_name=group.parent_name,
+                    normal_price=(
+                        None if group.normal_price is None else money_text(group.normal_price)
+                    ),
+                )
+                for group in getattr(storefront, "groups", ())
             ],
         )
 
