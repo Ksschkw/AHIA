@@ -3219,3 +3219,14 @@ lesson four times - so dispatch is recorded here as **half built and not usable*
   The dashboard and the lists screen both do (`cachedRead`), and the cache was changed this session to **seed
   the first paint only and never replace the network**, but the *evidence* for "first paint comes from the
   cache" is the code and that fix, not a browser measurement - and that is the honest description of it.
+
+- **M24.5 is complete and both halves are proven.** The shop is server-rendered with its prices in the markup;
+  and the authenticated app's **first paint comes from the cache** - measured, not read. The check holds every
+  products request for five seconds and asks the screen whether the shelf is already on it:
+  **`the shelf was on screen 1198ms after the reload, with 2 request(s) held for 5s`**, with 12 cache keys
+  written. A trader opening his shelf on a market connection reads his own stock immediately instead of waiting
+  for a round trip to a server in another continent.
+- **The measurement is the point.** "The first paint comes from the cache" is a claim about timing; reading the
+  code would have shown `cachedRead` and proved nothing about whether it runs before the request. Slowing the
+  network and timing the paint is what turns it into a fact - and it is the same instrument that would have
+  caught it being false.
