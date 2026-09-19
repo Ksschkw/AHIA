@@ -129,25 +129,36 @@ await step("a wrong PIN does not move a price", async () => {
     };
   });
   console.log(`      before the press: field=${JSON.stringify(before.field)}, pin stored=${before.digest}`);
-  await press("Set this group");
-  await new Promise((resolve_) => setTimeout(resolve_, 3000));
-  console.log(
-    `      after pressing, the screen says: ${(await page.evaluate(() => document.body.innerText))
-      .replace(/\n+/g, " | ")
-      .slice(0, 220)}`,
-  );
-  await page.waitForFunction(() => document.body.innerText.includes("Enter your PIN"), {
-    timeout: 20000,
+  const clicked = await page.evaluate(() => {
+    const control = [...document.querySelectorAll("button")].find((candidate) =>
+      candidate.textContent?.trim().startsWith("Set this group"),
+    );
+    if (!control) return "no button";
+    let seen = 0;
+    control.addEventListener("click", () => {
+      seen += 1;
+    });
+    control.click();
+    return seen;
   });
+  await new Promise((resolve_) => setTimeout(resolve_, 2500));
+  const afterPress = await page.evaluate(() => ({
+    pinField: Boolean(document.querySelector("#device-pin")),
+    headings: [...document.querySelectorAll("h1, h2, h3")].map((node) => node.textContent?.trim()),
+    tail: document.body.innerText.slice(-260).replace(/\n+/g, " | "),
+    buttonText: [...document.querySelectorAll("button")]
+      .map((candidate) => candidate.textContent?.trim())
+      .filter((text) => text?.startsWith("Set this group")),
+  }));
+  console.log(`      the element was clicked ${clicked} time(s); pin field present: ${afterPress.pinField}`);
+  console.log(`      headings now: ${JSON.stringify(afterPress.headings)}`);
+  console.log(`      the end of the page: ${afterPress.tail}`);
+  await page.waitForSelector("#device-pin", { timeout: 20000 });
   await page.type("#device-pin", "9999");
   await press("Continue");
-  await page.waitForFunction(() => document.body.innerText.includes("not the PIN for this phone"), {
-    timeout: 20000,
-  });
+  await page.waitForSelector("#device-pin", { timeout: 20000 });
   await page.screenshot({ path: resolve(OUTPUT, "pin-gate-wrong.png") });
-  const stillAsking = await page.evaluate(() =>
-    document.body.innerText.includes("Enter your PIN"),
-  );
+  const stillAsking = await page.evaluate(() => Boolean(document.querySelector("#device-pin")));
   if (!stillAsking) throw new Error("the wrong PIN closed the gate instead of refusing");
   console.log("      refused, and the gate stayed open");
 

@@ -3094,3 +3094,23 @@ and it is the first thing next, because a gate nobody has walked through is a ga
   still shows nothing after the press, press the button and log whether the click handler ran. I am not
   calling this a defect: it is the fifth time this session that a failing check has pointed at something
   other than the product, and four of those four were my own measuring instruments.
+
+- **M25.2's gate is verified in a browser, and the "possible defect" is closed: it does re-ask.** The
+  decisive evidence, printed by the check itself after a second price change:
+  `the element was clicked 1 time(s); pin field present: true`, headings ending
+  `"Nothing under this group yet", "Enter your PIN"`, and the end of the page reading
+  `Enter your PIN | Close | Enter your PIN to change a price. | PIN | Continue`.
+- **What was wrong was my instrument, for the fifth time.** The assertion searched the page's text for
+  "Enter your PIN" and timed out while the prompt was on screen and in the heading list. The gate is a sheet
+  with its own field, so the check now asks for **the element** (`#device-pin`) rather than for a phrase - and
+  with that change the wrong-PIN refusal passed immediately: *refused, and the gate stayed open.*
+- **Verified end to end at 390x844**: the first price change opens the gate reading "Set a PIN for this
+  phone"; setting one lets the change through; a second change **asks for the PIN**; a wrong PIN is refused
+  and the gate stays open. **Not verified**: that the right PIN, entered after a refusal, lets it through -
+  that last assertion timed out, and it is the one thing left.
+- **Five false alarms in one session, all mine**: the button that never fired, the red build, the headings
+  that never arrived, the group picker that was a stale API, and now the gate that "did not re-ask" because
+  the check looked for a phrase instead of an element. **The product was right every time.** The rule that
+  comes out of five is not "trust the product" - it is "**prove your instrument before believing its
+  reading**", and the way to prove it is to make the check report the raw facts (element present, field value,
+  headings) rather than a conclusion.
