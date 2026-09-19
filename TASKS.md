@@ -3467,3 +3467,32 @@ because what it caches is a decision about a trader's data.
   by opening the PNG, and the second render is the mark filling the tile.
 - **The rule this adds to the others: look for the thing that exists before making a new one.** A name, an
   asset, or a helper that already exists and is duplicated is worse than a gap, because now there are two.
+
+## Correction: there was no mobile-auth gap, and I said there was - twice, and in a commit
+
+I wrote that the first piece of M20 would be *"a real backend addition: an `Authorization: Bearer` path for the
+app's authenticated routes"*. **It already exists, and has all along.** `authenticate_request` checks the
+`Authorization` header **first** and falls back to the session cookie, and its own docstring names the reason:
+*"so that a script, the interactive documentation and a mobile client keep working unchanged."*
+
+Proven against a live API, with no cookie anywhere:
+
+```
+POST /auth/register      -> access_token and refresh_token in the BODY
+GET  /tenants            -> 200, with Authorization: Bearer only
+POST /tenants            -> created, with Authorization: Bearer only
+POST /auth/refresh       -> a new access token AND a new refresh token, from the body
+Authorization: Bearer not-a-token -> 401
+```
+
+**So the mobile client can authenticate today.** The work is not a door to build; it is what to do with the
+keys: store the refresh token in `expo-secure-store` rather than local storage, keep the access token in memory,
+and refresh on 401 in one place - the same shape the web client uses, with a different place to keep the
+credential.
+
+**And this is the same fault as the icon, one turn apart.** There I drew a mark that existed; here I announced a
+gap that did not. Both came from answering before looking. **The rule already written for assets applies to
+analysis: look for the thing that exists before saying it is missing.**
+
+The correction cannot reach the commit message that announced the gap - it is in the history and stays there.
+This note is the only place it can be fixed, which is why it is here and not in a silent amendment.
