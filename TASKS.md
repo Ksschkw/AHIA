@@ -2955,3 +2955,16 @@ builder walking it.
   worth less. The next step is to find why a committed category row is invisible to the following read -
   and the products written the same way *are* visible, which is the clue: whatever differs between the two
   paths is where the answer is.
+
+- **Correction: my diagnosis was unsound, and it is withdrawn rather than left standing.** The diagnostic
+  test I added claimed the headings were invisible because of the write or row-level security. But it
+  created its categories **through the crud in a raw transaction scope**, while the category tests that
+  *pass* create them **through `CategoryService`** - so it compared two different write paths and reported
+  the difference as a fault in the product. It is deleted, and the tree test's reason now says what is
+  actually known: the products read in the same call come back and the headings do not, so the fault is
+  either in the read path or in **how that test creates its headings** - and the second is the more likely
+  of the two.
+- **The lesson: a diagnostic that does not use the same path as the thing it is diagnosing will happily
+  prove something untrue.** The right next step is to create the headings in the test the way the passing
+  category tests do - through the service - and see whether the shop then reports them. That distinguishes
+  a real defect from a test-fixture difference in one run.

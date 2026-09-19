@@ -331,49 +331,15 @@ async def test_a_contact_number_that_could_not_be_dialled_is_refused(
 
 
 @pytest.mark.integration
-@pytest.mark.integration
-async def test_the_crud_reads_back_the_headings_it_wrote(
-    database: Database, tenant_id: UUID
-) -> None:
-    """A diagnostic, and a permanent one: does the write reach a later read at all?
-
-    The tree test below fails because the headings come back empty. This says which half.
-    If it fails, the rows are not visible: the fault is the write or row-level security.
-    passes, the rows are there and the fault is in the service's read path.
-    """
-    async with database.transaction_scope() as unit_of_work:
-        session = unit_of_work.session_handle
-        family = await category_crud.create(
-            session,
-            CategoryModel.create(
-                category_id=uuid4(), tenant_id=tenant_id, name="Diagnostic Family", now=NOW
-            ),
-        )
-        await category_crud.create(
-            session,
-            CategoryModel.create(
-                category_id=uuid4(),
-                tenant_id=tenant_id,
-                name="Diagnostic Grade",
-                parent_id=family.id,
-                now=NOW,
-            ),
-        )
-
-    async with database.transaction_scope() as unit_of_work:
-        found = await category_crud.list_for_tenant(unit_of_work.session_handle, tenant_id)
-
-    names = {category.name for category in found}
-    assert "Diagnostic Family" in names, f"not visible to a later read: {sorted(names)}"
-
-
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "the headings come back empty from read_public_storefront: the projection is built "
-        "returned, yet the shop reports none. Either the read path does not reach that code or the "
-        "rows are not visible to it. Until that is settled the tree is not sent. Strict, so it "
-        "turns green the moment it is fixed, and fails loudly if it ever passes for another reason."
+        "the headings come back empty from read_public_storefront, while the products read in the "
+        "the read path, or in how this test creates its headings - and the latter is likely "
+        "the read path or in how this test creates its headings - and the second is likely, "
+        "the category tests that pass create them through CategoryService, not through the crud. "
+        "Strict, so this turns green when it is fixed and fails loudly if it starts passing "
+        "for another reason."
     ),
 )
 @pytest.mark.integration
