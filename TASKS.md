@@ -2996,3 +2996,13 @@ builder walking it.
   existed, so the subgroup was refused and only one group reached the form. It said exactly that rather than
   reporting a broken picker - which is what a setup should do. Running it needs the API restarted on the
   proxy target.
+
+- **The group picker is verified in a browser at both sizes, and the earlier failure was the stale API and
+  nothing else.** With the API restarted on the port the web dev server proxies to, the check passes:
+  `mobile: "Screenguard", "  21D"` and `desktop: "Screenguard", "  21D"` - the subgroup is created, offered,
+  and **indented under its parent** at 390x844 and at 1440x900. The first run failed because the API was
+  serving the build from before `parent_id` existed; the check said so in those words rather than blaming the
+  interface, and that is the behaviour that saved the round.
+- **The rule this confirms, and it is the same one as the last three false alarms**: before believing a
+  browser check that fails, confirm the thing it is talking to is the code you just wrote. A stale server is
+  the cheapest possible explanation and it looks exactly like a broken feature.
