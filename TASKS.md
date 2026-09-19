@@ -2944,3 +2944,14 @@ builder walking it.
   something reads it back.
 - Next for M24.2c, in order: find why the headings do not arrive, then product placement at any depth, the
   list builder walking the tree with only the exceptions named, and the nested Add-product screen.
+
+- **M24.2c: the empty headings are now diagnosed, not guessed at.** A second test asks the crude question -
+  write two headings in one transaction, read them back in another - and it **fails**. So the rows are not
+  visible to a later read at all, which places the fault in the **write or in row-level security** rather
+  than in the service's read path. That is half the search space eliminated, and it is a permanent test
+  rather than a scratch script.
+- Both tests are pinned: the tree test as a strict `xfail` that names the fault, and the diagnostic as a
+  plain failing test, because a diagnostic that passes is worth nothing and a diagnostic that is deleted is
+  worth less. The next step is to find why a committed category row is invisible to the following read -
+  and the products written the same way *are* visible, which is the clue: whatever differs between the two
+  paths is where the answer is.
