@@ -102,6 +102,7 @@ class CategoryService:
         *,
         name: str,
         description: str | None = None,
+        parent_id: UUID | None = None,
         default_normal_price: Decimal | None = None,
         default_wholesale_price: Decimal | None = None,
         default_pieces_per_pack: int | None = None,
@@ -121,20 +122,35 @@ class CategoryService:
             logger=self._logger,
         )
 
-        category = CategoryModel.create(
-            category_id=uuid4(),
-            tenant_id=tenant_context.tenant_id,
-            name=name,
-            description=description,
-            default_normal_price=default_normal_price,
-            default_wholesale_price=default_wholesale_price,
-            default_pieces_per_pack=default_pieces_per_pack,
-            now=datetime.now(UTC),
-        )
-
         unit_of_work = self._unit_of_work_factory()
         async with unit_of_work:
-            stored = await category_crud.create(unit_of_work.session_handle, category)
+            session = unit_of_work.session_handle
+            # Checked here rather than in the schema, because a parent is a fact about the catalogue
+            # and not about the shape of a request: the group must belong to this business.
+            if parent_id is not None:
+                parent = await category_crud.get_by_id(
+                    session, tenant_id=tenant_context.tenant_id, category_id=parent_id
+                )
+                if parent is None:
+                    raise NotFoundError(
+                        operation="create_category",
+                        entity="category",
+                        identifier=str(parent_id),
+                        detail="no group with that identifier in this business",
+                    )
+
+            category = CategoryModel.create(
+                category_id=uuid4(),
+                tenant_id=tenant_context.tenant_id,
+                name=name,
+                description=description,
+                parent_id=parent_id,
+                default_normal_price=default_normal_price,
+                default_wholesale_price=default_wholesale_price,
+                default_pieces_per_pack=default_pieces_per_pack,
+                now=datetime.now(UTC),
+            )
+            stored = await category_crud.create(session, category)
             await self._audit.record_audit_event(
                 unit_of_work.session_handle,
                 tenant_context,

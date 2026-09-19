@@ -141,6 +141,33 @@ async def test_creating_a_category_derives_its_slug(
 
 
 @pytest.mark.integration
+async def test_a_group_can_sit_inside_another(service: CategoryService, tenant_id: UUID) -> None:
+    """Screenguard, then 21D inside it, then Hot 8 inside that: as deep as the trade is."""
+    family = await service.create_category(owner_context(tenant_id), name="Screenguard")
+    grade = await service.create_category(owner_context(tenant_id), name="21D", parent_id=family.id)
+    model = await service.create_category(
+        owner_context(tenant_id), name="Hot 8", parent_id=grade.id
+    )
+
+    assert family.parent_id is None
+    assert grade.parent_id == family.id
+    assert model.parent_id == grade.id
+
+
+@pytest.mark.integration
+async def test_a_parent_from_another_business_is_refused(
+    database: Database, service: CategoryService, tenant_id: UUID
+) -> None:
+    """A parent is a group in the same shop: another shop's shelf is not a place to hang it."""
+    other_tenant = uuid4()
+    await insert_tenant(database, other_tenant)
+    theirs = await service.create_category(owner_context(other_tenant), name="Screenguard")
+
+    with pytest.raises(NotFoundError):
+        await service.create_category(owner_context(tenant_id), name="21D", parent_id=theirs.id)
+
+
+@pytest.mark.integration
 async def test_two_businesses_may_each_have_a_drinks_category(
     database: Database, service: CategoryService, tenant_id: UUID
 ) -> None:

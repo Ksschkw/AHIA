@@ -192,6 +192,7 @@ class CategoryModel:
             name=trimmed_name,
             slug=normalize_slug(trimmed_name),
             description=trimmed_description or None,
+            parent_id=parent_id,
             default_normal_price=default_normal_price,
             default_wholesale_price=default_wholesale_price,
             default_pieces_per_pack=default_pieces_per_pack,

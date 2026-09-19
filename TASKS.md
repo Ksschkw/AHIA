@@ -2878,3 +2878,17 @@ builder walking it.
   measurement and noise. Recording the failures as a red build was right at the time and wrong in
   hindsight: the honest version is that I could not tell my own noise from a real failure, and I should
   have settled that before naming it as a risk.
+
+- **M24.2c's first rule is in: a group's parent must be a group in the same shop.** Checked in the service,
+  before anything is written, and it raises a typed `NotFoundError` rather than a database error - so a
+  request that hangs a grade on another business's shelf is refused with a sentence, not a 500. The check
+  lives in the service rather than the schema because it is a fact about the catalogue, not about the shape
+  of a request.
+- **Verified with two new tests and 18 passing in the file**: `Screenguard -> 21D -> Hot 8` round-trips
+  with each parent recorded (which caught a real bug - the entity factory accepted `parent_id` and then
+  dropped it, so the column existed and the tree never grew), and a parent belonging to another business is
+  refused.
+- **Still to do for M24.2c**: the cycle check (a group cannot be nested inside one of its own descendants -
+  the entity's self-parent check only sees one node), placing a product at any depth, the public catalogue
+  exposing the tree with **only the exceptions listed**, the list builder walking it, and the nested
+  Add-product screen.
