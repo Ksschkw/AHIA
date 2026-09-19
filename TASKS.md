@@ -2864,3 +2864,17 @@ Also still to do for M24.2c: the service rules (a parent must belong to the same
 be a descendant - the cycle the entity check cannot see because it only knows one node), placing a product
 at any depth, the public catalogue exposing the tree with **only the exceptions listed**, and the list
 builder walking it.
+
+- **The full suite is green, and both alarming failures were my own doing.** Run the way CI runs it,
+  `pytest -q` reported **2,159 passed, 1 failed** - and the failure was
+  `test_two_simultaneous_sales_get_different_receipt_numbers`, a **concurrency** test, which passes alone
+  in 1.5 seconds. It failed because **a second pytest run of mine held the same database at the same
+  time**: I had started a job, let it time out, and launched another without waiting for it. The earlier
+  batch of 15 failures had the same cause - it appeared only when runs overlapped, and it does not
+  reproduce.
+- **The rule that comes out of it: never run two suites against the one local database.** The tests share
+  `ahia_test`, and a concurrency test sharing it with a second suite is not testing the product's
+  concurrency at all. Waiting for a run to finish is not patience; it is the difference between a
+  measurement and noise. Recording the failures as a red build was right at the time and wrong in
+  hindsight: the honest version is that I could not tell my own noise from a real failure, and I should
+  have settled that before naming it as a risk.
