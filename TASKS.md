@@ -3195,3 +3195,15 @@ lesson four times - so dispatch is recorded here as **half built and not usable*
   server is indistinguishable from a broken feature. That is now the fourth instance of this same trap
   (the stale API, the stale build, the dead server twice), and the rule is written where it will be read: before
   believing a browser check that fails, confirm the server answers.
+
+- **The workbench's owed check is written and green** - `[OK] no problems`, exit 0, at 390x844. The whole
+  trader's journey in one run: a list is waiting, he presses **I will buy it**, writes what it cost him and what
+  he charges, saves the line, and the screen reads **`Comes to N7,000.00 - you make N1,400.00`**, and the list
+  then becomes a sale.
+- **It closes a four-round-old mystery, and the answer was what I concluded at the time and could not prove:
+  the Save button always worked.** The old check was typing into fields in a way React never heard, so the save
+  sent nothing and looked like a dead control. This one sets values the way React hears them (the native setter
+  plus an input event) and presses controls **by their id** - and the same button has worked on the first run
+  ever since.
+- **The rule that took five false alarms to learn is now the shape of every check in this repository**: ask the
+  page for an **element** or a **value**, never for a sentence; set values the way React hears them; press by id.

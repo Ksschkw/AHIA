@@ -337,6 +337,7 @@ export default function Lists() {
                       : "Nothing priced yet"}
                   </p>
                   <Button
+                    id={`confirm_${list.id}`}
                     busy={busyAction === `confirm-${list.id}`}
                     disabled={list.status === "confirmed" || unpriced > 0}
                     onClick={() =>
