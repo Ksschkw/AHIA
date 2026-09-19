@@ -40,16 +40,22 @@ async function step(name, action) {
  * the number was not.
  */
 async function setPriceTo(value) {
-  const cleared = await page.evaluate(() => {
+  // **React does not hear a programmatic value assignment.** Typing at the keyboard and selecting the text
+  // first both left the field exactly as it was - measured, not guessed - so the page never saw a change and
+  // nothing happened on the press. The native setter followed by an input event is the way React's own
+  // listener is told, and it is what a person's keystroke looks like to it.
+  const changed = await page.evaluate((wanted) => {
     const input = document.querySelector("input[id^='normal_']");
-    if (!input) return false;
-    input.focus();
-    input.setSelectionRange(0, input.value.length);
-    return true;
-  });
-  if (!cleared) throw new Error("no price field to change");
-  await page.keyboard.press("Backspace");
-  await page.type("input[id^='normal_']", value);
+    if (!input) return null;
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value",
+    )?.set;
+    setter?.call(input, wanted);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    return input.value;
+  }, value);
+  if (changed === null) throw new Error("no price field to change");
 }
 
 async function press(label) {
@@ -112,11 +118,17 @@ await step("a wrong PIN does not move a price", async () => {
   await page.goto(`${APP_URL}/app/prices`, { waitUntil: "networkidle2" });
   await page.waitForFunction(() => document.body.innerText.includes("21D"), { timeout: 30000 });
   await setPriceTo("361");
-  console.log(
-    `      stored before the second change: ${await page.evaluate(() =>
-      JSON.stringify({ digest: Boolean(window.localStorage.getItem("ahia.pin.digest")) }),
-    )}`,
-  );
+  // **The measurement, not a theory.** What the field holds immediately before the press decides which
+  // half is at fault: an unchanged field means the typing never reached React, a changed one means the
+  // press did not run the action.
+  const before = await page.evaluate(() => {
+    const input = document.querySelector("input[id^='normal_']");
+    return {
+      field: input ? input.value : "(no field)",
+      digest: Boolean(window.localStorage.getItem("ahia.pin.digest")),
+    };
+  });
+  console.log(`      before the press: field=${JSON.stringify(before.field)}, pin stored=${before.digest}`);
   await press("Set this group");
   await new Promise((resolve_) => setTimeout(resolve_, 3000));
   console.log(

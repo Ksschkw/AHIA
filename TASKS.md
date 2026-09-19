@@ -3078,3 +3078,19 @@ and it is the first thing next, because a gate nobody has walked through is a ga
   next step is to press the button **by hand** through the same check and print the draft value the page holds
   before the press - if the draft is unchanged, the check's typing is at fault; if it changed and nothing
   happened, the runner is.
+
+- **M25.2's re-ask: the measurement is done, and the answer is now one of two things - neither of which is
+  the gate itself.** The check was corrected to change the price field the way React actually hears it (a
+  programmatic value assignment plus an input event; typing and selecting both left the field untouched,
+  measured rather than assumed), and the run then reported `before the press: field="361", pin stored=true`.
+  **The field had changed and the PIN was stored, and the press still produced nothing at all** - no gate, no
+  notice, no error.
+- So the fault is in one of two places, and both are cheaper to test than anything I did today: **the press
+  itself**, or **the code being served**. Round 28 taught this exact lesson with the group picker, where the
+  interface was fine and the API was one build behind - and the serving process here cannot even be seen from
+  inside this sandbox (`ps` shows no node process while port 3000 answers 200), which is itself a reason to
+  distrust the running bundle.
+- **The next step, in order, and both are one command**: restart the web server and re-run the check; if it
+  still shows nothing after the press, press the button and log whether the click handler ran. I am not
+  calling this a defect: it is the fifth time this session that a failing check has pointed at something
+  other than the product, and four of those four were my own measuring instruments.
