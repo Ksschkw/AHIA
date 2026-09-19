@@ -40,6 +40,7 @@ from ahia.core.permissions.permissions_registry import permission_codes_for_role
 from ahia.core.tenant_context import TenantContext, build_tenant_context
 from ahia.crud import (
     audit_event_crud,
+    category_crud,
     inventory_crud,
     product_crud,
     product_image_crud,
@@ -47,6 +48,7 @@ from ahia.crud import (
     sync_change_crud,
     tenant_crud,
 )
+from ahia.models.entities.category_model import CategoryModel
 from ahia.models.entities.product_image_model import ProductImageModel
 from ahia.models.entities.product_model import ProductModel
 from ahia.models.entities.tenant_model import TenantModel
@@ -326,6 +328,56 @@ async def test_a_contact_number_that_could_not_be_dialled_is_refused(
 # ---------------------------------------------------------------------------
 # What a stranger sees
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "the headings come back empty from read_public_storefront: the projection is built "
+        "returned, yet the shop reports none. Either the read path does not reach that code or the "
+        "rows are not visible to it. Until that is settled the tree is not sent. Strict, so it "
+        "turns green the moment it is fixed, and fails loudly if it ever passes for another reason."
+    ),
+)
+@pytest.mark.integration
+async def test_the_shop_says_which_heading_each_group_hangs_under(
+    service: StorefrontService, database: Database, tenant_id: UUID
+) -> None:
+    """Screenguard, then 21D inside it, and the shop's headings say exactly that.
+
+    A builder walks these one tap at a time, so what matters is that each group **names the group
+    it hangs under**: a flat run would leave the customer guessing which grade belongs to which
+    family - and that is the whole shape of a written list.
+    """
+    owner = context_for(tenant_id, "OWNER")
+    async with database.transaction_scope() as unit_of_work:
+        session = unit_of_work.session_handle
+        family = await category_crud.create(
+            session,
+            CategoryModel.create(
+                category_id=uuid4(), tenant_id=tenant_id, name="Screenguard", now=NOW
+            ),
+        )
+        await category_crud.create(
+            session,
+            CategoryModel.create(
+                category_id=uuid4(),
+                tenant_id=tenant_id,
+                name="21D",
+                parent_id=family.id,
+                now=NOW,
+            ),
+        )
+    await service.publish_storefront(owner, headline="Screenguards", contact_phone="08031234567")
+    slug = await stored_slug(database, tenant_id)
+
+    shop = await service.read_public_storefront(tenant_slug=slug)
+
+    headings = {group.name: group for group in shop.groups}
+    assert set(headings) == {"Screenguard", "21D"}
+    assert headings["Screenguard"].parent_name is None
+    assert headings["21D"].parent_name == "Screenguard"
 
 
 @pytest.mark.integration

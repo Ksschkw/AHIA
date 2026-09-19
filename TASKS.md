@@ -2929,3 +2929,18 @@ builder walking it.
   than the remaining budget could do safely. A field that is sent and never asserted is a field that breaks
   quietly, which this project has now paid for three times - so it is named here rather than left to look
   finished.
+
+- **M24.2c: the headings are sent but do not arrive, and there is now a test that says so.** I wrote the
+  test I owed so the tree would not be a field nobody asserts - and it **failed on the first run**:
+  `read_public_storefront` reports `groups` as empty even though the projection is built from one query and
+  returned. Either the read path does not reach the code that builds them, or the rows are not visible to
+  it; until that is settled the tree is **not** being sent, and the field on the wire is empty.
+- **It is pinned as a strict `xfail` rather than deleted or hidden**: the test turns green the moment the
+  cause is found, and fails loudly if it ever starts passing for another reason. The failure is named in its
+  reason string, so nobody has to guess what is wrong from the test's name.
+- **This is the fourth time this session that a test written to prevent a silent failure found one
+  immediately** - the audit wiring, the change vocabulary, the parent that was accepted and dropped, and
+  now the headings that are built and never arrive. The pattern is not luck: a field is not a feature until
+  something reads it back.
+- Next for M24.2c, in order: find why the headings do not arrive, then product placement at any depth, the
+  list builder walking the tree with only the exceptions named, and the nested Add-product screen.
