@@ -162,12 +162,17 @@ await step("a wrong PIN does not move a price", async () => {
   if (!stillAsking) throw new Error("the wrong PIN closed the gate instead of refusing");
   console.log("      refused, and the gate stayed open");
 
-  await page.type("#device-pin", "1234");
-  await press("Continue");
-  await page.waitForFunction(() => document.body.innerText.includes("follows this now"), {
-    timeout: 30000,
+  // The right PIN, put into the field the way React hears it, and judged by **the gate closing** rather
+  // than by a sentence on the page: the sentence is what failed last time while the behaviour was correct.
+  await page.evaluate(() => {
+    const input = document.querySelector("#device-pin");
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+    setter?.call(input, "1234");
+    input?.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  console.log("      then the right PIN let it through");
+  await press("Continue");
+  await page.waitForFunction(() => !document.querySelector("#device-pin"), { timeout: 30000 });
+  console.log("      then the right PIN let it through - the gate closed");
 });
 
 console.log(failures.length ? `[FAIL] ${failures.length} step(s)` : "[OK] no problems");

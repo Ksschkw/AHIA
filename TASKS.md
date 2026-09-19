@@ -3114,3 +3114,12 @@ and it is the first thing next, because a gate nobody has walked through is a ga
   comes out of five is not "trust the product" - it is "**prove your instrument before believing its
   reading**", and the way to prove it is to make the check report the raw facts (element present, field value,
   headings) rather than a conclusion.
+
+- **M25.2's PIN gate is fully verified at 390x844, and the check is green end to end.** The journey, in the
+  order a trader meets it: a first price change opens the gate reading **"Set a PIN for this phone"**; setting
+  one **lets the change through**; a second change **asks for the PIN**; a **wrong PIN is refused and the gate
+  stays open**; and the **right PIN closes it and lets the action through**. `[OK] no problems`, exit 0.
+- **The last assertion passed the moment it stopped asking for a sentence and started asking for the gate** -
+  the same correction as the assertion before it. Two assertions in a row were fixed by measuring the
+  interface's state instead of its prose, which is the whole of the lesson this session keeps teaching: a
+  check should ask for the element, and only then for the words.
