@@ -120,6 +120,9 @@ CHANGE_TYPE_FOR_ACTION: Final[dict[str, ChangeType]] = {
     # A customer's list. Working a line is an update to the list a device already has; confirming it
     # creates the sale, which is what a device actually needs to learn about.
     "request_line_worked": ChangeType.UPDATED,
+    # Sending a list creates no record a device needs to fetch: it changes the state of a list
+    # device already knows about, which is what UPDATED means here.
+    "request_dispatched": ChangeType.UPDATED,
     "request_confirmed": ChangeType.CREATED,
 }
 
@@ -203,7 +206,7 @@ class SyncChangeService:
             change_sequence=1,
             entity_type=entity_type,
             entity_id=entity_id,
-            change_type=CHANGE_TYPE_FOR_ACTION.get(action, ChangeType.UPDATED),
+            change_type=CHANGE_TYPE_FOR_ACTION[action],
             now=now,
             operation_id=operation_id,
         )

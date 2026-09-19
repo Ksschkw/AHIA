@@ -3242,3 +3242,13 @@ lesson four times - so dispatch is recorded here as **half built and not usable*
 - **Verified**: `tsc` clean, the production build compiles, `/app/team` is in the output. **Not verified in a
   browser**: that a second press during a removal is actually refused - the guard is in the markup and the
   measurement is owed.
+
+- **A red build, mine: `request_dispatched` was never added to the change vocabulary.** The guard that scans
+  every action the services record and refuses an unclassified one caught it - exactly as it caught
+  `request_line_worked` and `request_confirmed` earlier. **This is the third time this session that adding an
+  audit action without classifying it has been caught by that test**, which is the argument for keeping it.
+- **And the fallback that let omissions pass quietly is gone.** `CHANGE_TYPE_FOR_ACTION.get(action, UPDATED)`
+  meant an action nobody had classified arrived as an update and looked deliberate; it is now a direct lookup,
+  so the next omission fails at the moment it happens rather than in a feed that quietly told a device the wrong
+  thing. The test and the runtime now enforce the same rule, which is the only way a declared vocabulary stays
+  declared.
