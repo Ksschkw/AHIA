@@ -3158,3 +3158,18 @@ lesson four times - so dispatch is recorded here as **half built and not usable*
   is the point of verifying through the API rather than trusting the code.
 - **Still owed for dispatch**: the screen. The trader can send a list through the API and cannot yet do it from
   his phone, which is the only place he would ever do it.
+
+- **M24.2d's screen exists: the trader can send a list from his phone.** On a confirmed list the workbench now
+  carries a **"Send it"** section - who is carrying it, their number, the waybill number, what it cost to send,
+  and a tracking link - and once it has been sent the section reads back **"How it went"**: *"Emeka Motors -
+  waybill WB-4471 - N1,500.00 to send"*. The button says "Record the waybill" before and "Update it" after,
+  because a transporter who cancelled and a second trip are both normal.
+- **Verified**: `tsc` clean across the web app, the production build compiles, and the page is in the build
+  output. **Not verified in a browser**: the form's own journey - open a confirmed list, write a waybill, see
+  it read back - is owed, and it is the next thing, because a screen nobody has walked through is a screen
+  nobody knows works.
+- **And the API had died between rounds**, which is worth recording: the detached server I started stopped
+  answering (`api: 000`), so the first attempt to regenerate types read a stale `openapi.json` and reported the
+  new schema missing. Restarting it made `DispatchSchema` appear in the spec immediately. **A dead server and a
+  missing feature look identical from inside a check** - the same lesson as the stale build in round 28, and
+  the third time this session that "the code is wrong" was "the thing I was talking to was not the code".

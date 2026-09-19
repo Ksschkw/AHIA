@@ -1663,6 +1663,26 @@ export interface paths {
         patch: operations["work_request_line_api_v1_tenants__tenant_id__requests__request_id__lines__line_id__patch"];
         trace?: never;
     };
+    "/api/v1/tenants/{tenant_id}/requests/{request_id}/dispatch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record how a list was sent
+         * @description Write down the transporter, the waybill number, the cost, and where to follow it.
+         */
+        post: operations["dispatch_request_api_v1_tenants__tenant_id__requests__request_id__dispatch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenants/{tenant_id}/requests/{request_id}/confirm": {
         parameters: {
             query?: never;
@@ -2445,6 +2465,25 @@ export interface components {
             device: components["schemas"]["DeviceResponseSchema"];
             /** Sessions Ended */
             sessions_ended: number;
+        };
+        /**
+         * DispatchSchema
+         * @description How a list was sent.
+         *
+         *     Every field is optional, and none of them means "clear the rest": this is what the trader wrote
+         *     down on the way to the park, and what he did not write down is simply not there.
+         */
+        DispatchSchema: {
+            /** Transporter Name */
+            transporter_name?: string | null;
+            /** Transporter Phone */
+            transporter_phone?: string | null;
+            /** Waybill Number */
+            waybill_number?: string | null;
+            /** Dispatch Cost */
+            dispatch_cost?: number | string | null;
+            /** Tracking Url */
+            tracking_url?: string | null;
         };
         /**
          * ExpenseCategory
@@ -3648,6 +3687,18 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Transporter Name */
+            transporter_name?: string | null;
+            /** Transporter Phone */
+            transporter_phone?: string | null;
+            /** Waybill Number */
+            waybill_number?: string | null;
+            /** Dispatch Cost */
+            dispatch_cost?: string | null;
+            /** Tracking Url */
+            tracking_url?: string | null;
+            /** Dispatched At */
+            dispatched_at?: string | null;
             /** Lines */
             lines: components["schemas"]["RequestLineResponseSchema"][];
             /** Priced Total */
@@ -7682,6 +7733,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RequestLineWorkSchema"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestResponseSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dispatch_request_api_v1_tenants__tenant_id__requests__request_id__dispatch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DispatchSchema"];
             };
         };
         responses: {

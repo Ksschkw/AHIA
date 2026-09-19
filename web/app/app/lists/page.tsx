@@ -24,6 +24,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button, Card, Empty, Field, Loading, Pill, Toast } from "@/components/ui";
 import {
   LINE_STATES,
+  dispatchCustomerList,
   cachedRead,
   confirmCustomerList,
   currentUser,
@@ -61,6 +62,14 @@ export default function Lists() {
   //: before a price disappeared, and the line saved without it. A trader would have watched his own
   //: numbers vanish.
   const [drafts, setDrafts] = useState<Record<string, { cost: string; price: string }>>({});
+  //: What he writes down on the way to the park: the transporter, the number, the cost, the link.
+  const [dispatchDraft, setDispatchDraft] = useState({
+    transporter: "",
+    phone: "",
+    waybill: "",
+    cost: "",
+    tracking: "",
+  });
   const [adjustments, setAdjustments] = useState<Record<string, string>>({});
 
   const run = useCallback(async (key: string, action: () => Promise<void>) => {
@@ -346,6 +355,108 @@ export default function Lists() {
                   >
                     {list.status === "confirmed" ? "Confirmed" : "Confirm this list"}
                   </Button>
+                  {list.status === "confirmed" ? (
+                    <div className={styles.dispatch}>
+                      <h3 className={styles.dispatchTitle}>
+                        {list.dispatched_at ? "How it went" : "Send it"}
+                      </h3>
+                      {list.dispatched_at ? (
+                        <p className={styles.dispatchDone}>
+                          {list.transporter_name ?? "Carried by hand"}
+                          {list.waybill_number ? ` - waybill ${list.waybill_number}` : ""}
+                          {list.dispatch_cost
+                            ? ` - ${formatMoneyOrOnRequest(list.dispatch_cost)} to send`
+                            : ""}
+                        </p>
+                      ) : null}
+                      <div className={styles.dispatchRow}>
+                        <Field
+                          label="Who is carrying it"
+                          id={`transporter_${list.id}`}
+                          value={dispatchDraft.transporter}
+                          onChange={(value) =>
+                            setDispatchDraft((current) => ({ ...current, transporter: value }))
+                          }
+                          placeholder="Emeka Motors"
+                          optional
+                        />
+                        <Field
+                          label="Their number"
+                          id={`transporter_phone_${list.id}`}
+                          value={dispatchDraft.phone}
+                          onChange={(value) =>
+                            setDispatchDraft((current) => ({ ...current, phone: value }))
+                          }
+                          inputMode="tel"
+                          optional
+                        />
+                        <Field
+                          label="Waybill number"
+                          id={`waybill_${list.id}`}
+                          value={dispatchDraft.waybill}
+                          onChange={(value) =>
+                            setDispatchDraft((current) => ({ ...current, waybill: value }))
+                          }
+                          optional
+                        />
+                        <Field
+                          label="What it cost to send"
+                          id={`dispatch_cost_${list.id}`}
+                          value={dispatchDraft.cost}
+                          onChange={(value) =>
+                            setDispatchDraft((current) => ({ ...current, cost: value }))
+                          }
+                          inputMode="decimal"
+                          optional
+                        />
+                        <Field
+                          label="Tracking link"
+                          id={`tracking_${list.id}`}
+                          value={dispatchDraft.tracking}
+                          onChange={(value) =>
+                            setDispatchDraft((current) => ({ ...current, tracking: value }))
+                          }
+                          optional
+                        />
+                        <Button
+                          id={`dispatch_${list.id}`}
+                          busy={busyAction === `dispatch-${list.id}`}
+                          onClick={() =>
+                            run(`dispatch-${list.id}`, async () => {
+                              const updated = await dispatchCustomerList(business.id, list.id, {
+                                ...(dispatchDraft.transporter.trim()
+                                  ? { transporter_name: dispatchDraft.transporter.trim() }
+                                  : {}),
+                                ...(dispatchDraft.phone.trim()
+                                  ? { transporter_phone: dispatchDraft.phone.trim() }
+                                  : {}),
+                                ...(dispatchDraft.waybill.trim()
+                                  ? { waybill_number: dispatchDraft.waybill.trim() }
+                                  : {}),
+                                ...(dispatchDraft.cost.trim()
+                                  ? { dispatch_cost: dispatchDraft.cost.trim() }
+                                  : {}),
+                                ...(dispatchDraft.tracking.trim()
+                                  ? { tracking_url: dispatchDraft.tracking.trim() }
+                                  : {}),
+                              });
+                              setLists((current) =>
+                                current.map((one) => (one.id === updated.id ? updated : one)),
+                              );
+                              setNotice({
+                                message: "Written down.",
+                                hint: "It is on the list, where you will look for it.",
+                                tone: "good",
+                              });
+                            })
+                          }
+                        >
+                          {list.dispatched_at ? "Update it" : "Record the waybill"}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+
                   {unpriced > 0 ? (
                     <p className={styles.blocked}>
                       {unpriced} {unpriced === 1 ? "line has" : "lines have"} no price yet. Price them

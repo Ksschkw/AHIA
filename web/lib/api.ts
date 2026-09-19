@@ -860,6 +860,24 @@ export function workListLine(
   );
 }
 
+/** Record how a list was sent: who carried it, under what number, what it cost, where to follow it. */
+export function dispatchCustomerList(
+  tenantId: string,
+  requestId: string,
+  details: {
+    transporter_name?: string | null;
+    transporter_phone?: string | null;
+    waybill_number?: string | null;
+    dispatch_cost?: string | null;
+    tracking_url?: string | null;
+  },
+): Promise<CustomerList> {
+  return request<CustomerList>(
+    `/api/v1/tenants/${tenantId}/requests/${requestId}/dispatch`,
+    { method: "POST", body: details satisfies Schemas["DispatchSchema"] },
+  );
+}
+
 /** Turn a list into a sale. The API refuses while any line is unpriced, and says so. */
 export function confirmCustomerList(tenantId: string, requestId: string): Promise<CustomerList> {
   return request<CustomerList>(`/api/v1/tenants/${tenantId}/requests/${requestId}/confirm`, {
