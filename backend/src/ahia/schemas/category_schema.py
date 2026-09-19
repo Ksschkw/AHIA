@@ -49,6 +49,7 @@ class CategoryCreateSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: CategoryName
+    parent_id: UUID | None = None
     description: CategoryDescription | None = None
     # The price everything under this group uses unless it carries its own - which is how "all of
     # the 21D are 350" is one number rather than twenty. Optional, and a group with none is normal.

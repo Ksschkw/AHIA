@@ -58,6 +58,10 @@ class CategoryModel:
     created_at: datetime
     updated_at: datetime
     description: str | None = None
+    #: The group this one sits inside, if any. A shelf has levels - Screenguard, 21D, Hot 8 -
+    #: and a price lives on a node and is inherited down it: one number for the grade, and a
+    #: model that overrides it.
+    parent_id: UUID | None = None
     #: The price every item in this group is sold at unless it says otherwise. This is what makes
     #: a grade a grade: "all of them are 350" is one number here, and the exceptions are the items
     #: that carry their own.
@@ -67,6 +71,11 @@ class CategoryModel:
     default_pieces_per_pack: int | None = None
 
     def __post_init__(self) -> None:
+        if self.parent_id is not None and self.parent_id == self.id:
+            raise ValueError(
+                f"category_id={self.id} cannot be its own parent: a group containing itself is no "
+                "group, and a walk down the tree would never come back"
+            )
         _require_aware(self.created_at, field_name="created_at", category_id=self.id)
         _require_aware(self.updated_at, field_name="updated_at", category_id=self.id)
 
@@ -161,6 +170,7 @@ class CategoryModel:
         name: str,
         now: datetime,
         description: str | None = None,
+        parent_id: UUID | None = None,
         default_normal_price: Decimal | None = None,
         default_wholesale_price: Decimal | None = None,
         default_pieces_per_pack: int | None = None,

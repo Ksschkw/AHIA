@@ -2842,3 +2842,25 @@ tree can be as deep as the trade is.
   on the deployed site, so it reported four failures that were all consequences of a 404 - a not-found page
   has no share card and is never cached. The first assertion is now that the shop is really there, and the
   slug is passed in rather than assumed.
+
+### M24.2c, first step: a group can sit inside a group
+
+The foundation of the hierarchy, and nothing more yet. `categories` gains a **nullable parent**, with a
+self-referencing foreign key that **sets null rather than cascading** - a group that is deleted takes
+nothing with it, because losing a grade because somebody tidied up its parent is not a trade anyone would
+make - and an index behind it, since the list builder asks for a group's children on every visit. The
+entity refuses the one thing that would make the tree a loop of one: a group cannot be its own parent.
+
+Verified: `alembic upgrade head` ran (`7b2e4c91a5f3 -> 9c1d2e3f4a5b`), the column and both foreign keys
+exist in the database, the crud reads and writes the field, and ruff, formatting and mypy are clean.
+
+**Not yet verified, and it must be before this is trusted**: the full suite has not been re-run since this
+change. `tests/services/test_category_service.py` passes alone (16) and `tests/migrations` passes alone
+(64), but running the two **in one session** produced 15 failures. That is a test-isolation problem rather
+than a functional one - a single failing test passes on its own - but CI runs everything together, so it is
+a red build until it is understood. **It is the first thing to diagnose next.**
+
+Also still to do for M24.2c: the service rules (a parent must belong to the same business, a parent cannot
+be a descendant - the cycle the entity check cannot see because it only knows one node), placing a product
+at any depth, the public catalogue exposing the tree with **only the exceptions listed**, and the list
+builder walking it.

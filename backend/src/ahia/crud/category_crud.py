@@ -64,6 +64,11 @@ class CategoryRecord(Base):
     name: Mapped[str] = mapped_column(String(_NAME_LENGTH), nullable=False)
     slug: Mapped[str] = mapped_column(String(_SLUG_LENGTH), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: The group this one sits inside. A shelf has levels - Screenguard, 21D, Hot 8 - and the price
+    #: on a node is inherited down it.
+    parent_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("categories.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     #: The group's own prices. A group is a grade - "21D", "Privacy", "Grains" - and this is
     #: common price lives, so the trader sets one number instead of typing it on every item.
     default_normal_price: Mapped[Decimal | None] = mapped_column(
@@ -97,6 +102,7 @@ def to_entity(record: CategoryRecord) -> CategoryModel:
         name=record.name,
         slug=record.slug,
         description=record.description,
+        parent_id=record.parent_id,
         default_normal_price=record.default_normal_price,
         default_wholesale_price=record.default_wholesale_price,
         default_pieces_per_pack=record.default_pieces_per_pack,
@@ -110,6 +116,7 @@ def apply_entity(record: CategoryRecord, entity: CategoryModel) -> None:
     record.name = entity.name
     record.slug = entity.slug
     record.description = entity.description
+    record.parent_id = entity.parent_id
     record.default_normal_price = entity.default_normal_price
     record.default_wholesale_price = entity.default_wholesale_price
     record.default_pieces_per_pack = entity.default_pieces_per_pack
