@@ -46,6 +46,12 @@ export default async function ListPage({ params }: Params) {
       name: product.name,
       selling_price: product.selling_price,
       group_name: product.group_name,
+      is_special: product.is_special,
+    })),
+    groups: shop.groups.map((group) => ({
+      name: group.name,
+      parent_name: group.parent_name,
+      normal_price: group.normal_price,
     })),
   };
 

@@ -3006,3 +3006,19 @@ builder walking it.
 - **The rule this confirms, and it is the same one as the last three false alarms**: before believing a
   browser check that fails, confirm the thing it is talking to is the code you just wrote. A stale server is
   the cheapest possible explanation and it looks exactly like a broken feature.
+
+- **M24.2c is complete: the list builder walks the tree.** A customer sees the shop's headings, opens one,
+  sees what hangs under it, sees **the price that heading sets**, and sees the items priced differently -
+  then types any model of their own and it takes that heading's price. Verified in a browser: the walk shows
+  `21D`, a special shows `N400.00 - priced differently`, and the list the trader receives carries
+  **`headings=["21D", null, "21D"]`** - the line the customer typed landed under the heading they were
+  standing in, without them having to say so twice.
+- **Nothing is mandatory, which was the whole point**: the search over the whole catalogue is still there for
+  someone who knows what they want, the headings are there for someone who thinks in families, and typing is
+  there for the model nobody listed. The customer made their own group too - the second line arrived with no
+  heading and no price at all.
+- **A check's selector became ambiguous when the interface grew, and that is worth naming**: "the first
+  button whose text is Add" stopped meaning the Add beside the box the customer typed into once the headings
+  grew their own Add buttons. The check now presses the Add **beside the input**, and the failure it produced
+  before that was a reminder that a test written against a page's shape breaks when the shape changes - which
+  is legitimate, and is why the assertion it broke was re-read rather than deleted.

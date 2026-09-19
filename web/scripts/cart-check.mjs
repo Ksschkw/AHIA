@@ -132,10 +132,34 @@ await step("the customer searches, adds, and asks for the rest", async () => {
     control?.click();
   });
 
+  // **The walk down the tree**, which is the shape the product owner described: pick the kind, see what
+  // it prices differently, and type anything else under that kind so it takes the kind's price.
+  await page.evaluate(() => {
+    const chip = [...document.querySelectorAll("button")].find(
+      (candidate) => candidate.textContent?.trim() === "Screenguard",
+    );
+    chip?.click();
+  });
+  await page.waitForFunction(() => document.body.innerText.includes("21D"), { timeout: 10000 });
+  await page.evaluate(() => {
+    const chip = [...document.querySelectorAll("button")].find(
+      (candidate) => candidate.textContent?.trim() === "21D",
+    );
+    chip?.click();
+  });
+  const walked = await page.evaluate(() => document.body.innerText);
+  console.log(`      the walk shows: ${walked.match(/21D[^\n]*/)?.[0] ?? "(nothing)"}`);
+  if (!walked.includes("Everything")) throw new Error("the headings are not offered");
+  await page.screenshot({ path: resolve(OUTPUT, "cart-tree-mobile.png") });
+
   // Something the shop has not got, with no price - the line that sends people back to paper.
   await page.type("#list_asked", "Universal metal frame, any brand");
+  // The Add beside the box that was typed into, not the first Add on the page: the headings added their
+  // own Add buttons, and "the first one whose text is Add" stopped meaning what it used to.
   await page.evaluate(() => {
-    const control = [...document.querySelectorAll("button")].find(
+    const input = document.querySelector("#list_asked");
+    const row = input?.parentElement;
+    const control = [...(row?.querySelectorAll("button") ?? [])].find(
       (candidate) => candidate.textContent?.trim() === "Add",
     );
     control?.click();

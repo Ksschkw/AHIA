@@ -30,6 +30,14 @@ export interface ListShopProduct {
   selling_price: string | null;
   /** The heading this item sits under, in the trader's own words. */
   group_name: string | null;
+  /** True when the shop prices this one differently from the rest of its group. */
+  is_special: boolean;
+}
+
+export interface ListShopGroup {
+  name: string;
+  parent_name: string | null;
+  normal_price: string | null;
 }
 
 export interface ListShop {
@@ -38,6 +46,8 @@ export interface ListShop {
   headline: string | null;
   contact_phone: string | null;
   products: ListShopProduct[];
+  /** The trader's headings, each naming the one it hangs under. */
+  groups: ListShopGroup[];
 }
 
 interface ChosenLine {
@@ -60,6 +70,8 @@ function priceOf(value: string | null): number {
 
 export function ListBuilder({ shop }: { shop: ListShop }) {
   const [query, setQuery] = useState("");
+  //: The heading the customer is looking inside, if any. None means the whole catalogue.
+  const [chosenGroup, setChosenGroup] = useState<string | null>(null);
   const [chosen, setChosen] = useState<ChosenLine[]>([]);
   const [askedText, setAskedText] = useState("");
   const [askedGroup, setAskedGroup] = useState("");
@@ -89,6 +101,28 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
       )
       .slice(0, 8);
   }, [query, shop.products, chosen]);
+
+  // The tree, as the customer walks it: the headings that stand on their own, the ones under the
+  // heading being looked at, and the items inside it that carry a price of their own.
+  const topLevelGroups = shop.groups.filter(
+    (group) =>
+      group.parent_name === null ||
+      !shop.groups.some((candidate) => candidate.name === group.parent_name),
+  );
+  const childGroups =
+    chosenGroup === null
+      ? []
+      : shop.groups.filter((group) => group.parent_name === chosenGroup);
+  const specialsInGroup =
+    chosenGroup === null
+      ? []
+      : shop.products.filter(
+          (product) => product.is_special && product.group_name === chosenGroup,
+        );
+
+  function priceForGroup(name: string): string | null {
+    return shop.groups.find((group) => group.name === name)?.normal_price ?? null;
+  }
 
   const total = chosen.reduce((running, line) => running + priceOf(line.price) * line.quantity, 0);
   const toBePriced = chosen.filter((line) => line.price === null).length;
@@ -121,15 +155,18 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
   function addAsked() {
     const text = askedText.trim();
     if (text.length < 2) return;
+    // The heading they are standing in, unless they have named another one: a model typed under 21D
+    // takes the 21D price, which is the whole reason the heading exists.
+    const heading = askedGroup.trim() || chosenGroup || "";
     setChosen((current) => [
       ...current,
       {
         key: `asked-${Date.now()}-${current.length}`,
         productSlug: null,
         text,
-        group: askedGroup.trim(),
+        group: heading,
         quantity: 1,
-        price: null,
+        price: heading === "" ? null : priceForGroup(heading),
       },
     ]);
     setAskedText("");
@@ -329,6 +366,86 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
         <h1 className={styles.shopName}>{shop.business_name}</h1>
         {shop.headline ? <p className={styles.headline}>{shop.headline}</p> : null}
       </header>
+
+      {shop.groups.length > 0 ? (
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>What kind?</h2>
+          <p className={styles.sectionHint}>
+            Pick a kind to see what the shop prices differently. Anything else, just type it - it takes the
+            price of the kind it belongs to.
+          </p>
+          <div className={styles.groups}>
+            <button
+              type="button"
+              className={chosenGroup === null ? styles.groupOn : styles.groupOff}
+              onClick={() => setChosenGroup(null)}
+            >
+              Everything
+            </button>
+            {topLevelGroups.map((group) => (
+              <button
+                key={group.name}
+                type="button"
+                className={chosenGroup === group.name ? styles.groupOn : styles.groupOff}
+                onClick={() => setChosenGroup(group.name)}
+              >
+                {group.name}
+              </button>
+            ))}
+          </div>
+
+          {chosenGroup !== null ? (
+            <>
+              {childGroups.length > 0 ? (
+                <div className={styles.groups}>
+                  {childGroups.map((child) => (
+                    <button
+                      key={child.name}
+                      type="button"
+                      className={chosenGroup === child.name ? styles.groupOn : styles.groupOff}
+                      onClick={() => setChosenGroup(child.name)}
+                    >
+                      {child.name}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              <p className={styles.groupPrice}>
+                {priceForGroup(chosenGroup) === null
+                  ? `${chosenGroup}: the shop will price these`
+                  : `${chosenGroup}: ${formatMoneyOrOnRequest(priceForGroup(chosenGroup) ?? "")} each`}
+              </p>
+              {specialsInGroup.length > 0 ? (
+                <ul className={styles.items}>
+                  {specialsInGroup.map((product) => (
+                    <li key={product.product_slug} className={styles.item}>
+                      <span className={styles.itemBody}>
+                        <span className={styles.itemName}>{product.name}</span>
+                        <span className={styles.itemPrice}>
+                          {formatMoneyOrOnRequest(product.selling_price)} - priced differently
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        className={styles.addButton}
+                        onClick={() => addProduct(product)}
+                        aria-label={`Add ${product.name}`}
+                      >
+                        Add
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className={styles.sectionHint}>
+                  Nothing under {chosenGroup} is priced differently, so type the model you want below and it
+                  takes this price.
+                </p>
+              )}
+            </>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>What do you want?</h2>
