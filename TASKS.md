@@ -3065,3 +3065,16 @@ and it is the first thing next, because a gate nobody has walked through is a ga
 - **And the check's own fault in that run, recorded for the same reason**: it typed into a price field that
   already held a value, so the number became `350.00360` and the API refused it - which read as "the gate did
   not let the action through" when the gate was fine. Typing appends; a field must be replaced, not added to.
+
+- **M25.2's re-ask: narrowed with evidence, still not settled.** A diagnostic added to the check settles one
+  thing: after the first change, the PIN **is** stored on the device
+  (`stored before the second change: {"digest":true}`). But pressing "Set this group" a second time produced
+  **neither a gate nor a notice** - the screen simply stayed as it was. So the second save does nothing at
+  all, and the question is no longer "does the gate re-ask" but "why does the second press do nothing",
+  which is either the check's typing and clicking or the action runner.
+- **It is written as an open question, not a defect**, with the evidence beside it, because every single time
+  this session that I read a failing check as a broken product the product was fine: the button that never
+  fired, the red build, the headings that never arrived, and the group picker that was a stale API. The
+  next step is to press the button **by hand** through the same check and print the draft value the page holds
+  before the press - if the draft is unchanged, the check's typing is at fault; if it changed and nothing
+  happened, the runner is.

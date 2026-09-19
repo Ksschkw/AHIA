@@ -112,7 +112,18 @@ await step("a wrong PIN does not move a price", async () => {
   await page.goto(`${APP_URL}/app/prices`, { waitUntil: "networkidle2" });
   await page.waitForFunction(() => document.body.innerText.includes("21D"), { timeout: 30000 });
   await setPriceTo("361");
+  console.log(
+    `      stored before the second change: ${await page.evaluate(() =>
+      JSON.stringify({ digest: Boolean(window.localStorage.getItem("ahia.pin.digest")) }),
+    )}`,
+  );
   await press("Set this group");
+  await new Promise((resolve_) => setTimeout(resolve_, 3000));
+  console.log(
+    `      after pressing, the screen says: ${(await page.evaluate(() => document.body.innerText))
+      .replace(/\n+/g, " | ")
+      .slice(0, 220)}`,
+  );
   await page.waitForFunction(() => document.body.innerText.includes("Enter your PIN"), {
     timeout: 20000,
   });
