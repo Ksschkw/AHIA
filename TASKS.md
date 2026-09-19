@@ -3453,3 +3453,17 @@ add it to his home screen today and it opens without browser chrome**, on the sa
 Still to come for the full picture: the **service worker**, which is what makes a push notification possible in
 a browser and what keeps the shell alive on a dead connection. It belongs with the push work rather than here,
 because what it caches is a decision about a trader's data.
+
+- **Correction: I drew a second brand mark, and the product already had one.** The home-screen icons were
+  first generated from an **invented glyph** - a letter A drawn with polygons - while `app/icon.svg` has been the
+  product's mark all along, the four-square tile on green that every screen shows. The product owner saw it
+  immediately: *"why are you making a new icon? our web already has an ICON."*
+- **The icons are now rendered from `app/icon.svg` itself** by `scripts/make-icons.mjs`, so they are the real
+  mark at size rather than a drawing of my own invention, and a build does not depend on anybody's design tool.
+  The maskable one puts the mark inside the safe zone on the product's own green, because a launcher crops that
+  one to a shape of its choosing.
+- **Two render faults found by looking at the output rather than trusting the command**: the first version put
+  the mark in the corner at its own 24 pixels because the inline SVG kept its intrinsic size. Both were caught
+  by opening the PNG, and the second render is the mark filling the tile.
+- **The rule this adds to the others: look for the thing that exists before making a new one.** A name, an
+  asset, or a helper that already exists and is duplicated is worse than a gap, because now there are two.
