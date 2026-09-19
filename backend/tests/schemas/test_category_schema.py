@@ -180,6 +180,7 @@ def test_the_response_carries_no_field_the_entity_does_not_have() -> None:
         "name",
         "slug",
         "description",
+        "parent_id",
         "default_normal_price",
         "default_wholesale_price",
         "default_pieces_per_pack",

@@ -2982,3 +2982,17 @@ builder walking it.
   product was fine each time.
 - The test keeps a comment recording the two rounds, so the next reader knows why the setup looks the way
   it does.
+
+- **M24.2c's UI, first piece: a product can be put in a group when it is added.** The gap the product owner
+  named - "on my add product, i do not see the option to add it to a group or subgroup" - is closed. The
+  form offers the groups **in the order a person reads them, with a subgroup indented under its parent**,
+  and saving records the chosen group. Deliberately a select for now rather than a full tree picker: the
+  tree picker belongs with the list builder, which walks the same tree.
+- **The response contract carries `parent_id`**, so a screen can draw the tree without a second request, and
+  the schema contract test that pins the field set was updated for it - which is what that test is for.
+- **Verified**: 126 schema and category tests pass, `tsc` is clean across the web app, and the backend gates
+  are green. **The browser check failed on its own setup, for an honest reason**: it created the shop through
+  the API on the port the web dev server proxies to, which still runs the build from before `parent_id`
+  existed, so the subgroup was refused and only one group reached the form. It said exactly that rather than
+  reporting a broken picker - which is what a setup should do. Running it needs the API restarted on the
+  proxy target.

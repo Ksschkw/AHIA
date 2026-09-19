@@ -40,6 +40,7 @@ import {
   createBusiness,
   getBusiness,
   getStorefront,
+  listCategories,
   productShareSheet,
   publishProduct,
   publishStorefront,
@@ -66,6 +67,7 @@ import {
   signOut,
   type DailySalesSummary,
   type ExpenseCategory,
+  type Category,
   type ExpenseCategoryList,
   type PaymentMethod,
   type InventoryLevel,
@@ -114,6 +116,9 @@ export default function Dashboard() {
   const [recentSales, setRecentSales] = useState<SaleSummary[]>([]);
   const [runningOut, setRunningOut] = useState<LowStockProduct[]>([]);
   const [categories, setCategories] = useState<ExpenseCategoryList | null>(null);
+  // The product groups, which are a different thing from the spending categories above: these are how
+  // the shelf is arranged - Screenguard, 21D - and what a list is read under.
+  const [productGroups, setProductGroups] = useState<Category[]>([]);
   //: Photos per product, loaded after the shelf and never blocking it. An empty map means "not read
   //: yet", which is why the shelf shows a placeholder rather than nothing while it fills in.
   const [photos, setPhotos] = useState<Record<string, ProductImage[]>>({});
@@ -243,6 +248,9 @@ export default function Dashboard() {
       // business's own money rather than in a default that happens to be right for most shops.
       setBusinessDetail(await getBusiness(tenantId));
       setStorefront(await getStorefront(tenantId));
+      // A failure here leaves the form without a group picker rather than blocking the shelf: a trader
+      // who cannot pick a group can still add the thing and group it later.
+      setProductGroups(await listCategories(tenantId).catch(() => []));
       await loadBusiness(tenantId);
     },
     [loadBusiness],
@@ -732,10 +740,15 @@ export default function Dashboard() {
         busy={busyAction === "product"}
         currency={currency}
         onClose={() => setSheet(null)}
-        onSubmit={(name, price) =>
+        categories={productGroups}
+        onSubmit={(name, price, groupId) =>
           runProduct(async () => {
             if (!businessId) return;
-            await createProduct(businessId, { name, selling_price: price });
+            await createProduct(businessId, {
+              name,
+              selling_price: price,
+              category_id: groupId,
+            });
             setSheet(null);
             await refresh();
             setNotice({ message: `${name} added to the shelf.`, tone: "good" });
@@ -990,21 +1003,56 @@ function SaleSheet({
   );
 }
 
+/**
+ * Every group, with how deep it sits, so a select can show a heading and what hangs under it.
+ *
+ * Depth is worked out by walking up to the root, with a bound on how far it will go: a catalogue is not
+ * nested thirty levels deep, and a tree damaged elsewhere should not hang the form that adds a product.
+ */
+function orderGroups(categories: Category[]): { category: Category; depth: number }[] {
+  const byId = new Map(categories.map((category) => [category.id, category]));
+  const depthOf = (category: Category): number => {
+    let depth = 0;
+    let parentId = category.parent_id ?? null;
+    while (parentId !== null && depth < 16) {
+      const parent = byId.get(parentId);
+      if (!parent) break;
+      depth += 1;
+      parentId = parent.parent_id ?? null;
+    }
+    return depth;
+  };
+  return categories
+    .map((category) => ({ category, depth: depthOf(category) }))
+    .sort((left, right) =>
+      left.depth === right.depth
+        ? left.category.name.localeCompare(right.category.name)
+        : left.depth - right.depth,
+    );
+}
+
 function ProductSheet({
   open,
   busy,
   currency,
+  categories,
   onClose,
   onSubmit,
 }: {
   open: boolean;
   busy: boolean;
   currency: string;
+  categories: Category[];
   onClose: () => void;
-  onSubmit: (name: string, price: string) => void;
+  onSubmit: (name: string, price: string, groupId: string | null) => void;
 }) {
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
+  const [groupId, setGroupId] = useState("");
+
+  // The groups, in the order a person reads them: a heading, then what hangs under it, indented. A flat
+  // run of names would make "21D" and "Screenguard" look like siblings when one is inside the other.
+  const ordered = orderGroups(categories);
 
   return (
     <Sheet open={open} title="Add a product" onClose={onClose}>
@@ -1023,11 +1071,33 @@ function ProductSheet({
         inputMode="decimal"
         placeholder="45000.00"
       />
+      {categories.length > 0 ? (
+        <label className={styles.selectField}>
+          <span className={styles.selectLabel}>Which group?</span>
+          <select
+            className={styles.select}
+            id="new-product-group"
+            value={groupId}
+            onChange={(event) => setGroupId(event.target.value)}
+          >
+            <option value="">No group</option>
+            {ordered.map((entry) => (
+              <option key={entry.category.id} value={entry.category.id}>
+                {`${"\u00a0\u00a0".repeat(entry.depth)}${entry.category.name}`}
+              </option>
+            ))}
+          </select>
+          <span className={styles.selectHint}>
+            A group carries a price for everything under it, so a model that is the same as the rest does
+            not need its own.
+          </span>
+        </label>
+      ) : null}
       <Button
         full
         busy={busy}
         disabled={name.trim().length < 2 || Number(price) <= 0}
-        onClick={() => onSubmit(name.trim(), Number(price).toFixed(2))}
+        onClick={() => onSubmit(name.trim(), Number(price).toFixed(2), groupId || null)}
       >
         Add to the shelf
       </Button>

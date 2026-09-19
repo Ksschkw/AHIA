@@ -88,6 +88,8 @@ class CategoryResponseSchema(BaseModel):
     name: str
     slug: str
     description: str | None
+    #: The group this one hangs under, so a screen can draw the tree it belongs to.
+    parent_id: UUID | None = None
     default_normal_price: str | None
     default_wholesale_price: str | None
     default_pieces_per_pack: int | None
@@ -102,6 +104,7 @@ class CategoryResponseSchema(BaseModel):
             name=category.name,
             slug=category.slug,
             description=category.description,
+            parent_id=category.parent_id,
             default_normal_price=(
                 None
                 if category.default_normal_price is None

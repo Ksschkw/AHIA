@@ -2063,6 +2063,8 @@ export interface components {
         CategoryCreateSchema: {
             /** Name */
             name: string;
+            /** Parent Id */
+            parent_id?: string | null;
             /** Description */
             description?: string | null;
             /** Default Normal Price */
@@ -2093,6 +2095,8 @@ export interface components {
             slug: string;
             /** Description */
             description: string | null;
+            /** Parent Id */
+            parent_id?: string | null;
             /** Default Normal Price */
             default_normal_price: string | null;
             /** Default Wholesale Price */
@@ -3273,6 +3277,18 @@ export interface components {
             low_stock_threshold?: number | string | null;
         };
         /**
+         * PublicGroupSchema
+         * @description One heading: its name, the group it hangs under, and the price it carries.
+         */
+        PublicGroupSchema: {
+            /** Name */
+            name: string;
+            /** Parent Name */
+            parent_name: string | null;
+            /** Normal Price */
+            normal_price: string | null;
+        };
+        /**
          * PublicListLineSchema
          * @description One line of a list, as the customer who sent it sees it.
          *
@@ -3353,6 +3369,8 @@ export interface components {
             primary_image_url: string | null;
             /** Group Name */
             group_name: string | null;
+            /** Is Special */
+            is_special: boolean;
         };
         /**
          * PublicRequestAcceptedSchema
@@ -3437,6 +3455,11 @@ export interface components {
             contact_phone: string | null;
             /** Products */
             products: components["schemas"]["PublicProductSchema"][];
+            /**
+             * Groups
+             * @default []
+             */
+            groups: components["schemas"]["PublicGroupSchema"][];
         };
         /**
          * RefreshSessionSchema
