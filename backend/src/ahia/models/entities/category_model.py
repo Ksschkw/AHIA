@@ -263,6 +263,14 @@ class CategoryModel:
             updated_at=at,
         )
 
+    def reparented_to(self, *, parent_id: UUID | None, at: datetime) -> CategoryModel:
+        """Return the category hanging under a different group, or at the top.
+
+        `None` is a real destination, not "unchanged": a grade promoted out of a family leaves it.
+        The caller decides whether the field was sent at all.
+        """
+        return replace(self, parent_id=parent_id, updated_at=at)
+
     def described(self, *, description: str | None, at: datetime) -> CategoryModel:
         """Return the category with its description set, or cleared.
 

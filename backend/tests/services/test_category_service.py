@@ -155,6 +155,32 @@ async def test_a_group_can_sit_inside_another(service: CategoryService, tenant_i
 
 
 @pytest.mark.integration
+async def test_a_group_cannot_be_moved_inside_its_own_group(
+    service: CategoryService, tenant_id: UUID
+) -> None:
+    """Screenguard > 21D > Hot 8, and then somebody drags Screenguard under Hot 8.
+
+    Refused: a walk down that tree would never come back, and the list builder walks the tree.
+    """
+    family = await service.create_category(owner_context(tenant_id), name="Screenguard")
+    grade = await service.create_category(owner_context(tenant_id), name="21D", parent_id=family.id)
+    model = await service.create_category(
+        owner_context(tenant_id), name="Hot 8", parent_id=grade.id
+    )
+
+    with pytest.raises(InvalidInputError):
+        await service.update_category(
+            owner_context(tenant_id), category_id=family.id, changes={"parent_id": str(model.id)}
+        )
+
+    # A legitimate move still works, so the guard is not simply refusing every move.
+    moved = await service.update_category(
+        owner_context(tenant_id), category_id=model.id, changes={"parent_id": str(family.id)}
+    )
+    assert moved.parent_id == family.id
+
+
+@pytest.mark.integration
 async def test_a_parent_from_another_business_is_refused(
     database: Database, service: CategoryService, tenant_id: UUID
 ) -> None:

@@ -2892,3 +2892,15 @@ builder walking it.
   the entity's self-parent check only sees one node), placing a product at any depth, the public catalogue
   exposing the tree with **only the exceptions listed**, the list builder walking it, and the nested
   Add-product screen.
+
+- **M24.2c: a group cannot be moved inside its own group.** A cycle is not possible while creating - a new
+  node has no descendants - so the guard belongs on **moving** one, and it walks up from the proposed parent
+  refusing if the group being moved appears above it. The entity's own check covers a node being its own
+  parent; this covers the rest of the tree. It matters because the list builder walks the tree: a group
+  nested inside its own descendant does not merely read oddly, it never comes back.
+- **Bounded on purpose**: the walk stops after 32 levels rather than trusting the data, so a tree damaged by
+  something else cannot hang a request in a loop.
+- **Verified by a test that also moves it somewhere legitimate** - `Screenguard > 21D > Hot 8`, then
+  Screenguard dragged under Hot 8 is refused, and Hot 8 moved up next to Screenguard succeeds. A guard that
+  refuses every move would pass a naive test and break the product. **19 tests pass** in the file, with
+  ruff, formatting and mypy clean.

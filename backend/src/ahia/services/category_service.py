@@ -48,8 +48,13 @@ _EDITABLE_FIELDS: Final[frozenset[str]] = frozenset(
         "default_normal_price",
         "default_wholesale_price",
         "default_pieces_per_pack",
+        "parent_id",
     }
 )
+
+#: How far up the tree a move looks. A catalogue is not nested this deep; the bound is here so that
+#: a tree damaged elsewhere cannot hang a request in a loop.
+_MAXIMUM_DEPTH: Final[int] = 32
 
 
 #: The fields that are one decision - what this group costs - and move together.
@@ -216,6 +221,53 @@ class CategoryService:
     # Editing
     # ------------------------------------------------------------------
 
+    async def _require_move_is_possible(
+        self,
+        session: object,
+        *,
+        tenant_context: TenantContext,
+        category_id: UUID,
+        proposed_parent_id: UUID,
+    ) -> None:
+        """Refuse a move that would put a group inside itself.
+
+        The entity refuses a group being its own parent: the one-node case. This is the rest:
+        walk up from the proposed parent and refuse if the group being moved is somewhere above it.
+        A group nested inside its own descendant does not merely read oddly: every walk down the
+        tree would never come back, and the list builder walks the tree.
+        """
+        current: UUID | None = proposed_parent_id
+        for _ in range(_MAXIMUM_DEPTH):
+            if current is None:
+                return
+            if current == category_id:
+                raise InvalidInputError(
+                    operation="update_category",
+                    entity="category",
+                    identifier=str(category_id),
+                    detail="a group cannot be moved inside itself or inside one of its own groups",
+                )
+            ancestor = await category_crud.get_by_id(
+                session,  # type: ignore[arg-type]
+                tenant_id=tenant_context.tenant_id,
+                category_id=current,
+            )
+            if ancestor is None:
+                raise NotFoundError(
+                    operation="update_category",
+                    entity="category",
+                    identifier=str(proposed_parent_id),
+                    detail="no group with that identifier in this business",
+                )
+            current = ancestor.parent_id
+
+        raise InvalidInputError(
+            operation="update_category",
+            entity="category",
+            identifier=str(category_id),
+            detail=f"the groups are nested more than {_MAXIMUM_DEPTH} deep",
+        )
+
     async def update_category(
         self,
         tenant_context: TenantContext,
@@ -266,6 +318,17 @@ class CategoryService:
                 updated = updated.described(
                     description=description if isinstance(description, str) else None, at=now
                 )
+            if "parent_id" in changes:
+                raw_parent = changes["parent_id"]
+                proposed = UUID(raw_parent) if isinstance(raw_parent, str) else None
+                if proposed is not None:
+                    await self._require_move_is_possible(
+                        session,
+                        tenant_context=tenant_context,
+                        category_id=category_id,
+                        proposed_parent_id=proposed,
+                    )
+                updated = updated.reparented_to(parent_id=proposed, at=now)
             if any(field in changes for field in _PRICE_FIELDS):
                 # Absent means unchanged, and an explicit null means cleared - the same rule the
                 # description follows, and the reason the "was it sent" decision survives this far.
