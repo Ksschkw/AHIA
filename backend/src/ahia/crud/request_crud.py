@@ -84,6 +84,14 @@ def apply_entity(record: RequestRecord, entity: RequestModel) -> None:
     record.status = entity.status.value
     record.note = entity.note
     record.public_token_digest = entity.public_token_digest
+    #: The write path, not only the read: a field this forgets is a field the database never hears
+    #: about, which is how the category parent once looked finished and did nothing.
+    record.transporter_name = entity.transporter_name
+    record.transporter_phone = entity.transporter_phone
+    record.waybill_number = entity.waybill_number
+    record.dispatch_cost = entity.dispatch_cost
+    record.tracking_url = entity.tracking_url
+    record.dispatched_at = entity.dispatched_at
     record.created_at = entity.created_at
     record.updated_at = entity.updated_at
 

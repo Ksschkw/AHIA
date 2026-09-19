@@ -3143,3 +3143,18 @@ migration and crud tests pass**.
 **Not done, and it is the whole of the feature as a trader would see it**: the service method, the endpoint,
 and the screen. A column that nothing can write through is not a feature - this project has paid for that
 lesson four times - so dispatch is recorded here as **half built and not usable**, not as done.
+
+- **M24.2d dispatch is usable and verified through the API.** The list can now be sent: the endpoint records
+  **the transporter, the waybill number, what the trip cost, and where to follow it**, and the trader reads it
+  back on the list. Proven against a live API:
+  `{"transporter_name":"Emeka Motors","waybill_number":"WB-4471","dispatch_cost":"1500.00","tracking_url":"https://track.example/WB-4471","dispatched":true}`
+- **And the rule that matters is enforced**: dispatching a list that has not been confirmed answers **422** -
+  *sending goods before the price is agreed is how a trader ends up owed money he never named.* The audit
+  trail gets `request_dispatched` in the same transaction as the change, so a parcel on a road is attributable.
+- **The verification found a real bug of exactly the kind this project keeps teaching.** The first dispatch
+  returned every field null with `dispatched: false`: the **read** mapping knew the new fields and the
+  **write** mapping (`apply_entity`) did not, so the database never heard about them. That is the same fault as
+  the category parent two weeks ago, caught this time **by the curl verification rather than by a user** - which
+  is the point of verifying through the API rather than trusting the code.
+- **Still owed for dispatch**: the screen. The trader can send a list through the API and cannot yet do it from
+  his phone, which is the only place he would ever do it.

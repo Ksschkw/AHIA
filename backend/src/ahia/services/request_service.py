@@ -40,9 +40,10 @@ from ahia.core.security import TokenService
 from ahia.core.tenant_context import TenantContext
 from ahia.crud import product_crud, request_crud, request_line_crud, storefront_crud, tenant_crud
 from ahia.models.entities.request_line_model import RequestLineModel
-from ahia.models.entities.request_model import RequestModel
+from ahia.models.entities.request_model import RequestModel, RequestStatus
 from ahia.schemas.money_format import money_text, quantity_text
 from ahia.schemas.request_schema import (
+    DispatchSchema,
     PublicListLineSchema,
     PublicListSchema,
     PublicRequestSchema,
@@ -56,6 +57,18 @@ _REQUEST_LOGGER_NAME: Final[str] = "ahia.services.request"
 
 #: The longest edge of a list, so one customer cannot fill a database with one request.
 MAXIMUM_LINES_PER_LIST: Final[int] = 200
+
+
+def _text_or_none(value: str | None) -> str | None:
+    """Return what was typed, or None when nothing was.
+
+    Whitespace is not a transporter's name: a form submitted with spaces in a box means the box was
+    left empty, and storing spaces would make a screen show a blank where it should show nothing.
+    """
+    if value is None:
+        return None
+    trimmed = value.strip()
+    return trimmed or None
 
 
 def request_response(
@@ -79,6 +92,14 @@ def request_response(
         status=request.status,
         note=request.note,
         created_at=request.created_at,
+        transporter_name=request.transporter_name,
+        transporter_phone=request.transporter_phone,
+        waybill_number=request.waybill_number,
+        dispatch_cost=(
+            None if request.dispatch_cost is None else money_text(request.dispatch_cost)
+        ),
+        tracking_url=request.tracking_url,
+        dispatched_at=request.dispatched_at,
         unpriced_line_count=unpriced,
         priced_total=money_text(sum(priced, Decimal("0.00"))) if priced else None,
         lines=[
@@ -482,6 +503,74 @@ class RequestService:
             state=stored.state.value,
         )
         return request_response(request, lines)
+
+    async def dispatch_request(
+        self,
+        tenant_context: TenantContext,
+        *,
+        request_id: UUID,
+        payload: DispatchSchema,
+    ) -> RequestResponseSchema:
+        """Record how a list was sent.
+
+        Only a confirmed list can be dispatched, which is a rule rather than a formality: sending
+        goods before the price is agreed is how a trader ends up owed money he never named. What it
+        cost to send is kept beside what the list made, because the difference between the two is
+        the day's real answer.
+        """
+        tenant_context.require_permission(
+            sales_permissions.SALES_CREATE,
+            operation="dispatch_request",
+            resource_type="request",
+            resource_id=str(request_id),
+            logger=self._logger,
+        )
+        now = datetime.now(UTC)
+        unit_of_work = self._unit_of_work_factory()
+        async with unit_of_work:
+            session = unit_of_work.session_handle
+            request = await request_crud.require_by_id(
+                session, tenant_id=tenant_context.tenant_id, request_id=request_id
+            )
+            if request.status is not RequestStatus.CONFIRMED:
+                raise InvalidInputError(
+                    operation="dispatch_request",
+                    entity="request",
+                    identifier=str(request_id),
+                    detail="a list must be confirmed before it can be sent",
+                )
+            dispatched = request.dispatched(
+                transporter_name=_text_or_none(payload.transporter_name),
+                transporter_phone=_text_or_none(payload.transporter_phone),
+                waybill_number=_text_or_none(payload.waybill_number),
+                dispatch_cost=payload.dispatch_cost,
+                tracking_url=_text_or_none(payload.tracking_url),
+                at=now,
+            )
+            stored = await request_crud.update(session, dispatched)
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="request_dispatched",
+                entity_type="request",
+                entity_id=stored.id,
+                now=now,
+                detail={
+                    "waybill_number": stored.waybill_number or "",
+                    "has_tracking": "yes" if stored.tracking_url else "no",
+                },
+            )
+            lines = await request_line_crud.list_for_request(
+                session, tenant_id=tenant_context.tenant_id, request_id=request_id
+            )
+            await unit_of_work.commit()
+
+        self._logger.info(
+            "request_dispatched",
+            tenant_id=str(tenant_context.tenant_id),
+            request_id=str(request_id),
+        )
+        return request_response(stored, lines)
 
     async def confirm_request(
         self,

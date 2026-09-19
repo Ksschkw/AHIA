@@ -182,6 +182,22 @@ class RequestLineResponseSchema(BaseModel):
     image_key: str | None
 
 
+class DispatchSchema(BaseModel):
+    """How a list was sent.
+
+    Every field is optional, and none of them means "clear the rest": this is what the trader wrote
+    down on the way to the park, and what he did not write down is simply not there.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    transporter_name: str | None = None
+    transporter_phone: str | None = None
+    waybill_number: str | None = None
+    dispatch_cost: Money | None = None
+    tracking_url: str | None = None
+
+
 class RequestResponseSchema(BaseModel):
     """A list, as the business sees it - with its lines and what they come to."""
 
@@ -193,6 +209,14 @@ class RequestResponseSchema(BaseModel):
     status: RequestStatus
     note: str | None
     created_at: datetime
+    #: How it was sent, once it has been. None for a list nobody has dispatched yet, which is not
+    #: the same as one collected by hand.
+    transporter_name: str | None = None
+    transporter_phone: str | None = None
+    waybill_number: str | None = None
+    dispatch_cost: str | None = None
+    tracking_url: str | None = None
+    dispatched_at: datetime | None = None
     lines: list[RequestLineResponseSchema]
     # : What is known so far. None while nothing is priced, because a total missing money is worse
     # than

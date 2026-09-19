@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, Request, status
 from ahia.core.tenant_context import TenantContext
 from ahia.routers.tenant_router import require_tenant_context
 from ahia.schemas.request_schema import (
+    DispatchSchema,
     PublicListSchema,
     PublicRequestAcceptedSchema,
     PublicRequestSchema,
@@ -139,6 +140,21 @@ async def work_request_line(
         line_id=line_id,
         changes=payload,
     )
+
+
+@router.post(
+    "/requests/{request_id}/dispatch",
+    response_model=RequestResponseSchema,
+    summary="Record how a list was sent",
+)
+async def dispatch_request(
+    request_id: UUID,
+    payload: DispatchSchema,
+    tenant_context: TenantContextDependency,
+    service: RequestServiceDependency,
+) -> RequestResponseSchema:
+    """Write down the transporter, the waybill number, the cost, and where to follow it."""
+    return await service.dispatch_request(tenant_context, request_id=request_id, payload=payload)
 
 
 @router.post(
