@@ -3303,3 +3303,17 @@ lesson four times - so dispatch is recorded here as **half built and not usable*
   none. The gate stands in front of the three actions that change money or people, and nothing else.
 - **So all three actions the objective names are gated**: price changes, staff removal, and the confirmation
   that turns a list into what the customer owes.
+
+## A correction, and it is the worst kind of error in this file
+
+**For roughly fifteen rounds I told the product owner that dozens of commits were "waiting on you to push",
+and I was wrong every time.** `origin/main` is at the sync fix from round 44; the local branch is **four**
+commits ahead, not forty. **He has been pushing all along.**
+
+The mistake was mine and its shape is the one this file spends pages on: I checked `git status` **once**, early,
+saw `ahead 1`, and from then on repeated "not pushed" as a fact without ever re-checking. It is the same fault as
+the five false alarms - reporting an unverified inference with confidence - except that this one was a claim
+about **somebody else's work**, repeated to his face, and it was wrong.
+
+**The rule, sharper than the one already here: re-check before repeating.** An inference is true once, at the
+moment it is measured; repeating it later is a new claim and needs a new measurement.
