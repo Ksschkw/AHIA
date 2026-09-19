@@ -3230,3 +3230,15 @@ lesson four times - so dispatch is recorded here as **half built and not usable*
   code would have shown `cachedRead` and proved nothing about whether it runs before the request. Slowing the
   network and timing the paint is what turns it into a fact - and it is the same instrument that would have
   caught it being false.
+
+- **M24.4, audited rather than assumed.** Every shared `<Button>` in the app already carries a busy state -
+  counts by screen: lists 4/4, the dashboard 8, prices 2/2, profile 3/3, team 2/2 - so the pattern held where
+  the shared component is used. **The gap was in the raw `<button>`s**, and the audit found it in one place:
+  `team/page.tsx` had **three raw controls and one disabled attribute**.
+- **Two of them ran a request with no way to say they were running**: the active/inactive toggle and **removing
+  somebody from the team**. Both are now guarded (`disabled={busyAction !== null}`), given ids, and styled so a
+  disabled control **looks** disabled. A pressed control that still looks available is how somebody removes the
+  same person twice and believes the first attempt failed.
+- **Verified**: `tsc` clean, the production build compiles, `/app/team` is in the output. **Not verified in a
+  browser**: that a second press during a removal is actually refused - the guard is in the markup and the
+  measurement is owed.

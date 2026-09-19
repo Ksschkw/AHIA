@@ -181,3 +181,12 @@
   gap: 16px;
   align-items: center;
 }
+
+/* A control that cannot be pressed must look like it. Both of these run a request, and both refuse a second
+   press while one is in flight - a pressed control that looks available is how somebody sends the same
+   removal twice and believes the first one failed. */
+.linkButton:disabled,
+.dangerLink:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

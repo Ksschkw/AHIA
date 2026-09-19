@@ -300,6 +300,10 @@ export default function Team() {
                 <div className={styles.memberActions}>
                   <button
                     className={styles.linkButton}
+                    // Named and guarded: a control that runs a request has to be able to say it is running,
+                    // and has to refuse a second press while it is.
+                    id={`member_status_${member.id}`}
+                    disabled={busyAction !== null}
                     onClick={() =>
                       run(`status-${member.id}`, async () => {
                         await changeMemberStatus(
@@ -315,6 +319,8 @@ export default function Team() {
                   </button>
                   <button
                     className={styles.dangerLink}
+                    id={`member_remove_${member.id}`}
+                    disabled={busyAction !== null}
                     onClick={() =>
                       run(`remove-${member.id}`, async () => {
                         await removeMember(business.id, member.id);
