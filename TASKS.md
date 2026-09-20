@@ -3579,3 +3579,29 @@ dependencies. Until this round it had never been compiled at all.
 **On his question about the backend: yes, it is the deployed one.** `BASE_URL` defaults to the Northflank
 address, and `/health` answers 200. Pointing a build at a different API is `EXPO_PUBLIC_API_URL`, which exists so
 that no build carries a hostname that happens to be right today.
+
+## The welcome screen, and the four libraries it is built from
+
+The product owner asked for it to be beautified with animation and graphics, using free tools. It is now: a sand
+**gradient** background, the **product's own mark drawn in `react-native-svg`** and breathing - the two bright
+corners and the two dim ones taking turns, which is the mark's own two-tone idea set in motion rather than a
+decoration bolted on - a **staggered entrance** for the headline and the three promises, and **press buttons that
+answer the thumb** with a spring and a light haptic.
+
+Everything is open source and every version is pinned from Expo's `bundledNativeModules.json`:
+`react-native-reanimated` (already present as a dependency of expo-router, now declared), `react-native-svg`,
+`expo-linear-gradient`, `expo-haptics`.
+
+**Motion happens once, on arrival, and then stops.** Only the mark keeps moving, and slowly. A screen that
+animates forever drains a battery and distracts a man with a customer waiting.
+
+**Two things worth recording.** Reanimated 4 moved its Babel plugin into `react-native-worklets/plugin`, and a
+Babel plugin is applied when Metro builds, not when a screen re-renders - so **the app must be restarted with a
+cleared cache**, or it starts and the animations silently do nothing, which looks exactly like broken animation
+code. And the mark's squares are animated through `useAnimatedProps`, **not** `style`: react-native-svg reads its
+presentation from props, so an animated style is ignored on some platforms - the kind of fault that shows up on
+one device only, months later.
+
+**And the honest limit: it is not type-checked.** Three of the four libraries are not installed here, so `tsc`
+reports three "cannot find module" errors and nothing else - but with a module missing, TypeScript treats its
+types as `any`, so my usage of them is not checked either.

@@ -12,7 +12,10 @@
   "dependencies": {
     "@expo/metro-runtime": "~57.0.16",
     "expo": "~57.0.24",
+    "expo-blur": "~57.0.3",
     "expo-constants": "~57.0.19",
+    "expo-haptics": "~57.0.3",
+    "expo-linear-gradient": "~57.0.2",
     "expo-linking": "~57.0.10",
     "expo-router": "~57.0.22",
     "expo-secure-store": "~57.0.4",
@@ -21,8 +24,11 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
+    "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
-    "react-native-screens": "~4.26.0"
+    "react-native-screens": "~4.26.0",
+    "react-native-svg": "15.15.4",
+    "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
     "@types/react": "~19.2.0",

@@ -16,9 +16,25 @@ that protects against and what it does not.
 
     cd mobile
     npm install
-    npx expo start
+    npx expo start -c
 
 Then press `a` for an Android emulator or device, `i` for iOS on a Mac.
+
+**The `-c` matters after this change.** The animation libraries are transformed by a Babel plugin
+(`react-native-worklets/plugin`, which Reanimated 4 moved out of its own package), and a Babel plugin is applied
+when Metro builds - not when a screen re-renders. Without clearing the cache, the app starts and the animations
+do nothing, which looks exactly like a bug in the animation code.
+
+## What the welcome screen is built from
+
+All open source, all versions pinned from Expo's own `bundledNativeModules.json`:
+
+| | |
+|---|---|
+| `react-native-reanimated` | The entrance animations, the mark's breathing, the button springs |
+| `react-native-svg` | The mark itself, drawn from the same geometry as `app/icon.svg` |
+| `expo-linear-gradient` | The sand background |
+| `expo-haptics` | A light tap on every press, because a button that answers the thumb is a button that feels real |
 
 **No `npx expo install` step, and that is deliberate.** It resolves versions by asking Expo's API, which times
 out on a slow connection - and it is not needed, because every version this app wants is already pinned in
