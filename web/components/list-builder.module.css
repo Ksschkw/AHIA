@@ -341,3 +341,317 @@
   color: var(--leaf-dark);
   margin-bottom: var(--space-2);
 }
+
+/* ---------------------------------------------------------------------------
+   The second attempt.
+
+   Built for somebody standing in a market with one hand free: a search box he
+   cannot miss, rows he can tap with a thumb, a list that is always on screen,
+   and a bar at the bottom that never leaves. Every target is 44px or taller.
+   --------------------------------------------------------------------------- */
+
+.searchLabel {
+  display: block;
+  font-size: var(--text-md);
+  font-weight: 750;
+  color: var(--ink);
+  margin-bottom: var(--space-2);
+}
+
+.search {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 var(--space-4);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  font-family: inherit;
+  font-size: var(--text-md);
+  color: var(--ink);
+}
+
+.search:focus {
+  outline: none;
+  border-color: var(--leaf);
+}
+
+.rows {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 56px;
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--line);
+}
+
+.row:first-child {
+  border-top: none;
+}
+
+.rowBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.rowName {
+  font-size: var(--text-md);
+  font-weight: 650;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.rowMeta {
+  font-size: var(--text-xs);
+  color: var(--ink-3);
+}
+
+.rowPrice {
+  font-size: var(--text-sm);
+  font-weight: 750;
+  color: var(--leaf-dark);
+}
+
+.rowOpen {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-height: 44px;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.chev {
+  color: var(--ink-3);
+  font-size: 18px;
+}
+
+.addHere {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--leaf);
+  background: var(--leaf);
+  color: #fff;
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nothing {
+  font-size: var(--text-sm);
+  color: var(--ink-3);
+  margin-top: var(--space-2);
+}
+
+.onlyThese {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  margin-top: var(--space-4);
+}
+
+.ownButton {
+  width: 100%;
+  min-height: 52px;
+  border-radius: var(--radius-sm);
+  border: 1.5px dashed var(--leaf);
+  background: transparent;
+  color: var(--leaf-dark);
+  font-family: inherit;
+  font-size: var(--text-md);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ownForm {
+  margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ownRow {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.qty {
+  width: 84px;
+  min-height: 52px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  text-align: center;
+  font-family: inherit;
+  font-size: var(--text-md);
+}
+
+.chooseUnder {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.underOn,
+.underOff {
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.underOn {
+  background: var(--leaf);
+  border: 1px solid var(--leaf);
+  color: #fff;
+}
+
+.underOff {
+  background: var(--card);
+  border: 1px solid var(--line-strong);
+  color: var(--ink-2);
+}
+
+/* The customer's own shape: a heading, and what they put under it, visibly inside it. */
+.lineTop {
+  border-top: 1px solid var(--line);
+  padding: var(--space-2) 0;
+}
+
+.lineUnder {
+  border-top: 1px solid var(--line);
+  padding: var(--space-2) 0 var(--space-2) var(--space-4);
+  border-left: 3px solid var(--leaf-soft);
+  margin-left: var(--space-2);
+}
+
+.headingRow,
+.lineRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 48px;
+}
+
+.headingName {
+  flex: 1;
+  font-size: var(--text-base);
+  font-weight: 800;
+  color: var(--leaf-dark);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.stepButton {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.stepValue {
+  min-width: 28px;
+  text-align: center;
+  font-weight: 750;
+}
+
+.remove {
+  min-height: 40px;
+  padding: 0 var(--space-2);
+  background: none;
+  border: none;
+  color: var(--danger);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.who {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* The bar that never leaves the screen. */
+.bar {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-2);
+  padding: var(--space-3) 0 var(--space-4);
+  background: linear-gradient(to top, var(--sand) 70%, transparent);
+}
+
+.barList {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 52px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--leaf);
+  background: var(--card);
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.barCount {
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--leaf-dark);
+}
+
+.barTotal {
+  font-size: var(--text-sm);
+  font-weight: 750;
+  color: var(--ink-2);
+}
+
+.barAction {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--leaf);
+}

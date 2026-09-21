@@ -3751,3 +3751,32 @@ the API answered perfectly with an empty shape. Caught by looking at the stored 
 at the code that "should" have worked.
 
 645 model and schema tests pass; ruff, formatting and mypy clean.
+
+## The customer's list screen, rebuilt - the product owner's "confusing for even me" addressed
+
+The first version was built around the trader's catalogue: chips for groups, a search box underneath, and a
+customer who had to work out what a "heading" was before he could write one. **It asked him to understand the
+model instead of letting him say what he wants.** The second version is ordered by what he actually does:
+
+1. **Search first**, the largest thing on the screen, because most customers arrive knowing what they want. It
+   searches the whole shop at every depth, so nobody has to open a folder to find "21D for Hot 8".
+2. **Or look through the shop**, one level at a time, as **rows to tap** rather than chips to decode, with a
+   **breadcrumb** ("All of the shop / Screenguard") to get back, and **only the exceptions** listed by name
+   under each group.
+3. **"Can't find it? Add your own"** is now a first-class button, not an afterthought - because in this trade it
+   is the *normal* case.
+4. **His list never leaves the screen.** A bar at the bottom says "My list (2 items) - N7,400" and opens the
+   review, because a customer who cannot see his list assumes he has lost it and starts again.
+5. **His own headings nest**, and the review shows what is under what: an indented block with a rule down its
+   left, and removing a heading takes what was under it, which is what deleting a heading means.
+
+**Verified**: typecheck clean, the production build compiles and `/list/[slug]` is in the output.
+
+**Not verified, and named: the browser check for this screen does not pass yet.** Its assertions were written
+against the previous interface - it looked for chips reading "Everything", and for a control the new screen does
+not have - and my attempts to bring it up to date are what I ran out of room on. The last edit I made to it left
+a syntax error, so it has been **reverted to its committed state rather than left broken**: it is stale, it is a
+development tool rather than part of the build, and a half-edited check is worse than a stale one.
+
+Also not yet done for this screen: **the customer's live list page** (`/list/{shop}/{token}`, the one they come
+back to) still renders a flat list. It needs the same nesting treatment.
