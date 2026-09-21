@@ -3845,3 +3845,27 @@ has nothing to sell from stock. Either it confirms and records **no sale** (the 
 confirmation refuses until at least one line is a catalogue item. The second is worse for a trader whose list is
 mostly things he had to go and find - which is the normal case - so **the first is what I would build**: confirm
 the list, and say plainly on the screen that there was nothing on it to take from the shelf.
+
+## The two destinations that led nowhere, and why every page felt like it was reloading
+
+**Two of the four primary buttons in the frame went to 404s.** `Sales` and `Items` have been in the navigation
+since the frame was built, and neither page existed:
+
+    the frame links to:  /app/sales   /app/items
+    the pages that were: /app  /app/lists  /app/prices  /app/profile  /app/team
+
+Both now exist, with the same header as the rest of the app, the same date-free honesty, and **cache-first
+paint**: what the browser already holds is drawn before anything is asked for, and the request corrects it
+afterwards. The build now carries all seven destinations.
+
+Sales shows every sale with its **payment state**, which matters more than a date for a list that is usually
+paid on delivery, and Items is the whole catalogue with a search box - the dashboard's shelf is for the dozen
+things he touches daily, and this is for the one he sold once in March.
+
+**And the "it reloads every time" complaint has a name.** Every screen starts with `loading` and shows a spinner
+until its request returns, even when the browser is holding the answer it showed a minute ago. The dashboard and
+the lists screen were converted to paint from the cache first; **prices, team, profile and the two new pages
+were not**. That is the remaining work, and it is mechanical rather than difficult: read the cache during the
+first render, paint it, then ask. I wrote a shared hook for exactly that, then noticed I had not used it in the
+pages I had just written - and **deleted it rather than ship an abstraction that one half of the app uses**.
+A helper nobody calls is worse than the repetition it was meant to remove.
