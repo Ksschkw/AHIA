@@ -3812,3 +3812,36 @@ does record costs, and it is no longer the price of using the app.
 
 The dispatch cost stays as it was: it is a different thing - what the trip cost, which he *does* know and does
 need when he works out whether the run was worth making - and it is optional.
+
+## Confirmation creating the sale: the design, settled from the contracts
+
+The last unbuilt thing the clarification asks for, and the one with money attached. Investigated rather than
+guessed, and the two questions that looked like blockers both have answers in the code.
+
+**A sale line requires a `product_id`** (`SaleLineRequestSchema`), and a sale requires at least one line
+(`min_length=1`). So:
+
+- **Catalogue lines become sale lines.** Quantity from the list, `unit_price` from the trader's price - which is
+  exactly what that field is for: *"when a price is sent it is what is charged and what is snapshotted - a
+  negotiated price is a real thing at a counter."* A list price is a negotiated price.
+- **Free-text lines cannot be sold from stock.** There is no product to take from the shelf, because the whole
+  point of a free-text line is that the shop did not list it. They stay on the list as the record of what was
+  asked for and supplied, and the trader can turn one into a catalogue item afterwards - which the clarification
+  says in its own words.
+
+**And a sale may be unpaid**: `payments` defaults to `[]`. That matters more than it looks, because a customer's
+list is usually paid on collection or delivery, not when it is confirmed - so a confirmed list becomes a sale
+with money still owed, which is the truth of the trade rather than a workaround.
+
+**What confirmation will do**, once written:
+
+1. Build one sale line per request line that names a catalogue item, priced at what the trader set.
+2. Record the sale with **no payments**, through `complete_sale`, which is what moves stock, writes the ledger
+   and issues the receipt - the "stock, ledger and receipt operations" the clarification asks for.
+3. Keep the list's own record intact: what was asked for, what was free text, what it cost to send.
+
+**One decision the code cannot make, and it is the product owner's**: a list whose lines are **all** free text
+has nothing to sell from stock. Either it confirms and records **no sale** (the trade happened, off-system), or
+confirmation refuses until at least one line is a catalogue item. The second is worse for a trader whose list is
+mostly things he had to go and find - which is the normal case - so **the first is what I would build**: confirm
+the list, and say plainly on the screen that there was nothing on it to take from the shelf.
