@@ -237,7 +237,10 @@ export default function Dashboard() {
       // one is fetched. Showing the last shop's shelf under the new shop's name is worse than showing
       // nothing: it is exactly the kind of number a trader would act on.
       setProducts([]);
-      setShelfState("loading");
+      // **Only if there is nothing to show.** A trader who comes back to his shelf sees his shelf; setting
+      // this to "loading" unconditionally is what made every return look like a first visit, with the words
+      // "Fetching your shelf" over data the browser was already holding.
+      setShelfState((current) => (current === "ready" ? "ready" : "loading"));
       setStock([]);
       setToday(null);
       setRecentSales([]);

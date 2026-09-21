@@ -15,6 +15,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, Empty, Loading, Pill } from "@/components/ui";
 import {
   cachedRead,
+  firstPaint,
+  rememberedBusinessId,
   currentUser,
   getBusiness,
   listBusinesses,
@@ -28,11 +30,15 @@ import { formatMoneyOrOnRequest, formatQuantity } from "@/lib/format";
 import styles from "../dashboard.module.css";
 
 export default function Items() {
-  const [products, setProducts] = useState<Product[] | null>(null);
+  const [products, setProducts] = useState<Product[] | null>(() =>
+    firstPaint<Product[]>(rememberedBusinessId(), (id) => `/api/v1/tenants/${id}/products`),
+  );
   const [stock, setStock] = useState<InventoryLevel[]>([]);
   const [currency, setCurrency] = useState("NGN");
   const [query, setQuery] = useState("");
-  const [state, setState] = useState<"loading" | "ready">("loading");
+  const [state, setState] = useState<"loading" | "ready">(() =>
+    rememberedBusinessId() ? "ready" : "loading",
+  );
 
   const load = useCallback(async (tenantId: string) => {
     const [foundProducts, foundStock] = await Promise.all([

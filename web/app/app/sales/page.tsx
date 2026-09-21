@@ -13,6 +13,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, Empty, Loading, Pill, Toast } from "@/components/ui";
 import {
   cachedRead,
+  firstPaint,
+  rememberedBusinessId,
   currentUser,
   getBusiness,
   listBusinesses,
@@ -25,9 +27,13 @@ import styles from "../dashboard.module.css";
 
 export default function Sales() {
   const [business, setBusiness] = useState<Tenant | null>(null);
-  const [sales, setSales] = useState<SaleSummary[] | null>(null);
+  const [sales, setSales] = useState<SaleSummary[] | null>(() =>
+    firstPaint<SaleSummary[]>(rememberedBusinessId(), (id) => `/api/v1/tenants/${id}/sales`),
+  );
   const [currency, setCurrency] = useState("NGN");
-  const [state, setState] = useState<"loading" | "ready">("loading");
+  const [state, setState] = useState<"loading" | "ready">(() =>
+    rememberedBusinessId() ? "ready" : "loading",
+  );
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async (tenantId: string) => {

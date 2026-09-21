@@ -65,6 +65,26 @@ const elapsed = Date.now() - started;
 console.log(`      tapping Sales cost ${calls.length} request(s): ${JSON.stringify(calls)}`);
 console.log(`      and it showed its content ${elapsed}ms after the tap`);
 
+// **And nothing may say it is fetching.** Going back to a page the browser has already seen must show the
+// page, not a spinner over data that is already in hand - which is what the product owner kept seeing.
+calls = [];
+const back = Date.now();
+await page.evaluate(() => {
+  const link = [...document.querySelectorAll("a")].find((a) => a.getAttribute("href") === "/app");
+  link?.click();
+});
+await page.waitForFunction(() => window.location.pathname === "/app", { timeout: 15000 });
+const firstFrame = await page.evaluate(() => document.body.innerText);
+const words = ["Fetching", "Opening", "Loading", "Sending"].filter((word) =>
+  firstFrame.includes(word),
+);
+console.log(`      on returning to the shelf, the first frame said: ${words.length ? words.join(", ") : "nothing about loading"}`);
+if (words.length > 0) {
+  console.log(`[FAIL] the shelf announced "${words[0]}" over data the browser already had`);
+  process.exitCode = 1;
+}
+void back;
+
 // A soft word on the goal, not a hard gate: the point is that it is no longer four.
 if (calls.length > 2) {
   console.log(`[FAIL] a tap still costs ${calls.length} requests`);

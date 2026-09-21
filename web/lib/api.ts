@@ -231,6 +231,18 @@ function announceInFlight(delta: number): void {
 }
 
 /** Read what has been cached without asking the server, for a first paint. */
+/** The business this device last chose, readable before anything is fetched. */
+export function rememberedBusinessId(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem("ahia.business");
+}
+
+/** What a screen should show on its very first frame: the cache, or nothing. */
+export function firstPaint<T>(tenantId: string | null, path: (tenantId: string) => string): T | null {
+  if (!tenantId) return null;
+  return cachedRead<T>(path(tenantId));
+}
+
 export function cachedRead<T>(path: string, query?: Record<string, string>): T | null {
   const search = query ? `?${new URLSearchParams(query).toString()}` : "";
   return recall<T>(cacheKey(path, search))?.value ?? null;

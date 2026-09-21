@@ -4046,3 +4046,20 @@ produce - so Vercel is serving a build from before it. Rather than depend on the
 deployed API directly, and `http://` to any remote host is raised to `https://`. Proven across four cases: unset
 on a deployment, unset locally, a bare hostname, and an explicit `http://` remote. **A redeploy is still needed**
 - the code cannot change what is already running - but after it, the send works whatever the variable says.
+
+## The spinner on every return, and why the memo was not enough
+
+The page-level refresh was gone, but going back to a screen still said **"Fetching your shelf"** over data the
+browser was already holding. Two reasons, both mine:
+
+1. **The seed happened in an effect, which is a frame too late.** The state was created as `"loading"`, the cache
+   was read in `useEffect`, and the spinner got a frame on screen before the cached data replaced it. Seeding now
+   happens **during the first render** (`firstPaint` with `rememberedBusinessId`), so the first frame already has
+   the page on it.
+2. **The dashboard actively reset itself to loading.** `setShelfState("loading")` ran every time a business was
+   loaded - so a screen that had been ready went back to "Fetching your shelf" on nothing worse than a revisit.
+   It now stays ready once it is ready, and the data updates silently underneath.
+
+**Measured**: tapping to Sales costs **0 API requests** and shows its content **47ms** later; returning to the
+shelf reports **nothing about loading** on its first frame. `scripts/navigation-check.mjs` checks both, so
+neither can come back quietly.
