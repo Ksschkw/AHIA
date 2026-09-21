@@ -3692,3 +3692,30 @@ check of mine says "the list became a sale" when what became true is that its **
 **So this is the honest summary: of the six things the clarification asks for, four already exist, one needs a
 single additive column, and one - confirmation actually creating the sale - is missing and has been described as
 if it were done.**
+
+## Why sending a list from the live shop kept failing, and it was not the API
+
+Reproduced from the outside, which is the only way this was going to be found.
+
+**The API is fine.** Posting a list to the deployed API directly answers **201** for every shape the cart sends -
+free text, a real product slug from his own shop (`samsung-s21`), with a price, with a note. Four for four.
+
+**The web deployment was not.** Posting to the same path on the deployed site answered **307**:
+
+    POST https://useahia-hazel.vercel.app/shop/kosi-s-pot/requests
+      307  location: http://p01--ahia-api--qw5xhkblp8hy.code.run/shop/kosi-s-pot/requests
+
+**The destination was plaintext.** `API_PROXY_TARGET` on the deployment held a bare hostname, and the rewrite
+built `http://...`. A platform cannot proxy plaintext to a service that serves TLS, so instead of proxying it
+**redirected** - and by the time the browser arrived, the request body was gone, so the API refused it with
+`INVALID_REQUEST`. The customer pressed "Send my list" and got a failure; the API, called directly, worked
+perfectly. **That is exactly the shape of a bug that only reproduces in production.**
+
+Fixed in the configuration rather than in an instruction: `withScheme` in `next.config.ts` treats a bare value as
+a hostname, raises it to `https://`, and **raises `http://` on anything that is not this machine to TLS as well** -
+because a remote API reachable only over plaintext does not exist in this deployment, so honouring that value can
+only produce this failure.
+
+**The deployment still needs its variable corrected and a redeploy** (`API_PROXY_TARGET` with `https://`, or just
+the hostname, now that either works). The code fix protects whoever sets it next; it cannot change what is
+already deployed.
