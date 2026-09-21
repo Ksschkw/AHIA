@@ -646,6 +646,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
           <div className={styles.who}>
             <input
               className={styles.search}
+              id="list_phone"
               value={phone}
               placeholder="Your phone number"
               inputMode="tel"
@@ -687,6 +688,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
         </button>
         <button
           type="button"
+          id="send_list"
           className={styles.send}
           disabled={busy || items.length === 0}
           onClick={() => void send()}

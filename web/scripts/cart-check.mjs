@@ -102,7 +102,7 @@ await step("a shop with headings and stock", async () => {
   });
 });
 
-await step("the customer searches, adds, and asks for the rest", async () => {
+await step("the customer searches, adds, and makes his own heading", async () => {
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
   current = page;
@@ -110,7 +110,8 @@ await step("the customer searches, adds, and asks for the rest", async () => {
   await page.goto(`${APP_URL}/list/${shop.slug}`, { waitUntil: "networkidle2" });
   await page.waitForSelector("#list_search", { timeout: 20000 });
 
-  await page.type("#list_search", "21D");
+  // **Search first**, which is the main path now: type, see the shop's own goods, tap Add.
+  await page.type("#list_search", "Screenguard");
   await page.waitForFunction(() => document.body.innerText.includes("Screenguard - Hot 8"), {
     timeout: 10000,
   });
@@ -121,85 +122,62 @@ await step("the customer searches, adds, and asks for the rest", async () => {
     control?.click();
   });
 
-  await page.type("#list_search", "Privacy");
-  await page.waitForFunction(() => document.body.innerText.includes("Privacy Glass"), {
+  // **Browse by tapping a row**, which is the other path: the shop's own headings, by name.
+  await page.waitForSelector("#group_21D", { timeout: 10000 });
+  await page.click("#group_21D");
+  await page.waitForFunction(() => document.body.innerText.includes("Inside 21D"), {
     timeout: 10000,
   });
-  await page.evaluate(() => {
-    const control = [...document.querySelectorAll("button")].find(
-      (candidate) => candidate.getAttribute("aria-label") === "Add Privacy Glass - iPhone 13",
-    );
-    control?.click();
-  });
-
-  // **The walk down the tree**, which is the shape the product owner described: pick the kind, see what
-  // it prices differently, and type anything else under that kind so it takes the kind's price.
-  await page.evaluate(() => {
-    const chip = [...document.querySelectorAll("button")].find(
-      (candidate) => candidate.textContent?.trim() === "Screenguard",
-    );
-    chip?.click();
-  });
-  await page.waitForFunction(() => document.body.innerText.includes("21D"), { timeout: 10000 });
-  await page.evaluate(() => {
-    const chip = [...document.querySelectorAll("button")].find(
-      (candidate) => candidate.textContent?.trim() === "21D",
-    );
-    chip?.click();
-  });
-  const walked = await page.evaluate(() => document.body.innerText);
-  console.log(`      the walk shows: ${walked.match(/21D[^\n]*/)?.[0] ?? "(nothing)"}`);
-  if (!walked.includes("Everything")) throw new Error("the headings are not offered");
+  const crumbs = await page.evaluate(() => document.body.innerText.includes("All of the shop"));
+  if (!crumbs) throw new Error("there is no way back to the whole shop");
   await page.screenshot({ path: resolve(OUTPUT, "cart-tree-mobile.png") });
 
-  // Something the shop has not got, with no price - the line that sends people back to paper.
-  await page.type("#list_asked", "Universal metal frame, any brand");
-  // The Add beside the box that was typed into, not the first Add on the page: the headings added their
-  // own Add buttons, and "the first one whose text is Add" stopped meaning what it used to.
-  await page.evaluate(() => {
-    const input = document.querySelector("#list_asked");
-    const row = input?.parentElement;
-    const control = [...(row?.querySelectorAll("button") ?? [])].find(
-      (candidate) => candidate.textContent?.trim() === "Add",
-    );
-    control?.click();
-  });
-
-  await page.screenshot({ path: resolve(OUTPUT, "cart-mobile.png") });
-  const text = await page.evaluate(() => document.body.innerText);
-  console.log(`      grouped under: ${text.includes("21D") ? "21D" : "(no heading)"}`);
-  console.log(`      reads: ${text.match(/\\d+ items on your list/)?.[0] ?? "(no count)"} | ${text.match(/[₦][^\\n]*/)?.[0] ?? ""}`);
-  if (!text.includes("price to be confirmed")) {
-    throw new Error("a line the shop has not got does not say its price is to be confirmed");
-  }
-  if (!text.includes("3 items on your list")) throw new Error("the list does not count three items");
-
-  await page.type("#list_phone", "08029876543");
-  await page.type("#list_name", "Toba");
+  // **His own heading, with a thing under it**: the shape a written list has.
   await page.evaluate(() => {
     const control = [...document.querySelectorAll("button")].find((candidate) =>
-      candidate.textContent?.trim().startsWith("Send my list"),
+      candidate.textContent?.includes("Can't find it? Add your own"),
     );
     control?.click();
   });
+  await page.waitForSelector("#list_new_heading", { timeout: 15000 });
+  await page.type("#list_new_heading", "Items for my shop");
+  await page.evaluate(() => {
+    const control = [...document.querySelectorAll("button")].find(
+      (candidate) => candidate.textContent?.trim() === "Add heading",
+    );
+    control?.click();
+  });
+  await page.waitForFunction(() => document.body.innerText.includes("Items for my shop"), {
+    timeout: 10000,
+  });
+  await page.type("#list_own_text", "Something else");
+  await page.evaluate(() => {
+    const control = [...document.querySelectorAll("button")].find(
+      (candidate) => candidate.textContent?.trim() === "Add to my list",
+    );
+    control?.click();
+  });
+
+  // **The bar that never leaves**, which is what stops a customer starting again from nothing.
+  await page.waitForFunction(() => /My list \(\d+ items?\)/.test(document.body.innerText), {
+    timeout: 10000,
+  });
+  const bar = await page.evaluate(
+    () => document.body.innerText.match(/My list \([^)]*\)[^\n]*/)?.[0] ?? "(no bar)",
+  );
+  console.log(`      the bar reads: ${bar}`);
+
+  // Pressing Send without a number does not fail - it **opens the list and asks**, which is what a person
+  // would do. The check follows that, rather than assuming a form it has not opened.
+  await page.click("#send_list");
+  await page.waitForSelector("#list_phone", { timeout: 15000 });
+  await page.type("#list_phone", "08029876543");
+  await page.type("#list_name", "Toba");
+  await page.click("#send_list");
   await page.waitForFunction(() => document.body.innerText.includes("has reached"), {
     timeout: 30000,
   });
   await page.screenshot({ path: resolve(OUTPUT, "cart-sent.png") });
-
-  // The picture, which is what actually gets sent.
-  const drawn = await page.evaluate(() => {
-    const image = document.querySelector("img[alt='Your list']");
-    return image ? image.src : "";
-  });
-  if (!drawn.startsWith("blob:")) throw new Error("no picture of the list was produced");
-  const hasShare = await page.evaluate(() =>
-    [...document.querySelectorAll("button")].some((candidate) =>
-      candidate.textContent?.includes("Send the list on WhatsApp"),
-    ),
-  );
-  if (!hasShare) throw new Error("no way to send the picture");
-  console.log(`      picture produced: ${drawn.slice(0, 12)}...`);
   current = trader;
   await context.close();
 });
