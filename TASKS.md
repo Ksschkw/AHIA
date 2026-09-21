@@ -3605,3 +3605,90 @@ one device only, months later.
 **And the honest limit: it is not type-checked.** Three of the four libraries are not installed here, so `tsc`
 reports three "cannot find module" errors and nothing else - but with a module missing, TypeScript treats its
 types as `any`, so my usage of them is not checked either.
+
+# Domain inspection: catalogue hierarchy and flexible list-building
+
+Asked for before implementation, and it was right to ask. Below is what the code **actually does**, with the
+file and function named for each claim. Two of the six answers were surprises.
+
+## 1. What prevents arbitrary-depth hierarchies? Almost nothing - it is already built
+
+`categories` has a **self-referencing `parent_id`** (migration `9c1d2e3f4a5b`), nullable, with
+`ON DELETE SET NULL` so deleting a group never takes its children with it. There is **no depth column, no
+`group_id`/`subgroup_id`/`sub_subgroup_id`, and no table per level** - exactly the shape the clarification asks
+for. A product points at **any** node (`products.category_id`), so a branch can hold **both** further subgroups
+and selectable items, which the clarification also asks for and which I had not previously confirmed.
+
+Two bounds exist and neither is a schema limit: the **cycle walk** in `category_service` stops after 32 levels so
+a damaged tree cannot hang a request, and the **web's** group picker indents to 16 levels for display. Both are
+guards, not constraints on what can be stored.
+
+**So there is nothing to change here.** The hierarchy the clarification describes is the hierarchy the code
+already has.
+
+## 2. What prevents nested customer-created list structure? This one is real
+
+`request_lines` carries `free_text`, `note`, `quantity`, `unit`, `customer_price`, `shop_price`, cost and state.
+The **`note` field is currently being used as the heading** the customer picked, which gives a customer **one
+level** of their own structure: headings with lines under them, exactly what the cart builds today.
+
+There is **no parent/child between lines, and no customer-created node of any kind**. So:
+
+- a customer-created heading **with a sub-heading under it** is not representable today;
+- a free-text line is a line, never a container.
+
+The cart works around it by letting a line carry a heading in `note`. That is enough for "Privacy Glass / iPhone
+X650 x10" and **not** enough for the clarification's own example, which nests a customer heading
+("Items for my shop") with items under it *and* notes per item.
+
+## 3. Price inheritance: already there, and deeper than I had thought
+
+This is where I was wrong twice, in opposite directions, and the answer is the good one.
+
+`CategoryModel.inherited_price_defaults(ancestors)` **walks the ancestor chain**, most specific first, and it is
+**already in use**: `product_service` (line 269), and `storefront_service` twice (lines 160 and 450 - the second
+is what builds the public headings' prices). `resolve_price` then applies the rule the clarification states, in
+the same order: **own price, else the nearest ancestor's**, with the wholesale price falling back to the normal
+one when nobody set it.
+
+The clarification's own example - *all Privacy Glass is N350 wholesale, except Samsung S24 Ultra at N500* - is
+therefore **already expressible**: set N350 on the Privacy Glass node, and an override on the model. And the
+price a customer saw is **preserved on the request line** (`customer_price`), so a later catalogue change does
+not rewrite an existing request. That requirement is satisfied.
+
+## 4. What additive change is actually required? One, and it is small
+
+Everything in the clarification except **customer-created nesting** is already supported. The additive change is:
+
+- **`request_lines.parent_line_id`** - nullable, self-referencing, `ON DELETE CASCADE`, tenant-scoped. A line
+  with a parent is a heading; a line without one is at the top. That is the same shape as the catalogue's own
+  hierarchy, which is the point: **one idea, used twice**, rather than a second concept invented for lists.
+
+No API contract change is needed beyond carrying it: the public submit schema, the customer's own list view and
+the trader's workbench all already serialise lines, and each gains one optional field. **No change at all** is
+needed to the catalogue, to pricing, or to the lifecycle.
+
+## 5. The customer UI: the tree already comes down flat-with-a-parent
+
+The public payload already carries `groups` as a **flat list, each naming its parent** - which is what progressive
+browsing needs and what keeps arbitrary depth out of the interface. Search already exists in the cart, prices
+already come down, and free-text entry already works.
+
+What is missing for the clarification's UI: **breadcrumbs** (the cart has a heading chip and a back-to-all chip,
+which is a start and not the same thing), and the reveal-as-you-browse behaviour with items *and* subgroups in one
+list.
+
+## 6. The lifecycle: one clause of it is not implemented, and the docstring overclaims
+
+`confirm_request` flips `status` to confirmed, writes `request_confirmed` to the audit trail, and commits.
+**It does not create a sale, move stock, or write to the ledger.** Its own docstring says *"Turn a list into a
+sale - the one moment money exists"*, and that is currently **not true**.
+
+This matters because the clarification states it as a requirement: *"Confirmation is the point at which the list
+becomes a sale and the appropriate stock, ledger and receipt operations occur."* Creating the sale from a
+confirmed list is a **separate, unbuilt piece of work** - and my own reports have been loose about it: a browser
+check of mine says "the list became a sale" when what became true is that its **status** changed.
+
+**So this is the honest summary: of the six things the clarification asks for, four already exist, one needs a
+single additive column, and one - confirmation actually creating the sale - is missing and has been described as
+if it were done.**
