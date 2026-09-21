@@ -3338,6 +3338,8 @@ export interface components {
         PublicListLineSchema: {
             /** Position */
             position: number;
+            /** Parent Position */
+            parent_position: number | null;
             /** Text */
             text: string;
             /** Group */
@@ -3462,6 +3464,8 @@ export interface components {
             customer_price?: number | string | null;
             /** Image Key */
             image_key?: string | null;
+            /** Parent Position */
+            parent_position?: number | null;
         };
         /**
          * PublicRequestSchema

@@ -3780,3 +3780,14 @@ development tool rather than part of the build, and a half-edited check is worse
 
 Also not yet done for this screen: **the customer's live list page** (`/list/{shop}/{token}`, the one they come
 back to) still renders a flat list. It needs the same nesting treatment.
+
+- **The customer's own shape is now drawn on the live list page too** (`/list/{shop}/{token}` - the page they
+  come back to). A heading they wrote is shown as one, and what they put under it is indented beneath it with a
+  rule down its left - *an indent alone reads as a typo; a line down the side reads as "this belongs to that"*.
+  The shop's group is kept as a quieter label on the line itself, because it is the trader's word rather than
+  the customer's.
+  **Verified in a browser at 390x844 and 1440x900**: `html=true, lines=true, honestTotal=true, selfUpdating=true,
+  overflow=false, leaks=0`, exit 0 - and the earlier behaviours still hold, including the trader pricing a line
+  and the page noticing on its own.
+- The recursion that assembles it is safe by construction: **a parent is always an earlier line**, which is the
+  same rule that makes a cycle impossible to submit.

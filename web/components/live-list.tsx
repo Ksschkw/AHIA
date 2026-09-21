@@ -65,11 +65,36 @@ export function LiveList({
     };
   }, [slug, token]);
 
-  const headings = new Map<string, PublicList["lines"]>();
+  /**
+   * The list, put back into the shape the customer made.
+   *
+   * Two things can group a line here, and they are different. **His own headings** are lines he wrote, and the
+   * things under them point at them by position - that is his structure, and it nests. **The shop's headings**
+   * are the groups a catalogue item came from, which he never chose and which sit flat.
+   *
+   * His own shape wins, because it is the one he drew: a heading he made is where he expects to find what he
+   * put under it.
+   */
+  const byPosition = new Map(list.lines.map((line) => [line.position, line]));
+  const childrenOf = new Map<number | null, PublicList["lines"]>();
   for (const line of list.lines) {
-    const heading = line.group?.trim() || "Your list";
-    headings.set(heading, [...(headings.get(heading) ?? []), line]);
+    const under =
+      line.parent_position !== null && byPosition.has(line.parent_position)
+        ? line.parent_position
+        : null;
+    childrenOf.set(under, [...(childrenOf.get(under) ?? []), line]);
   }
+
+  /** A line and everything under it, in order. Recursion is safe because a parent is always earlier. */
+  function withChildren(line: PublicList["lines"][number], depth: number): { line: PublicList["lines"][number]; depth: number }[] {
+    const mine = childrenOf.get(line.position) ?? [];
+    return [
+      { line, depth },
+      ...mine.flatMap((child) => withChildren(child, depth + 1)),
+    ];
+  }
+
+  const shaped = (childrenOf.get(null) ?? []).flatMap((line) => withChildren(line, 0));
 
   return (
     <main className={styles.page}>
@@ -83,28 +108,30 @@ export function LiveList({
         </p>
       </header>
 
-      {[...headings.entries()].map(([heading, lines]) => (
-        <section key={heading} className={styles.section}>
-          <h2 className={styles.heading}>{heading}</h2>
-          <ul className={styles.items}>
-            {lines.map((line) => (
-              <li key={`${line.position}-${line.text}`} className={styles.item}>
-                <span className={styles.itemBody}>
-                  <span className={styles.itemName}>{line.text}</span>
-                  <span className={styles.itemMeta}>
-                    {line.quantity} pcs - {STATE_WORD[line.state] ?? line.state}
-                  </span>
+      <section className={styles.section}>
+        {/* **His own shape, drawn.** A line he wrote as a heading is shown as one; what he put under it is
+            indented beneath it. The shop's groups are a quieter label on the line itself, because they are the
+            trader's words rather than the customer's. */}
+        <ul className={styles.items}>
+          {shaped.map(({ line, depth }) => (
+            <li
+              key={`${line.position}-${line.text}`}
+              className={depth > 0 ? styles.itemUnder : styles.item}
+            >
+              <span className={styles.itemBody}>
+                <span className={depth > 0 ? styles.itemNameIn : styles.itemName}>{line.text}</span>
+                <span className={styles.itemMeta}>
+                  {line.quantity} pcs - {STATE_WORD[line.state] ?? line.state}
+                  {line.group ? ` - ${line.group}` : ""}
                 </span>
-                <span className={styles.itemPrice}>
-                  {line.shop_price
-                    ? formatMoneyOrOnRequest(line.shop_price)
-                    : "price to be confirmed"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+              </span>
+              <span className={styles.itemPrice}>
+                {line.shop_price ? formatMoneyOrOnRequest(line.shop_price) : "price to be confirmed"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
 
       <section className={styles.summary}>
         <span className={styles.totalLabel}>
