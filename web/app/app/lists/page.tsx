@@ -252,21 +252,7 @@ export default function Lists() {
 
                       <div className={styles.lineNumbers}>
                         <Field
-                          label="It cost me"
-                          id={`cost_${line.id}`}
-                          value={drafts[line.id]?.cost ?? ""}
-                          onChange={(value) =>
-                            setDrafts((current) => ({
-                              ...current,
-                              [line.id]: { cost: value, price: current[line.id]?.price ?? "" },
-                            }))
-                          }
-                          inputMode="decimal"
-                          placeholder={line.cost_price ?? "0.00"}
-                          optional
-                        />
-                        <Field
-                          label="I am selling for"
+                          label="Price"
                           id={`price_${line.id}`}
                           value={drafts[line.id]?.price ?? ""}
                           onChange={(value) =>
@@ -291,7 +277,6 @@ export default function Lists() {
                                 list.id,
                                 line.id,
                                 {
-                                  ...(typed.cost.trim() ? { cost_price: typed.cost.trim() } : {}),
                                   ...(typed.price.trim()
                                     ? { shop_price: typed.price.trim() }
                                     : {}),

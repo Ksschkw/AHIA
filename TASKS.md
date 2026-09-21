@@ -3791,3 +3791,24 @@ back to) still renders a flat list. It needs the same nesting treatment.
   and the page noticing on its own.
 - The recursion that assembles it is safe by construction: **a parent is always an earlier line**, which is the
   same rule that makes a cycle impossible to submit.
+
+## Product decision: the trader's screen asks for the price, and nothing else
+
+**"Nothing like 'it cost me... I am selling for'. In real life they never tell how much they got it, just put
+the price there bro. Just the price."**
+
+He is right, and it overturns something I had built in twice: the workbench asked him to type what he paid and
+what he charges, and showed what he made between them. **A trader knows what he paid. He does not write it
+down**, and asking him to turns his screen into a bookkeeper's form - which is exactly the sort of thing that
+makes a man go back to paper.
+
+So the line has **one box, labelled Price.** Verified in a browser: the fields on the screen are `price_...` and
+`adjust_...` and there is no `cost_...` at all, and the check fails if one ever comes back.
+
+**What this means underneath, said plainly**: the cost column still exists, the margin still computes when a
+cost is known, and nothing about the data was removed - but **the interface no longer asks**, so on a normal
+day there will be no cost and no margin shown. The number paper cannot give him is still there for anyone who
+does record costs, and it is no longer the price of using the app.
+
+The dispatch cost stays as it was: it is a different thing - what the trip cost, which he *does* know and does
+need when he works out whether the run was worth making - and it is optional.

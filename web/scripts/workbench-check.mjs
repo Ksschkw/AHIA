@@ -108,7 +108,7 @@ await step("a shop with a list waiting", async () => {
   });
 });
 
-await step("he marks the line, costs it, prices it, and sees what he makes", async () => {
+await step("he marks the line, prices it, and sees what it comes to", async () => {
   await page.goto(`${APP_URL}/app/lists`, { waitUntil: "networkidle2" });
   await page.waitForFunction(() => document.body.innerText.includes("Toba"), { timeout: 30000 });
   await page.evaluate(() => {
@@ -117,7 +117,7 @@ await step("he marks the line, costs it, prices it, and sees what he makes", asy
     );
     control?.click();
   });
-  await page.waitForSelector(`#cost_${ids.lineId}`, { timeout: 20000 });
+  await page.waitForSelector(`#price_${ids.lineId}`, { timeout: 20000 });
 
   // "I will buy it" - the market case, which is the one paper cannot account for.
   await page.evaluate(() => {
@@ -127,21 +127,22 @@ await step("he marks the line, costs it, prices it, and sees what he makes", asy
     control?.click();
   });
 
-  await fill(`#cost_${ids.lineId}`, "280.00");
+  // **The price, and only the price.** There is no cost box, which is the point: a trader knows what he paid,
+  // and asking him to type it turns his screen into a bookkeeper's form.
+  const thereIsNoCostBox = await page.evaluate(
+    () => document.querySelectorAll("input[id^='cost_']").length === 0,
+  );
+  if (!thereIsNoCostBox) throw new Error("a cost field is still on the trader's screen");
+
   await fill(`#price_${ids.lineId}`, "350.00");
   await pressById(`#save_${ids.lineId}`);
 
-  // What he made on the line, which is the number paper has never been able to give him.
-  await page.waitForFunction(() => document.body.innerText.includes("you make"), { timeout: 30000 });
+  await page.waitForFunction(() => document.body.innerText.includes("Comes to"), { timeout: 30000 });
   const facts = await page.evaluate(() => {
     const text = document.body.innerText;
-    return {
-      total: text.match(/Comes to [^\n]*/)?.[0] ?? "(no total)",
-      made: text.match(/you make [^\n]*/)?.[0] ?? "(no margin)",
-      unpriced: text.match(/\d+ (line|lines) (has|have) no price/)?.[0] ?? "(nothing unpriced)",
-    };
+    return { total: text.match(/Comes to [^\n]*/)?.[0] ?? "(no total)" };
   });
-  console.log(`      ${facts.total} - ${facts.made}`);
+  console.log(`      ${facts.total}`);
   await page.screenshot({ path: resolve(OUTPUT, "workbench-priced.png") });
 
   // And the whole list can become a sale, because everything on it is priced - which asks who is holding the
