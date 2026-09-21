@@ -3869,3 +3869,161 @@ were not**. That is the remaining work, and it is mechanical rather than difficu
 first render, paint it, then ask. I wrote a shared hook for exactly that, then noticed I had not used it in the
 pages I had just written - and **deleted it rather than ship an abstraction that one half of the app uses**.
 A helper nobody calls is worse than the repetition it was meant to remove.
+
+---
+
+# HANDOVER: everything outstanding, described to the minute
+
+Written for the next agent, or for me after a break. Everything below is **not done** unless it says otherwise.
+The rule for this section: if it is here, it was asked for and has not been built.
+
+## 1. URGENT: sending a list on the live shop still fails, and the cause is known to the line
+
+**Symptom** (photographed by the product owner, 21 September): the customer presses "Send my list" and reads
+*"We could not reach the shop. Check your connection and try again."*
+
+**Diagnosed by curl, twice, and it is not the API:**
+
+    POST https://useahia-hazel.vercel.app/shop/kosi-s-pot/requests
+      307  location: http://p01--ahia-api--qw5xhkblp8hy.code.run/shop/kosi-s-pot/requests
+
+The rewrite is proxying to **plaintext HTTP**, the platform will not proxy that, so it redirects - and the body is
+gone by the time it arrives, so the API answers `INVALID_REQUEST`.
+
+**The fix is already written and committed** (`2b0be9c`, `withScheme` in `web/next.config.ts`, which raises a
+bare hostname *and* a remote `http://` to `https://`). **It is not deployed.** Proof: the fixed code could not
+emit an `http://` destination, and the live site still does. So:
+
+1. **Redeploy Vercel from the latest commit, with the build cache cleared.**
+2. Check the environment variable while there: `API_PROXY_TARGET` should be
+   `https://p01--ahia-api--qw5xhkblp8hy.code.run` (or just the hostname - the code now handles both).
+3. Re-run the curl above and confirm it answers **201**, not 307.
+
+## 2. The buyer's journey has too many taps
+
+His words: *"I do not want to have to tap too many things as a buyer."* Today, adding one catalogue item is:
+type in search (1) -> tap Add (2) -> open the list bar to set a quantity (3). Work to do:
+
+- **Quantity where the item is added.** A stepper on the search result row, or a tap that adds one and leaves a
+  "+1" control in place, so adjusting never requires opening anything.
+- **The list review should not be a separate step** for the common case: the bar should allow editing inline.
+- **One tap from search result to list**, with the quantity adjustable from the bar without expanding it.
+
+## 3. Reusing and editing an old list, by phone number - **not built**
+
+This was in the original brief and it is the single biggest missing feature for a returning customer:
+*"if he wants to add anything to that same list it'll update automatically"* and *"the buyer is remembered by a
+cookie"*, and *"next time you will not start from nothing"*.
+
+What exists: the **phone number is remembered on the device** (`ahia.customer.phone`) and the session cookies
+carry the list address. What does **not**:
+
+- **No way to reopen a previous list.** `GET /api/v1/tenants/{id}/requests` is the *trader's* endpoint and needs a
+  session. A customer has no endpoint that answers "the lists this phone number has sent to this shop".
+  **Needed**: a public read, scoped to the shop and the phone number, verified the same way the list token is -
+  or, more simply, the customer's own list links kept on the device (`localStorage`) so the list screen offers
+  "your last list" without any new endpoint.
+- **No way to edit a submitted list.** The API has no customer-facing update path. **Needed**:
+  `PATCH /shop/{shop}/requests/{token}` accepting added, changed and removed lines, refused once the list is
+  confirmed (a change to a sale is a return, not an edit).
+- **No "start from my last list"** - the flow that makes the second order take thirty seconds instead of five
+  minutes.
+
+## 4. Auto-save on every entry - **not built**
+
+*"Why are we not auto saving on every entry? It would be frustrating if I accidentally go back or it refreshes
+without stuff I already did saving."*
+
+Today the customer's list lives in React state only: a refresh, a back gesture or a dead battery loses it. The
+phone number and name are the only things kept. **Work:**
+
+- Persist the **draft list** to `localStorage` on every change (lines, quantities, headings, notes), keyed by the
+  shop, and restore it on load.
+- Show it rather than hide it: if a draft was restored, say so once - *"we kept your list from last time"* - with
+  a way to clear it.
+- Clear the draft when the list is sent successfully.
+
+## 5. Grouping and infinite nesting are missing from the list itself
+
+*"Why is that list not showing the separation by the group? I see 2 Hot 8 there, but 1 of them is supposed to be
+under privacy and the other under 21D."* and *"what about the sub group and sub group of subgroup... infinite
+nesting?"*
+
+**The data supports all of it; the interface shows one level.** What exists and what does not:
+
+- **The catalogue is arbitrarily deep** - `categories.parent_id`, self-referencing, no depth column, no level
+  limits. Proven.
+- **A customer's own headings nest** - `request_lines.parent_line_id`, `ON DELETE CASCADE`, parent named by
+  position. Proven end to end, including that a loop cannot be submitted.
+- **What the screens do with it**: the live list page draws **one** level of the customer's own headings; the
+  trader's workbench shows a line's `note` and **not** the heading it was added under; the item's **shop group**
+  arrives in `group_name` and is shown as a small label only on the live page.
+
+**Work, in order:**
+
+1. **Nest without limit** on both the customer's list and the trader's workbench - recursive rendering, not a
+   fixed two levels. The recursion is safe because a parent is always an earlier line.
+2. **Show the shop's group on every line in the trader's view**, so two identically-named items are distinguishable
+   by where they came from - "Hot 8 (Privacy)" and "Hot 8 (21D)" are different goods at different prices.
+3. **Let the customer's own heading and the shop's group coexist visibly**: the customer's heading is the
+   structure; the shop's group is a label on the line.
+4. **The list-builder's grouping** must group the submitted payload the same way the screen showed it, so what
+   the trader opens matches what the customer built.
+
+## 6. Confirmation creating the sale - designed, not built
+
+The design and the one open decision are in the section above this one ("Confirmation creating the sale: the
+design, settled from the contracts"). Summary: one sale line per catalogue line at the trader's price, recorded
+**unpaid** through `complete_sale` (which moves stock, writes the ledger, issues the receipt), free-text lines
+recorded but not sold, and **a list of nothing but free text confirms with no sale** - my recommendation, pending
+his answer.
+
+## 7. The interface still needs polish
+
+His word for it. Concrete, from the screenshots and his complaints:
+
+- **Group rows and item rows look alike.** In the browse list, a heading and a thing read the same way; headings
+  need to look like containers (folder-ish, indented children, a count) and things like things.
+- **The empty space above "Or look through the shop"** is the search section collapsing when the query is empty.
+- **The bar's three columns** (count, total, action) are cramped at 390px with long text - the total wrapped onto
+  its own line in his screenshot.
+- **Nothing tells him he is offline** or that a send failed for a network reason rather than a real refusal.
+- Every screen should **paint from cache before asking** (section 8).
+
+## 8. Cache-first paint is on two screens out of seven - **the "it reloads every time" complaint**
+
+The dashboard and the lists screen paint what the browser holds before asking. **Prices, team, profile, sales and
+items do not** - each starts with `loading` and shows a spinner even when the answer is already in the browser.
+`lib/api.ts` has `cachedRead` and `remember`; the pattern is: initialise state **during the first render** from
+`cachedRead(path)`, and only show a spinner when that returns nothing.
+
+I wrote a shared `useCachedRead` hook for this and **deleted it rather than ship it half-used** - if it comes
+back, it comes back applied to every screen at once.
+
+## 9. The mobile application
+
+Foundation committed, **never run**: `cd mobile && npm install && npx expo start -c`. The last failure was
+`Unable to resolve "expo-linear-gradient"` because the packages were declared and never installed. Once running:
+the shelf from a local store, the outbox that makes "sell one" work with no signal, then the lists workbench.
+Releases: Android APK on a GitHub Release; iOS by TestFlight only.
+
+## 10. Housekeeping for the product owner, not for an agent
+
+- **Rotate the Neon password.** A command of mine echoed it into a chat log.
+- **`.env` holds the dead Neon password, `.env.deploy` the live one.** Confirm which each target reads.
+- **The local development database has 152 test businesses** and they **cannot be deleted**: the audit trail is
+  append-only and the trigger refuses (`audit_events is append-only: record a compensating event instead`). To
+  clear a development database, rebuild it: `dropdb ahia_dev && createdb ahia_dev && alembic upgrade head`.
+  Production was cleaned: **6 test lists removed, 2 businesses intact**, trigger verified armed afterwards.
+
+## 11. What has been verified, so nobody re-does it
+
+- The catalogue hierarchy: arbitrary depth, inherited prices through ancestors, overrides, exceptions flagged
+  (`is_special`), all published in the shop payload.
+- Customer nesting: submitted, stored, read back, and a loop is impossible.
+- The trader's workbench: one box - the price - and the confirmation asks for the PIN.
+- The PIN gate: set, asked, refused when wrong, accepted when right, on price changes, staff removal and
+  confirmation.
+- The shop is server-rendered with its prices in the markup; **the app's first paint comes from the cache**,
+  measured against a five-second network delay (1198ms).
+- Dispatch: the transporter, the waybill number, the cost and the tracking link, through the API and on screen.
