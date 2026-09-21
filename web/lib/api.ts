@@ -155,6 +155,7 @@ function remember(key: string, value: unknown): void {
 
 /** Forget everything. Called after any write, because a write is the only thing that invalidates a read. */
 export function forgetEverythingFetched(): void {
+  forgetResolution();
   READ_CACHE.clear();
   if (typeof window === "undefined") {
     return;
@@ -368,8 +369,31 @@ export function signOut(): Promise<Schemas["LogoutSchema"]> {
  * The session bootstrap. There is no token to inspect in the browser, so the only honest way to know
  * whether somebody is signed in is to ask the API with the cookie attached.
  */
+/**
+ * Who is signed in, remembered for as long as they are.
+ *
+ * **This and the two below were the real cause of every tap feeling like a reload.** Each screen asked for the
+ * user, then the businesses, then the business detail, and only then its own data - four round trips before a
+ * spinner could stop, on a page the browser already had everything for. A session does not change between two
+ * taps, so it is asked for once.
+ */
+let signedInUser: UserProfile | null = null;
+let businessesForSession: TenantSummary[] | null = null;
+const businessDetails = new Map<string, Tenant>();
+
+/** Forget what was resolved: for a sign-out, a failed refresh, or a business just created. */
+export function forgetResolution(): void {
+  signedInUser = null;
+  businessesForSession = null;
+  businessDetails.clear();
+}
+
 export function currentUser(): Promise<UserProfile> {
-  return request<UserProfile>("/api/v1/users/me");
+  if (signedInUser) return Promise.resolve(signedInUser);
+  return request<UserProfile>("/api/v1/users/me").then((user) => {
+    signedInUser = user;
+    return user;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -377,11 +401,20 @@ export function currentUser(): Promise<UserProfile> {
 // ---------------------------------------------------------------------------
 
 export function listBusinesses(): Promise<TenantSummary[]> {
-  return request<TenantSummary[]>("/api/v1/tenants");
+  if (businessesForSession) return Promise.resolve(businessesForSession);
+  return request<TenantSummary[]>("/api/v1/tenants").then((businesses) => {
+    businessesForSession = businesses;
+    return businesses;
+  });
 }
 
 export function getBusiness(tenantId: string): Promise<Tenant> {
-  return request<Tenant>(`/api/v1/tenants/${tenantId}`);
+  const known = businessDetails.get(tenantId);
+  if (known) return Promise.resolve(known);
+  return request<Tenant>(`/api/v1/tenants/${tenantId}`).then((business) => {
+    businessDetails.set(tenantId, business);
+    return business;
+  });
 }
 
 /** The business's own details: its name, where it is, and what it trades in. */
@@ -435,6 +468,9 @@ export function createBusiness(input: {
   currency?: string;
   timezone?: string;
 }): Promise<Tenant> {
+  // The list this session remembers is now one short, so it is forgotten rather than corrected: the next read
+  // asks, and asking is the only way to be sure.
+  businessesForSession = null;
   return request<Tenant>("/api/v1/tenants", {
     method: "POST",
     body: {

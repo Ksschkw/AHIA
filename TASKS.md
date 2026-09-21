@@ -4027,3 +4027,22 @@ Releases: Android APK on a GitHub Release; iOS by TestFlight only.
 - The shop is server-rendered with its prices in the markup; **the app's first paint comes from the cache**,
   measured against a five-second network delay (1198ms).
 - Dispatch: the transporter, the waybill number, the cost and the tracking link, through the API and on screen.
+
+## The two things he was angry about, fixed and measured
+
+**"Every page tap still refreshes."** It was never the cache alone. Every screen asked for the **user**, then the
+**business list**, then the **business detail**, and only then its own data - four round trips before a spinner
+could possibly stop, on a page the browser already had everything for. A session does not change between two
+taps, so it is now asked for once and remembered (`lib/api.ts`: `currentUser`, `listBusinesses`, `getBusiness`,
+with `forgetResolution` on sign-out, on a failed refresh, and when a business is created).
+
+**Measured, not assumed**: tapping from the shelf to Sales now costs **0 API requests** and its content is on
+screen **47ms** after the tap. A check (`scripts/navigation-check.mjs`) counts the requests a tap causes, so this
+cannot quietly regress.
+
+**"The send still does not work."** The live site is still proxying to `http://`, which my committed fix cannot
+produce - so Vercel is serving a build from before it. Rather than depend on the variable being set correctly,
+**the code now knows where the API is**: a deployed build with `API_PROXY_TARGET` missing or empty uses the
+deployed API directly, and `http://` to any remote host is raised to `https://`. Proven across four cases: unset
+on a deployment, unset locally, a bare hostname, and an explicit `http://` remote. **A redeploy is still needed**
+- the code cannot change what is already running - but after it, the send works whatever the variable says.

@@ -23,9 +23,17 @@ import type { NextConfig } from "next";
  * A missing scheme is a mistake waiting to be made by whoever sets the variable next, so it is corrected here
  * rather than in a deployment instruction nobody reads at the moment they need it.
  */
+//: The deployed API, used when this is a deployed build and the variable is missing or empty. Written here
+//: because a deployment whose variable was never set falls back to `localhost` - which is not a configuration
+//: mistake a customer should ever experience, and the exact thing that made "Send my list" fail in production.
+const DEPLOYED_API = "https://p01--ahia-api--qw5xhkblp8hy.code.run";
+
 function withScheme(target: string): string {
   const trimmed = target.trim().replace(/\/+$/, "");
-  if (trimmed === "") return "http://127.0.0.1:8000";
+  if (trimmed === "") {
+    // On Vercel, or any build outside a developer's machine, the API is not local.
+    return process.env.VERCEL || process.env.NODE_ENV === "production" ? DEPLOYED_API : "http://127.0.0.1:8000";
+  }
   // Anything that is not already a scheme is treated as a hostname, and a deployed hostname is TLS: the API
   // refuses plaintext and the platform refuses to proxy it.
   const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
