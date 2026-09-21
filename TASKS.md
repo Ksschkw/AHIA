@@ -3719,3 +3719,35 @@ only produce this failure.
 **The deployment still needs its variable corrected and a redeploy** (`API_PROXY_TARGET` with `https://`, or just
 the hostname, now that either works). The code fix protects whoever sets it next; it cannot change what is
 already deployed.
+
+## Implemented: a customer's own headings can nest (the clarification's missing piece)
+
+The inspection found one genuinely missing thing, and it is now built and proven. A submitted list can carry the
+customer's own structure:
+
+    [0] Items for my shop      x1  (heading)
+        under line 0  [1] Something else   x20  (matte, if available)
+        under line 0  [2] iPhone X650      x10
+    [3] Plain line with no heading  x2
+
+That is the clarification's own example - a customer heading, the items under it, and a note on one of them.
+
+**How a stranger's browser names a parent**: by **position in its own submission**, because the lines do not exist
+yet and there are no identifiers to send. The service assigns every identifier **before** it writes anything, so
+a line names its parent and the whole list is inserted in one pass - no second update, and no moment where a
+heading exists without its contents.
+
+**And a loop cannot be expressed at all.** A parent must be a line that came **before** it, which is one rule and
+makes cycles impossible rather than something to detect afterwards. Proven: a submission whose parent comes after
+its child answers **422**.
+
+The column is `request_lines.parent_line_id`, nullable, self-referencing, `ON DELETE CASCADE` - **the same shape
+as the catalogue's own hierarchy**, used a second time. It is the customer's structure: it never touches the
+trader's catalogue.
+
+**And the same bug I have now fixed four times appeared a fourth time**: the entity field, the migration and the
+store were all correct, and **the service never passed it to the constructor** - so the database stored nulls and
+the API answered perfectly with an empty shape. Caught by looking at the stored row and the response rather than
+at the code that "should" have worked.
+
+645 model and schema tests pass; ruff, formatting and mypy clean.

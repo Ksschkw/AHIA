@@ -263,6 +263,10 @@ class RequestService:
             )
 
         lines: list[RequestLineModel] = []
+        # One identifier per position, decided before anything is written: a line names its parent
+        # by the position the customer gave it, and this is what that position becomes.
+        identifiers = [uuid4() for _ in payload.lines]
+
         for position, line in enumerate(payload.lines):
             product_id: UUID | None = None
             free_text = line.free_text
@@ -290,9 +294,22 @@ class RequestService:
 
             unit = line.unit
             pieces_per_pack = line.pieces_per_pack
+            parent_line_id: UUID | None = None
+            if line.parent_position is not None:
+                # A parent must be a line that came **before** this one. That rule alone makes a
+                # cycle impossible to express, so there is nothing to detect later.
+                if line.parent_position >= position:
+                    raise InvalidInputError(
+                        operation="submit_customer_list",
+                        entity="request_line",
+                        identifier=str(position),
+                        detail="a heading must come before the lines it contains",
+                    )
+                parent_line_id = identifiers[line.parent_position]
+
             lines.append(
                 RequestLineModel(
-                    id=uuid4(),
+                    id=identifiers[position],
                     request_id=request_id,
                     tenant_id=tenant_id,
                     position=position,
@@ -304,6 +321,7 @@ class RequestService:
                     pieces_per_pack=pieces_per_pack,
                     customer_price=line.customer_price,
                     image_key=line.image_key,
+                    parent_line_id=parent_line_id,
                     created_at=now,
                 )
             )
@@ -339,6 +357,7 @@ class RequestService:
             tenant = await tenant_crud.get_by_id(session, request.tenant_id)
 
         priced = [line.line_total for line in lines if line.line_total is not None]
+        position_by_id = {line.id: line.position for line in lines}
         return PublicListSchema(
             business_name=tenant.name if tenant is not None else "",
             tenant_slug=tenant.slug if tenant is not None else "",
@@ -349,6 +368,13 @@ class RequestService:
             lines=[
                 PublicListLineSchema(
                     position=line.position,
+                    # Positions, because they are what the customer's own screen knows. The
+                    # stored shape uses identifiers, so here one becomes the other.
+                    parent_position=(
+                        position_by_id.get(line.parent_line_id)
+                        if line.parent_line_id is not None
+                        else None
+                    ),
                     text=line.free_text or "From the shop",
                     group=line.note,
                     quantity=quantity_text(line.quantity),

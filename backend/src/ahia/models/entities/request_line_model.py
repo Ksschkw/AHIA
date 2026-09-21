@@ -63,6 +63,20 @@ class RequestLineState(StrEnum):
     CANNOT_GET = "cannot_get"
 
 
+def _require_not_own_parent(line: RequestLineModel) -> None:
+    """Refuse a line that hangs under itself.
+
+    One node is all this can see: whether a chain of headings loops is a question
+    about a whole list, answered where the list is assembled. What this catches needs no
+    context, so it cannot be stored wrong in the first place.
+    """
+    if line.parent_line_id is not None and line.parent_line_id == line.id:
+        raise ValueError(
+            f"request_line_id={line.id} cannot hang under itself: a heading is not "
+            "a list, and walking it would never come back"
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class RequestLineModel:
     """One item on one customer's list."""
@@ -83,8 +97,13 @@ class RequestLineModel:
     cost_price: Decimal | None = None
     state: RequestLineState = RequestLineState.SOMEWHERE
     image_key: str | None = None
+    #: The line this one sits under, when the customer wrote a heading and put things beneath it.
+    #: None means it stands at the top of their list. It is the customer's own structure: it says
+    #: nothing about the trader's catalogue and never changes it.
+    parent_line_id: UUID | None = None
 
     def __post_init__(self) -> None:
+        _require_not_own_parent(self)
         if self.created_at.tzinfo is None or self.created_at.utcoffset() is None:
             raise EntityInvariantError(
                 operation="build_request_line",

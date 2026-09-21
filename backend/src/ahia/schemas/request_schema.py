@@ -68,6 +68,10 @@ class PublicRequestLineSchema(BaseModel):
     customer_price: Money | None = None
     #: A photograph of the thing they mean, which needs no words from either side.
     image_key: Annotated[str, StringConstraints(max_length=512)] | None = None
+    #: The line this one sits under, named by its position in this submission: the
+    #: customer's own heading, with their things beneath it. **A parent must come
+    #: before its child**, so a loop cannot be expressed at all.
+    parent_position: Annotated[int, Field(ge=0)] | None = None
 
 
 class PublicRequestSchema(BaseModel):
@@ -131,6 +135,8 @@ class PublicListLineSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     position: int
+    #: The position of the line this one sits under, or None when it stands at the top of the list.
+    parent_position: int | None
     text: str
     group: str | None
     quantity: str

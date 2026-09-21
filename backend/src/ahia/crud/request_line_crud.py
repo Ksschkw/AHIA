@@ -65,6 +65,9 @@ class RequestLineRecord(Base):
     )
     state: Mapped[str] = mapped_column(String(_STATE_LENGTH), nullable=False)
     image_key: Mapped[str | None] = mapped_column(String(_IMAGE_KEY_LENGTH), nullable=True)
+    parent_line_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("request_lines.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (Index("ix_request_lines_request_position", "request_id", "position"),)
@@ -87,6 +90,7 @@ def to_entity(record: RequestLineRecord) -> RequestLineModel:
         cost_price=record.cost_price,
         state=RequestLineState(record.state),
         image_key=record.image_key,
+        parent_line_id=record.parent_line_id,
         created_at=record.created_at,
     )
 
@@ -106,6 +110,7 @@ def apply_entity(record: RequestLineRecord, entity: RequestLineModel) -> None:
     record.cost_price = entity.cost_price
     record.state = entity.state.value
     record.image_key = entity.image_key
+    record.parent_line_id = entity.parent_line_id
     record.created_at = entity.created_at
 
 
