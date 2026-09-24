@@ -50,10 +50,12 @@ import {
   createProduct,
   currentUser,
   dailySales,
+  firstPaint,
   listBusinesses,
   listExpenseCategories,
   listProductImages,
   cachedRead,
+  rememberedBusinessId,
   listProducts,
   listSales,
   listStock,
@@ -103,14 +105,20 @@ export default function Dashboard() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [businesses, setBusinesses] = useState<TenantSummary[]>([]);
   const [businessDetail, setBusinessDetail] = useState<Tenant | null>(null);
-  const [businessId, setBusinessId] = useState<string | null>(null);
+  const [businessId, setBusinessId] = useState<string | null>(() => rememberedBusinessId());
   //: Whether the list has been read yet. "No business" is a fact about the data, not an event
   //: that can be missed while a screen is mounting - which is exactly how a trader ends up on a
   //: dashboard with no business and no way to name one.
   const [businessesLoaded, setBusinessesLoaded] = useState(false);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>(() =>
+    firstPaint<Product[]>(rememberedBusinessId(), (id) => `/api/v1/tenants/${id}/products`) ?? [],
+  );
   //: "loading" until the first answer arrives, so an empty shelf is never asserted before it is known.
-  const [shelfState, setShelfState] = useState<"loading" | "ready">("loading");
+  const [shelfState, setShelfState] = useState<"loading" | "ready">(() =>
+    rememberedBusinessId() && cachedRead(`/api/v1/tenants/${rememberedBusinessId()}/products`)
+      ? "ready"
+      : "loading",
+  );
   const [stock, setStock] = useState<InventoryLevel[]>([]);
   const [today, setToday] = useState<DailySalesSummary | null>(null);
   const [recentSales, setRecentSales] = useState<SaleSummary[]>([]);
@@ -233,14 +241,14 @@ export default function Dashboard() {
       if (typeof window !== "undefined") {
         window.localStorage.setItem(STORAGE_KEY, tenantId);
       }
-      // Everything that belongs to the business being left is dropped before anything about the new
-      // one is fetched. Showing the last shop's shelf under the new shop's name is worse than showing
-      // nothing: it is exactly the kind of number a trader would act on.
-      setProducts([]);
-      // **Only if there is nothing to show.** A trader who comes back to his shelf sees his shelf; setting
-      // this to "loading" unconditionally is what made every return look like a first visit, with the words
-      // "Fetching your shelf" over data the browser was already holding.
-      setShelfState((current) => (current === "ready" ? "ready" : "loading"));
+      const rememberedProducts = cachedRead<Product[]>(`/api/v1/tenants/${tenantId}/products`);
+      if (rememberedProducts) {
+        setProducts(rememberedProducts);
+        setShelfState("ready");
+      } else {
+        setProducts([]);
+        setShelfState("loading");
+      }
       setStock([]);
       setToday(null);
       setRecentSales([]);

@@ -23,7 +23,7 @@
  * under it, and can put a heading under that. Nothing he writes touches the trader's catalogue.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { formatMoneyOrOnRequest } from "@/lib/format";
 import styles from "./list-builder.module.css";
@@ -74,7 +74,34 @@ function priceOf(value: string | null): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function parseQuickPaste(raw: string): Array<{ text: string; quantity: number }> {
+  return raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => {
+      const leadingMatch = line.match(/^(\d+)\s*(?:x\s*|\*|\s+|-)?\s*(.+)$/i);
+      if (leadingMatch && leadingMatch[2].trim().length > 0) {
+        return {
+          quantity: Math.max(1, parseInt(leadingMatch[1], 10)),
+          text: leadingMatch[2].trim(),
+        };
+      }
+      const trailingMatch = line.match(/^(.+?)\s*(?:-|\:|\s)\s*(\d+)\s*(?:pcs|pieces|pack|packs|ctn)?$/i);
+      if (trailingMatch && trailingMatch[1].trim().length > 0) {
+        return {
+          quantity: Math.max(1, parseInt(trailingMatch[2], 10)),
+          text: trailingMatch[1].trim(),
+        };
+      }
+      return { quantity: 1, text: line };
+    });
+}
+
 export function ListBuilder({ shop }: { shop: ListShop }) {
+  const draftKey = `ahia.draft.${shop.tenant_slug}`;
+  const historyKey = `ahia.history.${shop.tenant_slug}`;
+
   const [query, setQuery] = useState("");
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [chosen, setChosen] = useState<ChosenLine[]>([]);
@@ -95,10 +122,63 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
   const [sent, setSent] = useState<number | null>(null);
   const [picture, setPicture] = useState<string | null>(null);
 
+  const [restoredDraft, setRestoredDraft] = useState(false);
+  const [lastList, setLastList] = useState<ChosenLine[] | null>(null);
+  const [isOffline, setIsOffline] = useState(false);
+  const [quickPaste, setQuickPaste] = useState(false);
+  const [quickPasteText, setQuickPasteText] = useState("");
+
   const headings = chosen.filter((line) => line.isHeading);
   const items = chosen.filter((line) => !line.isHeading);
   const total = items.reduce((running, line) => running + priceOf(line.price) * line.quantity, 0);
   const toBePriced = items.filter((line) => line.price === null).length;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    setIsOffline(!navigator.onLine);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const rawDraft = window.localStorage.getItem(draftKey);
+      if (rawDraft) {
+        const parsed = JSON.parse(rawDraft);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setChosen(parsed);
+          setRestoredDraft(true);
+        }
+      } else {
+        const rawHistory = window.localStorage.getItem(historyKey);
+        if (rawHistory) {
+          const parsed = JSON.parse(rawHistory);
+          if (Array.isArray(parsed) && parsed.length > 0 && Array.isArray(parsed[0].lines)) {
+            setLastList(parsed[0].lines);
+          }
+        }
+      }
+    } catch {
+      // Ignore parse failure
+    }
+  }, [draftKey, historyKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (sent !== null) return;
+    if (chosen.length > 0) {
+      window.localStorage.setItem(draftKey, JSON.stringify(chosen));
+    } else {
+      window.localStorage.removeItem(draftKey);
+    }
+  }, [chosen, draftKey, sent]);
 
   /** What search turns up: everything at every depth, because the customer should not have to guess a level. */
   const found = useMemo(() => {
@@ -133,20 +213,27 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
   }, [openGroup, shop.products]);
 
   function addProduct(product: ListShopProduct, under: string | null = null) {
-    setChosen((current) => [
-      ...current,
-      {
-        key: `item-${product.product_slug}-${current.length}`,
-        productSlug: product.product_slug,
-        text: product.name,
-        quantity: 1,
-        price: product.selling_price,
-        underKey: under,
-        isHeading: false,
-        note: "",
-      },
-    ]);
-    setQuery("");
+    setChosen((current) => {
+      const existing = current.find((line) => line.productSlug === product.product_slug);
+      if (existing) {
+        return current.map((line) =>
+          line.key === existing.key ? { ...line, quantity: line.quantity + 1 } : line,
+        );
+      }
+      return [
+        ...current,
+        {
+          key: `item-${product.product_slug}-${Date.now()}-${current.length}`,
+          productSlug: product.product_slug,
+          text: product.name,
+          quantity: 1,
+          price: product.selling_price,
+          underKey: under,
+          isHeading: false,
+          note: "",
+        },
+      ];
+    });
     setProblem(null);
   }
 
@@ -195,9 +282,13 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
 
   function changeQuantity(key: string, delta: number) {
     setChosen((current) =>
-      current.map((line) =>
-        line.key === key ? { ...line, quantity: Math.max(1, line.quantity + delta) } : line,
-      ),
+      current
+        .map((line) => {
+          if (line.key !== key) return line;
+          const next = line.quantity + delta;
+          return next <= 0 ? null : { ...line, quantity: next };
+        })
+        .filter((line): line is ChosenLine => line !== null),
     );
   }
 
@@ -331,6 +422,22 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
         setProblem(body?.error?.message ?? "The list did not go through. Try again.");
         return;
       }
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(draftKey);
+        try {
+          const past = JSON.parse(window.localStorage.getItem(historyKey) ?? "[]");
+          const record = {
+            date: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+            count: items.length,
+            lines: ordered,
+          };
+          const updated = [record, ...(Array.isArray(past) ? past.slice(0, 4) : [])];
+          window.localStorage.setItem(historyKey, JSON.stringify(updated));
+        } catch {
+          // ignore error saving local history
+        }
+      }
+      setRestoredDraft(false);
       setSent(body?.line_count ?? items.length);
     } catch {
       setProblem("We could not reach the shop. Check your connection and try again.");
@@ -405,6 +512,58 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
         )}
       </header>
 
+      {isOffline ? (
+        <div className={styles.offlineAlert}>
+          You are offline right now. Your list is saved safely on your phone and will be ready to send when your network returns.
+        </div>
+      ) : null}
+
+      {restoredDraft && items.length > 0 ? (
+        <div className={styles.bannerNotice}>
+          <span className={styles.bannerText}>
+            We kept your list from earlier ({items.length} {items.length === 1 ? "item" : "items"}).
+          </span>
+          <button
+            type="button"
+            className={styles.bannerAction}
+            onClick={() => {
+              setChosen([]);
+              setRestoredDraft(false);
+              if (typeof window !== "undefined") window.localStorage.removeItem(draftKey);
+            }}
+          >
+            Start fresh
+          </button>
+        </div>
+      ) : null}
+
+      {!restoredDraft && chosen.length === 0 && lastList && lastList.length > 0 ? (
+        <div className={styles.historyPrompt}>
+          <div className={styles.historyHeader}>
+            <span className={styles.historyTitle}>
+              Start from your previous list? ({lastList.filter((l) => !l.isHeading).length} items)
+            </span>
+            <button
+              type="button"
+              className={styles.bannerAction}
+              onClick={() => setLastList(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+          <button
+            type="button"
+            className={styles.historyAction}
+            onClick={() => {
+              setChosen(lastList);
+              setLastList(null);
+            }}
+          >
+            Load previous list
+          </button>
+        </div>
+      ) : null}
+
       <section className={styles.section}>
         <label className={styles.searchLabel} htmlFor="list_search">
           What are you looking for?
@@ -418,25 +577,50 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
         />
         {found.length > 0 ? (
           <ul className={styles.rows}>
-            {found.map((product) => (
-              <li key={product.product_slug} className={styles.row}>
-                <span className={styles.rowBody}>
-                  <span className={styles.rowName}>{product.name}</span>
-                  <span className={styles.rowMeta}>
-                    {product.group_name ? `${product.group_name} - ` : ""}
-                    {formatMoneyOrOnRequest(product.selling_price)}
+            {found.map((product) => {
+              const currentLine = chosen.find((line) => line.productSlug === product.product_slug);
+              return (
+                <li key={product.product_slug} className={styles.row}>
+                  <span className={styles.rowBody}>
+                    <span className={styles.rowName}>{product.name}</span>
+                    <span className={styles.rowMeta}>
+                      {product.group_name ? `${product.group_name} - ` : ""}
+                      {formatMoneyOrOnRequest(product.selling_price)}
+                    </span>
                   </span>
-                </span>
-                <button
-                  type="button"
-                  className={styles.addHere}
-                  onClick={() => addProduct(product, openGroup ? headingKeyFor(openGroup) : null)}
-                  aria-label={`Add ${product.name}`}
-                >
-                  Add
-                </button>
-              </li>
-            ))}
+                  {currentLine ? (
+                    <div className={styles.stepperInline}>
+                      <button
+                        type="button"
+                        className={styles.stepButtonSmall}
+                        onClick={() => changeQuantity(currentLine.key, -1)}
+                        aria-label={`One fewer ${product.name}`}
+                      >
+                        -
+                      </button>
+                      <span className={styles.stepValueSmall}>{currentLine.quantity}</span>
+                      <button
+                        type="button"
+                        className={styles.stepButtonSmall}
+                        onClick={() => changeQuantity(currentLine.key, 1)}
+                        aria-label={`One more ${product.name}`}
+                      >
+                        +
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className={styles.addHere}
+                      onClick={() => addProduct(product, openGroup ? headingKeyFor(openGroup) : null)}
+                      aria-label={`Add ${product.name}`}
+                    >
+                      Add
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         ) : null}
         {query.trim().length >= 2 && found.length === 0 ? (
@@ -444,7 +628,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
         ) : null}
       </section>
 
-      {query.trim().length < 2 ? (
+      {openGroup !== null || query.trim().length < 2 || found.length > 0 ? (
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>
             {openGroup === null ? "Or look through the shop" : `Inside ${openGroup}`}
@@ -479,23 +663,49 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
             <>
               <p className={styles.onlyThese}>Priced differently here:</p>
               <ul className={styles.rows}>
-                {specialsHere.map((product) => (
-                  <li key={product.product_slug} className={styles.row}>
-                    <span className={styles.rowBody}>
-                      <span className={styles.rowName}>{product.name}</span>
-                      <span className={styles.rowPrice}>
-                        {formatMoneyOrOnRequest(product.selling_price)}
+                {specialsHere.map((product) => {
+                  const currentLine = chosen.find((line) => line.productSlug === product.product_slug);
+                  return (
+                    <li key={product.product_slug} className={styles.row}>
+                      <span className={styles.rowBody}>
+                        <span className={styles.rowName}>{product.name}</span>
+                        <span className={styles.rowPrice}>
+                          {formatMoneyOrOnRequest(product.selling_price)}
+                        </span>
                       </span>
-                    </span>
-                    <button
-                      type="button"
-                      className={styles.addHere}
-                      onClick={() => addProduct(product, headingKeyFor(openGroup))}
-                    >
-                      Add
-                    </button>
-                  </li>
-                ))}
+                      {currentLine ? (
+                        <div className={styles.stepperInline}>
+                          <button
+                            type="button"
+                            className={styles.stepButtonSmall}
+                            onClick={() => changeQuantity(currentLine.key, -1)}
+                            aria-label={`One fewer ${product.name}`}
+                          >
+                            -
+                          </button>
+                          <span className={styles.stepValueSmall}>{currentLine.quantity}</span>
+                          <button
+                            type="button"
+                            className={styles.stepButtonSmall}
+                            onClick={() => changeQuantity(currentLine.key, 1)}
+                            aria-label={`One more ${product.name}`}
+                          >
+                            +
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className={styles.addHere}
+                          onClick={() => addProduct(product, headingKeyFor(openGroup))}
+                          aria-label={`Add ${product.name}`}
+                        >
+                          Add
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </>
           ) : null}
@@ -574,6 +784,64 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
                     {heading.text}
                   </button>
                 ))}
+              </div>
+            ) : null}
+
+            <button
+              type="button"
+              className={styles.quickPasteToggle}
+              onClick={() => setQuickPaste((open) => !open)}
+            >
+              {quickPaste ? "Hide quick paste" : "+ Paste list from WhatsApp"}
+            </button>
+            {quickPaste ? (
+              <div className={styles.quickPasteBox}>
+                <p className={styles.nothing}>
+                  Paste lines from WhatsApp, messages, or notes. One item per line:
+                  <br />
+                  e.g. 5 Hot 8 21D
+                  <br />
+                  e.g. 2 Camon 30
+                  <br />
+                  e.g. Charger Type C - 10pcs
+                </p>
+                <textarea
+                  className={styles.search}
+                  rows={4}
+                  value={quickPasteText}
+                  placeholder={"5 Hot 8 21D\n2 Camon 30\nCharger Type C - 10pcs"}
+                  onChange={(event) => setQuickPasteText(event.target.value)}
+                />
+                <button
+                  type="button"
+                  className={styles.addHere}
+                  style={{ alignSelf: "flex-start" }}
+                  disabled={quickPasteText.trim().length === 0}
+                  onClick={() => {
+                    const parsed = parseQuickPaste(quickPasteText);
+                    if (parsed.length === 0) return;
+                    const newLines: ChosenLine[] = parsed.map((item, index) => {
+                      const match = shop.products.find(
+                        (p) => p.name.toLowerCase() === item.text.toLowerCase(),
+                      );
+                      return {
+                        key: `paste-${Date.now()}-${index}`,
+                        productSlug: match?.product_slug ?? null,
+                        text: match?.name ?? item.text,
+                        quantity: item.quantity,
+                        price: match?.selling_price ?? null,
+                        underKey: ownUnder,
+                        isHeading: false,
+                        note: "",
+                      };
+                    });
+                    setChosen((current) => [...current, ...newLines]);
+                    setQuickPasteText("");
+                    setQuickPaste(false);
+                  }}
+                >
+                  Add all to my list
+                </button>
               </div>
             ) : null}
           </div>

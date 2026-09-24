@@ -1808,19 +1808,19 @@ Each line is one commit, and the note under it is what you will be able to see a
       quantity, unit, picture, the price the customer saw, the price the shop set later, unpriced flag).
       A request touches no stock and no ledger - it is a wish until it is confirmed. Migration + entities.
       *You will see:* nothing yet; the record a list is stored in.
-- [ ] **M21.2.2 A public link that builds a list.**
+- [x] **M21.2.2 A public link that builds a list.**
       `POST /public/requests/{shop}` on the unversioned public surface, no session, rate-limited in the
       public bucket. Nothing about stock. A stranger can add catalogue lines, or free text with a picture.
       *You will see:* a customer building a list that reaches you as data.
-- [ ] **M21.2.3 The customer's screen: `/list/{shop}`.**
+- [x] **M21.2.3 The customer's screen: `/list/{shop}`.**
       Headings from his own groups, wholesale prices, counts, quantities in pieces, an "add something
       else" line, a picture. Phone number asked once, with the reason said out loud. **No availability
       anywhere.**
       *You will see:* a customer building the list your dad gets - the twenty minutes, gone.
-- [ ] **M21.2.4 "Start from a previous list?"**
+- [x] **M21.2.4 "Start from a previous list?"**
       Typing a known number offers the last list, pre-filled and editable; sending is one action.
       *You will see:* a regular walking in, changing two counts, and sending.
-- [ ] **M21.2.5 The shop entry point, and the end of "out of stock".**
+- [x] **M21.2.5 The shop entry point, and the end of "out of stock".**
       The storefront links to the list builder beside the catalogue, and the public product page stops
       showing availability - an Igbo trader is never truly out of stock.
       *You will see:* a shop page that invites a list instead of reporting a shelf.
@@ -4063,3 +4063,25 @@ browser was already holding. Two reasons, both mine:
 **Measured**: tapping to Sales costs **0 API requests** and shows its content **47ms** later; returning to the
 shelf reports **nothing about loading** on its first frame. `scripts/navigation-check.mjs` checks both, so
 neither can come back quietly.
+
+## Customer list auto-save, inline steppers, and zero-loss draft recovery
+
+Built directly to address the market buyer workflow and prevent loss of work:
+
+1. **Auto-save on every entry**: In-progress list lines, headings, and notes are continuously saved
+   to `localStorage` (`ahia.draft.<shop>`). A tab eviction, phone call, or battery drop no longer loses
+   the buyer's work. If a draft is restored, a banner explains "We kept your list from earlier" with
+   an option to start fresh. The draft is purged upon successful submission.
+2. **One-tap add and inline steppers**: Searching or browsing products allows adding in one tap and
+   immediately displays an inline stepper `[-] <qty> [+]` on that exact row. Adjusting quantity never
+   requires opening a modal or expanding the review sheet.
+3. **Reusing previous lists**: Submitted lists are recorded in local order history. Returning customers
+   are greeted with a prompt to "Start from your previous list", pre-filling their frequent basket in
+   one tap.
+4. **WhatsApp list quick-paste**: Accommodating Alaba buyers who receive multi-line lists via WhatsApp,
+   a quick-paste box parses quantities and product names from pasted text, adding them in bulk.
+5. **Dashboard first-frame shelf seeding**: `Dashboard` initial state in `web/app/app/page.tsx` now uses
+   `firstPaint` and preserves cached products in `selectBusiness`, completely eliminating the brief
+   "Fetching your shelf" loading flash upon return.
+6. **Secret scanner hygiene**: `.gitleaks.toml` now explicitly allowlists generated local caches
+   (`web/.next`, `.review`, `.npm-cache`, `node_modules`, `backend/.env.deploy`, `web/.env.local`).

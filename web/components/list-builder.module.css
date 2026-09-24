@@ -655,3 +655,127 @@
   letter-spacing: 0.06em;
   color: var(--leaf);
 }
+
+.stepperInline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.stepButtonSmall {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1.5px solid var(--leaf);
+  background: var(--leaf-soft);
+  color: var(--leaf-dark);
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stepValueSmall {
+  min-width: 26px;
+  text-align: center;
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--leaf-dark);
+}
+
+.bannerNotice {
+  background: var(--leaf-soft);
+  border: 1px solid var(--leaf);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.bannerText {
+  font-size: var(--text-sm);
+  font-weight: 650;
+  color: var(--leaf-dark);
+}
+
+.bannerAction {
+  border: none;
+  background: none;
+  color: var(--danger);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: var(--space-1);
+}
+
+.historyPrompt {
+  background: var(--card);
+  border: 1.5px dashed var(--leaf);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.historyHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.historyTitle {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--leaf-dark);
+}
+
+.historyAction {
+  align-self: flex-start;
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--leaf);
+  background: var(--leaf);
+  color: #fff;
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.offlineAlert {
+  background: #fdf5e6;
+  border: 1px solid #d4a359;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+  color: #7c4a03;
+  font-weight: 600;
+}
+
+.quickPasteToggle {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  color: var(--leaf-dark);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: var(--space-1) 0;
+}
+
+.quickPasteBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
