@@ -8,14 +8,21 @@
  * cookie.
  */
 
-/**
- * `||`, not `??`, and that distinction is the bug this line already caused once: the browser-side
- * variable is deliberately the empty string (the app calls its own origin and is proxied), and `??`
- * only falls back on null or undefined. An empty base turns a server-side fetch into a relative URL,
- * which Node refuses - and the shop page answered 404 for a shop that the API was serving happily.
- */
-const API_BASE_URL =
-  process.env.API_PROXY_TARGET || process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
+const DEPLOYED_API = "https://p01--ahia-api--qw5xhkblp8hy.code.run";
+
+export function resolveApiBaseUrl(): string {
+  const target = (process.env.API_PROXY_TARGET || process.env.NEXT_PUBLIC_API_BASE_URL || "").trim().replace(/\/+$/, "");
+  if (!target) {
+    return process.env.VERCEL ? DEPLOYED_API : "http://127.0.0.1:8000";
+  }
+  const withProtocol = /^https?:\/\//i.test(target) ? target : `https://${target}`;
+  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(withProtocol);
+  return !isLocal && withProtocol.startsWith("http://")
+    ? `https://${withProtocol.slice("http://".length)}`
+    : withProtocol;
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 import type { components } from "./api-schema";
 

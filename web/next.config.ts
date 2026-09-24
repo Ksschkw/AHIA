@@ -31,8 +31,8 @@ const DEPLOYED_API = "https://p01--ahia-api--qw5xhkblp8hy.code.run";
 function withScheme(target: string): string {
   const trimmed = target.trim().replace(/\/+$/, "");
   if (trimmed === "") {
-    // On Vercel, or any build outside a developer's machine, the API is not local.
-    return process.env.VERCEL || process.env.NODE_ENV === "production" ? DEPLOYED_API : "http://127.0.0.1:8000";
+    // On Vercel, the API is remote. Locally, it is on this machine.
+    return process.env.VERCEL ? DEPLOYED_API : "http://127.0.0.1:8000";
   }
   // Anything that is not already a scheme is treated as a hostname, and a deployed hostname is TLS: the API
   // refuses plaintext and the platform refuses to proxy it.
@@ -59,15 +59,6 @@ const nextConfig: NextConfig = {
       {
         source: "/api/:path*",
         destination: `${API_PROXY_TARGET}/api/:path*`,
-      },
-      {
-        // **One path, not the whole prefix.** `/shop/:path*` proxied every request under it, including
-        // the pages themselves - so a customer opening the link a trader sent them got the API's raw
-        // JSON instead of the shop, and the shopfront was broken in production while every check that
-        // did not look at the content type stayed green. The only thing the browser needs from the API
-        // under this prefix is the list a customer sends.
-        source: "/shop/:slug/requests/:rest*",
-        destination: `${API_PROXY_TARGET}/shop/:slug/requests/:rest*`,
       },
     ];
   },
