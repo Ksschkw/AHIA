@@ -323,6 +323,23 @@ async def list_for_tenant(
     return [to_entity(record) for record in result.scalars().all()]
 
 
+async def list_by_ids(
+    session: AsyncSession,
+    *,
+    tenant_id: UUID,
+    product_ids: set[UUID] | list[UUID],
+) -> list[ProductModel]:
+    """Return products matching identifiers, scoped to one business."""
+    if not product_ids:
+        return []
+    result = await session.execute(
+        select(ProductRecord)
+        .where(ProductRecord.tenant_id == tenant_id)
+        .where(ProductRecord.id.in_(product_ids))
+    )
+    return [to_entity(record) for record in result.scalars().all()]
+
+
 async def list_published_for_tenant(
     session: AsyncSession,
     tenant_id: UUID,

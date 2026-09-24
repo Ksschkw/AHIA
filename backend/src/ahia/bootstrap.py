@@ -327,6 +327,7 @@ def build_application_container(
         token_service=token_service,
         default_phone_country_code=settings.default_phone_country_code,
         audit_event_service=audit_event_service,
+        sales_service=sales_service,
         logger=logger,
     )
 

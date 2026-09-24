@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, Request, status
 from ahia.core.tenant_context import TenantContext
 from ahia.routers.tenant_router import require_tenant_context
 from ahia.schemas.request_schema import (
+    CustomerListSummarySchema,
     DispatchSchema,
     PublicListSchema,
     PublicRequestAcceptedSchema,
@@ -91,6 +92,20 @@ async def read_public_list(
     """Return the list a token names. The token is the whole of the authority, as a share link's
     is."""
     return await service.read_public_list(list_token=list_token)
+
+
+@public_router.get(
+    "/shop/{tenant_slug}/customer-lists",
+    response_model=list[CustomerListSummarySchema],
+    summary="Lists a customer has previously sent to this shop",
+)
+async def list_customer_history(
+    tenant_slug: str,
+    phone: str,
+    service: RequestServiceDependency,
+) -> list[CustomerListSummarySchema]:
+    """Return recent lists from this phone number to this shop, with lines for one-tap reuse."""
+    return await service.list_customer_history(tenant_slug=tenant_slug, customer_phone=phone)
 
 
 @router.get(

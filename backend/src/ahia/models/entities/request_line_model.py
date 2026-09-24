@@ -215,6 +215,11 @@ class RequestLineModel:
         return self.quantity
 
     @property
+    def is_heading(self) -> bool:
+        """Return True when this line was submitted as a section heading."""
+        return self.note == "heading"
+
+    @property
     def is_priced(self) -> bool:
         """Return True when the trader has said what this line costs."""
         return self.shop_price is not None

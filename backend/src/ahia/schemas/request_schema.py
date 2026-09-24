@@ -168,6 +168,9 @@ class RequestLineResponseSchema(BaseModel):
     id: UUID
     position: int
     product_id: UUID | None
+    product_name: str | None = None
+    group_name: str | None = None
+    parent_position: int | None = None
     free_text: str | None
     note: str | None
     quantity: str
@@ -186,6 +189,35 @@ class RequestLineResponseSchema(BaseModel):
     margin: str | None
     state: RequestLineState
     image_key: str | None
+
+
+class CustomerListLineItemSchema(BaseModel):
+    """One line on a customer's past list, ready to be reused."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    position: int
+    product_id: UUID | None = None
+    text: str
+    group: str | None = None
+    quantity: str
+    unit: str
+    pieces_per_pack: int | None = None
+    shop_price: str | None = None
+
+
+class CustomerListSummarySchema(BaseModel):
+    """A previous list for a returning customer."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    created_at: datetime
+    status: RequestStatus
+    line_count: int
+    priced_total: str | None
+    lines_preview: list[str]
+    lines: list[CustomerListLineItemSchema] = []
 
 
 class DispatchSchema(BaseModel):

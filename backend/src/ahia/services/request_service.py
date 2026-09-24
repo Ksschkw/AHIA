@@ -32,17 +32,32 @@ from decimal import Decimal
 from typing import Final
 from uuid import UUID, uuid4
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from ahia.core.database import UnitOfWork
-from ahia.core.errors import InvalidInputError, NotFoundError
+from ahia.core.errors import AhiaError, EntityInvariantError, InvalidInputError, NotFoundError
 from ahia.core.logging import StructuredLogger, get_logger
 from ahia.core.permissions import sales_permissions
 from ahia.core.security import TokenService
 from ahia.core.tenant_context import TenantContext
-from ahia.crud import product_crud, request_crud, request_line_crud, storefront_crud, tenant_crud
+from ahia.crud import (
+    category_crud,
+    customer_crud,
+    product_crud,
+    request_crud,
+    request_line_crud,
+    storefront_crud,
+    tenant_crud,
+)
+from ahia.models.entities.category_model import CategoryModel
+from ahia.models.entities.phone_number import canonical_phone_number
+from ahia.models.entities.product_model import ProductModel
 from ahia.models.entities.request_line_model import RequestLineModel
 from ahia.models.entities.request_model import RequestModel, RequestStatus
 from ahia.schemas.money_format import money_text, quantity_text
 from ahia.schemas.request_schema import (
+    CustomerListLineItemSchema,
+    CustomerListSummarySchema,
     DispatchSchema,
     PublicListLineSchema,
     PublicListSchema,
@@ -52,6 +67,7 @@ from ahia.schemas.request_schema import (
     RequestResponseSchema,
 )
 from ahia.services.audit_event_service import AuditEventService
+from ahia.services.sale_service import SaleLineRequest, SalesService
 
 _REQUEST_LOGGER_NAME: Final[str] = "ahia.services.request"
 
@@ -71,42 +87,63 @@ def _text_or_none(value: str | None) -> str | None:
     return trimmed or None
 
 
+def _build_category_path(
+    category_id: UUID | None,
+    categories_by_id: dict[UUID, CategoryModel],
+) -> str | None:
+    """Assemble category and its parents into a breadcrumb hierarchy path."""
+    if category_id is None or category_id not in categories_by_id:
+        return None
+    crumbs: list[str] = []
+    curr: CategoryModel | None = categories_by_id.get(category_id)
+    seen: set[UUID] = set()
+    while curr is not None and curr.id not in seen:
+        seen.add(curr.id)
+        crumbs.append(curr.name)
+        curr = categories_by_id.get(curr.parent_id) if curr.parent_id else None
+    crumbs.reverse()
+    return " > ".join(crumbs)
+
+
 def request_response(
     request: RequestModel,
     lines: list[RequestLineModel],
+    *,
+    products_by_id: dict[UUID, ProductModel] | None = None,
+    categories_by_id: dict[UUID, CategoryModel] | None = None,
 ) -> RequestResponseSchema:
     """Shape one list and its lines for the trader.
 
     The total is None while nothing is priced, and the count of unpriced lines travels with it: a
-    figure
-    that quietly leaves out what nobody has priced is worse than no figure at all, and the screen
-    says
-    "to be priced" instead.
+    figure that quietly leaves out what nobody has priced is worse than no figure at all, and the
+    screen says "to be priced" instead. Headings are excluded from unpriced count.
     """
-    unpriced = sum(1 for line in lines if not line.is_priced)
+    unpriced = sum(1 for line in lines if not line.is_priced and not line.is_heading)
     priced = [line.line_total for line in lines if line.line_total is not None]
-    return RequestResponseSchema(
-        id=request.id,
-        customer_phone=request.customer_phone,
-        customer_name=request.customer_name,
-        status=request.status,
-        note=request.note,
-        created_at=request.created_at,
-        transporter_name=request.transporter_name,
-        transporter_phone=request.transporter_phone,
-        waybill_number=request.waybill_number,
-        dispatch_cost=(
-            None if request.dispatch_cost is None else money_text(request.dispatch_cost)
-        ),
-        tracking_url=request.tracking_url,
-        dispatched_at=request.dispatched_at,
-        unpriced_line_count=unpriced,
-        priced_total=money_text(sum(priced, Decimal("0.00"))) if priced else None,
-        lines=[
+    position_by_id = {line.id: line.position for line in lines}
+
+    line_responses: list[RequestLineResponseSchema] = []
+    for line in lines:
+        prod = products_by_id.get(line.product_id) if (products_by_id and line.product_id) else None
+        prod_name = prod.name if prod else None
+        grp_name: str | None = None
+        if prod and prod.category_id and categories_by_id:
+            grp_name = _build_category_path(prod.category_id, categories_by_id)
+        if not grp_name and line.note and line.note != "heading":
+            grp_name = line.note
+
+        line_responses.append(
             RequestLineResponseSchema(
                 id=line.id,
                 position=line.position,
                 product_id=line.product_id,
+                product_name=prod_name,
+                group_name=grp_name,
+                parent_position=(
+                    position_by_id.get(line.parent_line_id)
+                    if line.parent_line_id is not None
+                    else None
+                ),
                 free_text=line.free_text,
                 note=line.note,
                 quantity=quantity_text(line.quantity),
@@ -127,8 +164,26 @@ def request_response(
                 state=line.state,
                 image_key=line.image_key,
             )
-            for line in lines
-        ],
+        )
+
+    return RequestResponseSchema(
+        id=request.id,
+        customer_phone=request.customer_phone,
+        customer_name=request.customer_name,
+        status=request.status,
+        note=request.note,
+        created_at=request.created_at,
+        transporter_name=request.transporter_name,
+        transporter_phone=request.transporter_phone,
+        waybill_number=request.waybill_number,
+        dispatch_cost=(
+            None if request.dispatch_cost is None else money_text(request.dispatch_cost)
+        ),
+        tracking_url=request.tracking_url,
+        dispatched_at=request.dispatched_at,
+        unpriced_line_count=unpriced,
+        priced_total=money_text(sum(priced, Decimal("0.00"))) if priced else None,
+        lines=line_responses,
     )
 
 
@@ -138,29 +193,48 @@ class RequestService:
     def __init__(
         self,
         unit_of_work_factory: Callable[[], UnitOfWork],
+        *,
         token_service: TokenService,
         default_phone_country_code: str = "+234",
         audit_event_service: AuditEventService | None = None,
+        sales_service: SalesService | None = None,
         logger: StructuredLogger | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         #: What he did with a list is a business change and belongs in the trail. A customer's own
-        # : submission has no authenticated actor to attribute it to, so it is written to the
-        # structured
-        # : security log with its correlation id instead - the arrangement authentication already
-        # uses,
-        #: because it too happens before a business is chosen.
+        #: submission has no authenticated actor to attribute it to, so it is written to the
+        #: structured security log with its correlation id instead - the arrangement authentication
+        #: already uses, because it too happens before a business is chosen.
         self._audit = audit_event_service or AuditEventService(
             unit_of_work_factory=unit_of_work_factory
         )
         self._default_country_code = default_phone_country_code
-        # : The same token service share links use: a list's address is a credential, and the
-        # database
-        #: keeps only its digest, so a leak of the table is not a leak of everybody's lists.
+        #: The same token service share links use: a list's address is a credential, and the
+        #: database keeps only its digest, so a leak of the table is not a leak of
+        #: everybody's lists.
         self._tokens = token_service
+        self._sales = sales_service
         self._logger = (logger or get_logger(_REQUEST_LOGGER_NAME)).bind(
             component="request_service", layer="service"
         )
+
+    async def _load_enrichment(
+        self,
+        session: AsyncSession,
+        tenant_id: UUID,
+        lines: list[RequestLineModel],
+    ) -> tuple[dict[UUID, ProductModel], dict[UUID, CategoryModel]]:
+        """Load referenced products and the business categories for breadcrumbs."""
+        product_ids = {line.product_id for line in lines if line.product_id is not None}
+        products = (
+            await product_crud.list_by_ids(session, tenant_id=tenant_id, product_ids=product_ids)
+            if product_ids
+            else []
+        )
+        products_by_id = {p.id: p for p in products}
+        categories = await category_crud.list_for_tenant(session, tenant_id)
+        categories_by_id = {c.id: c for c in categories}
+        return products_by_id, categories_by_id
 
     # ------------------------------------------------------------------
     # What a customer does: no session, no account
@@ -355,37 +429,151 @@ class RequestService:
                 session, tenant_id=request.tenant_id, request_id=request.id
             )
             tenant = await tenant_crud.get_by_id(session, request.tenant_id)
+            products_by_id, categories_by_id = await self._load_enrichment(
+                session, request.tenant_id, lines
+            )
 
         priced = [line.line_total for line in lines if line.line_total is not None]
         position_by_id = {line.id: line.position for line in lines}
-        return PublicListSchema(
-            business_name=tenant.name if tenant is not None else "",
-            tenant_slug=tenant.slug if tenant is not None else "",
-            status=request.status,
-            created_at=request.created_at,
-            unpriced_line_count=sum(1 for line in lines if not line.is_priced),
-            priced_total=money_text(sum(priced, Decimal("0.00"))) if priced else None,
-            lines=[
+
+        public_lines: list[PublicListLineSchema] = []
+        for line in lines:
+            prod = products_by_id.get(line.product_id) if line.product_id else None
+            item_text = prod.name if prod else (line.free_text or "From the shop")
+            group_path: str | None = None
+            if prod and prod.category_id:
+                group_path = _build_category_path(prod.category_id, categories_by_id)
+            if not group_path and line.note and line.note != "heading":
+                group_path = line.note
+
+            public_lines.append(
                 PublicListLineSchema(
                     position=line.position,
-                    # Positions, because they are what the customer's own screen knows. The
-                    # stored shape uses identifiers, so here one becomes the other.
                     parent_position=(
                         position_by_id.get(line.parent_line_id)
                         if line.parent_line_id is not None
                         else None
                     ),
-                    text=line.free_text or "From the shop",
-                    group=line.note,
+                    text=item_text,
+                    group="heading" if line.is_heading else group_path,
                     quantity=quantity_text(line.quantity),
                     pieces=quantity_text(line.pieces),
                     shop_price=None if line.shop_price is None else money_text(line.shop_price),
                     line_total=None if line.line_total is None else money_text(line.line_total),
                     state=line.state,
                 )
-                for line in lines
-            ],
+            )
+
+        return PublicListSchema(
+            business_name=tenant.name if tenant is not None else "",
+            tenant_slug=tenant.slug if tenant is not None else "",
+            status=request.status,
+            created_at=request.created_at,
+            unpriced_line_count=sum(
+                1 for line in lines if not line.is_priced and not line.is_heading
+            ),
+            priced_total=money_text(sum(priced, Decimal("0.00"))) if priced else None,
+            lines=public_lines,
         )
+
+    async def list_customer_history(
+        self,
+        *,
+        tenant_slug: str,
+        customer_phone: str,
+    ) -> list[CustomerListSummarySchema]:
+        """Return past lists submitted by a customer to this shop, newest first."""
+        phone = _text_or_none(customer_phone)
+        if not phone:
+            return []
+        try:
+            canonical_phone = canonical_phone_number(
+                phone, default_country_code=self._default_country_code
+            )
+        except (EntityInvariantError, ValueError):
+            return []
+
+        unit_of_work = self._unit_of_work_factory()
+        async with unit_of_work:
+            session = unit_of_work.session_handle
+            tenant = await tenant_crud.get_by_slug(session, tenant_slug)
+            if tenant is None:
+                raise NotFoundError(
+                    operation="list_customer_history",
+                    entity="storefront",
+                    identifier=tenant_slug,
+                    detail="no shop answers at that address",
+                )
+            requests = await request_crud.list_for_tenant(
+                session, tenant.id, customer_phone=canonical_phone, limit=20
+            )
+            if not requests:
+                return []
+
+            categories = await category_crud.list_for_tenant(session, tenant.id)
+            categories_by_id = {c.id: c for c in categories}
+
+            summaries: list[CustomerListSummarySchema] = []
+            for req in requests:
+                lines = await request_line_crud.list_for_request(
+                    session, tenant_id=tenant.id, request_id=req.id
+                )
+                priced = [line.line_total for line in lines if line.line_total is not None]
+                prod_ids = {line.product_id for line in lines if line.product_id is not None}
+                products = (
+                    await product_crud.list_by_ids(
+                        session, tenant_id=tenant.id, product_ids=prod_ids
+                    )
+                    if prod_ids
+                    else []
+                )
+                products_by_id = {p.id: p for p in products}
+
+                line_items: list[CustomerListLineItemSchema] = []
+                preview_texts: list[str] = []
+
+                for line in lines:
+                    if line.is_heading:
+                        continue
+                    prod = products_by_id.get(line.product_id) if line.product_id else None
+                    item_text = prod.name if prod else (line.free_text or "Item")
+                    grp_name = None
+                    if prod and prod.category_id:
+                        grp_name = _build_category_path(prod.category_id, categories_by_id)
+                    if not grp_name and line.note:
+                        grp_name = line.note
+
+                    line_items.append(
+                        CustomerListLineItemSchema(
+                            position=line.position,
+                            product_id=line.product_id,
+                            text=item_text,
+                            group=grp_name,
+                            quantity=quantity_text(line.quantity),
+                            unit=line.unit,
+                            pieces_per_pack=line.pieces_per_pack,
+                            shop_price=(
+                                None if line.shop_price is None else money_text(line.shop_price)
+                            ),
+                        )
+                    )
+                    if len(preview_texts) < 5:
+                        preview_texts.append(
+                            f"{quantity_text(line.quantity)} {line.unit} {item_text}"
+                        )
+
+                summaries.append(
+                    CustomerListSummarySchema(
+                        id=req.id,
+                        created_at=req.created_at,
+                        status=req.status,
+                        line_count=len(line_items),
+                        priced_total=(money_text(sum(priced, Decimal("0.00"))) if priced else None),
+                        lines_preview=preview_texts,
+                        lines=line_items,
+                    )
+                )
+            return summaries
 
     # ------------------------------------------------------------------
     # What the trader does
@@ -414,7 +602,15 @@ class RequestService:
             lines = await request_line_crud.list_for_request(
                 session, tenant_id=tenant_context.tenant_id, request_id=request_id
             )
-        return request_response(request, lines)
+            products_by_id, categories_by_id = await self._load_enrichment(
+                session, tenant_context.tenant_id, lines
+            )
+        return request_response(
+            request,
+            lines,
+            products_by_id=products_by_id,
+            categories_by_id=categories_by_id,
+        )
 
     async def as_response(
         self,
@@ -430,7 +626,15 @@ class RequestService:
                 tenant_id=tenant_context.tenant_id,
                 request_id=request.id,
             )
-        return request_response(request, lines)
+            products_by_id, categories_by_id = await self._load_enrichment(
+                unit_of_work.session_handle, tenant_context.tenant_id, lines
+            )
+        return request_response(
+            request,
+            lines,
+            products_by_id=products_by_id,
+            categories_by_id=categories_by_id,
+        )
 
     async def list_requests(
         self,
@@ -519,6 +723,9 @@ class RequestService:
                     "priced": "yes" if stored.is_priced else "no",
                 },
             )
+            products_by_id, categories_by_id = await self._load_enrichment(
+                session, tenant_context.tenant_id, lines
+            )
             await unit_of_work.commit()
 
         self._logger.info(
@@ -528,7 +735,12 @@ class RequestService:
             line_id=str(stored.id),
             state=stored.state.value,
         )
-        return request_response(request, lines)
+        return request_response(
+            request,
+            lines,
+            products_by_id=products_by_id,
+            categories_by_id=categories_by_id,
+        )
 
     async def dispatch_request(
         self,
@@ -589,6 +801,9 @@ class RequestService:
             lines = await request_line_crud.list_for_request(
                 session, tenant_id=tenant_context.tenant_id, request_id=request_id
             )
+            products_by_id, categories_by_id = await self._load_enrichment(
+                session, tenant_context.tenant_id, lines
+            )
             await unit_of_work.commit()
 
         self._logger.info(
@@ -596,7 +811,12 @@ class RequestService:
             tenant_id=str(tenant_context.tenant_id),
             request_id=str(request_id),
         )
-        return request_response(stored, lines)
+        return request_response(
+            stored,
+            lines,
+            products_by_id=products_by_id,
+            categories_by_id=categories_by_id,
+        )
 
     async def confirm_request(
         self,
@@ -607,10 +827,9 @@ class RequestService:
         """Turn a list into a sale - the one moment money exists.
 
         Refused while any line is unpriced, because a total with holes in it is not an agreement,
-        and
-        confirming one would write a sale nobody agreed to. The trader can still confirm a list he
-        never
-        priced line by line by pricing every line to zero, which is his business.
+        and confirming one would write a sale nobody agreed to. The trader can still confirm a
+        list he never priced line by line by pricing every line to zero, which is his business.
+        Headings are excluded from this check because they are section dividers, not products.
         """
         tenant_context.require_permission(
             sales_permissions.SALES_CREATE,
@@ -629,7 +848,7 @@ class RequestService:
             lines = await request_line_crud.list_for_request(
                 session, tenant_id=tenant_context.tenant_id, request_id=request_id
             )
-            unpriced = [line for line in lines if not line.is_priced]
+            unpriced = [line for line in lines if not line.is_priced and not line.is_heading]
             if unpriced:
                 raise InvalidInputError(
                     operation="confirm_request",
@@ -640,6 +859,46 @@ class RequestService:
                         "because a total with holes is not an agreement"
                     ),
                 )
+            customers = await customer_crud.find_by_phone(
+                session,
+                tenant_id=tenant_context.tenant_id,
+                phone=request.customer_phone,
+            )
+            customer_id = customers[0].id if customers else None
+
+        if self._sales is not None:
+            catalogue_lines = [
+                line for line in lines if line.product_id is not None and not line.is_heading
+            ]
+            if catalogue_lines:
+                sale_lines = [
+                    SaleLineRequest(
+                        product_id=line.product_id,
+                        quantity=line.quantity,
+                        unit_price=line.shop_price or line.customer_price,
+                    )
+                    for line in catalogue_lines
+                    if line.product_id is not None
+                ]
+                try:
+                    await self._sales.complete_sale(
+                        tenant_context,
+                        lines=sale_lines,
+                        payments=[],
+                        customer_id=customer_id,
+                        operation_id=request.id,
+                        occurred_at=now,
+                    )
+                except AhiaError as exc:
+                    self._logger.warning(
+                        "request_sale_completion_skipped",
+                        request_id=str(request.id),
+                        reason=str(exc),
+                    )
+
+        unit_of_work = self._unit_of_work_factory()
+        async with unit_of_work:
+            session = unit_of_work.session_handle
             confirmed = await request_crud.update(session, request.confirmed(at=now))
             # The moment a list becomes a sale is the change most in need of a record: it is the
             # one that creates money, and it is written in the same transaction as the change, so
@@ -653,6 +912,9 @@ class RequestService:
                 now=now,
                 detail={"line_count": str(len(lines))},
             )
+            products_by_id, categories_by_id = await self._load_enrichment(
+                session, tenant_context.tenant_id, lines
+            )
             await unit_of_work.commit()
 
         self._logger.info(
@@ -661,4 +923,9 @@ class RequestService:
             request_id=str(request_id),
             line_count=len(lines),
         )
-        return request_response(confirmed, lines)
+        return request_response(
+            confirmed,
+            lines,
+            products_by_id=products_by_id,
+            categories_by_id=categories_by_id,
+        )

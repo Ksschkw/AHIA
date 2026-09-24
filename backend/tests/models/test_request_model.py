@@ -143,3 +143,10 @@ def test_what_it_cost_him_is_recorded_when_he_buys_it_in() -> None:
     bought = a_line().sourced_for(cost_price=Decimal("280.00"), state=RequestLineState.BUY_IT)
     assert bought.state is RequestLineState.BUY_IT
     assert bought.cost_price == Decimal("280.00")
+
+
+@pytest.mark.unit
+def test_a_heading_line_is_recognized_as_heading() -> None:
+    heading = a_line(product_id=None, note="heading", free_text="Screenguards")
+    assert heading.is_heading is True
+    assert a_line(note="regular note").is_heading is False
