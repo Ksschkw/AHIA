@@ -1,24 +1,25 @@
 "use client";
 
 /**
- * Everything on the shelf: categories and items with unlimited nesting.
+ * Unified Shop Catalog: categories, products, and dual prices (retail & wholesale).
  *
- * Rebuilt to support an arbitrary-depth category family tree:
- * - Categories nest without limit: Root -> Parent -> Child -> Grandchild -> Great-grandchild.
- * - Drill-down folder browsing with clickable breadcrumb trail ("All > Phones > Screenguards > 21D").
- * - Create subcategories under any existing folder or at root.
- * - Add products directly into any category or at root.
- * - Toggle products between published ("In shop") and unpublished ("Hidden").
- * - Switch between Folder drill-down view and Full Family Tree view.
- * - Instant search across all products and categories.
- * - Cache-first rendering with zero spinner flash.
+ * Designed with a Samsung File Manager multi-select experience and genuine branching tree:
+ * - Categories nest without limit: Root -> Parent -> Child -> Grandchild.
+ * - Dual pricing: Wholesale and Retail prices defined at category level or overridden on items.
+ * - Multi-select item checkboxes with a sticky bottom action bar (Copy to..., Move to..., Select All).
+ * - Quick batch copying: duplicate entire product lines (e.g. Hot 8, Hot 9, Camon 30) across categories in one click.
+ * - Copied items inherit destination category default prices automatically.
+ * - Authentic visual family tree diagram with connecting stems, branch elbows, and leaves.
+ * - Cache-first rendering with instant local search across all nesting levels.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
+  CheckMarkIcon,
   ChevronRightIcon,
   CloseIcon,
+  CopyIcon,
   FolderIcon,
   FolderOpenIcon,
   ItemBoxIcon,
@@ -39,10 +40,11 @@ import {
   moveCategory,
   listProducts,
   createProduct,
-  moveItemToGroup,
   publishProduct,
   unpublishProduct,
   listStock,
+  copyProducts,
+  moveProductsBatch,
   type Category,
   type InventoryLevel,
   type Product,
@@ -52,6 +54,12 @@ import { formatMoneyOrOnRequest, formatQuantity } from "@/lib/format";
 import styles from "./items.module.css";
 
 type Notice = { message: string; tone: "good" | "bad"; hint?: string };
+
+interface BatchModalState {
+  mode: "copy" | "move";
+  productIds: string[];
+  sourceName?: string;
+}
 
 export default function Items() {
   const [business, setBusiness] = useState<Tenant | null>(null);
@@ -74,21 +82,28 @@ export default function Items() {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
 
-  // Moving category & item state
+  // Multi-selection state
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+  const [batchModal, setBatchModal] = useState<BatchModalState | null>(null);
+  const [busyBatch, setBusyBatch] = useState(false);
+
+  // Moving category state
   const [movingCategory, setMovingCategory] = useState<Category | null>(null);
   const [busyMove, setBusyMove] = useState(false);
-  const [movingProduct, setMovingProduct] = useState<Product | null>(null);
-  const [busyMoveProduct, setBusyMoveProduct] = useState(false);
 
   // Forms state
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [newCatName, setNewCatName] = useState("");
   const [newCatParentId, setNewCatParentId] = useState<string | null>(null);
-  const [newCatPrice, setNewCatPrice] = useState("");
+  const [newCatNormalPrice, setNewCatNormalPrice] = useState("");
+  const [newCatWholesalePrice, setNewCatWholesalePrice] = useState("");
+  const [newCatPiecesPerPack, setNewCatPiecesPerPack] = useState("");
 
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [newProdName, setNewProdName] = useState("");
-  const [newProdPrice, setNewProdPrice] = useState("");
+  const [newProdSellingPrice, setNewProdSellingPrice] = useState("");
+  const [newProdWholesalePrice, setNewProdWholesalePrice] = useState("");
+  const [newProdPiecesPerPack, setNewProdPiecesPerPack] = useState("");
   const [newProdPublish, setNewProdPublish] = useState(true);
 
   const load = useCallback(async (tenantId: string) => {
@@ -144,6 +159,12 @@ export default function Items() {
     return trail;
   }, [categories, currentCategoryId]);
 
+  // Current category entity (if drilled down)
+  const currentCategory = useMemo(() => {
+    if (!currentCategoryId) return null;
+    return categories.find((c) => c.id === currentCategoryId) ?? null;
+  }, [categories, currentCategoryId]);
+
   // Children of current category
   const currentSubcategories = useMemo(() => {
     return categories.filter((c) => (c.parent_id ?? null) === currentCategoryId);
@@ -153,7 +174,6 @@ export default function Items() {
   const currentProducts = useMemo(() => {
     const all = products ?? [];
     if (currentCategoryId === null) {
-      // At root, show uncategorized products or products explicitly at root
       return all.filter((p) => p.category_id === null);
     }
     return all.filter((p) => p.category_id === currentCategoryId);
@@ -229,7 +249,7 @@ export default function Items() {
     [],
   );
 
-  // Eligible move targets (cannot move inside itself or any of its descendants)
+  // Eligible move targets for categories
   const eligibleMoveTargets = useMemo(() => {
     if (!movingCategory) return [];
     const descendantIds = getDescendantCategoryIds(movingCategory.id, categories);
@@ -237,6 +257,35 @@ export default function Items() {
       .filter((cat) => cat.id !== movingCategory.id && !descendantIds.has(cat.id))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [movingCategory, categories, getDescendantCategoryIds]);
+
+  // Multi-selection handlers
+  const toggleSelectProduct = (productId: string) => {
+    setSelectedProductIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) {
+        next.delete(productId);
+      } else {
+        next.add(productId);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+    const visibleIds = currentProducts.map((p) => p.id);
+    if (visibleIds.length === 0) return;
+    const allSelected = visibleIds.every((id) => selectedProductIds.has(id));
+    if (allSelected) {
+      setSelectedProductIds(new Set());
+    } else {
+      setSelectedProductIds(new Set([...selectedProductIds, ...visibleIds]));
+    }
+  };
+
+  const openBatchModal = (mode: "copy" | "move", productIds: string[], sourceName?: string) => {
+    if (productIds.length === 0) return;
+    setBatchModal({ mode, productIds, sourceName });
+  };
 
   async function handleExecuteMove(targetParentId: string | null) {
     if (!business || !movingCategory) return;
@@ -268,33 +317,42 @@ export default function Items() {
     }
   }
 
-  async function handleExecuteMoveProduct(targetCategoryId: string | null) {
-    if (!business || !movingProduct) return;
-    if ((movingProduct.category_id ?? null) === targetCategoryId) {
-      setMovingProduct(null);
-      return;
-    }
-    setBusyMoveProduct(true);
+  async function handleExecuteBatch(targetCategoryId: string | null) {
+    if (!business || !batchModal) return;
+    setBusyBatch(true);
+    const { mode, productIds } = batchModal;
+    const targetName = targetCategoryId
+      ? categories.find((c) => c.id === targetCategoryId)?.name ?? "selected folder"
+      : "Shelf Root (Uncategorized)";
+
     try {
-      const updated = await moveItemToGroup(business.id, movingProduct.id, targetCategoryId);
-      setProducts((current) =>
-        (current ?? []).map((p) => (p.id === updated.id ? updated : p)),
-      );
-      const targetName = targetCategoryId
-        ? categories.find((c) => c.id === targetCategoryId)?.name ?? "selected folder"
-        : "Shelf Root (Uncategorized)";
-      setNotice({
-        message: `Item "${movingProduct.name}" moved to ${targetName}.`,
-        tone: "good",
-      });
-      setMovingProduct(null);
+      if (mode === "copy") {
+        const copied = await copyProducts(business.id, productIds, targetCategoryId);
+        setProducts((current) => [...(current ?? []), ...copied]);
+        setNotice({
+          message: `Copied ${productIds.length} item${productIds.length > 1 ? "s" : ""} to "${targetName}". They inherited "${targetName}" default prices.`,
+          tone: "good",
+        });
+      } else {
+        const moved = await moveProductsBatch(business.id, productIds, targetCategoryId);
+        const movedMap = new Map(moved.map((m) => [m.id, m]));
+        setProducts((current) =>
+          (current ?? []).map((p) => (movedMap.has(p.id) ? movedMap.get(p.id)! : p)),
+        );
+        setNotice({
+          message: `Moved ${productIds.length} item${productIds.length > 1 ? "s" : ""} to "${targetName}".`,
+          tone: "good",
+        });
+      }
+      setSelectedProductIds(new Set());
+      setBatchModal(null);
     } catch {
       setNotice({
-        message: "Could not move item. Please try again.",
+        message: `Could not ${mode} items. Please try again.`,
         tone: "bad",
       });
     } finally {
-      setBusyMoveProduct(false);
+      setBusyBatch(false);
     }
   }
 
@@ -307,16 +365,23 @@ export default function Items() {
     }
     setBusyAction("add-cat");
     try {
+      const packParsed = newCatPiecesPerPack.trim()
+        ? parseInt(newCatPiecesPerPack.trim(), 10)
+        : undefined;
       const created = await createCategory(business.id, {
         name,
         parent_id: newCatParentId,
-        default_normal_price: newCatPrice.trim() || undefined,
+        default_normal_price: newCatNormalPrice.trim() || undefined,
+        default_wholesale_price: newCatWholesalePrice.trim() || undefined,
+        default_pieces_per_pack: Number.isFinite(packParsed) ? packParsed : undefined,
       });
       setCategories((current) => [...current, created]);
       setNewCatName("");
-      setNewCatPrice("");
+      setNewCatNormalPrice("");
+      setNewCatWholesalePrice("");
+      setNewCatPiecesPerPack("");
       setShowAddCategory(false);
-      setNotice({ message: `Category "${name}" created.`, tone: "good" });
+      setNotice({ message: `Category "${name}" created with price defaults.`, tone: "good" });
     } catch {
       setNotice({ message: "Could not create category. Please try again.", tone: "bad" });
     } finally {
@@ -333,9 +398,14 @@ export default function Items() {
     }
     setBusyAction("add-prod");
     try {
+      const packParsed = newProdPiecesPerPack.trim()
+        ? parseInt(newProdPiecesPerPack.trim(), 10)
+        : undefined;
       let created = await createProduct(business.id, {
         name,
-        selling_price: newProdPrice.trim() || undefined,
+        selling_price: newProdSellingPrice.trim() || undefined,
+        wholesale_price: newProdWholesalePrice.trim() || undefined,
+        pieces_per_pack: Number.isFinite(packParsed) ? packParsed : undefined,
         category_id: currentCategoryId,
       });
       if (newProdPublish) {
@@ -343,9 +413,11 @@ export default function Items() {
       }
       setProducts((current) => [...(current ?? []), created]);
       setNewProdName("");
-      setNewProdPrice("");
+      setNewProdSellingPrice("");
+      setNewProdWholesalePrice("");
+      setNewProdPiecesPerPack("");
       setShowAddProduct(false);
-      setNotice({ message: `Item "${name}" added to shelf.`, tone: "good" });
+      setNotice({ message: `Item "${name}" added to catalog.`, tone: "good" });
     } catch {
       setNotice({ message: "Could not add item. Please try again.", tone: "bad" });
     } finally {
@@ -380,7 +452,12 @@ export default function Items() {
     <main className={styles.page}>
       <header className={styles.header}>
         <div className={styles.titleRow}>
-          <h1 className={styles.title}>Shelf &amp; Categories</h1>
+          <div>
+            <h1 className={styles.title}>Catalog</h1>
+            <p style={{ fontSize: "13px", color: "var(--ink-2)", margin: "2px 0 0" }}>
+              Categories, items, and dual prices (retail &amp; wholesale)
+            </p>
+          </div>
           <button
             type="button"
             className={styles.toggleViewBtn}
@@ -468,6 +545,23 @@ export default function Items() {
               <span>Add Item</span>
             </button>
           </div>
+
+          {currentCategoryId && currentProducts.length > 0 ? (
+            <button
+              type="button"
+              className={styles.copyAllBtn}
+              onClick={() =>
+                openBatchModal(
+                  "copy",
+                  currentProducts.map((p) => p.id),
+                  breadcrumbs[breadcrumbs.length - 1]?.name,
+                )
+              }
+            >
+              <CopyIcon size={14} />
+              <span>Copy All {currentProducts.length} Items to Another Folder...</span>
+            </button>
+          ) : null}
         </div>
       </section>
 
@@ -482,17 +576,35 @@ export default function Items() {
               label="Category name"
               id="new_category_name"
               value={newCatName}
-              placeholder="e.g. Screenguards, 21D, Chargers"
+              placeholder="e.g. Screenguards, 21D, Privacy, Silicone Cases"
               onChange={setNewCatName}
             />
             <Field
-              label="Default price (optional)"
-              id="new_category_price"
-              value={newCatPrice}
-              placeholder="e.g. 1500"
+              label="Default Retail Price (optional)"
+              id="new_category_normal_price"
+              value={newCatNormalPrice}
+              placeholder="e.g. 500 (covers all items inside)"
               inputMode="decimal"
               optional
-              onChange={setNewCatPrice}
+              onChange={setNewCatNormalPrice}
+            />
+            <Field
+              label="Default Wholesale Price (optional)"
+              id="new_category_wholesale_price"
+              value={newCatWholesalePrice}
+              placeholder="e.g. 350 (bulk / trade price)"
+              inputMode="decimal"
+              optional
+              onChange={setNewCatWholesalePrice}
+            />
+            <Field
+              label="Default Pack Size (optional)"
+              id="new_category_pack"
+              value={newCatPiecesPerPack}
+              placeholder="e.g. 10 or 25 pieces per pack"
+              inputMode="numeric"
+              optional
+              onChange={setNewCatPiecesPerPack}
             />
           </div>
           <div className={styles.formActions}>
@@ -526,17 +638,43 @@ export default function Items() {
               label="Item name"
               id="new_product_name"
               value={newProdName}
-              placeholder="e.g. Hot 8, Camon 30, Type C Fast Charger"
+              placeholder="e.g. Hot 8, Hot 9, Camon 30"
               onChange={setNewProdName}
             />
             <Field
-              label="Selling price"
+              label="Retail price (leave empty to follow category default)"
               id="new_product_price"
-              value={newProdPrice}
-              placeholder="e.g. 2500"
+              value={newProdSellingPrice}
+              placeholder={
+                currentCategory?.default_normal_price
+                  ? `Follows category default (${formatMoneyOrOnRequest(currentCategory.default_normal_price, currency)})`
+                  : "e.g. 2500"
+              }
               inputMode="decimal"
               optional
-              onChange={setNewProdPrice}
+              onChange={setNewProdSellingPrice}
+            />
+            <Field
+              label="Wholesale price (leave empty to follow category default)"
+              id="new_product_wholesale"
+              value={newProdWholesalePrice}
+              placeholder={
+                currentCategory?.default_wholesale_price
+                  ? `Follows category default (${formatMoneyOrOnRequest(currentCategory.default_wholesale_price, currency)})`
+                  : "e.g. 1800"
+              }
+              inputMode="decimal"
+              optional
+              onChange={setNewProdWholesalePrice}
+            />
+            <Field
+              label="Pieces per pack (optional)"
+              id="new_product_pack"
+              value={newProdPiecesPerPack}
+              placeholder="e.g. 10"
+              inputMode="numeric"
+              optional
+              onChange={setNewProdPiecesPerPack}
             />
           </div>
           <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
@@ -568,7 +706,7 @@ export default function Items() {
       ) : null}
 
       {state === "loading" && (!products || products.length === 0) ? (
-        <Loading label="Fetching your shelf..." />
+        <Loading label="Fetching your catalog..." />
       ) : null}
 
       {/* Search results mode */}
@@ -604,7 +742,20 @@ export default function Items() {
                         <span className={styles.folderIcon}>
                           <FolderIcon size={20} />
                         </span>
-                        <span className={styles.folderName}>{cat.name}</span>
+                        <div>
+                          <span className={styles.folderName}>{cat.name}</span>
+                          {cat.default_normal_price || cat.default_wholesale_price ? (
+                            <div className={styles.catPriceDefaults}>
+                              {cat.default_normal_price
+                                ? `Retail: ${formatMoneyOrOnRequest(cat.default_normal_price, currency)}`
+                                : ""}
+                              {cat.default_normal_price && cat.default_wholesale_price ? " - " : ""}
+                              {cat.default_wholesale_price
+                                ? `Wholesale: ${formatMoneyOrOnRequest(cat.default_wholesale_price, currency)}`
+                                : ""}
+                            </div>
+                          ) : null}
+                        </div>
                       </span>
                       <span className={styles.folderCount}>
                         {stats.products} items
@@ -633,28 +784,54 @@ export default function Items() {
               {searchResults.products.map((prod) => {
                 const curStock = level(prod.id);
                 const cat = categories.find((c) => c.id === prod.category_id);
+                const isSelected = selectedProductIds.has(prod.id);
                 return (
-                  <div key={prod.id} className={styles.productRow}>
+                  <div
+                    key={prod.id}
+                    className={`${styles.productRow} ${isSelected ? styles.productRowSelected : ""}`}
+                  >
+                    <input
+                      type="checkbox"
+                      className={styles.itemCheckbox}
+                      checked={isSelected}
+                      onChange={() => toggleSelectProduct(prod.id)}
+                      aria-label={`Select ${prod.name}`}
+                    />
                     <div className={styles.productInfo}>
                       <span className={styles.productNameRow}>
                         <ItemBoxIcon size={16} className={styles.productIcon} />
                         <span className={styles.productName}>{prod.name}</span>
                       </span>
-                      <span className={styles.productMeta}>
-                        <span className={styles.productPrice}>
-                          {formatMoneyOrOnRequest(prod.effective_normal_price, currency)}
+                      <div className={styles.pricesMeta}>
+                        <span className={styles.retailBadge}>
+                          Retail: {formatMoneyOrOnRequest(prod.effective_normal_price, currency)}
                         </span>
-                        <span>-</span>
-                        <span>{formatQuantity(curStock?.available_quantity ?? "0")} in stock</span>
-                        {cat ? <span>- in {cat.name}</span> : null}
-                      </span>
+                        {prod.effective_wholesale_price ? (
+                          <span className={styles.wholesaleBadge}>
+                            Wholesale: {formatMoneyOrOnRequest(prod.effective_wholesale_price, currency)}
+                            {prod.effective_pieces_per_pack ? ` (${prod.effective_pieces_per_pack}/pk)` : ""}
+                          </span>
+                        ) : null}
+                        <span style={{ fontSize: "11px", color: "var(--ink-3)" }}>
+                          - {formatQuantity(curStock?.available_quantity ?? "0")} in stock
+                          {cat ? ` - in ${cat.name}` : ""}
+                        </span>
+                      </div>
                     </div>
                     <div className={styles.productActions}>
                       <button
                         type="button"
+                        className={styles.copyItemBtn}
+                        title={`Copy ${prod.name} into another folder`}
+                        onClick={() => openBatchModal("copy", [prod.id], prod.name)}
+                      >
+                        Copy
+                      </button>
+                      <button
+                        type="button"
                         className={styles.moveItemBtn}
                         title={`Move ${prod.name} into another folder or root`}
-                        onClick={() => setMovingProduct(prod)}
+                        onClick={() => openBatchModal("move", [prod.id], prod.name)}
                       >
                         Move
                       </button>
@@ -678,26 +855,33 @@ export default function Items() {
           ) : null}
         </section>
       ) : viewMode === "tree" ? (
-        /* Full Family Tree View (Recursive unlimited nesting) */
+        /* Full Family Tree View (Genuine Branching Diagram) */
         <section className={styles.treeContainer}>
-          <h2 className={styles.sectionTitle} style={{ marginTop: 0 }}>
-            Complete Category Family Tree
-          </h2>
-          <FamilyTreeRenderer
-            categories={categories}
-            products={products ?? []}
-            stock={stock}
-            currency={currency}
-            parentId={null}
-            onSelectCategory={(id) => {
-              setCurrentCategoryId(id);
-              setViewMode("folder");
-            }}
-            onStartMoveCategory={setMovingCategory}
-            onStartMoveProduct={setMovingProduct}
-            onTogglePublish={handleTogglePublish}
-            busyAction={busyAction}
-          />
+          <div style={{ marginBottom: "16px" }}>
+            <h2 className={styles.sectionTitle} style={{ marginTop: 0 }}>
+              Visual Category Family Tree
+            </h2>
+            <p style={{ fontSize: "12px", color: "var(--ink-3)", margin: "2px 0 0" }}>
+              Interactive hierarchy with connecting branches, wholesale defaults, and quick copy/move actions
+            </p>
+          </div>
+          <div className={styles.treeRoot}>
+            <FamilyTreeRenderer
+              categories={categories}
+              products={products ?? []}
+              stock={stock}
+              currency={currency}
+              parentId={null}
+              onSelectCategory={(id) => {
+                setCurrentCategoryId(id);
+                setViewMode("folder");
+              }}
+              onStartMoveCategory={setMovingCategory}
+              onStartBatchProduct={openBatchModal}
+              onTogglePublish={handleTogglePublish}
+              busyAction={busyAction}
+            />
+          </div>
         </section>
       ) : (
         /* Folder Drill-down View */
@@ -728,7 +912,21 @@ export default function Items() {
                           <span className={styles.folderIcon}>
                             <FolderIcon size={20} />
                           </span>
-                          <span className={styles.folderName}>{cat.name}</span>
+                          <div>
+                            <span className={styles.folderName}>{cat.name}</span>
+                            {cat.default_normal_price || cat.default_wholesale_price ? (
+                              <div className={styles.catPriceDefaults}>
+                                {cat.default_normal_price
+                                  ? `Retail: ${formatMoneyOrOnRequest(cat.default_normal_price, currency)}`
+                                  : ""}
+                                {cat.default_normal_price && cat.default_wholesale_price ? " - " : ""}
+                                {cat.default_wholesale_price
+                                  ? `Wholesale: ${formatMoneyOrOnRequest(cat.default_wholesale_price, currency)}`
+                                  : ""}
+                                {cat.default_pieces_per_pack ? ` (${cat.default_pieces_per_pack}/pk)` : ""}
+                              </div>
+                            ) : null}
+                          </div>
                         </span>
                         <span className={styles.folderCount}>
                           {stats.subcategories > 0 ? `${stats.subcategories} sub - ` : ""}
@@ -756,10 +954,30 @@ export default function Items() {
 
           {/* Products in this category */}
           <section>
-            <h2 className={styles.sectionTitle}>
-              {currentCategoryId === null ? "Items at Root / Uncategorized" : "Items in this category"} (
-              {currentProducts.length})
-            </h2>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+              <h2 className={styles.sectionTitle}>
+                {currentCategoryId === null ? "Items at Root / Uncategorized" : "Items in this category"} (
+                {currentProducts.length})
+              </h2>
+              {currentProducts.length > 0 ? (
+                <button
+                  type="button"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "var(--leaf)",
+                    fontWeight: 700,
+                    fontSize: "12px",
+                    cursor: "pointer",
+                  }}
+                  onClick={handleToggleSelectAll}
+                >
+                  {currentProducts.every((p) => selectedProductIds.has(p.id))
+                    ? "Deselect All Visible"
+                    : "Select All Visible"}
+                </button>
+              ) : null}
+            </div>
 
             {currentProducts.length === 0 && currentSubcategories.length === 0 ? (
               <Empty
@@ -792,9 +1010,9 @@ export default function Items() {
               >
                 {currentCategoryId
                   ? `"${breadcrumbs[breadcrumbs.length - 1]?.name ?? "This category"}" is empty.`
-                  : "Your shelf is empty."}
+                  : "Your catalog is empty."}
                 <br />
-                Add categories to organize your goods, or add items directly.
+                Add categories with wholesale and retail prices, or add items directly.
               </Empty>
             ) : currentProducts.length === 0 ? (
               <p style={{ fontSize: "13px", color: "var(--ink-3)", padding: "8px 0" }}>
@@ -804,27 +1022,53 @@ export default function Items() {
               <div className={styles.productsList}>
                 {currentProducts.map((prod) => {
                   const curStock = level(prod.id);
+                  const isSelected = selectedProductIds.has(prod.id);
                   return (
-                    <div key={prod.id} className={styles.productRow}>
+                    <div
+                      key={prod.id}
+                      className={`${styles.productRow} ${isSelected ? styles.productRowSelected : ""}`}
+                    >
+                      <input
+                        type="checkbox"
+                        className={styles.itemCheckbox}
+                        checked={isSelected}
+                        onChange={() => toggleSelectProduct(prod.id)}
+                        aria-label={`Select ${prod.name}`}
+                      />
                       <div className={styles.productInfo}>
                         <span className={styles.productNameRow}>
                           <ItemBoxIcon size={16} className={styles.productIcon} />
                           <span className={styles.productName}>{prod.name}</span>
                         </span>
-                        <span className={styles.productMeta}>
-                          <span className={styles.productPrice}>
-                            {formatMoneyOrOnRequest(prod.effective_normal_price, currency)}
+                        <div className={styles.pricesMeta}>
+                          <span className={styles.retailBadge}>
+                            Retail: {formatMoneyOrOnRequest(prod.effective_normal_price, currency)}
                           </span>
-                          <span>-</span>
-                          <span>{formatQuantity(curStock?.available_quantity ?? "0")} in stock</span>
-                        </span>
+                          {prod.effective_wholesale_price ? (
+                            <span className={styles.wholesaleBadge}>
+                              Wholesale: {formatMoneyOrOnRequest(prod.effective_wholesale_price, currency)}
+                              {prod.effective_pieces_per_pack ? ` (${prod.effective_pieces_per_pack}/pk)` : ""}
+                            </span>
+                          ) : null}
+                          <span style={{ fontSize: "11px", color: "var(--ink-3)" }}>
+                            - {formatQuantity(curStock?.available_quantity ?? "0")} in stock
+                          </span>
+                        </div>
                       </div>
                       <div className={styles.productActions}>
                         <button
                           type="button"
+                          className={styles.copyItemBtn}
+                          title={`Copy ${prod.name} into another folder`}
+                          onClick={() => openBatchModal("copy", [prod.id], prod.name)}
+                        >
+                          Copy
+                        </button>
+                        <button
+                          type="button"
                           className={styles.moveItemBtn}
                           title={`Move ${prod.name} into another folder or root`}
-                          onClick={() => setMovingProduct(prod)}
+                          onClick={() => openBatchModal("move", [prod.id], prod.name)}
                         >
                           Move
                         </button>
@@ -845,6 +1089,141 @@ export default function Items() {
           </section>
         </>
       )}
+
+      {/* Samsung File Manager Style Sticky Selection Toolbar */}
+      {selectedProductIds.size > 0 ? (
+        <div className={styles.selectionToolbar}>
+          <div className={styles.selectionCountBadge}>
+            <CheckMarkIcon size={16} />
+            <span>{selectedProductIds.size} selected</span>
+          </div>
+          <div className={styles.selectionActions}>
+            <button
+              type="button"
+              className={styles.selectionBtn}
+              onClick={() => openBatchModal("copy", Array.from(selectedProductIds))}
+            >
+              <CopyIcon size={13} />
+              <span>Copy to...</span>
+            </button>
+            <button
+              type="button"
+              className={styles.selectionBtn}
+              onClick={() => openBatchModal("move", Array.from(selectedProductIds))}
+            >
+              <span>Move to...</span>
+            </button>
+            <button
+              type="button"
+              className={styles.selectionBtnSecondary}
+              onClick={handleToggleSelectAll}
+            >
+              {currentProducts.every((p) => selectedProductIds.has(p.id))
+                ? "Deselect All"
+                : "Select All"}
+            </button>
+            <button
+              type="button"
+              className={styles.selectionBtnSecondary}
+              onClick={() => setSelectedProductIds(new Set())}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Batch Copy / Move Product Modal */}
+      {batchModal !== null ? (
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="batch-modal-title"
+          onClick={() => !busyBatch && setBatchModal(null)}
+        >
+          <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div>
+                <h2 id="batch-modal-title" className={styles.modalTitle}>
+                  {batchModal.mode === "copy" ? "Copy" : "Move"}{" "}
+                  {batchModal.productIds.length > 1
+                    ? `${batchModal.productIds.length} items`
+                    : `"${batchModal.sourceName ?? "item"}"`}
+                </h2>
+                <p className={styles.modalSubtitle}>
+                  {batchModal.mode === "copy"
+                    ? "Items will inherit destination folder's default prices unless they carry custom prices."
+                    : "Choose destination folder or move out to Shelf Root."}
+                </p>
+              </div>
+              <button
+                type="button"
+                className={styles.modalClose}
+                aria-label="Close modal"
+                disabled={busyBatch}
+                onClick={() => setBatchModal(null)}
+              >
+                <CloseIcon size={16} />
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              {/* Shelf Root Option */}
+              <button
+                type="button"
+                className={styles.moveOption}
+                disabled={busyBatch}
+                onClick={() => void handleExecuteBatch(null)}
+              >
+                <div className={styles.moveOptionMain}>
+                  <FolderOpenIcon size={18} className={styles.moveOptionIcon} />
+                  <div className={styles.moveOptionInfo}>
+                    <span className={styles.moveOptionName}>Shelf Root (Uncategorized)</span>
+                    <span className={styles.moveOptionPath}>Main shelf without folder grouping</span>
+                  </div>
+                </div>
+                <span className={styles.selectMoveBtn}>
+                  {busyBatch ? "Processing..." : batchModal.mode === "copy" ? "Copy Here" : "Move Here"}
+                </span>
+              </button>
+
+              {/* All Categories */}
+              {categories
+                .slice()
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((target) => {
+                  const fullPath = getCategoryPath(target, categories);
+                  return (
+                    <button
+                      key={target.id}
+                      type="button"
+                      className={styles.moveOption}
+                      disabled={busyBatch}
+                      onClick={() => void handleExecuteBatch(target.id)}
+                    >
+                      <div className={styles.moveOptionMain}>
+                        <FolderIcon size={18} className={styles.moveOptionIcon} />
+                        <div className={styles.moveOptionInfo}>
+                          <span className={styles.moveOptionName}>{target.name}</span>
+                          <span className={styles.moveOptionPath}>
+                            {fullPath}
+                            {target.default_normal_price || target.default_wholesale_price
+                              ? ` - Retail: ${formatMoneyOrOnRequest(target.default_normal_price, currency)} | Wholesale: ${formatMoneyOrOnRequest(target.default_wholesale_price, currency)}`
+                              : ""}
+                          </span>
+                        </div>
+                      </div>
+                      <span className={styles.selectMoveBtn}>
+                        {busyBatch ? "Processing..." : batchModal.mode === "copy" ? "Copy Here" : "Move Here"}
+                      </span>
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Move Category Modal */}
       {movingCategory !== null ? (
@@ -930,93 +1309,6 @@ export default function Items() {
         </div>
       ) : null}
 
-      {/* Move Product Modal */}
-      {movingProduct !== null ? (
-        <div
-          className={styles.modalOverlay}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="move-product-title"
-          onClick={() => !busyMoveProduct && setMovingProduct(null)}
-        >
-          <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <div>
-                <h2 id="move-product-title" className={styles.modalTitle}>
-                  Move &quot;{movingProduct.name}&quot;
-                </h2>
-                <p className={styles.modalSubtitle}>
-                  Choose a category folder or move out to Shelf Root
-                </p>
-              </div>
-              <button
-                type="button"
-                className={styles.modalClose}
-                aria-label="Close modal"
-                disabled={busyMoveProduct}
-                onClick={() => setMovingProduct(null)}
-              >
-                <CloseIcon size={16} />
-              </button>
-            </div>
-
-            <div className={styles.modalBody}>
-              {/* Shelf Root Option */}
-              <button
-                type="button"
-                className={`${styles.moveOption} ${movingProduct.category_id === null ? styles.moveOptionCurrent : ""}`}
-                disabled={busyMoveProduct || movingProduct.category_id === null}
-                onClick={() => void handleExecuteMoveProduct(null)}
-              >
-                <div className={styles.moveOptionMain}>
-                  <FolderOpenIcon size={18} className={styles.moveOptionIcon} />
-                  <div className={styles.moveOptionInfo}>
-                    <span className={styles.moveOptionName}>Shelf Root (Uncategorized)</span>
-                    <span className={styles.moveOptionPath}>Move out of all folders to main shelf</span>
-                  </div>
-                </div>
-                {movingProduct.category_id === null ? (
-                  <span className={styles.currentBadge}>Current</span>
-                ) : (
-                  <span className={styles.selectMoveBtn}>Move Here</span>
-                )}
-              </button>
-
-              {/* All Categories */}
-              {categories
-                .slice()
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((target) => {
-                  const isCurrent = movingProduct.category_id === target.id;
-                  const fullPath = getCategoryPath(target, categories);
-                  return (
-                    <button
-                      key={target.id}
-                      type="button"
-                      className={`${styles.moveOption} ${isCurrent ? styles.moveOptionCurrent : ""}`}
-                      disabled={busyMoveProduct || isCurrent}
-                      onClick={() => void handleExecuteMoveProduct(target.id)}
-                    >
-                      <div className={styles.moveOptionMain}>
-                        <FolderIcon size={18} className={styles.moveOptionIcon} />
-                        <div className={styles.moveOptionInfo}>
-                          <span className={styles.moveOptionName}>{target.name}</span>
-                          <span className={styles.moveOptionPath}>{fullPath}</span>
-                        </div>
-                      </div>
-                      {isCurrent ? (
-                        <span className={styles.currentBadge}>Current</span>
-                      ) : (
-                        <span className={styles.selectMoveBtn}>Move Here</span>
-                      )}
-                    </button>
-                  );
-                })}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       {notice ? (
         <Toast
           message={notice.message}
@@ -1029,7 +1321,7 @@ export default function Items() {
   );
 }
 
-/** Recursive family tree component to render arbitrary-depth nesting */
+/** Authentic Visual Branching Tree Renderer for unlimited category depth */
 function FamilyTreeRenderer({
   categories,
   products,
@@ -1038,7 +1330,7 @@ function FamilyTreeRenderer({
   parentId,
   onSelectCategory,
   onStartMoveCategory,
-  onStartMoveProduct,
+  onStartBatchProduct,
   onTogglePublish,
   busyAction,
 }: {
@@ -1049,7 +1341,7 @@ function FamilyTreeRenderer({
   parentId: string | null;
   onSelectCategory: (id: string) => void;
   onStartMoveCategory?: (category: Category) => void;
-  onStartMoveProduct?: (product: Product) => void;
+  onStartBatchProduct: (mode: "copy" | "move", productIds: string[], sourceName?: string) => void;
   onTogglePublish: (prod: Product) => void;
   busyAction: string | null;
 }) {
@@ -1061,83 +1353,134 @@ function FamilyTreeRenderer({
   }
 
   return (
-    <div className={parentId === null ? undefined : styles.treeNode}>
-      {childCategories.map((cat) => (
-        <div key={cat.id} style={{ marginBottom: "6px" }}>
-          <div className={styles.treeRow} onClick={() => onSelectCategory(cat.id)}>
-            <FolderIcon size={16} className={styles.treeFolderIcon} />
-            <span className={styles.treeNodeName}>{cat.name}</span>
-            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "6px" }}>
-              {onStartMoveCategory ? (
-                <button
-                  type="button"
-                  className={styles.moveFolderSmallBtn}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onStartMoveCategory(cat);
-                  }}
-                  title={`Move ${cat.name}`}
-                >
-                  Move
-                </button>
-              ) : null}
-              <ChevronRightIcon size={14} className={styles.treeChevIcon} />
+    <>
+      {childCategories.map((cat) => {
+        const catDirectProducts = products.filter((p) => p.category_id === cat.id);
+        const subCats = categories.filter((c) => c.parent_id === cat.id);
+        return (
+          <div key={cat.id} className={styles.treeItemWrap}>
+            {parentId !== null ? <div className={styles.treeConnectorElbow} /> : null}
+            <div className={styles.treeCategoryCard} onClick={() => onSelectCategory(cat.id)}>
+              <div className={styles.treeCategoryInfo}>
+                <FolderIcon size={18} className={styles.treeFolderIcon} />
+                <span className={styles.treeCategoryName}>{cat.name}</span>
+                <span className={styles.treeCategoryMeta}>
+                  ({catDirectProducts.length} items{subCats.length > 0 ? `, ${subCats.length} sub` : ""})
+                </span>
+                {cat.default_normal_price || cat.default_wholesale_price ? (
+                  <span className={styles.catPriceDefaults}>
+                    {cat.default_normal_price
+                      ? `Retail: ${formatMoneyOrOnRequest(cat.default_normal_price, currency)}`
+                      : ""}
+                    {cat.default_normal_price && cat.default_wholesale_price ? " - " : ""}
+                    {cat.default_wholesale_price
+                      ? `Wholesale: ${formatMoneyOrOnRequest(cat.default_wholesale_price, currency)}`
+                      : ""}
+                  </span>
+                ) : null}
+              </div>
+              <div className={styles.treeActions} onClick={(e) => e.stopPropagation()}>
+                {catDirectProducts.length > 0 ? (
+                  <button
+                    type="button"
+                    className={styles.copyItemBtn}
+                    title={`Copy all ${catDirectProducts.length} items in ${cat.name} to another folder`}
+                    onClick={() =>
+                      onStartBatchProduct("copy", catDirectProducts.map((p) => p.id), `${cat.name} items`)
+                    }
+                  >
+                    Copy All Items
+                  </button>
+                ) : null}
+                {onStartMoveCategory ? (
+                  <button
+                    type="button"
+                    className={styles.moveItemBtn}
+                    title={`Move ${cat.name} folder`}
+                    onClick={() => onStartMoveCategory(cat)}
+                  >
+                    Move
+                  </button>
+                ) : null}
+                <ChevronRightIcon size={14} className={styles.treeChevIcon} />
+              </div>
             </div>
+
+            {/* Connecting branch for children */}
+            {subCats.length > 0 || catDirectProducts.length > 0 ? (
+              <div className={styles.treeBranch}>
+                <FamilyTreeRenderer
+                  categories={categories}
+                  products={products}
+                  stock={stock}
+                  currency={currency}
+                  parentId={cat.id}
+                  onSelectCategory={onSelectCategory}
+                  onStartMoveCategory={onStartMoveCategory}
+                  onStartBatchProduct={onStartBatchProduct}
+                  onTogglePublish={onTogglePublish}
+                  busyAction={busyAction}
+                />
+              </div>
+            ) : null}
           </div>
-          <FamilyTreeRenderer
-            categories={categories}
-            products={products}
-            stock={stock}
-            currency={currency}
-            parentId={cat.id}
-            onSelectCategory={onSelectCategory}
-            onStartMoveCategory={onStartMoveCategory}
-            onStartMoveProduct={onStartMoveProduct}
-            onTogglePublish={onTogglePublish}
-            busyAction={busyAction}
-          />
-        </div>
-      ))}
+        );
+      })}
 
       {directProducts.map((prod) => {
         const curStock = stock.find((s) => s.product_id === prod.id);
         return (
-          <div
-            key={prod.id}
-            className={styles.treeRow}
-            style={{ paddingLeft: "16px", justifyContent: "space-between" }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <ItemBoxIcon size={15} className={styles.treeProductIcon} />
-              <span className={styles.treeNodeName}>{prod.name}</span>
-              <span className={styles.treeNodeMeta}>
-                {formatMoneyOrOnRequest(prod.effective_normal_price, currency)} -{" "}
-                {formatQuantity(curStock?.available_quantity ?? "0")} in stock
-              </span>
-            </div>
-            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "6px" }}>
-              {onStartMoveProduct ? (
+          <div key={prod.id} className={styles.treeItemWrap}>
+            {parentId !== null ? <div className={styles.treeConnectorElbow} /> : null}
+            <div className={styles.treeProductCard}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <ItemBoxIcon size={15} className={styles.treeProductIcon} />
+                <span className={styles.treeCategoryName}>{prod.name}</span>
+                <div className={styles.pricesMeta}>
+                  <span className={styles.retailBadge}>
+                    Retail: {formatMoneyOrOnRequest(prod.effective_normal_price, currency)}
+                  </span>
+                  {prod.effective_wholesale_price ? (
+                    <span className={styles.wholesaleBadge}>
+                      Wholesale: {formatMoneyOrOnRequest(prod.effective_wholesale_price, currency)}
+                      {prod.effective_pieces_per_pack ? ` (${prod.effective_pieces_per_pack}/pk)` : ""}
+                    </span>
+                  ) : null}
+                  <span style={{ fontSize: "11px", color: "var(--ink-3)" }}>
+                    - {formatQuantity(curStock?.available_quantity ?? "0")} in stock
+                  </span>
+                </div>
+              </div>
+              <div className={styles.treeActions}>
                 <button
                   type="button"
-                  className={styles.moveItemSmallBtn}
-                  onClick={() => onStartMoveProduct(prod)}
-                  title={`Move ${prod.name}`}
+                  className={styles.copyItemBtn}
+                  onClick={() => onStartBatchProduct("copy", [prod.id], prod.name)}
+                  title={`Copy ${prod.name} to another category`}
+                >
+                  Copy
+                </button>
+                <button
+                  type="button"
+                  className={styles.moveItemBtn}
+                  onClick={() => onStartBatchProduct("move", [prod.id], prod.name)}
+                  title={`Move ${prod.name} to another category`}
                 >
                   Move
                 </button>
-              ) : null}
-              <button
-                type="button"
-                className={`${styles.publishToggleBtn} ${prod.is_published ? styles.published : ""}`}
-                disabled={busyAction === `pub-${prod.id}`}
-                onClick={() => onTogglePublish(prod)}
-              >
-                {prod.is_published ? "In shop" : "Hidden"}
-              </button>
+                <button
+                  type="button"
+                  className={`${styles.publishToggleBtn} ${prod.is_published ? styles.published : ""}`}
+                  disabled={busyAction === `pub-${prod.id}`}
+                  onClick={() => onTogglePublish(prod)}
+                >
+                  {prod.is_published ? "In shop" : "Hidden"}
+                </button>
+              </div>
             </div>
           </div>
         );
       })}
-    </div>
+    </>
   );
 }

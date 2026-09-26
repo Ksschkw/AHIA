@@ -181,6 +181,20 @@ export function unpublishProduct(tenantId: string, productId: string): Promise<P
   });
 }
 
+export function copyProducts(
+  tenantId: string,
+  productIds: string[],
+  targetCategoryId: string | null = null,
+): Promise<Product[]> {
+  return request<Product[]>(`/api/v1/tenants/${tenantId}/products/copy`, {
+    method: "POST",
+    body: {
+      product_ids: productIds,
+      target_category_id: targetCategoryId,
+    },
+  });
+}
+
 export function recordSale(
   tenantId: string,
   sale: {
@@ -218,5 +232,11 @@ export function workListLine(
   return request<CustomerList>(`/api/v1/tenants/${tenantId}/requests/${listId}/lines/${lineId}`, {
     method: "PATCH",
     body: updates,
+  });
+}
+
+export function deleteCustomerList(tenantId: string, listId: string): Promise<void> {
+  return request<void>(`/api/v1/tenants/${tenantId}/requests/${listId}`, {
+    method: "DELETE",
   });
 }

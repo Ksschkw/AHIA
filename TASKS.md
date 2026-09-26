@@ -4179,3 +4179,31 @@ Allows traders to reorganize products between categories or unfile them to root 
 3. **Optimistic Updates & Backend Synchronization**:
    - Calls `moveItemToGroup(tenantId, productId, categoryId)` (`PATCH /api/v1/tenants/{tenantId}/products/{productId}`).
    - Updates local product state optimistically and displays an affirmative toast notification confirming the new location.
+
+## 16. Unified Catalog, Batch Copy/Move, Hybrid Offline Conflict Resolution, and Dark Mode
+
+1. **Unified Catalog (`/app/items`)**:
+   - Merged standalone "Prices" screen directly into "Catalog" (`/app/items`), eliminating fragmented navigation.
+   - Dual pricing (Retail & Wholesale) displayed across category cards, product rows, creation modals, and mobile views.
+   - Redirect added from `/app/prices` to `/app/items`.
+2. **Samsung File Manager Style Multi-Select & Batch Copy**:
+   - Multi-select checkboxes on product rows with sticky floating action toolbar (`[X selected]`, `Copy to...`, `Move to...`, `Select All`, `Cancel`).
+   - "Copy All Items in this Folder" quick action button.
+   - Backend `POST /tenants/{id}/products/copy` and `POST /tenants/{id}/products/move-batch` supporting identical model names across multiple categories (e.g. `Hot 8` under `21D Glass` and `Privacy Glass`) with auto-disambiguating slugs.
+3. **Visual Branching Family Tree**:
+   - Authentic visual branching tree diagram with CSS stem lines, connector elbows, folder node cards, and product leaf cards.
+4. **List & Canvas Image Disambiguation**:
+   - Explicit category tags and grouping in list-builder and customer list views.
+   - Canvas image generator embeds category tags for products with identical names across groups.
+5. **Customer List Deletion with Warning Safeguards**:
+   - Backend `DELETE /tenants/{tenant_id}/requests/{request_id}` with cascade deletion of request lines.
+   - Guard against deleting confirmed customer lists that already created ledger sales records.
+   - Frontend confirmation modal warning traders before permanent deletion.
+6. **Mobile SQLite Offline Hybrid Conflict Resolution**:
+   - **Sales Outbox**: Append-only Event Sourcing (conflict-free ledger writes).
+   - **Inventory Stock**: Automatic smart additive merging via deltas (commutative decrements).
+   - **Catalog & Prices**: Last-Write-Wins (LWW) with timestamp comparison.
+   - **Customer Lists / Drafts**: User decides / interactive conflict reconciliation.
+7. **Dark Mode**:
+   - Pure CSS variables in `web/app/globals.css` with `[data-theme="dark"]` and `@media (prefers-color-scheme: dark)`.
+   - Theme toggle in side rail and mobile topbar with `localStorage` persistence.

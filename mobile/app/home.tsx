@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -17,6 +18,8 @@ import {
   ApiError,
   listBusinesses,
   listCustomerLists,
+  deleteCustomerList,
+  copyProducts,
   listProducts,
   publishProduct,
   sellOneProduct,
@@ -186,6 +189,43 @@ export default function Home() {
     }
   };
 
+  const handleCopyProduct = async (product: Product) => {
+    if (!activeBusiness) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await copyProducts(activeBusiness.id, [product.id], product.category_id);
+      await loadData(activeBusiness.id);
+      showToast(`Copied ${product.name}`);
+    } catch {
+      showToast("Could not copy item");
+    }
+  };
+
+  const handleDeleteList = (list: CustomerList) => {
+    if (!activeBusiness) return;
+    Alert.alert(
+      "Delete Customer List?",
+      `Are you sure you want to delete the list from ${list.customer_name ?? list.customer_phone}? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            try {
+              await deleteCustomerList(activeBusiness.id, list.id);
+              setCustomerLists((current) => current.filter((l) => l.id !== list.id));
+              showToast("Customer list deleted");
+            } catch {
+              showToast("Could not delete list");
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const filteredProducts = products.filter((p) =>
     p.name.toLowerCase().includes(searchQuery.trim().toLowerCase()),
   );
@@ -242,7 +282,7 @@ export default function Home() {
           }}
         >
           <Text style={[styles.tabText, tab === "shelf" && styles.activeTabText]}>
-            Shelf ({products.length})
+            Catalog ({products.length})
           </Text>
         </Pressable>
         <Pressable
@@ -303,8 +343,13 @@ export default function Home() {
                 <View style={styles.productInfo}>
                   <Text style={styles.productName}>{item.name}</Text>
                   <Text style={styles.productPrice}>
-                    {formatMoney(item.effective_normal_price ?? item.selling_price)}
+                    Retail: {formatMoney(item.selling_price ?? item.effective_normal_price)}
                   </Text>
+                  {item.effective_wholesale_price ? (
+                    <Text style={styles.productWholesalePrice}>
+                      Wholesale: {formatMoney(item.effective_wholesale_price)}
+                    </Text>
+                  ) : null}
                   <View style={styles.pillRow}>
                     <Pressable
                       style={[styles.statusPill, item.is_published ? styles.livePill : styles.hiddenPill]}
@@ -322,10 +367,15 @@ export default function Home() {
                   </View>
                 </View>
 
-                {/* Sell 1 Action Button */}
-                <Pressable style={styles.sellBtn} onPress={() => void handleSellOne(item)}>
-                  <Text style={styles.sellBtnText}>Sell 1</Text>
-                </Pressable>
+                {/* Actions Button Group */}
+                <View style={styles.cardActions}>
+                  <Pressable style={styles.copyBtn} onPress={() => void handleCopyProduct(item)}>
+                    <Text style={styles.copyBtnText}>Copy</Text>
+                  </Pressable>
+                  <Pressable style={styles.sellBtn} onPress={() => void handleSellOne(item)}>
+                    <Text style={styles.sellBtnText}>Sell 1</Text>
+                  </Pressable>
+                </View>
               </View>
             )}
             ListEmptyComponent={
@@ -362,8 +412,18 @@ export default function Home() {
                   </Text>
                   <Text style={styles.customerPhone}>{list.customer_phone}</Text>
                 </View>
-                <View style={styles.orderBadge}>
-                  <Text style={styles.orderBadgeText}>{list.lines.length} lines</Text>
+                <View style={styles.orderBadgeRow}>
+                  <View style={styles.orderBadge}>
+                    <Text style={styles.orderBadgeText}>{list.lines.length} lines</Text>
+                  </View>
+                  {list.status !== "confirmed" ? (
+                    <Pressable
+                      style={styles.deleteListBtn}
+                      onPress={() => handleDeleteList(list)}
+                    >
+                      <Text style={styles.deleteListBtnText}>Delete</Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               </View>
 
@@ -585,6 +645,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     color: "#0b5d3b",
+    marginBottom: 2,
+  },
+  productWholesalePrice: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#2563eb",
     marginBottom: 6,
   },
   pillRow: {
@@ -616,17 +682,36 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#a3372b",
   },
+  cardActions: {
+    flexDirection: "column",
+    gap: 6,
+    alignItems: "stretch",
+  },
+  copyBtn: {
+    backgroundColor: "#f4f0e8",
+    borderWidth: 1,
+    borderColor: "#d8d0c2",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  copyBtnText: {
+    color: "#5c5549",
+    fontSize: 12,
+    fontWeight: "700",
+  },
   sellBtn: {
     backgroundColor: "#0b5d3b",
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 16,
-    borderRadius: 10,
+    borderRadius: 8,
     minWidth: 76,
     alignItems: "center",
   },
   sellBtnText: {
     color: "#ffffff",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
   },
   orderCard: {
@@ -655,6 +740,11 @@ const styles = StyleSheet.create({
     color: "#5c5549",
     marginTop: 1,
   },
+  orderBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   orderBadge: {
     backgroundColor: "#e8f4ed",
     paddingHorizontal: 8,
@@ -665,6 +755,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     color: "#0b5d3b",
+  },
+  deleteListBtn: {
+    backgroundColor: "#fdf2f2",
+    borderWidth: 1,
+    borderColor: "#f8b4b4",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  deleteListBtnText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#a3372b",
   },
   linesList: {
     gap: 8,

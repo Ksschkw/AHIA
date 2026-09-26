@@ -185,3 +185,17 @@ async def confirm_request(
     """Confirm the list. Refused while any line is unpriced, because a total with holes is not a
     deal."""
     return await service.confirm_request(tenant_context, request_id=request_id)
+
+
+@router.delete(
+    "/requests/{request_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete an unconfirmed customer list",
+)
+async def delete_request(
+    request_id: UUID,
+    tenant_context: TenantContextDependency,
+    service: RequestServiceDependency,
+) -> None:
+    """Delete a customer list that has not been confirmed into a sale."""
+    await service.delete_request(tenant_context, request_id=request_id)

@@ -12,7 +12,18 @@ from decimal import Decimal
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, Text, select
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    select,
+)
+from sqlalchemy import (
+    delete as sa_delete,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -175,3 +186,20 @@ async def list_for_tenant(
     statement = statement.order_by(RequestRecord.created_at.desc()).limit(limit)
     records = (await session.execute(statement)).scalars().all()
     return [to_entity(record) for record in records]
+
+
+async def delete(session: AsyncSession, *, tenant_id: UUID, request_id: UUID) -> None:
+    """Delete a customer list."""
+    statement = (
+        sa_delete(RequestRecord)
+        .where(RequestRecord.id == request_id)
+        .where(RequestRecord.tenant_id == tenant_id)
+    )
+    result = await session.execute(statement)
+    if result.rowcount == 0:
+        raise NotFoundError(
+            operation="delete_request",
+            entity="request",
+            identifier=str(request_id),
+            detail="no list matched in this business",
+        )

@@ -703,3 +703,103 @@ async def test_an_item_nobody_priced_is_refused(database: Database) -> None:
     message = refused.json()["error"]["message"]
     assert "Unpriced item" not in message
     assert "no price" not in message.lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_copy_products_into_another_category(database: Database) -> None:
+    async with running_application() as (client, _application):
+        owner, tenant = await owner_with_business(client)
+        source_group = await a_group(
+            client,
+            owner,
+            tenant,
+            name="21D",
+            default_normal_price="500.00",
+            default_wholesale_price="350.00",
+        )
+        target_group = await a_group(
+            client,
+            owner,
+            tenant,
+            name="Privacy",
+            default_normal_price="1000.00",
+            default_wholesale_price="700.00",
+        )
+
+        # Create two products under 21D: one follows group, one has custom price
+        p1 = await client.post(
+            products_path(tenant["id"]),
+            headers=auth(owner),
+            json={"name": "Hot 8", "category_id": source_group["id"]},
+        )
+        assert p1.status_code == 201
+        p2 = await client.post(
+            products_path(tenant["id"]),
+            headers=auth(owner),
+            json={
+                "name": "Hot 9",
+                "category_id": source_group["id"],
+                "selling_price": "600.00",
+            },
+        )
+        assert p2.status_code == 201
+
+        # Copy both products to Privacy
+        copy_res = await client.post(
+            f"{products_path(tenant['id'])}/copy",
+            headers=auth(owner),
+            json={
+                "product_ids": [p1.json()["id"], p2.json()["id"]],
+                "target_category_id": target_group["id"],
+            },
+        )
+        assert copy_res.status_code == 201, copy_res.text
+        copied = copy_res.json()
+        assert len(copied) == 2
+
+        # First copied item follows Privacy group prices
+        c1 = next(item for item in copied if item["name"] == "Hot 8")
+        assert c1["category_id"] == target_group["id"]
+        assert c1["effective_normal_price"] == "1000.00"
+        assert c1["effective_wholesale_price"] == "700.00"
+        assert c1["normal_price_from_group"] is True
+
+        # Second copied item kept its custom price override
+        c2 = next(item for item in copied if item["name"] == "Hot 9")
+        assert c2["category_id"] == target_group["id"]
+        assert c2["selling_price"] == "600.00"
+        assert c2["normal_price_from_group"] is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_move_products_batch(database: Database) -> None:
+    async with running_application() as (client, _application):
+        owner, tenant = await owner_with_business(client)
+        group = await a_group(client, owner, tenant, name="Cases", default_normal_price="800.00")
+
+        p1 = await client.post(
+            products_path(tenant["id"]),
+            headers=auth(owner),
+            json={"name": "Clear Case", "category_id": group["id"]},
+        )
+        p2 = await client.post(
+            products_path(tenant["id"]),
+            headers=auth(owner),
+            json={"name": "Silicone Case", "category_id": group["id"]},
+        )
+
+        # Move both to root (null)
+        move_res = await client.post(
+            f"{products_path(tenant['id'])}/move-batch",
+            headers=auth(owner),
+            json={
+                "product_ids": [p1.json()["id"], p2.json()["id"]],
+                "target_category_id": None,
+            },
+        )
+        assert move_res.status_code == 200, move_res.text
+        moved = move_res.json()
+        assert len(moved) == 2
+        assert all(item["category_id"] is None for item in moved)

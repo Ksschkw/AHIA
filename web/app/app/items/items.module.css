@@ -468,49 +468,108 @@
   margin-top: var(--space-1);
 }
 
-/* Tree View */
+/* Authentic Visual Branching Tree */
 .treeContainer {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  padding: var(--space-3);
+  padding: var(--space-4);
+  overflow-x: auto;
 }
 
-.treeNode {
+.treeRoot {
   display: flex;
   flex-direction: column;
-  margin-left: var(--space-3);
-  border-left: 2px solid var(--line);
-  padding-left: var(--space-2);
-  margin-top: 4px;
+  gap: 12px;
 }
 
-.treeRow {
+.treeBranch {
+  position: relative;
+  margin-left: 20px;
+  padding-left: 18px;
+  border-left: 2px solid #b7c7b8;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.treeItemWrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.treeConnectorElbow {
+  position: absolute;
+  top: 18px;
+  left: -18px;
+  width: 16px;
+  height: 2px;
+  background: #b7c7b8;
+}
+
+.treeCategoryCard {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: 4px 6px;
-  border-radius: 4px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f9fbf9;
+  border: 1px solid #c9decb;
+  border-radius: var(--radius-sm);
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
-.treeRow:hover {
+.treeCategoryCard:hover {
+  background: var(--leaf-soft);
+  border-color: var(--leaf);
+}
+
+.treeProductCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 12px;
   background: var(--sand);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
 }
 
-.treeNodeName {
+.treeProductCard:hover {
+  border-color: var(--line-strong);
+}
+
+.treeCategoryInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.treeCategoryName {
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 750;
   color: var(--ink);
 }
 
-.treeNodeMeta {
+.treeCategoryMeta {
   font-size: 11px;
-  color: var(--ink-3);
+  color: var(--ink-2);
 }
 
 .treeFolderIcon {
   color: var(--leaf);
+  flex-shrink: 0;
+}
+
+.treeProductIcon {
+  color: var(--ink-3);
   flex-shrink: 0;
 }
 
@@ -519,9 +578,176 @@
   margin-left: auto;
 }
 
-.treeProductIcon {
-  color: var(--ink-3);
+.treeActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Item Selection & Sticky Toolbar */
+.itemCheckbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--leaf);
   flex-shrink: 0;
+}
+
+.productRowSelected {
+  background: #f0f7f2 !important;
+  border-color: var(--leaf) !important;
+}
+
+.copyItemBtn {
+  min-height: 28px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  color: var(--ink-2);
+  transition: all 0.15s ease;
+}
+
+.copyItemBtn:hover {
+  background: #e8f4fd;
+  border-color: #70b3e5;
+  color: #1a56db;
+}
+
+.copyAllBtn {
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--leaf);
+  background: var(--leaf-soft);
+  color: var(--leaf-dark);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.copyAllBtn:hover {
+  background: var(--leaf);
+  color: #ffffff;
+}
+
+.pricesMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.retailBadge {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.wholesaleBadge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--leaf-dark);
+  background: var(--leaf-soft);
+  padding: 2px 6px;
+  border-radius: var(--radius-pill);
+}
+
+.catPriceDefaults {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--leaf-dark);
+  margin-top: 2px;
+}
+
+/* Samsung File Manager Style Sticky Selection Toolbar */
+.selectionToolbar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: 640px;
+  background: #141e17;
+  color: #ffffff;
+  border-radius: 9999px;
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  z-index: 950;
+  backdrop-filter: blur(8px);
+}
+
+.selectionCountBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #a7f3d0;
+  white-space: nowrap;
+}
+
+.selectionActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.selectionBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 9999px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.selectionBtn:hover:not(:disabled) {
+  background: var(--leaf);
+  border-color: var(--leaf);
+}
+
+.selectionBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.selectionBtnSecondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.selectionBtnSecondary:hover {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.4);
 }
 
 /* Move Category Modal */

@@ -49,10 +49,9 @@ interface Destination {
 export const DESTINATIONS: Destination[] = [
   { href: "/app", label: "The shop", short: "Shop", icon: "store", primary: true },
   { href: "/app/sales", label: "Sales", short: "Sales", icon: "receipt", primary: true },
-  { href: "/app/items", label: "Items", short: "Items", icon: "box", primary: true },
+  { href: "/app/items", label: "Catalog", short: "Catalog", icon: "box", primary: true },
   { href: "/app/lists", label: "Lists", short: "Lists", icon: "list", primary: true },
   { href: "/app/team", label: "Team", short: "Team", icon: "people", primary: false },
-  { href: "/app/prices", label: "Prices", short: "Prices", icon: "tag", primary: false },
   { href: "/app/profile", label: "You", short: "You", icon: "person", primary: false },
 ];
 
@@ -139,6 +138,31 @@ export function AppShell({
     });
   }, []);
 
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = window.localStorage.getItem("ahia.theme");
+    if (saved === "dark" || saved === "light") {
+      setTheme(saved);
+      document.documentElement.setAttribute("data-theme", saved);
+    } else if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) {
+      setTheme("dark");
+      document.documentElement.setAttribute("data-theme", "dark");
+    }
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((current) => {
+      const next = current === "dark" ? "light" : "dark";
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("ahia.theme", next);
+        document.documentElement.setAttribute("data-theme", next);
+      }
+      return next;
+    });
+  }, []);
+
   const phoneDestinations = pinnedDestinations(pinned);
 
   return (
@@ -199,6 +223,16 @@ export function AppShell({
           ))}
         </ul>
 
+        <button
+          type="button"
+          className={styles.themeToggle}
+          onClick={toggleTheme}
+          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+        >
+          <span>Theme</span>
+          <span>{theme === "dark" ? "Dark Mode" : "Light Mode"}</span>
+        </button>
+
         <p className={styles.railFoot}>
           Signed in as
           <br />
@@ -213,22 +247,32 @@ export function AppShell({
           <Link className={styles.topbarBrand} href="/app">
             <Wordmark />
           </Link>
-          {businesses.length > 1 ? (
-            <select
-              className={styles.topbarSelect}
-              value={active?.id ?? ""}
-              onChange={(event) => onSwitchBusiness(event.target.value)}
-              aria-label="Which business"
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <button
+              type="button"
+              className={styles.themeToggleTopbar}
+              onClick={toggleTheme}
+              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
             >
-              {businesses.map((business) => (
-                <option key={business.id} value={business.id}>
-                  {business.name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span className={styles.topbarName}>{active?.name ?? ""}</span>
-          )}
+              <span>{theme === "dark" ? "Dark" : "Light"}</span>
+            </button>
+            {businesses.length > 1 ? (
+              <select
+                className={styles.topbarSelect}
+                value={active?.id ?? ""}
+                onChange={(event) => onSwitchBusiness(event.target.value)}
+                aria-label="Which business"
+              >
+                {businesses.map((business) => (
+                  <option key={business.id} value={business.id}>
+                    {business.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className={styles.topbarName}>{active?.name ?? ""}</span>
+            )}
+          </div>
         </header>
 
         <main className={styles.main} id="main">

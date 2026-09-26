@@ -328,3 +328,21 @@ class ProductResponseSchema(BaseModel):
             created_at=product.created_at,
             updated_at=product.updated_at,
         )
+
+
+class ProductCopySchema(BaseModel):
+    """Payload to copy multiple products into a destination category."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    product_ids: list[UUID]
+    target_category_id: UUID | None = None
+
+
+class ProductMoveBatchSchema(BaseModel):
+    """Payload to move multiple products into a destination category."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    product_ids: list[UUID]
+    target_category_id: UUID | None = None

@@ -27,12 +27,14 @@ import {
   ClockIcon,
   ItemBoxIcon,
   PhoneIcon,
+  TrashIcon,
 } from "@/components/icons";
 import { EmptyRequestsIllustration } from "@/components/illustrations";
 import { Button, Card, Empty, Field, Loading, Pill, Toast } from "@/components/ui";
 import {
   LINE_STATES,
   dispatchCustomerList,
+  deleteCustomerList,
   cachedRead,
   confirmCustomerList,
   currentUser,
@@ -95,6 +97,7 @@ export default function Lists() {
     tracking: "",
   });
   const [adjustments, setAdjustments] = useState<Record<string, string>>({});
+  const [listPendingDelete, setListPendingDelete] = useState<CustomerList | null>(null);
 
   const run = useCallback(async (key: string, action: () => Promise<void>, skipGate = false) => {
     // **Confirming a list is confirming money.** It is the moment a total stops being a suggestion and becomes
@@ -224,12 +227,25 @@ export default function Lists() {
             {list.note ? <p className={styles.note}>Note: {list.note}</p> : null}
 
             <div className={styles.headActions}>
-              <Button
-                busy={busyAction === `open-${list.id}`}
-                onClick={() => setOpenId(open ? null : list.id)}
-              >
-                {open ? "Close" : "Work this list"}
-              </Button>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <Button
+                  busy={busyAction === `open-${list.id}`}
+                  onClick={() => setOpenId(open ? null : list.id)}
+                >
+                  {open ? "Close" : "Work this list"}
+                </Button>
+                {list.status !== "confirmed" ? (
+                  <button
+                    type="button"
+                    className={styles.deleteListBtn}
+                    onClick={() => setListPendingDelete(list)}
+                    title="Delete this customer list"
+                  >
+                    <TrashIcon size={14} />
+                    <span>Delete</span>
+                  </button>
+                ) : null}
+              </div>
               {!open ? (
                 <span className={styles.totalPreview}>
                   {list.priced_total
@@ -531,6 +547,54 @@ export default function Lists() {
           </Card>
         );
       })}
+
+      {listPendingDelete ? (
+        <div className={styles.modalOverlay} onClick={() => setListPendingDelete(null)}>
+          <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+            <h2 className={styles.modalTitle}>
+              <TrashIcon size={20} />
+              <span>Delete customer list?</span>
+            </h2>
+            <p className={styles.modalBody}>
+              Are you sure you want to delete the list from{" "}
+              <strong>
+                {listPendingDelete.customer_name ?? listPendingDelete.customer_phone}
+              </strong>{" "}
+              ({listPendingDelete.lines.length} items)?
+            </p>
+            <div className={styles.modalWarning}>
+              Warning: This will permanently remove this customer request. This action cannot be undone.
+            </div>
+            <div className={styles.modalActions}>
+              <button
+                type="button"
+                className={styles.modalCancelBtn}
+                onClick={() => setListPendingDelete(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={styles.modalConfirmDeleteBtn}
+                disabled={busyAction === `delete-${listPendingDelete.id}`}
+                onClick={() =>
+                  run(`delete-${listPendingDelete.id}`, async () => {
+                    await deleteCustomerList(business.id, listPendingDelete.id);
+                    setLists((curr) => curr.filter((l) => l.id !== listPendingDelete.id));
+                    setListPendingDelete(null);
+                    setNotice({
+                      message: "Customer list deleted.",
+                      tone: "good",
+                    });
+                  })
+                }
+              >
+                {busyAction === `delete-${listPendingDelete.id}` ? "Deleting..." : "Yes, delete list"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <p className={styles.foot}>
         <Link className={styles.footLink} href="/app">

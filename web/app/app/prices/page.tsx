@@ -67,6 +67,11 @@ interface ItemDraft {
 
 export default function Prices() {
   const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/app/items");
+  }, [router]);
+
   const [business, setBusiness] = useState<Tenant | null>(() =>
     firstPaint<Tenant>(rememberedBusinessId(), (id) => `/api/v1/tenants/${id}`),
   );

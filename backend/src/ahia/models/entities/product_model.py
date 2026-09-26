@@ -293,6 +293,7 @@ class ProductModel:
         wholesale_price: Decimal | None = None,
         pieces_per_pack: int | None = None,
         low_stock_threshold: Decimal = ZERO_QUANTITY,
+        slug: str | None = None,
     ) -> ProductModel:
         """Create a product, deriving its slug and normalising its identifiers.
 
@@ -300,11 +301,12 @@ class ProductModel:
         visible to customers, so a business can prepare it before anyone sees it.
         """
         trimmed_name = name.strip()
+        final_slug = slug if slug is not None else normalize_slug(trimmed_name)
         return cls(
             id=product_id,
             tenant_id=tenant_id,
             name=trimmed_name,
-            slug=normalize_slug(trimmed_name),
+            slug=final_slug,
             selling_price=selling_price,
             category_id=category_id,
             description=_clean_optional_text(description),

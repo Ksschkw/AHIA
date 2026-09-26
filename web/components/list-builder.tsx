@@ -495,8 +495,20 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
           context.fillStyle = "#1e1b16";
           context.font = "22px system-ui, sans-serif";
           const indent = sub.subName !== null ? 86 : 72;
+          let displayName = line.text;
+          if (
+            line.groupName &&
+            sub.subName !== line.groupName &&
+            sec.rootName !== line.groupName &&
+            !displayName.toLowerCase().includes(line.groupName.toLowerCase())
+          ) {
+            displayName = `${line.text} (${line.groupName})`;
+          }
           const maxChars = sub.subName !== null ? 42 : 46;
-          const label = line.text.length > maxChars ? `${line.text.slice(0, maxChars - 1)}...` : line.text;
+          const label =
+            displayName.length > maxChars
+              ? `${displayName.slice(0, maxChars - 1)}...`
+              : displayName;
           context.fillText(label, indent, y);
 
           context.fillStyle = "#084a2f";

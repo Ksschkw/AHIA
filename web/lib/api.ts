@@ -612,6 +612,36 @@ export function moveItemToGroup(
   });
 }
 
+/** Copy products into another category folder, inheriting target defaults when not overridden. */
+export function copyProducts(
+  tenantId: string,
+  productIds: string[],
+  targetCategoryId: string | null,
+): Promise<Product[]> {
+  return request<Product[]>(`/api/v1/tenants/${tenantId}/products/copy`, {
+    method: "POST",
+    body: {
+      product_ids: productIds,
+      target_category_id: targetCategoryId,
+    },
+  });
+}
+
+/** Move multiple products into another category folder or to root shelf in one operation. */
+export function moveProductsBatch(
+  tenantId: string,
+  productIds: string[],
+  targetCategoryId: string | null,
+): Promise<Product[]> {
+  return request<Product[]>(`/api/v1/tenants/${tenantId}/products/move-batch`, {
+    method: "POST",
+    body: {
+      product_ids: productIds,
+      target_category_id: targetCategoryId,
+    },
+  });
+}
+
 /**
  * Publication is its own operation, not a field on an edit: a product that appears in the public shop
  * is a decision, and it is recorded as one.
@@ -956,6 +986,13 @@ export function confirmCustomerList(tenantId: string, requestId: string): Promis
   return request<CustomerList>(`/api/v1/tenants/${tenantId}/requests/${requestId}/confirm`, {
     method: "POST",
     body: {},
+  });
+}
+
+/** Delete an unconfirmed customer list from the business records. */
+export function deleteCustomerList(tenantId: string, requestId: string): Promise<void> {
+  return request<void>(`/api/v1/tenants/${tenantId}/requests/${requestId}`, {
+    method: "DELETE",
   });
 }
 

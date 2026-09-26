@@ -30,7 +30,7 @@ service at publication and never logged - only its fingerprint is.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, Final
@@ -46,6 +46,7 @@ from ahia.core.permissions.product_permissions import (
     PRODUCTS_UPDATE,
 )
 from ahia.core.security import TokenService, fingerprint_for_log
+from ahia.core.slug import normalize_slug
 from ahia.core.tenant_context import TenantContext
 from ahia.crud import category_crud, product_crud
 from ahia.models.entities.category_model import CategoryModel
@@ -152,6 +153,12 @@ class ProductService:
                 "cost_price": cost_price,
                 "wholesale_price": wholesale_price,
                 "pieces_per_pack": pieces_per_pack,
+                "slug": await self._resolve_product_slug(
+                    session,
+                    tenant_id=tenant_context.tenant_id,
+                    name=name,
+                    category=group,
+                ),
             }
             if low_stock_threshold is not None:
                 creation_arguments["low_stock_threshold"] = low_stock_threshold
@@ -177,6 +184,180 @@ class ProductService:
             has_sku=product.sku is not None,
         )
         return product
+
+    async def copy_products(
+        self,
+        tenant_context: TenantContext,
+        *,
+        product_ids: Sequence[UUID],
+        target_category_id: UUID | None,
+    ) -> list[ProductModel]:
+        """Copy a collection of products into a target category.
+
+        Items inherit the target category's default normal and wholesale prices unless
+        they carry explicit overrides.
+        """
+        tenant_context.require_permission(
+            PRODUCTS_CREATE,
+            operation="copy_products",
+            resource_type="product",
+            resource_id=str(tenant_context.tenant_id),
+            logger=self._logger,
+        )
+
+        now = datetime.now(UTC)
+        copied: list[ProductModel] = []
+        unit_of_work = self._unit_of_work_factory()
+        async with unit_of_work:
+            session = unit_of_work.session_handle
+            target_group = await self._require_category_in_business(
+                session, tenant_context=tenant_context, category_id=target_category_id
+            )
+            target_defaults = (
+                target_group.price_defaults() if target_group is not None else NO_DEFAULTS
+            )
+
+            for product_id in product_ids:
+                source = await self._require_product(
+                    session, tenant_context=tenant_context, product_id=product_id
+                )
+                source_group = await self._require_category_in_business(
+                    session, tenant_context=tenant_context, category_id=source.category_id
+                )
+                source_defaults = (
+                    source_group.price_defaults() if source_group is not None else NO_DEFAULTS
+                )
+                source_resolved = resolve_price(
+                    own_normal_price=source.selling_price,
+                    own_wholesale_price=source.wholesale_price,
+                    own_pieces_per_pack=source.pieces_per_pack,
+                    defaults=source_defaults,
+                )
+
+                # Determine selling price:
+                if target_defaults.normal_price is not None:
+                    new_selling_price = source.selling_price
+                else:
+                    new_selling_price = (
+                        source.selling_price
+                        if source.selling_price is not None
+                        else source_resolved.normal_price
+                    )
+
+                # Determine wholesale price:
+                if target_defaults.wholesale_price is not None:
+                    new_wholesale_price = source.wholesale_price
+                else:
+                    new_wholesale_price = (
+                        source.wholesale_price
+                        if source.wholesale_price is not None
+                        else source_resolved.wholesale_price
+                    )
+
+                await self._require_a_price(
+                    own_normal_price=new_selling_price,
+                    defaults=target_defaults,
+                    product_name=source.name,
+                    operation="copy_products",
+                )
+
+                creation_arguments: dict[str, Any] = {
+                    "product_id": uuid4(),
+                    "tenant_id": tenant_context.tenant_id,
+                    "name": source.name,
+                    "selling_price": new_selling_price,
+                    "now": now,
+                    "category_id": target_category_id,
+                    "description": source.description,
+                    "sku": None,
+                    "barcode": None,
+                    "cost_price": source.cost_price,
+                    "wholesale_price": new_wholesale_price,
+                    "pieces_per_pack": source.pieces_per_pack,
+                    "slug": await self._resolve_product_slug(
+                        session,
+                        tenant_id=tenant_context.tenant_id,
+                        name=source.name,
+                        category=target_group,
+                        allow_disambiguation=True,
+                    ),
+                }
+                new_product = await product_crud.create(
+                    session, ProductModel.create(**creation_arguments)
+                )
+                await self._audit.record_audit_event(
+                    session,
+                    tenant_context,
+                    action="create_product",
+                    entity_type="product",
+                    entity_id=new_product.id,
+                    now=new_product.created_at,
+                    detail=new_product.describe_for_audit(),
+                )
+                copied.append(new_product)
+
+            await unit_of_work.commit()
+
+        self._logger.info(
+            "products_copied",
+            tenant_id=str(tenant_context.tenant_id),
+            actor_id=str(tenant_context.user_id),
+            count=len(copied),
+            target_category_id=str(target_category_id) if target_category_id else None,
+        )
+        return copied
+
+    async def move_products(
+        self,
+        tenant_context: TenantContext,
+        *,
+        product_ids: Sequence[UUID],
+        target_category_id: UUID | None,
+    ) -> list[ProductModel]:
+        """Move multiple products into another category."""
+        tenant_context.require_permission(
+            PRODUCTS_UPDATE,
+            operation="move_products",
+            resource_type="product",
+            resource_id=str(tenant_context.tenant_id),
+            logger=self._logger,
+        )
+
+        now = datetime.now(UTC)
+        moved: list[ProductModel] = []
+        unit_of_work = self._unit_of_work_factory()
+        async with unit_of_work:
+            session = unit_of_work.session_handle
+            await self._require_category_in_business(
+                session, tenant_context=tenant_context, category_id=target_category_id
+            )
+            for product_id in product_ids:
+                product = await self._require_product(
+                    session, tenant_context=tenant_context, product_id=product_id
+                )
+                product = product.categorised(category_id=target_category_id, at=now)
+                product = await product_crud.update(session, product)
+                await self._audit.record_audit_event(
+                    session,
+                    tenant_context,
+                    action="update_product",
+                    entity_type="product",
+                    entity_id=product.id,
+                    now=product.updated_at,
+                    detail=product.describe_for_audit(),
+                )
+                moved.append(product)
+
+            await unit_of_work.commit()
+
+        self._logger.info(
+            "products_moved_batch",
+            tenant_id=str(tenant_context.tenant_id),
+            actor_id=str(tenant_context.user_id),
+            count=len(moved),
+            target_category_id=str(target_category_id) if target_category_id else None,
+        )
+        return moved
 
     # ------------------------------------------------------------------
     # Reading
@@ -750,6 +931,34 @@ class ProductService:
                 detail="no category matched in this business",
             )
         return category
+
+    async def _resolve_product_slug(
+        self,
+        session: Any,
+        *,
+        tenant_id: UUID,
+        name: str,
+        category: CategoryModel | None = None,
+        allow_disambiguation: bool = False,
+    ) -> str:
+        """Resolve a unique slug for a product, disambiguating when appropriate."""
+        base_slug = normalize_slug(name)
+        existing = await product_crud.get_by_slug(session, tenant_id=tenant_id, slug=base_slug)
+        if existing is None:
+            return base_slug
+        if not allow_disambiguation and (category is None or existing.category_id == category.id):
+            return base_slug
+
+        prefix = base_slug[:55].rstrip("-")
+        if category is not None and (allow_disambiguation or existing.category_id != category.id):
+            cat_slug = normalize_slug(category.name)
+            prefix = normalize_slug(f"{base_slug[:30]}-{cat_slug[:25]}")[:55].rstrip("-")
+
+        for counter in range(2, 100):
+            candidate = f"{prefix}-{counter}"
+            if await product_crud.get_by_slug(session, tenant_id=tenant_id, slug=candidate) is None:
+                return candidate
+        return f"{prefix[:50]}-{uuid4().hex[:6]}"
 
 
 # ---------------------------------------------------------------------------

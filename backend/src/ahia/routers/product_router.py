@@ -27,8 +27,10 @@ from ahia.core.tenant_context import TenantContext
 from ahia.routers.tenant_router import require_tenant_context
 from ahia.schemas.product_schema import (
     PriceForResponse,
+    ProductCopySchema,
     ProductCreateSchema,
     ProductForResponse,
+    ProductMoveBatchSchema,
     ProductResponseSchema,
     ProductUpdateSchema,
 )
@@ -93,6 +95,48 @@ async def create_product(
         low_stock_threshold=payload.low_stock_threshold,
     )
     return _shape(product, await service.price_for(tenant_context, product))
+
+
+@router.post(
+    "/products/copy",
+    response_model=list[ProductResponseSchema],
+    status_code=status.HTTP_201_CREATED,
+    summary="Copy products into another category",
+)
+async def copy_products(
+    payload: ProductCopySchema,
+    tenant_context: TenantContextDependency,
+    service: ProductServiceDependency,
+) -> list[ProductResponseSchema]:
+    """Copy products into another category, adopting target category prices."""
+    products = await service.copy_products(
+        tenant_context,
+        product_ids=payload.product_ids,
+        target_category_id=payload.target_category_id,
+    )
+    prices = await service.prices_for(tenant_context, products)
+    return _shape_all(products, prices)
+
+
+@router.post(
+    "/products/move-batch",
+    response_model=list[ProductResponseSchema],
+    status_code=status.HTTP_200_OK,
+    summary="Move multiple products into another category",
+)
+async def move_products_batch(
+    payload: ProductMoveBatchSchema,
+    tenant_context: TenantContextDependency,
+    service: ProductServiceDependency,
+) -> list[ProductResponseSchema]:
+    """Move multiple products into another category in one transaction."""
+    products = await service.move_products(
+        tenant_context,
+        product_ids=payload.product_ids,
+        target_category_id=payload.target_category_id,
+    )
+    prices = await service.prices_for(tenant_context, products)
+    return _shape_all(products, prices)
 
 
 @router.get(

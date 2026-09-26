@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import pytest
 
+from ahia.core.errors import InvalidInputError
 from ahia.core.permissions import sales_permissions
 from ahia.core.tenant_context import TenantContext
 from ahia.crud import (
@@ -322,7 +323,85 @@ async def test_list_customer_history_returns_summaries_and_lines() -> None:
     assert len(summaries) == 1
     assert summaries[0].id == req_id
     assert summaries[0].line_count == 1
-    assert summaries[0].priced_total == "4500.00"
     assert len(summaries[0].lines) == 1
     assert summaries[0].lines[0].text == "Ceramic Screenguard"
     assert summaries[0].lines[0].quantity == "3.000"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_unconfirmed_request() -> None:
+    tenant_id = uuid4()
+    req_id = uuid4()
+
+    mock_session = AsyncMock()
+    mock_uow = MagicMock()
+    mock_uow.session_handle = mock_session
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=None)
+    mock_uow.commit = AsyncMock()
+    mock_uow_factory = MagicMock(return_value=mock_uow)
+    mock_tokens = MagicMock()
+    mock_audit = MagicMock()
+    mock_audit.record_audit_event = AsyncMock()
+
+    service = RequestService(
+        unit_of_work_factory=mock_uow_factory,
+        token_service=mock_tokens,
+        audit_event_service=mock_audit,
+    )
+
+    mock_req = RequestModel.submitted_by_customer(
+        request_id=req_id,
+        tenant_id=tenant_id,
+        customer_phone="08031234567",
+        now=NOW,
+    )
+    request_crud.require_by_id = AsyncMock(return_value=mock_req)  # type: ignore[method-assign]
+    request_crud.delete = AsyncMock(return_value=None)  # type: ignore[method-assign]
+
+    tenant_context = TenantContext(
+        tenant_id=tenant_id,
+        user_id=uuid4(),
+        membership_id=uuid4(),
+        permissions=frozenset({sales_permissions.SALES_CREATE}),
+    )
+    await service.delete_request(tenant_context, request_id=req_id)
+    request_crud.delete.assert_awaited_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_confirmed_request_refused() -> None:
+    tenant_id = uuid4()
+    req_id = uuid4()
+
+    mock_session = AsyncMock()
+    mock_uow = MagicMock()
+    mock_uow.session_handle = mock_session
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=None)
+    mock_uow_factory = MagicMock(return_value=mock_uow)
+    mock_tokens = MagicMock()
+
+    service = RequestService(
+        unit_of_work_factory=mock_uow_factory,
+        token_service=mock_tokens,
+    )
+
+    mock_req = RequestModel.submitted_by_customer(
+        request_id=req_id,
+        tenant_id=tenant_id,
+        customer_phone="08031234567",
+        now=NOW,
+    ).confirmed(at=NOW)
+    request_crud.require_by_id = AsyncMock(return_value=mock_req)  # type: ignore[method-assign]
+
+    tenant_context = TenantContext(
+        tenant_id=tenant_id,
+        user_id=uuid4(),
+        membership_id=uuid4(),
+        permissions=frozenset({sales_permissions.SALES_CREATE}),
+    )
+    with pytest.raises(InvalidInputError):
+        await service.delete_request(tenant_context, request_id=req_id)

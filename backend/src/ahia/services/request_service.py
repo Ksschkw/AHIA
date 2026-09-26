@@ -929,3 +929,51 @@ class RequestService:
             products_by_id=products_by_id,
             categories_by_id=categories_by_id,
         )
+
+    async def delete_request(
+        self,
+        tenant_context: TenantContext,
+        *,
+        request_id: UUID,
+    ) -> None:
+        """Delete an unconfirmed customer list."""
+        tenant_context.require_permission(
+            sales_permissions.SALES_CREATE,
+            operation="delete_request",
+            resource_type="request",
+            resource_id=str(request_id),
+            logger=self._logger,
+        )
+        now = datetime.now(UTC)
+        unit_of_work = self._unit_of_work_factory()
+        async with unit_of_work:
+            session = unit_of_work.session_handle
+            request = await request_crud.require_by_id(
+                session, tenant_id=tenant_context.tenant_id, request_id=request_id
+            )
+            if request.is_confirmed:
+                raise InvalidInputError(
+                    operation="delete_request",
+                    entity="request",
+                    identifier=str(request_id),
+                    detail="confirmed lists cannot be deleted as they are recorded sales",
+                )
+            await request_crud.delete(
+                session, tenant_id=tenant_context.tenant_id, request_id=request_id
+            )
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="request_deleted",
+                entity_type="request",
+                entity_id=request.id,
+                now=now,
+                detail={"customer_phone": request.customer_phone},
+            )
+            await unit_of_work.commit()
+
+        self._logger.info(
+            "request_deleted",
+            tenant_id=str(tenant_context.tenant_id),
+            request_id=str(request_id),
+        )
