@@ -4164,3 +4164,18 @@ Allows traders to reorganize categories flexibly on the shelf:
    - "Shelf Root (Top Level)" option enables moving any subcategory out to the root shelf in one tap.
    - Current location is clearly badged and disabled.
    - Successful moves immediately update the category tree and display an affirmative toast confirmation.
+
+## 15. Move Items Between Category Folders or to Root Shelf
+
+Allows traders to reorganize products between categories or unfile them to root shelf:
+
+1. **Move Item Action on Product Rows (`/app/items`)**:
+   - Added a dedicated "Move" action button on all product rows across Search results, Folder drill-down, and Complete Family Tree views.
+   - Preserves quick publication toggle alongside item movement.
+2. **Item Destination Picker Modal**:
+   - Displays "Shelf Root (Uncategorized)" at the top so items can be moved out of any folder to the main shelf in one tap.
+   - Lists all shop categories sorted alphabetically with full hierarchical breadcrumb trails (`getCategoryPath`) for easy selection.
+   - Highlights the current category with a "Current" badge and disables self-selection.
+3. **Optimistic Updates & Backend Synchronization**:
+   - Calls `moveItemToGroup(tenantId, productId, categoryId)` (`PATCH /api/v1/tenants/{tenantId}/products/{productId}`).
+   - Updates local product state optimistically and displays an affirmative toast notification confirming the new location.

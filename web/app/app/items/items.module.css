@@ -269,6 +269,24 @@
   color: var(--leaf-dark);
 }
 
+.moveItemSmallBtn {
+  background: none;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink-2);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.moveItemSmallBtn:hover {
+  background: var(--leaf-soft);
+  border-color: var(--leaf);
+  color: var(--leaf-dark);
+}
+
 .folderMain {
   display: flex;
   align-items: center;
@@ -393,6 +411,25 @@
   background: #def7ec;
   border-color: #31c48d;
   color: #03543f;
+}
+
+.moveItemBtn {
+  min-height: 28px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  color: var(--ink-2);
+  transition: all 0.15s ease;
+}
+
+.moveItemBtn:hover {
+  background: var(--leaf-soft);
+  border-color: var(--leaf);
+  color: var(--leaf-dark);
 }
 
 /* Form Card */

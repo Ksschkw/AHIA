@@ -39,6 +39,7 @@ import {
   moveCategory,
   listProducts,
   createProduct,
+  moveItemToGroup,
   publishProduct,
   unpublishProduct,
   listStock,
@@ -73,9 +74,11 @@ export default function Items() {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
 
-  // Moving category state
+  // Moving category & item state
   const [movingCategory, setMovingCategory] = useState<Category | null>(null);
   const [busyMove, setBusyMove] = useState(false);
+  const [movingProduct, setMovingProduct] = useState<Product | null>(null);
+  const [busyMoveProduct, setBusyMoveProduct] = useState(false);
 
   // Forms state
   const [showAddCategory, setShowAddCategory] = useState(false);
@@ -262,6 +265,36 @@ export default function Items() {
       });
     } finally {
       setBusyMove(false);
+    }
+  }
+
+  async function handleExecuteMoveProduct(targetCategoryId: string | null) {
+    if (!business || !movingProduct) return;
+    if ((movingProduct.category_id ?? null) === targetCategoryId) {
+      setMovingProduct(null);
+      return;
+    }
+    setBusyMoveProduct(true);
+    try {
+      const updated = await moveItemToGroup(business.id, movingProduct.id, targetCategoryId);
+      setProducts((current) =>
+        (current ?? []).map((p) => (p.id === updated.id ? updated : p)),
+      );
+      const targetName = targetCategoryId
+        ? categories.find((c) => c.id === targetCategoryId)?.name ?? "selected folder"
+        : "Shelf Root (Uncategorized)";
+      setNotice({
+        message: `Item "${movingProduct.name}" moved to ${targetName}.`,
+        tone: "good",
+      });
+      setMovingProduct(null);
+    } catch {
+      setNotice({
+        message: "Could not move item. Please try again.",
+        tone: "bad",
+      });
+    } finally {
+      setBusyMoveProduct(false);
     }
   }
 
@@ -619,6 +652,14 @@ export default function Items() {
                     <div className={styles.productActions}>
                       <button
                         type="button"
+                        className={styles.moveItemBtn}
+                        title={`Move ${prod.name} into another folder or root`}
+                        onClick={() => setMovingProduct(prod)}
+                      >
+                        Move
+                      </button>
+                      <button
+                        type="button"
                         className={`${styles.publishToggleBtn} ${prod.is_published ? styles.published : ""}`}
                         disabled={busyAction === `pub-${prod.id}`}
                         onClick={() => void handleTogglePublish(prod)}
@@ -653,6 +694,7 @@ export default function Items() {
               setViewMode("folder");
             }}
             onStartMoveCategory={setMovingCategory}
+            onStartMoveProduct={setMovingProduct}
             onTogglePublish={handleTogglePublish}
             busyAction={busyAction}
           />
@@ -780,6 +822,14 @@ export default function Items() {
                       <div className={styles.productActions}>
                         <button
                           type="button"
+                          className={styles.moveItemBtn}
+                          title={`Move ${prod.name} into another folder or root`}
+                          onClick={() => setMovingProduct(prod)}
+                        >
+                          Move
+                        </button>
+                        <button
+                          type="button"
                           className={`${styles.publishToggleBtn} ${prod.is_published ? styles.published : ""}`}
                           disabled={busyAction === `pub-${prod.id}`}
                           onClick={() => void handleTogglePublish(prod)}
@@ -880,6 +930,93 @@ export default function Items() {
         </div>
       ) : null}
 
+      {/* Move Product Modal */}
+      {movingProduct !== null ? (
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="move-product-title"
+          onClick={() => !busyMoveProduct && setMovingProduct(null)}
+        >
+          <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div>
+                <h2 id="move-product-title" className={styles.modalTitle}>
+                  Move &quot;{movingProduct.name}&quot;
+                </h2>
+                <p className={styles.modalSubtitle}>
+                  Choose a category folder or move out to Shelf Root
+                </p>
+              </div>
+              <button
+                type="button"
+                className={styles.modalClose}
+                aria-label="Close modal"
+                disabled={busyMoveProduct}
+                onClick={() => setMovingProduct(null)}
+              >
+                <CloseIcon size={16} />
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              {/* Shelf Root Option */}
+              <button
+                type="button"
+                className={`${styles.moveOption} ${movingProduct.category_id === null ? styles.moveOptionCurrent : ""}`}
+                disabled={busyMoveProduct || movingProduct.category_id === null}
+                onClick={() => void handleExecuteMoveProduct(null)}
+              >
+                <div className={styles.moveOptionMain}>
+                  <FolderOpenIcon size={18} className={styles.moveOptionIcon} />
+                  <div className={styles.moveOptionInfo}>
+                    <span className={styles.moveOptionName}>Shelf Root (Uncategorized)</span>
+                    <span className={styles.moveOptionPath}>Move out of all folders to main shelf</span>
+                  </div>
+                </div>
+                {movingProduct.category_id === null ? (
+                  <span className={styles.currentBadge}>Current</span>
+                ) : (
+                  <span className={styles.selectMoveBtn}>Move Here</span>
+                )}
+              </button>
+
+              {/* All Categories */}
+              {categories
+                .slice()
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((target) => {
+                  const isCurrent = movingProduct.category_id === target.id;
+                  const fullPath = getCategoryPath(target, categories);
+                  return (
+                    <button
+                      key={target.id}
+                      type="button"
+                      className={`${styles.moveOption} ${isCurrent ? styles.moveOptionCurrent : ""}`}
+                      disabled={busyMoveProduct || isCurrent}
+                      onClick={() => void handleExecuteMoveProduct(target.id)}
+                    >
+                      <div className={styles.moveOptionMain}>
+                        <FolderIcon size={18} className={styles.moveOptionIcon} />
+                        <div className={styles.moveOptionInfo}>
+                          <span className={styles.moveOptionName}>{target.name}</span>
+                          <span className={styles.moveOptionPath}>{fullPath}</span>
+                        </div>
+                      </div>
+                      {isCurrent ? (
+                        <span className={styles.currentBadge}>Current</span>
+                      ) : (
+                        <span className={styles.selectMoveBtn}>Move Here</span>
+                      )}
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {notice ? (
         <Toast
           message={notice.message}
@@ -901,6 +1038,7 @@ function FamilyTreeRenderer({
   parentId,
   onSelectCategory,
   onStartMoveCategory,
+  onStartMoveProduct,
   onTogglePublish,
   busyAction,
 }: {
@@ -911,6 +1049,7 @@ function FamilyTreeRenderer({
   parentId: string | null;
   onSelectCategory: (id: string) => void;
   onStartMoveCategory?: (category: Category) => void;
+  onStartMoveProduct?: (product: Product) => void;
   onTogglePublish: (prod: Product) => void;
   busyAction: string | null;
 }) {
@@ -953,6 +1092,7 @@ function FamilyTreeRenderer({
             parentId={cat.id}
             onSelectCategory={onSelectCategory}
             onStartMoveCategory={onStartMoveCategory}
+            onStartMoveProduct={onStartMoveProduct}
             onTogglePublish={onTogglePublish}
             busyAction={busyAction}
           />
@@ -975,14 +1115,26 @@ function FamilyTreeRenderer({
                 {formatQuantity(curStock?.available_quantity ?? "0")} in stock
               </span>
             </div>
-            <button
-              type="button"
-              className={`${styles.publishToggleBtn} ${prod.is_published ? styles.published : ""}`}
-              disabled={busyAction === `pub-${prod.id}`}
-              onClick={() => onTogglePublish(prod)}
-            >
-              {prod.is_published ? "In shop" : "Hidden"}
-            </button>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "6px" }}>
+              {onStartMoveProduct ? (
+                <button
+                  type="button"
+                  className={styles.moveItemSmallBtn}
+                  onClick={() => onStartMoveProduct(prod)}
+                  title={`Move ${prod.name}`}
+                >
+                  Move
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className={`${styles.publishToggleBtn} ${prod.is_published ? styles.published : ""}`}
+                disabled={busyAction === `pub-${prod.id}`}
+                onClick={() => onTogglePublish(prod)}
+              >
+                {prod.is_published ? "In shop" : "Hidden"}
+              </button>
+            </div>
           </div>
         );
       })}
