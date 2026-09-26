@@ -112,3 +112,111 @@ export async function registerAccount(details: {
   });
   await rememberSession(session);
 }
+
+export interface TenantSummary {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+export interface Product {
+  id: string;
+  tenant_id: string;
+  name: string;
+  slug: string;
+  category_id: string | null;
+  description: string | null;
+  selling_price: string | null;
+  effective_normal_price: string | null;
+  effective_wholesale_price: string | null;
+  is_active: boolean;
+  is_published: boolean;
+}
+
+export interface CustomerListLine {
+  id: string;
+  product_id: string | null;
+  product_name: string | null;
+  group_name: string | null;
+  free_text: string | null;
+  note: string | null;
+  quantity: string;
+  unit: string;
+  pieces_per_pack: number | null;
+  pieces: string | null;
+  shop_price: string | null;
+  cost_price: string | null;
+  line_total: string | null;
+  state: "somewhere" | "have_it" | "buy_it" | "cannot_get";
+}
+
+export interface CustomerList {
+  id: string;
+  tenant_id: string;
+  customer_phone: string;
+  customer_name: string | null;
+  status: "received" | "quoted" | "confirmed" | "cancelled";
+  created_at: string;
+  priced_total: string | null;
+  lines: CustomerListLine[];
+}
+
+export function listBusinesses(): Promise<TenantSummary[]> {
+  return request<TenantSummary[]>("/api/v1/tenants");
+}
+
+export function listProducts(tenantId: string): Promise<Product[]> {
+  return request<Product[]>(`/api/v1/tenants/${tenantId}/products`);
+}
+
+export function publishProduct(tenantId: string, productId: string): Promise<Product> {
+  return request<Product>(`/api/v1/tenants/${tenantId}/products/${productId}/publish`, {
+    method: "POST",
+  });
+}
+
+export function unpublishProduct(tenantId: string, productId: string): Promise<Product> {
+  return request<Product>(`/api/v1/tenants/${tenantId}/products/${productId}/unpublish`, {
+    method: "POST",
+  });
+}
+
+export function recordSale(
+  tenantId: string,
+  sale: {
+    lines: Array<{ product_id: string; quantity: string; unit_price: string }>;
+    payment_method: string;
+  },
+): Promise<{ id: string; total_amount: string }> {
+  return request<{ id: string; total_amount: string }>(`/api/v1/tenants/${tenantId}/sales`, {
+    method: "POST",
+    body: sale,
+  });
+}
+
+export function sellOneProduct(tenantId: string, product: Product): Promise<{ id: string; total_amount: string }> {
+  const price = product.effective_normal_price ?? product.selling_price ?? "0";
+  return recordSale(tenantId, {
+    lines: [{ product_id: product.id, quantity: "1.000", unit_price: price }],
+    payment_method: "cash",
+  });
+}
+
+export function listCustomerLists(tenantId: string): Promise<CustomerList[]> {
+  return request<CustomerList[]>(`/api/v1/tenants/${tenantId}/requests`);
+}
+
+export function workListLine(
+  tenantId: string,
+  listId: string,
+  lineId: string,
+  updates: {
+    shop_price?: string;
+    state?: string;
+  },
+): Promise<CustomerList> {
+  return request<CustomerList>(`/api/v1/tenants/${tenantId}/requests/${listId}/lines/${lineId}`, {
+    method: "PATCH",
+    body: updates,
+  });
+}
