@@ -2164,6 +2164,8 @@ export interface components {
         CategoryUpdateSchema: {
             /** Name */
             name?: string | null;
+            /** Parent Id */
+            parent_id?: string | null;
             /** Description */
             description?: string | null;
             /** Default Normal Price */

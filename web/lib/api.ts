@@ -565,6 +565,20 @@ export function setGroupPrices(
 }
 
 /**
+ * Move a category inside another category (or to the shelf root with null).
+ */
+export function moveCategory(
+  tenantId: string,
+  categoryId: string,
+  parentId: string | null,
+): Promise<Category> {
+  return request<Category>(`/api/v1/tenants/${tenantId}/categories/${categoryId}`, {
+    method: "PATCH",
+    body: { parent_id: parentId } satisfies Schemas["CategoryUpdateSchema"],
+  });
+}
+
+/**
  * Set an item's own prices, or clear them back to following its group.
  *
  * `null` is the meaningful value here: it removes the override, and the item goes back to whatever

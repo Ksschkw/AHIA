@@ -366,6 +366,54 @@ async def test_an_update_cannot_change_the_slug(database: Database) -> None:
     assert response.status_code == 422
 
 
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_moving_a_category_to_another_parent_or_root(database: Database) -> None:
+    async with running_application() as (client, _application):
+        owner, tenant = await owner_with_business(client)
+        cat_a = await client.post(
+            categories_path(tenant["id"]), headers=auth(owner), json={"name": "Phones"}
+        )
+        cat_b = await client.post(
+            categories_path(tenant["id"]), headers=auth(owner), json={"name": "Screenguards"}
+        )
+
+        # Move Screenguards under Phones
+        moved_under = await client.patch(
+            f"{categories_path(tenant['id'])}/{cat_b.json()['id']}",
+            headers=auth(owner),
+            json={"parent_id": cat_a.json()["id"]},
+        )
+        assert moved_under.status_code == 200, moved_under.text
+        assert moved_under.json()["parent_id"] == cat_a.json()["id"]
+
+        # Move Screenguards back to root by passing null
+        moved_to_root = await client.patch(
+            f"{categories_path(tenant['id'])}/{cat_b.json()['id']}",
+            headers=auth(owner),
+            json={"parent_id": None},
+        )
+        assert moved_to_root.status_code == 200, moved_to_root.text
+        assert moved_to_root.json()["parent_id"] is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_moving_a_category_into_itself_is_refused(database: Database) -> None:
+    async with running_application() as (client, _application):
+        owner, tenant = await owner_with_business(client)
+        cat = await client.post(
+            categories_path(tenant["id"]), headers=auth(owner), json={"name": "Phones"}
+        )
+
+        response = await client.patch(
+            f"{categories_path(tenant['id'])}/{cat.json()['id']}",
+            headers=auth(owner),
+            json={"parent_id": cat.json()["id"]},
+        )
+        assert response.status_code == 422, response.text
+
+
 # ---------------------------------------------------------------------------
 # Authorization over HTTP
 # ---------------------------------------------------------------------------

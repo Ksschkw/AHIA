@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   ChevronRightIcon,
+  CloseIcon,
   FolderIcon,
   FolderOpenIcon,
   ItemBoxIcon,
@@ -35,6 +36,7 @@ import {
   listBusinesses,
   listCategories,
   createCategory,
+  moveCategory,
   listProducts,
   createProduct,
   publishProduct,
@@ -70,6 +72,10 @@ export default function Items() {
   );
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+
+  // Moving category state
+  const [movingCategory, setMovingCategory] = useState<Category | null>(null);
+  const [busyMove, setBusyMove] = useState(false);
 
   // Forms state
   const [showAddCategory, setShowAddCategory] = useState(false);
@@ -183,6 +189,81 @@ export default function Items() {
     },
     [categories, products],
   );
+
+  // Helper: find all recursive descendant IDs for a category (to prevent cyclic moves)
+  const getDescendantCategoryIds = useCallback(
+    (categoryId: string, allCategories: Category[]): Set<string> => {
+      const descendants = new Set<string>();
+      const queue = [categoryId];
+      while (queue.length > 0) {
+        const current = queue.shift();
+        if (!current) continue;
+        for (const cat of allCategories) {
+          if (cat.parent_id === current && !descendants.has(cat.id)) {
+            descendants.add(cat.id);
+            queue.push(cat.id);
+          }
+        }
+      }
+      return descendants;
+    },
+    [],
+  );
+
+  // Helper: get human-readable breadcrumb path for a category
+  const getCategoryPath = useCallback(
+    (category: Category, allCategories: Category[]): string => {
+      const parts: string[] = [category.name];
+      let currentParentId = category.parent_id;
+      while (currentParentId) {
+        const parent = allCategories.find((c) => c.id === currentParentId);
+        if (!parent) break;
+        parts.unshift(parent.name);
+        currentParentId = parent.parent_id;
+      }
+      return parts.join(" > ");
+    },
+    [],
+  );
+
+  // Eligible move targets (cannot move inside itself or any of its descendants)
+  const eligibleMoveTargets = useMemo(() => {
+    if (!movingCategory) return [];
+    const descendantIds = getDescendantCategoryIds(movingCategory.id, categories);
+    return categories
+      .filter((cat) => cat.id !== movingCategory.id && !descendantIds.has(cat.id))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [movingCategory, categories, getDescendantCategoryIds]);
+
+  async function handleExecuteMove(targetParentId: string | null) {
+    if (!business || !movingCategory) return;
+    if ((movingCategory.parent_id ?? null) === targetParentId) {
+      setMovingCategory(null);
+      return;
+    }
+    setBusyMove(true);
+    try {
+      const updated = await moveCategory(business.id, movingCategory.id, targetParentId);
+      setCategories((current) =>
+        current.map((c) => (c.id === updated.id ? updated : c)),
+      );
+      const targetName = targetParentId
+        ? categories.find((c) => c.id === targetParentId)?.name ?? "selected folder"
+        : "Shelf Root";
+      setNotice({
+        message: `Category "${movingCategory.name}" moved to ${targetName}.`,
+        tone: "good",
+      });
+      setMovingCategory(null);
+    } catch {
+      setNotice({
+        message: "Could not move category. Check that you are not creating a loop.",
+        tone: "bad",
+      });
+    } finally {
+      setBusyMove(false);
+    }
+  }
 
   async function handleCreateCategory() {
     if (!business) return;
@@ -470,26 +551,45 @@ export default function Items() {
               {searchResults.categories.map((cat) => {
                 const stats = getCategoryStats(cat.id);
                 return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    className={styles.folderCard}
-                    onClick={() => {
-                      setCurrentCategoryId(cat.id);
-                      setQuery("");
-                    }}
-                  >
-                    <span className={styles.folderMain}>
-                      <span className={styles.folderIcon}>
-                        <FolderIcon size={20} />
+                  <div key={cat.id} className={styles.folderCard}>
+                    <div
+                      className={styles.folderCardMain}
+                      onClick={() => {
+                        setCurrentCategoryId(cat.id);
+                        setQuery("");
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          setCurrentCategoryId(cat.id);
+                          setQuery("");
+                        }
+                      }}
+                    >
+                      <span className={styles.folderMain}>
+                        <span className={styles.folderIcon}>
+                          <FolderIcon size={20} />
+                        </span>
+                        <span className={styles.folderName}>{cat.name}</span>
                       </span>
-                      <span className={styles.folderName}>{cat.name}</span>
-                    </span>
-                    <span className={styles.folderCount}>
-                      {stats.products} items
-                    </span>
-                    <ChevronRightIcon size={16} className={styles.folderChev} />
-                  </button>
+                      <span className={styles.folderCount}>
+                        {stats.products} items
+                      </span>
+                      <ChevronRightIcon size={16} className={styles.folderChev} />
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.moveFolderBtn}
+                      title={`Move ${cat.name} into another folder`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMovingCategory(cat);
+                      }}
+                    >
+                      Move
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -552,6 +652,7 @@ export default function Items() {
               setCurrentCategoryId(id);
               setViewMode("folder");
             }}
+            onStartMoveCategory={setMovingCategory}
             onTogglePublish={handleTogglePublish}
             busyAction={busyAction}
           />
@@ -569,24 +670,42 @@ export default function Items() {
                 {currentSubcategories.map((cat) => {
                   const stats = getCategoryStats(cat.id);
                   return (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      className={styles.folderCard}
-                      onClick={() => setCurrentCategoryId(cat.id)}
-                    >
-                      <span className={styles.folderMain}>
-                        <span className={styles.folderIcon}>
-                          <FolderIcon size={20} />
+                    <div key={cat.id} className={styles.folderCard}>
+                      <div
+                        className={styles.folderCardMain}
+                        onClick={() => setCurrentCategoryId(cat.id)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            setCurrentCategoryId(cat.id);
+                          }
+                        }}
+                      >
+                        <span className={styles.folderMain}>
+                          <span className={styles.folderIcon}>
+                            <FolderIcon size={20} />
+                          </span>
+                          <span className={styles.folderName}>{cat.name}</span>
                         </span>
-                        <span className={styles.folderName}>{cat.name}</span>
-                      </span>
-                      <span className={styles.folderCount}>
-                        {stats.subcategories > 0 ? `${stats.subcategories} sub - ` : ""}
-                        {stats.products} items
-                      </span>
-                      <ChevronRightIcon size={16} className={styles.folderChev} />
-                    </button>
+                        <span className={styles.folderCount}>
+                          {stats.subcategories > 0 ? `${stats.subcategories} sub - ` : ""}
+                          {stats.products} items
+                        </span>
+                        <ChevronRightIcon size={16} className={styles.folderChev} />
+                      </div>
+                      <button
+                        type="button"
+                        className={styles.moveFolderBtn}
+                        title={`Move ${cat.name} into another folder`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMovingCategory(cat);
+                        }}
+                      >
+                        Move
+                      </button>
+                    </div>
                   );
                 })}
               </div>
@@ -677,6 +796,90 @@ export default function Items() {
         </>
       )}
 
+      {/* Move Category Modal */}
+      {movingCategory !== null ? (
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="move-category-title"
+          onClick={() => !busyMove && setMovingCategory(null)}
+        >
+          <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div>
+                <h2 id="move-category-title" className={styles.modalTitle}>
+                  Move &quot;{movingCategory.name}&quot;
+                </h2>
+                <p className={styles.modalSubtitle}>
+                  Choose a destination folder or move out to Shelf Root
+                </p>
+              </div>
+              <button
+                type="button"
+                className={styles.modalClose}
+                aria-label="Close modal"
+                disabled={busyMove}
+                onClick={() => setMovingCategory(null)}
+              >
+                <CloseIcon size={16} />
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              {/* Shelf Root Option */}
+              <button
+                type="button"
+                className={`${styles.moveOption} ${movingCategory.parent_id === null ? styles.moveOptionCurrent : ""}`}
+                disabled={busyMove || movingCategory.parent_id === null}
+                onClick={() => void handleExecuteMove(null)}
+              >
+                <div className={styles.moveOptionMain}>
+                  <FolderOpenIcon size={18} className={styles.moveOptionIcon} />
+                  <div className={styles.moveOptionInfo}>
+                    <span className={styles.moveOptionName}>Shelf Root (Top Level)</span>
+                    <span className={styles.moveOptionPath}>Move out of all folders to main shelf</span>
+                  </div>
+                </div>
+                {movingCategory.parent_id === null ? (
+                  <span className={styles.currentBadge}>Current</span>
+                ) : (
+                  <span className={styles.selectMoveBtn}>Move Here</span>
+                )}
+              </button>
+
+              {/* Other Eligible Categories */}
+              {eligibleMoveTargets.map((target) => {
+                const isCurrent = movingCategory.parent_id === target.id;
+                const fullPath = getCategoryPath(target, categories);
+                return (
+                  <button
+                    key={target.id}
+                    type="button"
+                    className={`${styles.moveOption} ${isCurrent ? styles.moveOptionCurrent : ""}`}
+                    disabled={busyMove || isCurrent}
+                    onClick={() => void handleExecuteMove(target.id)}
+                  >
+                    <div className={styles.moveOptionMain}>
+                      <FolderIcon size={18} className={styles.moveOptionIcon} />
+                      <div className={styles.moveOptionInfo}>
+                        <span className={styles.moveOptionName}>{target.name}</span>
+                        <span className={styles.moveOptionPath}>{fullPath}</span>
+                      </div>
+                    </div>
+                    {isCurrent ? (
+                      <span className={styles.currentBadge}>Current</span>
+                    ) : (
+                      <span className={styles.selectMoveBtn}>Move Here</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {notice ? (
         <Toast
           message={notice.message}
@@ -697,6 +900,7 @@ function FamilyTreeRenderer({
   currency,
   parentId,
   onSelectCategory,
+  onStartMoveCategory,
   onTogglePublish,
   busyAction,
 }: {
@@ -706,6 +910,7 @@ function FamilyTreeRenderer({
   currency: string;
   parentId: string | null;
   onSelectCategory: (id: string) => void;
+  onStartMoveCategory?: (category: Category) => void;
   onTogglePublish: (prod: Product) => void;
   busyAction: string | null;
 }) {
@@ -723,7 +928,22 @@ function FamilyTreeRenderer({
           <div className={styles.treeRow} onClick={() => onSelectCategory(cat.id)}>
             <FolderIcon size={16} className={styles.treeFolderIcon} />
             <span className={styles.treeNodeName}>{cat.name}</span>
-            <ChevronRightIcon size={14} className={styles.treeChevIcon} />
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "6px" }}>
+              {onStartMoveCategory ? (
+                <button
+                  type="button"
+                  className={styles.moveFolderSmallBtn}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStartMoveCategory(cat);
+                  }}
+                  title={`Move ${cat.name}`}
+                >
+                  Move
+                </button>
+              ) : null}
+              <ChevronRightIcon size={14} className={styles.treeChevIcon} />
+            </div>
           </div>
           <FamilyTreeRenderer
             categories={categories}
@@ -732,6 +952,7 @@ function FamilyTreeRenderer({
             currency={currency}
             parentId={cat.id}
             onSelectCategory={onSelectCategory}
+            onStartMoveCategory={onStartMoveCategory}
             onTogglePublish={onTogglePublish}
             busyAction={busyAction}
           />

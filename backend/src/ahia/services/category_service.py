@@ -320,7 +320,12 @@ class CategoryService:
                 )
             if "parent_id" in changes:
                 raw_parent = changes["parent_id"]
-                proposed = UUID(raw_parent) if isinstance(raw_parent, str) else None
+                if isinstance(raw_parent, UUID):
+                    proposed = raw_parent
+                elif isinstance(raw_parent, str) and raw_parent.strip():
+                    proposed = UUID(raw_parent.strip())
+                else:
+                    proposed = None
                 if proposed is not None:
                     await self._require_move_is_possible(
                         session,

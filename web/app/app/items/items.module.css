@@ -205,19 +205,68 @@
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  padding: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  cursor: pointer;
-  text-align: left;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .folderCard:hover {
   border-color: var(--leaf);
+}
+
+.folderCardMain {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.folderCardMain:hover .folderName {
+  color: var(--leaf-dark);
+}
+
+.moveFolderBtn {
+  background: var(--sand);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-2);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.moveFolderBtn:hover {
   background: var(--leaf-soft);
+  border-color: var(--leaf);
+  color: var(--leaf-dark);
+}
+
+.moveFolderSmallBtn {
+  background: none;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink-2);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.moveFolderSmallBtn:hover {
+  background: var(--leaf-soft);
+  border-color: var(--leaf);
+  color: var(--leaf-dark);
 }
 
 .folderMain {
@@ -435,5 +484,164 @@
 
 .treeProductIcon {
   color: var(--ink-3);
+  flex-shrink: 0;
+}
+
+/* Move Category Modal */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-3);
+  backdrop-filter: blur(2px);
+}
+
+.modalCard {
+  background: var(--card);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  max-width: 480px;
+  width: 100%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+.modalHeader {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.modalTitle {
+  font-size: var(--text-base);
+  font-weight: 750;
+  color: var(--ink);
+  margin: 0;
+}
+
+.modalSubtitle {
+  font-size: var(--text-xs);
+  color: var(--ink-2);
+  margin-top: 2px;
+}
+
+.modalClose {
+  background: none;
+  border: none;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--ink-3);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.modalClose:hover {
+  color: var(--ink);
+}
+
+.modalBody {
+  padding: var(--space-3) var(--space-4);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.moveOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  background: var(--sand);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  width: 100%;
+  gap: var(--space-2);
+}
+
+.moveOption:hover:not(:disabled) {
+  border-color: var(--leaf);
+  background: var(--leaf-soft);
+}
+
+.moveOption:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.moveOptionCurrent {
+  border-color: var(--leaf);
+  background: var(--leaf-soft);
+}
+
+.moveOptionMain {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  flex: 1;
+}
+
+.moveOptionIcon {
+  color: var(--leaf);
+  flex-shrink: 0;
+}
+
+.moveOptionInfo {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.moveOptionName {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.moveOptionPath {
+  font-size: 11px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.currentBadge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--leaf-dark);
+  background: var(--card);
+  border: 1px solid var(--leaf);
+  padding: 2px 6px;
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+}
+
+.selectMoveBtn {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--leaf-dark);
+  border: 1px solid var(--leaf);
+  background: var(--card);
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
   flex-shrink: 0;
 }

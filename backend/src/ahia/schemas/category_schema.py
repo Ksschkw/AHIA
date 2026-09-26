@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, StringConstraints
@@ -68,12 +68,13 @@ class CategoryUpdateSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: CategoryName | None = None
+    parent_id: UUID | None = None
     description: CategoryDescription | None = None
     default_normal_price: Money | None = None
     default_wholesale_price: Money | None = None
     default_pieces_per_pack: int | None = None
 
-    def to_entity_changes(self) -> dict[str, str | None]:
+    def to_entity_changes(self) -> dict[str, Any]:
         """Return only the fields the caller actually sent."""
         return self.model_dump(exclude_unset=True)
 
