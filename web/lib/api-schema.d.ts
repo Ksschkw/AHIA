@@ -163,6 +163,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/shop/{tenant_slug}/customer-lists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lists a customer has previously sent to this shop
+         * @description Return recent lists from this phone number to this shop, with lines for one-tap reuse.
+         */
+        get: operations["list_customer_history_shop__tenant_slug__customer_lists_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/share/{token}": {
         parameters: {
             query?: never;
@@ -2253,6 +2273,56 @@ export interface components {
             notes?: string | null;
         };
         /**
+         * CustomerListLineItemSchema
+         * @description One line on a customer's past list, ready to be reused.
+         */
+        CustomerListLineItemSchema: {
+            /** Position */
+            position: number;
+            /** Product Id */
+            product_id?: string | null;
+            /** Text */
+            text: string;
+            /** Group */
+            group?: string | null;
+            /** Quantity */
+            quantity: string;
+            /** Unit */
+            unit: string;
+            /** Pieces Per Pack */
+            pieces_per_pack?: number | null;
+            /** Shop Price */
+            shop_price?: string | null;
+        };
+        /**
+         * CustomerListSummarySchema
+         * @description A previous list for a returning customer.
+         */
+        CustomerListSummarySchema: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            status: components["schemas"]["RequestStatus"];
+            /** Line Count */
+            line_count: number;
+            /** Priced Total */
+            priced_total: string | null;
+            /** Lines Preview */
+            lines_preview: string[];
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["CustomerListLineItemSchema"][];
+        };
+        /**
          * CustomerLookupResponseSchema
          * @description What a counter lookup found: the customers already holding a number.
          */
@@ -3612,6 +3682,12 @@ export interface components {
             position: number;
             /** Product Id */
             product_id: string | null;
+            /** Product Name */
+            product_name?: string | null;
+            /** Group Name */
+            group_name?: string | null;
+            /** Parent Position */
+            parent_position?: number | null;
             /** Free Text */
             free_text: string | null;
             /** Note */
@@ -4881,6 +4957,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicListSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_customer_history_shop__tenant_slug__customer_lists_get: {
+        parameters: {
+            query: {
+                phone: string;
+            };
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerListSummarySchema"][];
                 };
             };
             /** @description Validation Error */

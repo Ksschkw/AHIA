@@ -779,3 +779,117 @@
   gap: var(--space-2);
   margin-top: var(--space-2);
 }
+
+.doneAddingBtn {
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.doneAddingBtn:hover {
+  background: var(--sand-soft);
+}
+
+.categoryGroupHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--leaf-soft);
+  border-left: 3px solid var(--leaf);
+  border-radius: 4px;
+  margin-top: var(--space-3);
+  margin-bottom: var(--space-1);
+}
+
+.categoryGroupTitle {
+  font-size: var(--text-xs);
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--leaf-dark);
+}
+
+.categoryBadge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--leaf-dark);
+  background: var(--leaf-soft);
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-top: 2px;
+  align-self: flex-start;
+}
+
+.pastListsSection {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.pastListsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.pastListCard {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  background: var(--sand);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.pastListRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pastListDate {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.pastListStatus {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--leaf);
+}
+
+.pastListPreview {
+  font-size: var(--text-xs);
+  color: var(--ink-2);
+  line-height: var(--leading-normal);
+}
+
+.pastListLoadBtn {
+  align-self: flex-start;
+  min-height: 34px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--leaf);
+  background: var(--leaf);
+  color: #fff;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  cursor: pointer;
+}

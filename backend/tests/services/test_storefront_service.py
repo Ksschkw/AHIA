@@ -176,21 +176,22 @@ async def insert_product(
     published: bool = True,
     stock: Decimal = Decimal("5.000"),
     with_image: bool = False,
+    category_id: UUID | None = None,
 ) -> ProductModel:
     identifier = uuid4()
     async with database.transaction_scope() as unit_of_work:
         session = unit_of_work.session_handle
-        product = await product_crud.create(
-            session,
-            ProductModel.create(
-                product_id=identifier,
-                tenant_id=tenant_id,
-                name=name,
-                selling_price=selling_price,
-                cost_price=cost_price,
-                now=NOW,
-            ),
+        prod = ProductModel.create(
+            product_id=identifier,
+            tenant_id=tenant_id,
+            name=name,
+            selling_price=selling_price,
+            cost_price=cost_price,
+            now=NOW,
         )
+        if category_id is not None:
+            prod = replace(prod, category_id=category_id)
+        product = await product_crud.create(session, prod)
         if stock > 0:
             # The row is created by the locking reader - the only path that creates one - and the
             # quantity is set on the projection it returns.
@@ -581,3 +582,37 @@ async def test_an_audit_event_is_written_when_a_shop_opens_and_closes(
     ]
     assert all(event.entity_type == "storefront" for event in events)
     assert changes == [], "a shop is not something a device holds offline"
+
+
+@pytest.mark.integration
+async def test_product_group_name_includes_full_category_breadcrumbs(
+    service: StorefrontService, database: Database, tenant_id: UUID
+) -> None:
+    """A product filed under a nested subcategory shows the full breadcrumb path."""
+    owner = context_for(tenant_id, "OWNER")
+    categories = CategoryService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        audit_event_service=AuditEventService(unit_of_work_factory=database.unit_of_work_factory()),
+    )
+    root = await categories.create_category(owner, name="Accessories")
+    sub = await categories.create_category(owner, name="Screenguards", parent_id=root.id)
+    child = await categories.create_category(owner, name="21D", parent_id=sub.id)
+
+    await insert_product(
+        database,
+        tenant_id=tenant_id,
+        name="Hot 8",
+        selling_price=Decimal("350.00"),
+        published=True,
+        category_id=child.id,
+    )
+
+    await service.publish_storefront(
+        owner, headline="Accessories Shop", contact_phone="08031234567"
+    )
+    slug = await stored_slug(database, tenant_id)
+
+    shop = await service.read_public_storefront(tenant_slug=slug)
+    matched = [p for p in shop.products if p.name == "Hot 8"]
+    assert len(matched) == 1
+    assert matched[0].group_name == "Accessories > Screenguards > 21D"

@@ -25,6 +25,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { getCustomerPastLists, type CustomerListSummary } from "@/lib/api";
 import { formatMoneyOrOnRequest } from "@/lib/format";
 import styles from "./list-builder.module.css";
 
@@ -59,6 +60,7 @@ interface ChosenLine {
   text: string;
   quantity: number;
   price: string | null;
+  groupName?: string | null;
   /** The key of the heading this sits under, when they made one. */
   underKey: string | null;
   /** True when the line *is* a heading they made. */
@@ -212,6 +214,51 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     );
   }, [openGroup, shop.products]);
 
+  const [pastLists, setPastLists] = useState<CustomerListSummary[] | null>(null);
+  const [loadingPast, setLoadingPast] = useState(false);
+  const [pastError, setPastError] = useState<string | null>(null);
+  const [showPastSection, setShowPastSection] = useState(false);
+
+  async function loadPastListsForCustomer() {
+    const cleanPhone = phone.trim();
+    if (cleanPhone.length < 7) {
+      setProblem("Enter your phone number below first to find your previous lists.");
+      setShowingList(true);
+      return;
+    }
+    setLoadingPast(true);
+    setPastError(null);
+    try {
+      const found = await getCustomerPastLists(shop.tenant_slug, cleanPhone);
+      setPastLists(found);
+      if (found.length === 0) {
+        setPastError("No previous lists found for this phone number at this shop.");
+      }
+    } catch {
+      setPastError("Could not fetch past lists. Please check your connection.");
+    } finally {
+      setLoadingPast(false);
+    }
+  }
+
+  function loadFromPastList(list: CustomerListSummary) {
+    const loadedLines: ChosenLine[] = list.lines.map((l, index) => ({
+      key: `past-${list.id}-${l.position || index}`,
+      productSlug: null,
+      text: l.text,
+      quantity: Number(l.quantity) || 1,
+      price: l.shop_price ?? null,
+      groupName: l.group ?? null,
+      underKey: null,
+      isHeading: false,
+      note: "",
+    }));
+    setChosen(loadedLines);
+    setShowPastSection(false);
+    setShowingList(true);
+    setProblem(null);
+  }
+
   function addProduct(product: ListShopProduct, under: string | null = null) {
     setChosen((current) => {
       const existing = current.find((line) => line.productSlug === product.product_slug);
@@ -228,6 +275,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
           text: product.name,
           quantity: 1,
           price: product.selling_price,
+          groupName: product.group_name ?? null,
           underKey: under,
           isHeading: false,
           note: "",
@@ -269,6 +317,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
         text,
         quantity: Math.max(1, Number(ownQuantity) || 1),
         price: null,
+        groupName: null,
         underKey: ownUnder,
         isHeading: false,
         note: "",
@@ -276,7 +325,6 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     ]);
     setOwnText("");
     setOwnQuantity("1");
-    setAddingOwn(false);
     setProblem(null);
   }
 
@@ -297,11 +345,49 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     setChosen((current) => current.filter((line) => line.key !== key && line.underKey !== key));
   }
 
-  /** The list, drawn as the paper it replaces: headings, the things under them, and the counts. */
+  /** The list, drawn as the paper it replaces: category headings, the things under them, and the counts. */
   async function drawList(): Promise<Blob | null> {
     const width = 900;
     const row = 46;
-    const canvasHeight = Math.max(640, 300 + chosen.filter((line) => !line.isHeading).length * row + headings.length * 60);
+
+    // Group items:
+    // 1. If customer created headings, group under customer headings.
+    // 2. Otherwise (or for items not under customer headings), group by catalogue category (groupName).
+    type Section = { title: string; lines: ChosenLine[]; isCustomerHeading?: boolean };
+    const sections: Section[] = [];
+
+    if (headings.length > 0) {
+      for (const heading of headings) {
+        const childItems = items.filter((line) => line.underKey === heading.key);
+        sections.push({ title: heading.text, lines: childItems, isCustomerHeading: true });
+      }
+      const unassigned = items.filter((line) => line.underKey === null);
+      if (unassigned.length > 0) {
+        const byGroup = new Map<string, ChosenLine[]>();
+        for (const item of unassigned) {
+          const g = item.groupName ?? "Other Items";
+          byGroup.set(g, [...(byGroup.get(g) ?? []), item]);
+        }
+        for (const [groupTitle, groupLines] of byGroup.entries()) {
+          sections.push({ title: groupTitle, lines: groupLines });
+        }
+      }
+    } else {
+      const byGroup = new Map<string, ChosenLine[]>();
+      for (const item of items) {
+        const g = item.groupName ?? "Items";
+        byGroup.set(g, [...(byGroup.get(g) ?? []), item]);
+      }
+      for (const [groupTitle, groupLines] of byGroup.entries()) {
+        sections.push({ title: groupTitle, lines: groupLines });
+      }
+    }
+
+    const totalLinesCount = items.length;
+    const canvasHeight = Math.max(
+      640,
+      300 + totalLinesCount * row + sections.length * 64,
+    );
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = canvasHeight;
@@ -318,33 +404,41 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     context.fillText(`${name.trim() || "A customer"} - ${phone.trim()}`, 48, 122);
     context.fillStyle = "#0b5d3b";
     context.font = "bold 22px system-ui, sans-serif";
-    context.fillText("LIST", 48, 176);
+    context.fillText("ORDER LIST", 48, 172);
     context.fillStyle = "#e7dfd2";
-    context.fillRect(48, 190, width - 96, 2);
+    context.fillRect(48, 186, width - 96, 2);
 
-    // The shape the customer made, drawn: a heading, and what they put under it, indented.
-    const ordered: ChosenLine[] = [];
-    for (const heading of headings) {
-      ordered.push(heading);
-      for (const item of items.filter((line) => line.underKey === heading.key)) ordered.push(item);
-    }
-    for (const item of items.filter((line) => line.underKey === null)) ordered.push(item);
+    let y = 236;
+    for (const section of sections) {
+      if (section.lines.length === 0) continue;
 
-    let y = 240;
-    for (const line of ordered) {
-      const indented = line.isHeading || line.underKey !== null;
-      context.fillStyle = line.isHeading ? "#084a2f" : "#1e1b16";
-      context.font = line.isHeading ? "bold 26px system-ui, sans-serif" : "22px system-ui, sans-serif";
-      const label = line.text.length > 50 ? `${line.text.slice(0, 49)}...` : line.text;
-      context.fillText(label, indented ? 72 : 48, y);
-      if (!line.isHeading) {
+      // Draw Category Header banner
+      context.fillStyle = "#f4f0e8";
+      context.fillRect(48, y - 26, width - 96, 36);
+      context.fillStyle = "#084a2f";
+      context.fillRect(48, y - 26, 6, 36);
+
+      context.font = "bold 20px system-ui, sans-serif";
+      const sectionLabel =
+        section.title.length > 55 ? `${section.title.slice(0, 54)}...` : section.title;
+      context.fillText(sectionLabel.toUpperCase(), 64, y);
+      y += 42;
+
+      for (const line of section.lines) {
+        context.fillStyle = "#1e1b16";
+        context.font = "22px system-ui, sans-serif";
+        const label = line.text.length > 46 ? `${line.text.slice(0, 45)}...` : line.text;
+        context.fillText(label, 72, y);
+
         context.fillStyle = "#5c5549";
         context.font = "bold 22px system-ui, sans-serif";
         context.textAlign = "right";
         context.fillText(`${line.quantity} pcs`, width - 48, y);
         context.textAlign = "left";
+
+        y += row;
       }
-      y += line.isHeading ? 60 : row;
+      y += 18;
     }
 
     context.fillStyle = "#e7dfd2";
@@ -748,8 +842,15 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
               <button type="button" className={styles.addHere} onClick={addOwnItem}>
                 Add to my list
               </button>
+              <button
+                type="button"
+                className={styles.doneAddingBtn}
+                onClick={() => setAddingOwn(false)}
+              >
+                Done
+              </button>
             </div>
-            <p className={styles.nothing}>The shop will put a price on it.</p>
+            <p className={styles.nothing}>The shop will put a price on it. Keep adding items or tap Done when finished.</p>
 
             <p className={styles.onlyThese}>Or start your own heading, with things under it:</p>
             <div className={styles.ownRow}>
@@ -830,6 +931,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
                         text: match?.name ?? item.text,
                         quantity: item.quantity,
                         price: match?.selling_price ?? null,
+                        groupName: match?.group_name ?? null,
                         underKey: ownUnder,
                         isHeading: false,
                         note: "",
@@ -873,6 +975,9 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
                 <div className={styles.lineRow}>
                   <span className={styles.rowBody}>
                     <span className={styles.rowName}>{line.text}</span>
+                    {line.groupName ? (
+                      <span className={styles.categoryBadge}>{line.groupName}</span>
+                    ) : null}
                     <span className={styles.rowMeta}>
                       {line.price === null
                         ? "the shop will price it"
@@ -921,6 +1026,52 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
               aria-label="Your phone number"
               onChange={(event) => setPhone(event.target.value)}
             />
+            <button
+              type="button"
+              className={styles.historyAction}
+              style={{ marginTop: "4px" }}
+              disabled={loadingPast || phone.trim().length < 7}
+              onClick={() => void loadPastListsForCustomer()}
+            >
+              {loadingPast ? "Finding your past lists..." : "Find past lists for this phone number"}
+            </button>
+            {pastError ? <p className={styles.problem}>{pastError}</p> : null}
+            {pastLists && pastLists.length > 0 ? (
+              <div className={styles.pastListsSection}>
+                <span className={styles.onlyThese}>Your previous orders with {shop.business_name}:</span>
+                <div className={styles.pastListsGrid}>
+                  {pastLists.map((past) => (
+                    <div key={past.id} className={styles.pastListCard}>
+                      <div className={styles.pastListRow}>
+                        <span className={styles.pastListDate}>
+                          {new Date(past.created_at).toLocaleDateString("en-GB", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </span>
+                        <span className={styles.pastListStatus}>{past.status}</span>
+                      </div>
+                      <div className={styles.pastListPreview}>
+                        {past.lines.length} {past.lines.length === 1 ? "item" : "items"}:{" "}
+                        {past.lines
+                          .slice(0, 4)
+                          .map((l) => `${Number(l.quantity)}x ${l.text}`)
+                          .join(", ")}
+                        {past.lines.length > 4 ? "..." : ""}
+                      </div>
+                      <button
+                        type="button"
+                        className={styles.pastListLoadBtn}
+                        onClick={() => loadFromPastList(past)}
+                      >
+                        Load this list
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <p className={styles.nothing}>
               So the shop knows whose list this is, and so you do not type it all again next time.
             </p>

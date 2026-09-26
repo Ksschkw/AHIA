@@ -202,42 +202,109 @@ export default function Lists() {
             {open ? (
               <>
                 <ul className={styles.lines}>
-                  {list.lines.map((line) => (
-                    <li key={line.id} className={styles.line}>
-                      <div className={styles.lineWho}>
-                        <span className={styles.lineName}>
-                          {line.free_text ?? "Catalogue item"}
-                        </span>
-                        <span className={styles.lineMeta}>
-                          {line.quantity} x {line.pieces} pieces
-                          {line.note ? ` - ${line.note}` : ""}
-                        </span>
-                        {line.customer_price ? (
-                          <span className={styles.lineMeta}>
-                            customer saw {formatMoneyOrOnRequest(line.customer_price)}
+                  {list.lines.map((line) => {
+                    if (line.note === "heading") {
+                      return (
+                        <li key={line.id} className={styles.sectionDivider}>
+                          <span className={styles.sectionDividerTitle}>
+                            {line.product_name ?? line.free_text}
                           </span>
-                        ) : null}
-                      </div>
+                        </li>
+                      );
+                    }
 
-                      <div className={styles.lineStates}>
-                        {LINE_STATES.map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            className={
-                              line.state === option.value
-                                ? styles.stateOn
-                                : styles.stateOff
-                            }
-                            title={option.hint}
+                    const qtyNum = Number(line.quantity);
+                    const qtyFormatted =
+                      line.unit === "pack" && line.pieces_per_pack
+                        ? `${qtyNum} packs (${Number(line.pieces)} pcs)`
+                        : `${qtyNum} pcs`;
+                    const itemName = line.product_name ?? line.free_text ?? "Item";
+                    const isUnavailable = line.state === "cannot_get";
+
+                    return (
+                      <li
+                        key={line.id}
+                        className={`${styles.line} ${isUnavailable ? styles.lineUnavailable : ""}`}
+                      >
+                        <div className={styles.lineWho}>
+                          {line.group_name ? (
+                            <span className={styles.categoryBadge}>{line.group_name}</span>
+                          ) : null}
+                          <span className={styles.lineName}>{itemName}</span>
+                          <span className={styles.lineMeta}>
+                            {qtyFormatted}
+                            {line.note && line.note !== "heading" ? ` - ${line.note}` : ""}
+                          </span>
+                          {line.customer_price ? (
+                            <span className={styles.lineMeta}>
+                              Customer saw {formatMoneyOrOnRequest(line.customer_price)}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div className={styles.compactPriceRow}>
+                          <div className={styles.compactPriceField}>
+                            <Field
+                              label="Price"
+                              id={`price_${line.id}`}
+                              value={drafts[line.id]?.price ?? ""}
+                              onChange={(value) =>
+                                setDrafts((current) => ({
+                                  ...current,
+                                  [line.id]: { cost: current[line.id]?.cost ?? "", price: value },
+                                }))
+                              }
+                              inputMode="decimal"
+                              placeholder={line.shop_price ?? "0.00"}
+                              optional
+                            />
+                          </div>
+                          <Button
+                            id={`save_${line.id}`}
+                            busy={busyAction === `save-${line.id}`}
                             disabled={list.status === "confirmed"}
                             onClick={() =>
-                              run(`state-${line.id}`, async () => {
+                              run(`save-${line.id}`, async () => {
+                                const typed = drafts[line.id] ?? { cost: "", price: "" };
                                 const updated = await workListLine(
                                   business.id,
                                   list.id,
                                   line.id,
-                                  { state: option.value as NonNullable<ListLineState> },
+                                  {
+                                    ...(typed.price.trim()
+                                      ? { shop_price: typed.price.trim() }
+                                      : {}),
+                                  },
+                                );
+                                setLists((current) =>
+                                  current.map((one) => (one.id === updated.id ? updated : one)),
+                                );
+                                setDrafts((current) => ({
+                                  ...current,
+                                  [line.id]: { cost: "", price: "" },
+                                }));
+                                setNotice({
+                                  message: `${itemName} saved.`,
+                                  tone: "good",
+                                });
+                              })
+                            }
+                          >
+                            Save
+                          </Button>
+                          <button
+                            type="button"
+                            className={isUnavailable ? styles.cannotGetOn : styles.cannotGetOff}
+                            title={isUnavailable ? "Mark as available" : "Mark as cannot get"}
+                            disabled={list.status === "confirmed"}
+                            onClick={() =>
+                              run(`state-${line.id}`, async () => {
+                                const nextState = isUnavailable ? "have_it" : "cannot_get";
+                                const updated = await workListLine(
+                                  business.id,
+                                  list.id,
+                                  line.id,
+                                  { state: nextState as NonNullable<ListLineState> },
                                 );
                                 setLists((current) =>
                                   current.map((one) => (one.id === updated.id ? updated : one)),
@@ -245,73 +312,23 @@ export default function Lists() {
                               })
                             }
                           >
-                            {option.label}
+                            {isUnavailable ? "Cannot get" : "Cannot get?"}
                           </button>
-                        ))}
-                      </div>
+                        </div>
 
-                      <div className={styles.lineNumbers}>
-                        <Field
-                          label="Price"
-                          id={`price_${line.id}`}
-                          value={drafts[line.id]?.price ?? ""}
-                          onChange={(value) =>
-                            setDrafts((current) => ({
-                              ...current,
-                              [line.id]: { cost: current[line.id]?.cost ?? "", price: value },
-                            }))
-                          }
-                          inputMode="decimal"
-                          placeholder={line.shop_price ?? "0.00"}
-                          optional
-                        />
-                        <Button
-                          id={`save_${line.id}`}
-                          busy={busyAction === `save-${line.id}`}
-                          disabled={list.status === "confirmed"}
-                          onClick={() =>
-                            run(`save-${line.id}`, async () => {
-                              const typed = drafts[line.id] ?? { cost: "", price: "" };
-                              const updated = await workListLine(
-                                business.id,
-                                list.id,
-                                line.id,
-                                {
-                                  ...(typed.price.trim()
-                                    ? { shop_price: typed.price.trim() }
-                                    : {}),
-                                },
-                              );
-                              setLists((current) =>
-                                current.map((one) => (one.id === updated.id ? updated : one)),
-                              );
-                              setDrafts((current) => ({
-                                ...current,
-                                [line.id]: { cost: "", price: "" },
-                              }));
-                              setNotice({
-                                message: `${line.free_text ?? "Line"} saved.`,
-                                tone: "good",
-                              });
-                            })
-                          }
-                        >
-                          Save this line
-                        </Button>
-                      </div>
-
-                      {line.line_total ? (
-                        <p className={styles.lineTotal}>
-                          Comes to {formatMoneyOrOnRequest(line.line_total)}
-                          {line.margin
-                            ? ` - you make ${formatMoneyOrOnRequest(line.margin)}`
-                            : ""}
-                        </p>
-                      ) : (
-                        <p className={styles.lineUnpriced}>Not priced yet</p>
-                      )}
-                    </li>
-                  ))}
+                        {line.line_total ? (
+                          <p className={styles.lineTotal}>
+                            Comes to {formatMoneyOrOnRequest(line.line_total)}
+                            {line.margin
+                              ? ` - you make ${formatMoneyOrOnRequest(line.margin)}`
+                              : ""}
+                          </p>
+                        ) : (
+                          <p className={styles.lineUnpriced}>Not priced yet</p>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
 
                 <div className={styles.quote}>

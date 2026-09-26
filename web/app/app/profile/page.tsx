@@ -19,9 +19,11 @@ import {
   changePassword,
   currentUser,
   getBusiness,
+  getStorefront,
   listBusinesses,
   updateBusiness,
   updateProfile,
+  updateStorefront,
   type Tenant,
   type TenantSummary,
   type UserProfile,
@@ -57,6 +59,14 @@ export default function Profile() {
   const [businessAddress, setBusinessAddress] = useState("");
   const [businessCity, setBusinessCity] = useState("");
   const [businessState, setBusinessState] = useState("");
+
+  // Shop Customization
+  const [storefrontHeadline, setStorefrontHeadline] = useState("");
+  const [storefrontDescription, setStorefrontDescription] = useState("");
+  const [storefrontPhone, setStorefrontPhone] = useState("");
+  const [themeColor, setThemeColor] = useState("#084a2f");
+  const [themeBg, setThemeBg] = useState("#fbf7f0");
+  const [themeBgImage, setThemeBgImage] = useState("");
 
   // Password
   const [currentPassword, setCurrentPassword] = useState("");
@@ -104,6 +114,29 @@ export default function Profile() {
           setBusinessAddress(detail.address ?? "");
           setBusinessCity(detail.city ?? "");
           setBusinessState(detail.state ?? "");
+
+          try {
+            const sf = await getStorefront(chosen.id);
+            setStorefrontHeadline(sf.headline ?? "");
+            setStorefrontDescription(sf.description ?? "");
+            setStorefrontPhone(sf.contact_phone ?? "");
+          } catch {
+            // storefront might not be created or published yet
+          }
+
+          if (typeof window !== "undefined") {
+            try {
+              const savedTheme = window.localStorage.getItem(`ahia.theme.${chosen.id}`);
+              if (savedTheme) {
+                const parsed = JSON.parse(savedTheme);
+                if (parsed.color) setThemeColor(parsed.color);
+                if (parsed.bg) setThemeBg(parsed.bg);
+                if (parsed.bgImage) setThemeBgImage(parsed.bgImage);
+              }
+            } catch {
+              // ignore parse errors
+            }
+          }
         }
       } catch {
         router.replace("/start");
@@ -240,6 +273,125 @@ export default function Profile() {
                 }
               >
                 Save the business details
+              </Button>
+            </div>
+          </Card>
+        ) : null}
+
+        {business ? (
+          <Card title="Shop Appearance &amp; Customization">
+            <div className={styles.grid}>
+              <Field
+                label="Shop headline"
+                id="shop_headline"
+                value={storefrontHeadline}
+                onChange={setStorefrontHeadline}
+                placeholder="e.g. Phone accessories, wholesale &amp; retail"
+                hint="Appears prominently at the top of your public shop."
+              />
+              <Field
+                label="Shop WhatsApp / Order phone"
+                id="shop_phone"
+                value={storefrontPhone}
+                onChange={setStorefrontPhone}
+                inputMode="tel"
+                placeholder="e.g. 08012345678"
+                hint="Where customers send completed lists and inquiries."
+              />
+              <Field
+                label="Shop description"
+                id="shop_description"
+                value={storefrontDescription}
+                onChange={setStorefrontDescription}
+                placeholder="e.g. We stock 21D screenguards, pouches, fast chargers and accessories in Alaba."
+                optional
+              />
+              <Field
+                label="Custom Background Image URL"
+                id="shop_bg_image"
+                value={themeBgImage}
+                onChange={setThemeBgImage}
+                placeholder="https://... (direct image link)"
+                optional
+                hint="Optional image to display as your shop background."
+              />
+            </div>
+
+            <div style={{ marginTop: "14px" }}>
+              <span style={{ fontSize: "13px", fontWeight: 700 }}>Shop Accent Color</span>
+              <div className={styles.colorSwatches}>
+                {[
+                  { name: "Forest Green", color: "#084a2f" },
+                  { name: "Royal Blue", color: "#1e40af" },
+                  { name: "Indigo", color: "#3730a3" },
+                  { name: "Maroon", color: "#831843" },
+                  { name: "Amber", color: "#b45309" },
+                  { name: "Slate", color: "#1e293b" },
+                ].map((item) => (
+                  <button
+                    key={item.color}
+                    type="button"
+                    title={item.name}
+                    className={`${styles.swatch} ${themeColor === item.color ? styles.swatchSelected : ""}`}
+                    style={{ background: item.color }}
+                    onClick={() => setThemeColor(item.color)}
+                  />
+                ))}
+                <input
+                  type="color"
+                  value={themeColor}
+                  onChange={(e) => setThemeColor(e.target.value)}
+                  style={{ width: "36px", height: "36px", border: "none", cursor: "pointer", background: "none" }}
+                  title="Pick custom color"
+                />
+              </div>
+            </div>
+
+            <div style={{ marginTop: "14px" }}>
+              <span style={{ fontSize: "13px", fontWeight: 700 }}>Shop Background Style</span>
+              <div className={styles.colorSwatches}>
+                {[
+                  { name: "Warm Sand", color: "#fbf7f0" },
+                  { name: "Clean White", color: "#ffffff" },
+                  { name: "Soft Cream", color: "#fefce8" },
+                  { name: "Cool Slate", color: "#f1f5f9" },
+                ].map((item) => (
+                  <button
+                    key={item.color}
+                    type="button"
+                    title={item.name}
+                    className={`${styles.swatch} ${themeBg === item.color ? styles.swatchSelected : ""}`}
+                    style={{ background: item.color, border: "1px solid var(--line-strong)" }}
+                    onClick={() => setThemeBg(item.color)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className={styles.actions}>
+              <Button
+                busy={busyAction === "storefront"}
+                onClick={() =>
+                  run("storefront", async () => {
+                    await updateStorefront(business.id, {
+                      headline: storefrontHeadline.trim() || null,
+                      description: storefrontDescription.trim() || null,
+                      contact_phone: storefrontPhone.trim() || null,
+                    });
+                    if (typeof window !== "undefined") {
+                      const themeData = JSON.stringify({
+                        color: themeColor,
+                        bg: themeBg,
+                        bgImage: themeBgImage.trim() || null,
+                      });
+                      window.localStorage.setItem(`ahia.theme.${business.id}`, themeData);
+                      window.localStorage.setItem(`ahia.theme.${business.public_path}`, themeData);
+                    }
+                    setNotice({ message: "Shop appearance and branding saved.", tone: "good" });
+                  })
+                }
+              >
+                Save shop appearance
               </Button>
             </div>
           </Card>

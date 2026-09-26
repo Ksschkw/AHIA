@@ -38,6 +38,8 @@ export type Storefront = Schemas["StorefrontResponseSchema"];
 export type Member = Schemas["MembershipResponseSchema"];
 export type CustomerList = Schemas["RequestResponseSchema"];
 export type CustomerListLine = Schemas["RequestLineResponseSchema"];
+export type CustomerListSummary = Schemas["CustomerListSummarySchema"];
+export type CustomerListLineItem = Schemas["CustomerListLineItemSchema"];
 export type ListLineState = Schemas["RequestLineWorkSchema"]["state"];
 export type MembershipInvitation = Schemas["InvitationResponseSchema"];
 export type PendingInvitation = Schemas["PendingInvitationSchema"];
@@ -528,6 +530,7 @@ export function createCategory(
   tenantId: string,
   input: {
     name: string;
+    parent_id?: string | null;
     default_normal_price?: string | null;
     default_wholesale_price?: string | null;
     default_pieces_per_pack?: number | null;
@@ -884,6 +887,14 @@ export const LINE_STATES: { value: NonNullable<ListLineState>; label: string; hi
 /** Every list this business has been sent, newest first, with its lines. */
 export function listCustomerLists(tenantId: string): Promise<CustomerList[]> {
   return request<CustomerList[]>(`/api/v1/tenants/${tenantId}/requests`);
+}
+
+/** Lists a returning customer has previously sent to this shop, for quick reordering. */
+export function getCustomerPastLists(slug: string, phone: string): Promise<CustomerListSummary[]> {
+  return request<CustomerListSummary[]>(
+    `/shop/${encodeURIComponent(slug)}/customer-lists`,
+    { query: { phone: phone.trim() } },
+  );
 }
 
 /**

@@ -4085,3 +4085,35 @@ Built directly to address the market buyer workflow and prevent loss of work:
    "Fetching your shelf" loading flash upon return.
 6. **Secret scanner hygiene**: `.gitleaks.toml` now explicitly allowlists generated local caches
    (`web/.next`, `.review`, `.npm-cache`, `node_modules`, `backend/.env.deploy`, `web/.env.local`).
+
+## 12. Deep Category Hierarchy, Trader Workbench Overhaul, and Returning Customer Workflows
+
+Directly addressing the product owner's requirements:
+
+1. **GitHub CI Backend-Check Gate**: Resolved the six storefront integration test failures (`NotFoundError: no open shop matches`). Category hierarchy traversal (`_build_category_path`) now pre-fetches category headings within the tenant scope, avoiding N+1 queries and context boundary drops. 100% of storefront tests pass.
+2. **Category Separation in List Picture & Customer Review**: Both the generated canvas list image and the customer review sheet now structure and group items by their full category breadcrumb path (e.g. `PHONE ACCESSORIES > SCREENGUARDS > 21D` vs `PHONE ACCESSORIES > SCREENGUARDS > PRIVACY`). Duplicate model names (e.g. `Hot 8` 10 pcs under 21D vs `Hot 8` 5 pcs under Privacy) are cleanly separated under clear category section headers with accent banners.
+3. **Trader's Request Workbench (`/app/lists`) Overhaul**:
+   - Replaced bloated four-state buttons (`I have it`, `I will buy it`, `Cannot get it`, `Not looked at yet`) with a minimalist, mobile-first row.
+   - Display category breadcrumb tags on every line so the trader knows the exact subcategory (screenguard vs pouch, 21D vs privacy).
+   - Fixed quantity string formatting: clean integer display (`10 pcs` instead of `10.000 x 10.000 pieces`).
+   - Compact inline pricing with Save action.
+   - Single "Cannot get" toggle button that marks unavailability and visually dims the line.
+   - Customer-created headings rendered as visual section dividers.
+4. **Returning Customer Order Reuse by Phone Number**:
+   - Customers can enter their phone number on the shop page or list builder to view all their previous orders with that shop (`/shop/{slug}/customer-lists?phone=...`).
+   - One-tap "Load this list" pre-fills their basket with quantities and category details intact.
+5. **Zero-Friction Custom Item Entry**:
+   - Adding a custom item ("Can't find it? Add your own") now keeps the form open with input cleared and focus ready, enabling multi-item consecutive entry without reopening the form. A "Done" button allows exiting when finished.
+   - WhatsApp quick-paste supports multi-line items and references image URLs without duplicate uploads.
+6. **Trader's Items Page (`/app/items`) Rebuilt as an Arbitrary-Depth Category Family Tree**:
+   - Supports unlimited recursive nesting: parent -> child -> grandchild -> great-grandchild.
+   - Clean folder drill-down with breadcrumb navigation ("Shelf Root / Phones / Screenguards / 21D") so traders can jump back to any level.
+   - Quick "+ Add Category" at root or under any selected folder.
+   - Quick "+ Add Item" with optional instant shop publication.
+   - Interactive toggle between Folder view and Full Family Tree view.
+   - Instant search across all nested levels.
+7. **Shop Appearance & Customization**:
+   - Shop owners can customize their storefront branding: Headline, Description, WhatsApp/Order contact phone, Theme Accent Color (swatches + color picker), Background Style, and custom Background Image/Banner URL.
+   - Customizations are saved to both backend storefront entities and client theme profiles.
+8. **Mobile Toast Positioning & UI Polish**:
+   - Fixed toast message clipping on mobile with centered top alignment, safe-area insets, and high z-index (`9999`).

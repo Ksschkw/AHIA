@@ -253,40 +253,6 @@
   gap: 14px;
 }
 
-.toast {
-  position: fixed;
-  left: 50%;
-  bottom: 16px;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  max-width: min(680px, calc(100vw - 32px));
-  padding: 12px 16px;
-  border-radius: 999px;
-  box-shadow: var(--shadow-lg);
-  font-size: 14px;
-  z-index: 60;
-}
-
-.toastGood {
-  background: var(--leaf);
-  color: #fff;
-}
-
-.toastBad {
-  background: var(--danger);
-  color: #fff;
-}
-
-.toastClose {
-  background: none;
-  border: none;
-  color: inherit;
-  font-size: 12px;
-  text-decoration: underline;
-  opacity: 0.9;
-}
 
 /* Fields ----------------------------------------------------------------- */
 
@@ -459,27 +425,48 @@
 }
 
 /* The toast is a card, not a pill.
-   It sits at the bottom on a phone and in a corner on a desk; the text wraps inside it instead of
-   pushing the box wider, and the radius stays the same whatever the message says. A notification whose
-   shape changes with its content reads as a rendering fault, which is exactly how the trader described
-   it - and "sometimes the text is outside the borders" was the same problem seen from the other side. */
+   Placed prominently at the top of the screen (or top-right on desktop) with z-index: 9999 so it
+   is never clipped or covered by the bottom navigation bar or floating panels. High contrast, clean
+   rounded corners, and clear text hierarchy. */
 .toast {
   position: fixed;
-  left: var(--space-4);
-  right: var(--space-4);
-  bottom: calc(var(--bottombar-height) + var(--space-4));
-  z-index: 60;
+  top: calc(16px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
-  max-width: min(440px, calc(100vw - 2 * var(--space-4)));
-  margin-inline: auto;
+  width: calc(100vw - 32px);
+  max-width: 440px;
   padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--line-strong);
-  background: var(--card);
-  box-shadow: var(--shadow-lg);
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
   text-align: left;
+  animation: toastSlideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes toastSlideDown {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -12px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.toastGood {
+  background: var(--leaf-dark, #063c26);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.toastBad {
+  background: #991b1b;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
 }
 
 .toastText {
@@ -490,9 +477,26 @@
   flex: 1;
 }
 
-.toastMessage,
-.toastHint,
+.toastMessage {
+  font-weight: 600;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-height: var(--leading-normal);
+}
+
+.toastHint {
+  font-size: 13px;
+  opacity: 0.9;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-height: var(--leading-normal);
+}
+
 .toastReference {
+  font-size: 11px;
+  opacity: 0.75;
+  letter-spacing: 0.02em;
   overflow-wrap: anywhere;
   word-break: normal;
   line-height: var(--leading-normal);
@@ -501,13 +505,37 @@
 .toastClose {
   flex: none;
   align-self: flex-start;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.toastClose:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.15);
 }
 
 @media (min-width: 900px) {
   .toast {
     left: auto;
     right: var(--space-5);
-    bottom: var(--space-5);
+    transform: none;
+    animation: toastSlideLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes toastSlideLeft {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 }
 

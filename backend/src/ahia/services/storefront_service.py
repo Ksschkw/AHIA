@@ -47,6 +47,7 @@ from ahia.crud import (
     storefront_crud,
     tenant_crud,
 )
+from ahia.models.entities.category_model import CategoryModel
 from ahia.models.entities.phone_number import (
     canonical_phone_number,
     international_digits_for,
@@ -82,6 +83,24 @@ class PublicProduct:
     #: trader should not have to type four hundred models in for the four hundred that are all the
     #: same price.
     is_special: bool = False
+
+
+def _build_category_path(
+    category_id: UUID | None,
+    categories_by_id: dict[UUID, CategoryModel],
+) -> str | None:
+    """Assemble category and its parents into a breadcrumb hierarchy path."""
+    if category_id is None or category_id not in categories_by_id:
+        return None
+    crumbs: list[str] = []
+    curr: CategoryModel | None = categories_by_id.get(category_id)
+    seen: set[UUID] = set()
+    while curr is not None and curr.id not in seen:
+        seen.add(curr.id)
+        crumbs.append(curr.name)
+        curr = categories_by_id.get(curr.parent_id) if curr.parent_id else None
+    crumbs.reverse()
+    return " > ".join(crumbs)
 
 
 @dataclass(frozen=True, slots=True)
@@ -386,19 +405,11 @@ class StorefrontService:
                 shop = await storefront_crud.get_for_tenant(session, resolved_tenant_id)
                 if shop is None or not shop.is_open():
                     raise self._closed_shop(tenant_slug)
-                products = await product_crud.list_published_for_tenant(session, resolved_tenant_id)
-                catalogue = [
-                    await self._public_product(
-                        session,
-                        tenant_id=resolved_tenant_id,
-                        product=product,
-                    )
-                    for product in products
-                ]
                 # The headings, flat, each naming its parent: what a builder walks down one tap at a
                 # time - Screenguard, then 21D, then the exceptions under it. Read in one query and
                 # resolved from the same list rather than one lookup per node.
                 headings = await category_crud.list_for_tenant(session, resolved_tenant_id)
+                categories_by_id = {heading.id: heading for heading in headings}
                 names_by_id = {heading.id: heading.name for heading in headings}
                 groups = [
                     PublicGroup(
@@ -409,6 +420,17 @@ class StorefrontService:
                         normal_price=heading.price_defaults().normal_price,
                     )
                     for heading in headings
+                ]
+
+                products = await product_crud.list_published_for_tenant(session, resolved_tenant_id)
+                catalogue = [
+                    await self._public_product(
+                        session,
+                        tenant_id=resolved_tenant_id,
+                        product=product,
+                        categories_by_id=categories_by_id,
+                    )
+                    for product in products
                 ]
 
         return PublicStorefront(
@@ -565,6 +587,7 @@ class StorefrontService:
         *,
         tenant_id: UUID,
         product: ProductModel,
+        categories_by_id: dict[UUID, CategoryModel] | None = None,
     ) -> PublicProduct:
         """Build one product's public projection from an allowlist of fields.
 
@@ -584,13 +607,12 @@ class StorefrontService:
         group = None
         group_default_price = None
         if product.category_id is not None:
-            found = await category_crud.get_by_id(
-                session,  # type: ignore[arg-type]
-                tenant_id=tenant_id,
-                category_id=product.category_id,
-            )
+            if categories_by_id is None:
+                all_cats = await category_crud.list_for_tenant(session, tenant_id)  # type: ignore[arg-type]
+                categories_by_id = {c.id: c for c in all_cats}
+            found = categories_by_id.get(product.category_id)
             if found is not None:
-                group = found.name
+                group = _build_category_path(product.category_id, categories_by_id)
                 group_default_price = found.price_defaults().normal_price
         # An exception carries its own price and it differs from the group's. An
         # item with no price of its own inherits, and inheriting is the ordinary case.

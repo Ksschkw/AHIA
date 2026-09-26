@@ -107,6 +107,84 @@
   color: var(--ink-3);
 }
 
+.categoryBadge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--leaf-dark);
+  background: var(--leaf-soft);
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-bottom: 4px;
+  align-self: flex-start;
+}
+
+.sectionDivider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--leaf-soft);
+  border-left: 3px solid var(--leaf);
+  border-radius: 4px;
+  margin-top: var(--space-2);
+}
+
+.sectionDividerTitle {
+  font-size: var(--text-xs);
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--leaf-dark);
+}
+
+.cannotGetOn,
+.cannotGetOff {
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.cannotGetOn {
+  background: #fde8e8;
+  border: 1px solid #f98080;
+  color: #9b1c1c;
+}
+
+.cannotGetOff {
+  background: var(--card);
+  border: 1px solid var(--line-strong);
+  color: var(--ink-2);
+}
+
+.cannotGetOn:disabled,
+.cannotGetOff:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.lineUnavailable {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+.compactPriceRow {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.compactPriceField {
+  flex: 1;
+  max-width: 150px;
+}
+
 .lineStates {
   display: flex;
   flex-wrap: wrap;
