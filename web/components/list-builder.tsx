@@ -358,45 +358,93 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
   /** The list, drawn as the paper it replaces: category headings, the things under them, and the counts. */
   async function drawList(): Promise<Blob | null> {
     const width = 900;
-    const row = 46;
+    const row = 44;
 
-    // Group items:
-    // 1. If customer created headings, group under customer headings.
-    // 2. Otherwise (or for items not under customer headings), group by catalogue category (groupName).
-    type Section = { title: string; lines: ChosenLine[]; isCustomerHeading?: boolean };
-    const sections: Section[] = [];
+    // Group items hierarchically: Root Category -> Sub-categories -> Items
+    interface SubSection {
+      subName: string | null;
+      lines: ChosenLine[];
+    }
+    interface RootSection {
+      rootName: string;
+      subs: SubSection[];
+    }
+
+    const rootMap = new Map<string, Map<string, ChosenLine[]>>();
+
+    function addLineToHierarchy(rootCategory: string, subCategory: string | null, line: ChosenLine) {
+      const root = rootCategory.trim() || "General Items";
+      const sub = subCategory ? subCategory.trim() : "__direct__";
+      if (!rootMap.has(root)) {
+        rootMap.set(root, new Map());
+      }
+      const subs = rootMap.get(root)!;
+      if (!subs.has(sub)) {
+        subs.set(sub, []);
+      }
+      subs.get(sub)!.push(line);
+    }
 
     if (headings.length > 0) {
-      for (const heading of headings) {
-        const childItems = items.filter((line) => line.underKey === heading.key);
-        sections.push({ title: heading.text, lines: childItems, isCustomerHeading: true });
+      // Top-level headings have underKey === null
+      const topHeadings = headings.filter((h) => h.underKey === null);
+      for (const th of topHeadings) {
+        // Direct child items
+        const directItems = items.filter((l) => l.underKey === th.key);
+        for (const item of directItems) {
+          addLineToHierarchy(th.text, null, item);
+        }
+        // Sub-headings under this top heading
+        const childHeadings = headings.filter((h) => h.underKey === th.key);
+        for (const ch of childHeadings) {
+          const subItems = items.filter((l) => l.underKey === ch.key);
+          for (const item of subItems) {
+            addLineToHierarchy(th.text, ch.text, item);
+          }
+        }
       }
-      const unassigned = items.filter((line) => line.underKey === null);
-      if (unassigned.length > 0) {
-        const byGroup = new Map<string, ChosenLine[]>();
-        for (const item of unassigned) {
-          const g = item.groupName ?? "Other Items";
-          byGroup.set(g, [...(byGroup.get(g) ?? []), item]);
-        }
-        for (const [groupTitle, groupLines] of byGroup.entries()) {
-          sections.push({ title: groupTitle, lines: groupLines });
-        }
+      // Any items without customer heading assignment: use groupName hierarchy if available
+      const unassigned = items.filter((l) => l.underKey === null);
+      for (const item of unassigned) {
+        const path = item.groupName ?? "Other Items";
+        const parts = path.split(" > ").map((p) => p.trim());
+        const root = parts[0] || "Other Items";
+        const sub = parts.length > 1 ? parts.slice(1).join(" > ") : null;
+        addLineToHierarchy(root, sub, item);
       }
     } else {
-      const byGroup = new Map<string, ChosenLine[]>();
+      // Group by catalogue category hierarchy (e.g. Screenguard > Privacy, Screenguard > 21D)
       for (const item of items) {
-        const g = item.groupName ?? "Items";
-        byGroup.set(g, [...(byGroup.get(g) ?? []), item]);
-      }
-      for (const [groupTitle, groupLines] of byGroup.entries()) {
-        sections.push({ title: groupTitle, lines: groupLines });
+        const path = item.groupName ?? "Items";
+        const parts = path.split(" > ").map((p) => p.trim());
+        const root = parts[0] || "Items";
+        const sub = parts.length > 1 ? parts.slice(1).join(" > ") : null;
+        addLineToHierarchy(root, sub, item);
       }
     }
 
+    const sections: RootSection[] = [];
+    for (const [rootName, subsMap] of rootMap.entries()) {
+      const subs: SubSection[] = [];
+      for (const [subKey, lines] of subsMap.entries()) {
+        subs.push({
+          subName: subKey === "__direct__" ? null : subKey,
+          lines,
+        });
+      }
+      sections.push({ rootName, subs });
+    }
+
     const totalLinesCount = items.length;
+    let totalSubsCount = 0;
+    for (const sec of sections) {
+      for (const sub of sec.subs) {
+        if (sub.subName !== null) totalSubsCount++;
+      }
+    }
     const canvasHeight = Math.max(
       640,
-      300 + totalLinesCount * row + sections.length * 64,
+      320 + totalLinesCount * row + sections.length * 52 + totalSubsCount * 32,
     );
     const canvas = document.createElement("canvas");
     canvas.width = width;
@@ -419,36 +467,49 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     context.fillRect(48, 186, width - 96, 2);
 
     let y = 236;
-    for (const section of sections) {
-      if (section.lines.length === 0) continue;
-
-      // Draw Category Header banner
-      context.fillStyle = "#f4f0e8";
-      context.fillRect(48, y - 26, width - 96, 36);
+    for (const sec of sections) {
+      // Draw Root Category Header banner
+      context.fillStyle = "#eef4f0";
+      context.fillRect(48, y - 24, width - 96, 36);
       context.fillStyle = "#084a2f";
-      context.fillRect(48, y - 26, 6, 36);
+      context.fillRect(48, y - 24, 6, 36);
 
+      context.fillStyle = "#084a2f";
       context.font = "bold 20px system-ui, sans-serif";
-      const sectionLabel =
-        section.title.length > 55 ? `${section.title.slice(0, 54)}...` : section.title;
-      context.fillText(sectionLabel.toUpperCase(), 64, y);
-      y += 42;
+      const rootLabel =
+        sec.rootName.length > 55 ? `${sec.rootName.slice(0, 54)}...` : sec.rootName;
+      context.fillText(rootLabel.toUpperCase(), 64, y + 2);
+      y += 44;
 
-      for (const line of section.lines) {
-        context.fillStyle = "#1e1b16";
-        context.font = "22px system-ui, sans-serif";
-        const label = line.text.length > 46 ? `${line.text.slice(0, 45)}...` : line.text;
-        context.fillText(label, 72, y);
+      for (const sub of sec.subs) {
+        if (sub.subName !== null) {
+          context.fillStyle = "#2d3748";
+          context.font = "bold 17px system-ui, sans-serif";
+          context.fillText(`>  ${sub.subName}`, 70, y);
+          context.fillStyle = "#e2e8f0";
+          context.fillRect(70, y + 6, width - 128, 1);
+          y += 28;
+        }
 
-        context.fillStyle = "#5c5549";
-        context.font = "bold 22px system-ui, sans-serif";
-        context.textAlign = "right";
-        context.fillText(`${line.quantity} pcs`, width - 48, y);
-        context.textAlign = "left";
+        for (const line of sub.lines) {
+          context.fillStyle = "#1e1b16";
+          context.font = "22px system-ui, sans-serif";
+          const indent = sub.subName !== null ? 86 : 72;
+          const maxChars = sub.subName !== null ? 42 : 46;
+          const label = line.text.length > maxChars ? `${line.text.slice(0, maxChars - 1)}...` : line.text;
+          context.fillText(label, indent, y);
 
-        y += row;
+          context.fillStyle = "#084a2f";
+          context.font = "bold 22px system-ui, sans-serif";
+          context.textAlign = "right";
+          context.fillText(`${line.quantity} pcs`, width - 48, y);
+          context.textAlign = "left";
+
+          y += row;
+        }
+        y += 8;
       }
-      y += 18;
+      y += 16;
     }
 
     context.fillStyle = "#e7dfd2";

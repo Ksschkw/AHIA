@@ -17,7 +17,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { Brand, Wordmark } from "@/components/brand";
+import { ArrowLeftIcon } from "@/components/icons";
 import { Button, Card, Field, Pill, Select, Toast } from "@/components/ui";
 import {
   ApiError,
@@ -134,15 +134,7 @@ export default function Team() {
   }, [refresh, router]);
 
   if (!business) {
-    return (
-      <main className={styles.page}>
-        <header className={styles.topbar}>
-          <Brand>
-            <Wordmark />
-          </Brand>
-        </header>
-      </main>
-    );
+    return <main className={styles.page} />;
   }
 
   // Somebody who was removed is not in the business: the API keeps the row for the audit trail, and
@@ -154,16 +146,12 @@ export default function Team() {
 
   return (
     <main className={styles.page}>
-      <header className={styles.topbar}>
-        <Brand>
-          <Wordmark />
-        </Brand>
-        <Link className={styles.back} href="/app">
-          Back to the shop
-        </Link>
-      </header>
-
       <div className={styles.content}>
+        <Link className={styles.backLink} href="/app">
+          <ArrowLeftIcon size={16} />
+          <span>Back to shop</span>
+        </Link>
+
         <div>
           <h1 className={styles.title}>Who is in {business.name}</h1>
           <p className={styles.lede}>

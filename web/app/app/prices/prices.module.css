@@ -1,149 +1,433 @@
+/* Price Book Management - Minimalist, Mobile-First, Uncluttered */
+
 .page {
-  min-height: 100vh;
-  padding-bottom: 48px;
-}
-
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 16px;
-  background: rgba(251, 247, 240, 0.94);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--line);
-}
-
-.back {
-  font-size: 13px;
-  font-weight: 650;
-  color: var(--leaf);
-  text-decoration: none;
-}
-
-.content {
-  max-width: 820px;
-  width: 100%;
+  max-width: 900px;
   margin: 0 auto;
-  padding: 20px 16px 40px;
+  padding: var(--space-4) var(--space-4) var(--space-7);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
 }
 
 .title {
-  font-size: 24px;
+  font-size: clamp(22px, 5vw, 30px);
+  font-weight: 800;
+  color: var(--ink);
   letter-spacing: -0.02em;
 }
 
 .lede {
-  margin-top: 8px;
   color: var(--ink-2);
-  font-size: 14px;
-  max-width: 60ch;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  max-width: 65ch;
 }
 
-.addRow {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  align-items: end;
-}
-
-@media (min-width: 620px) {
-  .addRow {
-    grid-template-columns: 1fr auto;
-  }
-}
-
-.groupGrid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-}
-
-@media (min-width: 620px) {
-  .groupGrid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-.actions {
+.toolbar {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 14px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
-.subhead {
-  margin-top: 20px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
-  font-size: 13px;
+.searchWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 220px;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 12px;
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
+.search {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 var(--space-3) 0 38px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  box-sizing: border-box;
+}
+
+.search:focus {
+  outline: 2px solid var(--leaf);
+  outline-offset: -1px;
+}
+
+.actionBtn {
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--leaf);
+  background: var(--leaf);
+  color: #ffffff;
+  font-size: var(--text-xs);
+  font-weight: 750;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.actionBtn:hover {
+  opacity: 0.9;
+}
+
+.actionBtnSecondary {
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  color: var(--ink);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.addGroupCard {
+  background: var(--card);
+  border: 1.5px solid var(--leaf);
+  border-radius: var(--radius-sm);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  box-shadow: 0 4px 14px rgba(11, 93, 59, 0.08);
+}
+
+.addGroupTitle {
+  font-size: var(--text-md);
+  font-weight: 750;
+  color: var(--leaf-dark);
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-2);
+}
+
+@media (min-width: 600px) {
+  .formGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.formActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+/* Group Cards */
+.groupCard {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.groupTitleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.groupIcon {
+  color: var(--leaf);
+  flex-shrink: 0;
+}
+
+.groupTitle {
+  font-size: var(--text-md);
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.groupCount {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--leaf-dark);
+  background: var(--leaf-soft);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.editBtn {
+  background: var(--sand);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  padding: 5px 12px;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.editBtn:hover {
+  background: var(--leaf-soft);
+  border-color: var(--leaf);
+  color: var(--leaf-dark);
+}
+
+/* Prices summary badges in View mode */
+.priceBadges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+}
+
+.priceBadge {
+  display: flex;
+  flex-direction: column;
+  background: var(--sand);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  min-width: 120px;
+}
+
+.priceBadgeLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-3);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
+}
+
+.priceBadgeValue {
+  font-size: var(--text-base);
+  font-weight: 800;
+  color: var(--leaf-dark);
+}
+
+/* Edit Mode Box */
+.editModeBox {
+  background: var(--sand);
+  border: 1.5px solid var(--leaf);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.editGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-2);
+}
+
+@media (min-width: 600px) {
+  .editGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.editActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+/* Items List under Group */
+.itemsSection {
+  margin-top: var(--space-1);
+}
+
+.itemsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.itemsTitle {
+  font-size: var(--text-xs);
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   color: var(--ink-3);
 }
 
-.items {
+.toggleItemsBtn {
+  background: none;
+  border: none;
+  color: var(--leaf);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.itemsList {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  overflow: hidden;
 }
 
-.item {
-  display: grid;
-  grid-template-columns: 1fr auto;
+.itemRow {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--line);
+  padding: var(--space-3);
+  gap: var(--space-2);
+}
+
+.itemRow:last-child {
+  border-bottom: none;
+}
+
+.itemMain {
+  display: flex;
   align-items: center;
-  gap: 8px 12px;
-  padding: 12px 0;
-  border-top: 1px solid var(--line);
-}
-
-.item:first-child {
-  border-top: none;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .itemWho {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
 
-.itemName {
-  font-weight: 650;
-}
-
-.itemPrice {
-  font-size: 12px;
+.itemIcon {
   color: var(--ink-3);
+  flex-shrink: 0;
 }
 
-.itemActions {
-  grid-column: 1 / -1;
+.itemName {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+  overflow-wrap: anywhere;
 }
 
-@media (min-width: 620px) {
-  .itemActions {
-    grid-column: auto;
+.itemPricing {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.itemPriceText {
+  font-size: var(--text-sm);
+  font-weight: 750;
+  color: var(--leaf-dark);
+}
+
+.itemEditBtn {
+  background: none;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-2);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.itemEditBtn:hover {
+  border-color: var(--leaf);
+  color: var(--leaf-dark);
+  background: var(--leaf-soft);
+}
+
+.itemEditForm {
+  background: var(--sand);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: 4px;
+}
+
+.itemEditGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-2);
+}
+
+@media (min-width: 600px) {
+  .itemEditGrid {
+    grid-template-columns: 1fr 1fr 1fr;
   }
 }
 
-.linkButton {
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--leaf);
-  font-size: 13px;
-  font-weight: 650;
-  text-decoration: underline;
+.itemEditActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: 4px;
 }
 
-.note {
-  font-size: 13px;
-  color: var(--ink-2);
+.resetGroupBtn {
+  background: none;
+  border: none;
+  color: var(--danger);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 0;
+  text-decoration: underline;
 }

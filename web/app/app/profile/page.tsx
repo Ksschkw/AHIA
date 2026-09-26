@@ -12,7 +12,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
-import { Brand, Wordmark } from "@/components/brand";
+import { ArrowLeftIcon } from "@/components/icons";
 import { Button, Card, Field, Pill, PasswordField, Toast } from "@/components/ui";
 import {
   ApiError,
@@ -149,29 +149,17 @@ export default function Profile() {
   const passwordsMatch = confirmation.length > 0 && confirmation === newPassword;
 
   if (!user) {
-    return (
-      <main className={styles.page}>
-        <header className={styles.topbar}>
-          <Brand>
-            <Wordmark />
-          </Brand>
-        </header>
-      </main>
-    );
+    return <main className={styles.page} />;
   }
 
   return (
     <main className={styles.page}>
-      <header className={styles.topbar}>
-        <Brand>
-          <Wordmark />
-        </Brand>
-        <Link className={styles.back} href="/app">
-          Back to the shop
-        </Link>
-      </header>
-
       <div className={styles.content}>
+        <Link className={styles.backLink} href="/app">
+          <ArrowLeftIcon size={16} />
+          <span>Back to shop</span>
+        </Link>
+
         <div className={styles.identity}>
           <span className={styles.avatar} aria-hidden>
             {(user.first_name[0] ?? "").toUpperCase()}

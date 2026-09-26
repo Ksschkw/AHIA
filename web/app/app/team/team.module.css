@@ -24,6 +24,22 @@
   text-decoration: none;
 }
 
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--leaf);
+  text-decoration: none;
+  padding: 4px 0;
+  width: fit-content;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+}
+
 .content {
   max-width: 820px;
   width: 100%;

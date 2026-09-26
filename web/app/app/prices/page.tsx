@@ -1,27 +1,35 @@
 "use client";
 
 /**
- * The price book: what a group costs, and the items that differ.
+ * The price book: category group prices and item overrides.
  *
- * A trader thinks in grades. "All of the 21D are 350" is one number, so this screen is built around
- * that sentence: each heading carries the price everything under it uses, and an item only gets its own
- * price when it is genuinely an exception - Hot 8 at 370 while the rest of the 21D stays at 350.
+ * Market traders set prices by grade/category ("All 21D are 500 normal, 350 wholesale").
+ * Every item under that category automatically uses that price unless specifically given an override.
  *
- * Two prices, both his: the **normal** price is what the shop page shows a browsing customer, and the
- * **wholesale** price is what a list is priced with. There is no tier machinery and nothing to
- * configure - just the numbers he sets, overridable on any line when he wants to.
- *
- * Clearing an item's price is a real action, and it is how an exception stops being one: it goes back
- * to following its group.
+ * Built for clarity and low cognitive load:
+ * - View mode by default: clean badges showing normal price, wholesale price, and pack size.
+ * - Edit on demand: inputs and save actions only appear when the trader taps "Edit".
+ * - Items under each group show their effective prices clearly with quick override options.
+ * - Quick search to filter groups and items instantly.
+ * - Protected by PIN gate for price changes that move money.
  */
 
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
 
-import { Brand, Wordmark } from "@/components/brand";
+import {
+  CheckMarkIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  EditIcon,
+  FolderIcon,
+  ItemBoxIcon,
+  PlusIcon,
+  SearchIcon,
+} from "@/components/icons";
+import { EmptyShelfIllustration } from "@/components/illustrations";
 import { PinGate } from "@/components/pin-gate";
-import { Button, Card, Field, Pill, Select, Toast } from "@/components/ui";
+import { Button, Card, Empty, Field, Loading, Pill, Select, Toast } from "@/components/ui";
 import {
   createCategory,
   currentUser,
@@ -48,21 +56,41 @@ interface GroupDraft {
   pack: string;
 }
 
+interface ItemDraft {
+  normal: string;
+  wholesale: string;
+  groupId: string;
+}
+
 export default function Prices() {
   const router = useRouter();
   const [business, setBusiness] = useState<Tenant | null>(null);
   const [groups, setGroups] = useState<Category[]>([]);
   const [items, setItems] = useState<Product[]>([]);
-  const [drafts, setDrafts] = useState<Record<string, GroupDraft>>({});
+  const [currency, setCurrency] = useState("NGN");
+  const [state, setState] = useState<"loading" | "ready">("loading");
+  const [query, setQuery] = useState("");
+
+  // Edit states
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [groupDrafts, setGroupDrafts] = useState<Record<string, GroupDraft>>({});
+
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [itemDraft, setItemDraft] = useState<ItemDraft>({ normal: "", wholesale: "", groupId: "" });
+
+  // Add group modal/card state
+  const [showAddGroup, setShowAddGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [newGroupNormal, setNewGroupNormal] = useState("");
+  const [newGroupWholesale, setNewGroupWholesale] = useState("");
+
+  // Collapsible groups
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [newGroup, setNewGroup] = useState("");
-  //: The action waiting on the question, if the person holding the phone has not answered yet.
   const [gated, setGated] = useState<{ run: () => void } | null>(null);
 
-  //: The keys whose action moves money. A price can be changed by a tap and cost real money by the end of
-  //: the day, so these ask who is holding the phone first. Everything else goes straight through, because a
-  //: PIN asked for too much becomes a PIN people share with whoever is nearest.
   const MOVES_MONEY = /^(group-|item-|clear-)/;
 
   const run = useCallback(
@@ -71,10 +99,10 @@ export default function Prices() {
         setGated({ run: () => void run(key, action, true) });
         return;
       }
-        setBusyAction(key);
-    setNotice(null);
+      setBusyAction(key);
+      setNotice(null);
       try {
-      await action();
+        await action();
       } catch (error) {
         const explained = explainFailure(error);
         setNotice({ message: explained.message, hint: explained.hint, tone: "bad" });
@@ -92,7 +120,7 @@ export default function Prices() {
     ]);
     setGroups(foundGroups);
     setItems(foundItems);
-    setDrafts(
+    setGroupDrafts(
       Object.fromEntries(
         foundGroups.map((group) => [
           group.id,
@@ -104,6 +132,7 @@ export default function Prices() {
         ]),
       ),
     );
+    setState("ready");
   }, []);
 
   useEffect(() => {
@@ -118,7 +147,9 @@ export default function Prices() {
           router.replace("/app");
           return;
         }
-        setBusiness(await getBusiness(chosen.id));
+        const detail = await getBusiness(chosen.id);
+        setBusiness(detail);
+        setCurrency(detail.currency);
         await load(chosen.id);
       } catch {
         router.replace("/start");
@@ -126,24 +157,10 @@ export default function Prices() {
     })();
   }, [load, router]);
 
-  if (!business) {
-    return (
-      <main className={styles.page}>
-        <header className={styles.topbar}>
-          <Brand>
-            <Wordmark />
-          </Brand>
-        </header>
-      </main>
-    );
-  }
-
   const money = (value: string): string | null => {
     const trimmed = value.trim();
     return trimmed === "" ? null : trimmed;
   };
-
-  const ungrouped = items.filter((product) => product.category_id === null);
 
   const count = (value: string): number | null => {
     const trimmed = value.trim();
@@ -152,251 +169,516 @@ export default function Prices() {
     return Number.isNaN(parsed) ? null : parsed;
   };
 
+  const toggleGroupExpanded = (groupId: string) => {
+    setExpandedGroups((prev) => ({
+      ...prev,
+      [groupId]: prev[groupId] === undefined ? true : !prev[groupId],
+    }));
+  };
+
+  const isGroupExpanded = (groupId: string): boolean => {
+    return expandedGroups[groupId] ?? true; // expanded by default
+  };
+
+  // Filter groups and items
+  const filteredGroups = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return groups;
+    return groups.filter((g) => {
+      if (g.name.toLowerCase().includes(q)) return true;
+      const groupItems = items.filter((i) => i.category_id === g.id);
+      return groupItems.some((i) => i.name.toLowerCase().includes(q));
+    });
+  }, [groups, items, query]);
+
+  const ungrouped = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const raw = items.filter((product) => product.category_id === null);
+    if (!q) return raw;
+    return raw.filter((i) => i.name.toLowerCase().includes(q));
+  }, [items, query]);
+
+  if (!business) {
+    return (
+      <main className={styles.page}>
+        <Loading label="Opening your price book..." />
+      </main>
+    );
+  }
+
   return (
     <main className={styles.page}>
-      <header className={styles.topbar}>
-        <Brand>
-          <Wordmark />
-        </Brand>
-        <Link className={styles.back} href="/app">
-          Back to the shop
-        </Link>
+      <header className={styles.header}>
+        <h1 className={styles.title}>Price Book</h1>
+        <p className={styles.lede}>
+          Set standard prices by category. Items automatically follow their category price, with
+          individual overrides available when a specific model differs.
+        </p>
       </header>
 
-      <div className={styles.content}>
-        <div>
-          <h1 className={styles.title}>Prices in {business.name}</h1>
-          <p className={styles.lede}>
-            Set what a group costs and everything under it follows. Give an item its own price only
-            when it is genuinely different - that is the exception, and it is marked so you can see it.
-          </p>
+      {/* Search and Action Toolbar */}
+      <section className={styles.toolbar}>
+        <div className={styles.searchWrap}>
+          <SearchIcon size={18} className={styles.searchIcon} />
+          <input
+            className={styles.search}
+            id="prices_search"
+            value={query}
+            placeholder="Search categories or items..."
+            aria-label="Search categories or items"
+            onChange={(event) => setQuery(event.target.value)}
+          />
         </div>
 
-        <Card title="Add a group">
-          <div className={styles.addRow}>
+        <button
+          type="button"
+          className={styles.actionBtn}
+          onClick={() => setShowAddGroup((prev) => !prev)}
+        >
+          <PlusIcon size={15} />
+          <span>Add Category</span>
+        </button>
+      </section>
+
+      {/* Add Category Form (expandable) */}
+      {showAddGroup ? (
+        <section className={styles.addGroupCard}>
+          <h2 className={styles.addGroupTitle}>Add New Category Group</h2>
+          <div className={styles.formGrid}>
             <Field
-              label="Name it the way you say it"
-              id="new_group"
-              value={newGroup}
-              onChange={setNewGroup}
-              placeholder="21D, Privacy, Charging cords"
-              hint="A grade, a heading, a shelf - whatever you call it."
+              label="Category name"
+              id="new_group_name"
+              value={newGroupName}
+              placeholder="e.g. 21D, Privacy, Chargers"
+              onChange={setNewGroupName}
             />
-            <Button
-              busy={busyAction === "add-group"}
-              disabled={newGroup.trim().length < 1}
+            <Field
+              label="Normal price (optional)"
+              id="new_group_normal"
+              value={newGroupNormal}
+              inputMode="decimal"
+              placeholder="e.g. 500"
+              optional
+              onChange={setNewGroupNormal}
+            />
+            <Field
+              label="Wholesale price (optional)"
+              id="new_group_wholesale"
+              value={newGroupWholesale}
+              inputMode="decimal"
+              placeholder="e.g. 350"
+              optional
+              onChange={setNewGroupWholesale}
+            />
+          </div>
+          <div className={styles.formActions}>
+            <button
+              type="button"
+              className={styles.actionBtn}
+              disabled={busyAction === "add-group" || newGroupName.trim().length < 1}
               onClick={() =>
                 run("add-group", async () => {
-                  await createCategory(business.id, { name: newGroup.trim() });
-                  setNewGroup("");
+                  await createCategory(business.id, {
+                    name: newGroupName.trim(),
+                    default_normal_price: money(newGroupNormal) ?? undefined,
+                    default_wholesale_price: money(newGroupWholesale) ?? undefined,
+                  });
+                  setNewGroupName("");
+                  setNewGroupNormal("");
+                  setNewGroupWholesale("");
+                  setShowAddGroup(false);
                   await load(business.id);
-                  setNotice({ message: "Group added. Set its price below.", tone: "good" });
+                  setNotice({ message: "Category created.", tone: "good" });
                 })
               }
             >
-              Add group
-            </Button>
+              {busyAction === "add-group" ? "Saving..." : "Save Category"}
+            </button>
+            <button
+              type="button"
+              className={styles.actionBtnSecondary}
+              onClick={() => setShowAddGroup(false)}
+            >
+              Cancel
+            </button>
           </div>
-        </Card>
+        </section>
+      ) : null}
 
-        {groups.length === 0 ? (
-          <Card title="No groups yet">
-            <p className={styles.note}>
-              A group is how a price reaches many items at once. Add one above - "21D" is a good first
-              one - then put your models under it.
-            </p>
-          </Card>
-        ) : null}
+      {state === "loading" ? <Loading label="Loading prices..." /> : null}
 
-        {ungrouped.length > 0 ? (
-          <Card title="Not under any group">
-            <p className={styles.note}>
-              These carry their own price. Put one under a group and it follows that group's price
-              instead - give it its own again any time.
-            </p>
-            <ul className={styles.items}>
-              {ungrouped.map((product) => (
-                <li key={product.id} className={styles.item}>
-                  <div className={styles.itemWho}>
-                    <span className={styles.itemName}>{product.name}</span>
-                    <span className={styles.itemPrice}>
-                      sells at {formatMoneyOrOnRequest(product.effective_normal_price)}
-                    </span>
-                  </div>
-                  <Select
-                    label="Under"
-                    id={`ungrouped_${product.id}`}
-                    value=""
-                    options={[
-                      { value: "", label: "No group" },
-                      ...groups.map((candidate) => ({
-                        value: candidate.id,
-                        label: candidate.name,
-                      })),
-                    ]}
+      {state === "ready" && groups.length === 0 ? (
+        <Empty
+          illustration={<EmptyShelfIllustration size={110} />}
+          action={
+            <button
+              type="button"
+              className={styles.actionBtn}
+              onClick={() => setShowAddGroup(true)}
+            >
+              <PlusIcon size={15} /> Add First Category
+            </button>
+          }
+        >
+          No price categories yet.
+          <br />
+          Create your first category (e.g. &quot;21D Screenguards&quot;) to set standard prices across
+          multiple items at once.
+        </Empty>
+      ) : null}
+
+      {/* Groups List */}
+      {filteredGroups.map((group) => {
+        const isEditing = editingGroupId === group.id;
+        const draft = groupDrafts[group.id] ?? {
+          normal: group.default_normal_price ?? "",
+          wholesale: group.default_wholesale_price ?? "",
+          pack: group.default_pieces_per_pack?.toString() ?? "",
+        };
+        const members = items.filter((product) => product.category_id === group.id);
+        const expanded = isGroupExpanded(group.id);
+
+        return (
+          <section key={group.id} className={styles.groupCard}>
+            <header className={styles.groupHeader}>
+              <div className={styles.groupTitleRow}>
+                <FolderIcon size={20} className={styles.groupIcon} />
+                <h2 className={styles.groupTitle}>{group.name}</h2>
+                <span className={styles.groupCount}>
+                  {members.length} {members.length === 1 ? "item" : "items"}
+                </span>
+              </div>
+              <button
+                type="button"
+                className={styles.editBtn}
+                onClick={() => setEditingGroupId(isEditing ? null : group.id)}
+              >
+                <EditIcon size={14} />
+                <span>{isEditing ? "Close" : "Edit Category Price"}</span>
+              </button>
+            </header>
+
+            {/* View Mode: Clean, glanceable price summary badges */}
+            {!isEditing ? (
+              <div className={styles.priceBadges}>
+                <div className={styles.priceBadge}>
+                  <span className={styles.priceBadgeLabel}>Shop Normal</span>
+                  <span className={styles.priceBadgeValue}>
+                    {formatMoneyOrOnRequest(group.default_normal_price, currency)}
+                  </span>
+                </div>
+                <div className={styles.priceBadge}>
+                  <span className={styles.priceBadgeLabel}>Wholesale List</span>
+                  <span className={styles.priceBadgeValue}>
+                    {formatMoneyOrOnRequest(group.default_wholesale_price, currency)}
+                  </span>
+                </div>
+                <div className={styles.priceBadge}>
+                  <span className={styles.priceBadgeLabel}>Pack Size</span>
+                  <span className={styles.priceBadgeValue}>
+                    {group.default_pieces_per_pack
+                      ? `${group.default_pieces_per_pack} pcs/pack`
+                      : "Single piece"}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              /* Edit Mode: Compact form only visible when requested */
+              <div className={styles.editModeBox}>
+                <div className={styles.editGrid}>
+                  <Field
+                    label="Normal price (shop page)"
+                    id={`normal_${group.id}`}
+                    value={draft.normal}
                     onChange={(value) =>
-                      run(`under-${product.id}`, async () => {
-                        await moveItemToGroup(business.id, product.id, value);
+                      setGroupDrafts((current) => ({
+                        ...current,
+                        [group.id]: { ...draft, normal: value },
+                      }))
+                    }
+                    inputMode="decimal"
+                    placeholder="e.g. 500"
+                  />
+                  <Field
+                    label="Wholesale price (customer list)"
+                    id={`wholesale_${group.id}`}
+                    value={draft.wholesale}
+                    onChange={(value) =>
+                      setGroupDrafts((current) => ({
+                        ...current,
+                        [group.id]: { ...draft, wholesale: value },
+                      }))
+                    }
+                    inputMode="decimal"
+                    placeholder="e.g. 350"
+                  />
+                  <Field
+                    label="Pieces in a pack"
+                    id={`pack_${group.id}`}
+                    value={draft.pack}
+                    onChange={(value) =>
+                      setGroupDrafts((current) => ({
+                        ...current,
+                        [group.id]: { ...draft, pack: value },
+                      }))
+                    }
+                    inputMode="numeric"
+                    optional
+                    placeholder="e.g. 10"
+                  />
+                </div>
+                <div className={styles.editActions}>
+                  <button
+                    type="button"
+                    className={styles.actionBtn}
+                    disabled={busyAction === `group-${group.id}`}
+                    onClick={() =>
+                      run(`group-${group.id}`, async () => {
+                        await setGroupPrices(business.id, group.id, {
+                          default_normal_price: money(draft.normal),
+                          default_wholesale_price: money(draft.wholesale),
+                          default_pieces_per_pack: count(draft.pack),
+                        });
+                        setEditingGroupId(null);
                         await load(business.id);
-                        setNotice({ message: `${product.name} now follows a group.`, tone: "good" });
+                        setNotice({
+                          message: `Prices updated for ${group.name}.`,
+                          tone: "good",
+                        });
                       })
                     }
-                  />
-                </li>
-              ))}
-            </ul>
-          </Card>
-        ) : null}
-
-        {groups.map((group) => {
-          const draft = drafts[group.id] ?? { normal: "", wholesale: "", pack: "" };
-          const members = items.filter((product) => product.category_id === group.id);
-          return (
-            <Card key={group.id} title={group.name}>
-              <div className={styles.groupGrid}>
-                <Field
-                  label="Normal price (shop page)"
-                  id={`normal_${group.id}`}
-                  value={draft.normal}
-                  onChange={(value) =>
-                    setDrafts((current) => ({
-                      ...current,
-                      [group.id]: { ...draft, normal: value },
-                    }))
-                  }
-                  inputMode="decimal"
-                  placeholder="500"
-                />
-                <Field
-                  label="Wholesale price (a list)"
-                  id={`wholesale_${group.id}`}
-                  value={draft.wholesale}
-                  onChange={(value) =>
-                    setDrafts((current) => ({
-                      ...current,
-                      [group.id]: { ...draft, wholesale: value },
-                    }))
-                  }
-                  inputMode="decimal"
-                  placeholder="350"
-                />
-                <Field
-                  label="Pieces in a pack"
-                  id={`pack_${group.id}`}
-                  value={draft.pack}
-                  onChange={(value) =>
-                    setDrafts((current) => ({
-                      ...current,
-                      [group.id]: { ...draft, pack: value },
-                    }))
-                  }
-                  inputMode="numeric"
-                  optional
-                  placeholder="10"
-                />
+                  >
+                    <CheckMarkIcon size={14} />
+                    <span>{busyAction === `group-${group.id}` ? "Saving..." : "Save Category Prices"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.actionBtnSecondary}
+                    onClick={() => setEditingGroupId(null)}
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
-              <div className={styles.actions}>
-                <Button
-                  busy={busyAction === `group-${group.id}`}
-                  onClick={() =>
-                    run(`group-${group.id}`, async () => {
-                      await setGroupPrices(business.id, group.id, {
-                        default_normal_price: money(draft.normal),
-                        default_wholesale_price: money(draft.wholesale),
-                        default_pieces_per_pack: count(draft.pack),
-                      });
-                      await load(business.id);
-                      setNotice({
-                        message: `Everything under ${group.name} follows this now.`,
-                        hint: "An item with its own price keeps it.",
-                        tone: "good",
-                      });
-                    })
-                  }
-                >
-                  Set this group
-                </Button>
+            )}
+
+            {/* Items inside this Category */}
+            <div className={styles.itemsSection}>
+              <div className={styles.itemsHeader}>
+                <span className={styles.itemsTitle}>
+                  Items in this category ({members.length})
+                </span>
+                {members.length > 0 ? (
+                  <button
+                    type="button"
+                    className={styles.toggleItemsBtn}
+                    onClick={() => toggleGroupExpanded(group.id)}
+                  >
+                    {expanded ? <ChevronDownIcon size={15} /> : <ChevronRightIcon size={15} />}
+                    <span>{expanded ? "Collapse" : "Expand"}</span>
+                  </button>
+                ) : null}
               </div>
 
-              <h3 className={styles.subhead}>
-                {members.length === 0
-                  ? "Nothing under this group yet"
-                  : `${members.length} under this group`}
-              </h3>
-              <ul className={styles.items}>
-                {members.map((product) => (
-                  <li key={product.id} className={styles.item}>
-                    <div className={styles.itemWho}>
-                      <span className={styles.itemName}>{product.name}</span>
-                      <span className={styles.itemPrice}>
-                        sells at {formatMoneyOrOnRequest(product.effective_normal_price)}
-                        {product.effective_wholesale_price
-                          ? `, list ${formatMoneyOrOnRequest(product.effective_wholesale_price)}`
-                          : ""}
-                      </span>
-                    </div>
-                    <Pill tone={product.normal_price_from_group ? "warn" : "good"}>
-                      {product.normal_price_from_group ? "Follows the group" : "Its own price"}
-                    </Pill>
+              {expanded && members.length > 0 ? (
+                <ul className={styles.itemsList}>
+                  {members.map((product) => {
+                    const isItemEditing = editingItemId === product.id;
+                    const hasOverride = !product.normal_price_from_group || !product.wholesale_price_from_group;
+
+                    return (
+                      <li key={product.id} className={styles.itemRow}>
+                        <div className={styles.itemMain}>
+                          <div className={styles.itemWho}>
+                            <ItemBoxIcon size={16} className={styles.itemIcon} />
+                            <span className={styles.itemName}>{product.name}</span>
+                          </div>
+                          <div className={styles.itemPricing}>
+                            <Pill tone={hasOverride ? "warn" : "good"}>
+                              {hasOverride
+                                ? `Custom: ${formatMoneyOrOnRequest(product.effective_normal_price, currency)}`
+                                : `Follows group (${formatMoneyOrOnRequest(product.effective_normal_price, currency)})`}
+                            </Pill>
+                            <button
+                              type="button"
+                              className={styles.itemEditBtn}
+                              onClick={() => {
+                                if (isItemEditing) {
+                                  setEditingItemId(null);
+                                } else {
+                                  setEditingItemId(product.id);
+                                  setItemDraft({
+                                    normal: product.normal_price_from_group ? "" : (product.selling_price ?? ""),
+                                    wholesale: product.wholesale_price_from_group ? "" : (product.effective_wholesale_price ?? ""),
+                                    groupId: product.category_id ?? "",
+                                  });
+                                }
+                              }}
+                            >
+                              <EditIcon size={12} />
+                              <span>{isItemEditing ? "Close" : "Change Price"}</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Individual Item Edit Form (only visible when requested) */}
+                        {isItemEditing ? (
+                          <div className={styles.itemEditForm}>
+                            <div className={styles.itemEditGrid}>
+                              <Field
+                                label="Custom shop price (leave blank for group)"
+                                id={`prod_normal_${product.id}`}
+                                value={itemDraft.normal}
+                                onChange={(value) =>
+                                  setItemDraft((prev) => ({ ...prev, normal: value }))
+                                }
+                                inputMode="decimal"
+                                placeholder={group.default_normal_price ?? "Group price"}
+                                optional
+                              />
+                              <Field
+                                label="Custom wholesale price"
+                                id={`prod_wholesale_${product.id}`}
+                                value={itemDraft.wholesale}
+                                onChange={(value) =>
+                                  setItemDraft((prev) => ({ ...prev, wholesale: value }))
+                                }
+                                inputMode="decimal"
+                                placeholder={group.default_wholesale_price ?? "Group price"}
+                                optional
+                              />
+                              <Select
+                                label="Category"
+                                id={`prod_cat_${product.id}`}
+                                value={itemDraft.groupId}
+                                options={[
+                                  { value: "", label: "No category" },
+                                  ...groups.map((c) => ({ value: c.id, label: c.name })),
+                                ]}
+                                onChange={(val) =>
+                                  setItemDraft((prev) => ({ ...prev, groupId: val }))
+                                }
+                              />
+                            </div>
+                            <div className={styles.itemEditActions}>
+                              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                                <button
+                                  type="button"
+                                  className={styles.actionBtn}
+                                  disabled={busyAction === `item-${product.id}`}
+                                  onClick={() =>
+                                    run(`item-${product.id}`, async () => {
+                                      await setItemPrices(business.id, product.id, {
+                                        selling_price: money(itemDraft.normal),
+                                        wholesale_price: money(itemDraft.wholesale),
+                                      });
+                                      if (itemDraft.groupId !== (product.category_id ?? "")) {
+                                        await moveItemToGroup(
+                                          business.id,
+                                          product.id,
+                                          itemDraft.groupId || null,
+                                        );
+                                      }
+                                      setEditingItemId(null);
+                                      await load(business.id);
+                                      setNotice({
+                                        message: `Price updated for ${product.name}.`,
+                                        tone: "good",
+                                      });
+                                    })
+                                  }
+                                >
+                                  <CheckMarkIcon size={14} />
+                                  <span>Save Item Price</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className={styles.actionBtnSecondary}
+                                  onClick={() => setEditingItemId(null)}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                              {hasOverride ? (
+                                <button
+                                  type="button"
+                                  className={styles.resetGroupBtn}
+                                  onClick={() =>
+                                    run(`clear-${product.id}`, async () => {
+                                      await setItemPrices(business.id, product.id, {
+                                        selling_price: null,
+                                        wholesale_price: null,
+                                      });
+                                      setEditingItemId(null);
+                                      await load(business.id);
+                                      setNotice({
+                                        message: `${product.name} now follows ${group.name} price.`,
+                                        tone: "good",
+                                      });
+                                    })
+                                  }
+                                >
+                                  Reset to Category Price
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
+            </div>
+          </section>
+        );
+      })}
+
+      {/* Ungrouped items */}
+      {ungrouped.length > 0 ? (
+        <Card title={`Uncategorized Items (${ungrouped.length})`}>
+          <p className={styles.lede} style={{ marginBottom: "12px" }}>
+            These items do not have a category yet. Assign them to a category to apply standard prices.
+          </p>
+          <ul className={styles.itemsList}>
+            {ungrouped.map((product) => (
+              <li key={product.id} className={styles.itemRow}>
+                <div className={styles.itemMain}>
+                  <div className={styles.itemWho}>
+                    <ItemBoxIcon size={16} className={styles.itemIcon} />
+                    <span className={styles.itemName}>{product.name}</span>
+                  </div>
+                  <div className={styles.itemPricing}>
+                    <span className={styles.itemPriceText}>
+                      {formatMoneyOrOnRequest(product.effective_normal_price, currency)}
+                    </span>
                     <Select
-                      label="Under"
-                      id={`under_${product.id}`}
-                      value={product.category_id ?? ""}
+                      label=""
+                      id={`ungrouped_select_${product.id}`}
+                      value=""
                       options={[
-                        { value: "", label: "No group" },
-                        ...groups.map((candidate) => ({
-                          value: candidate.id,
-                          label: candidate.name,
-                        })),
+                        { value: "", label: "Assign category..." },
+                        ...groups.map((c) => ({ value: c.id, label: c.name })),
                       ]}
-                      onChange={(value) =>
-                        run(`under-${product.id}`, async () => {
-                          // Filing an item under a heading is what lets one price cover it, so this
-                          // is the move that makes the whole price book worth having.
-                          await moveItemToGroup(
-                            business.id,
-                            product.id,
-                            value === "" ? null : value,
-                          );
+                      onChange={(catId) => {
+                        if (!catId) return;
+                        void run(`move-${product.id}`, async () => {
+                          await moveItemToGroup(business.id, product.id, catId);
                           await load(business.id);
                           setNotice({
-                            message:
-                              value === ""
-                                ? `${product.name} is not under a group any more.`
-                                : `${product.name} follows ${groups.find((c) => c.id === value)?.name}.`,
+                            message: `${product.name} assigned to category.`,
                             tone: "good",
                           });
-                        })
-                      }
+                        });
+                      }}
                     />
-                    <div className={styles.itemActions}>
-                      <button
-                        className={styles.linkButton}
-                        onClick={() =>
-                          run(`clear-${product.id}`, async () => {
-                            // Clearing the override is how an exception stops being one.
-                            await setItemPrices(business.id, product.id, {
-                              selling_price: null,
-                              wholesale_price: null,
-                            });
-                            await load(business.id);
-                            setNotice({
-                              message: `${product.name} follows ${group.name} again.`,
-                              tone: "good",
-                            });
-                          })
-                        }
-                      >
-                        Follow the group
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          );
-        })}
-      </div>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       {notice ? (
         <Toast
@@ -407,8 +689,6 @@ export default function Prices() {
         />
       ) : null}
 
-      {/* What everything costs is the one thing a tap can change and cost real money by the end of the
-          day, so it asks who is holding the phone before it happens. */}
       <PinGate
         open={gated !== null}
         reason="change a price"
