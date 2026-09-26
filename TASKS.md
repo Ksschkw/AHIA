@@ -100,10 +100,9 @@ assertion in a commit message.
 | M22 | Interface rebuild | `[x]` | M19 |
 | M23 | Responsiveness, truthful loading states, perceived speed | `[x]` | M22 |
 | M24 | Storefront, lists, shelf, button states, render split | `[x]` | M23 |
-| M25 | Authentication continuity and the device PIN | `[ ]` in part | M19 |
+| M25 | Authentication continuity and the device PIN | `[x]` | M19 |
 
-M25.2 - the device PIN for sensitive actions - is complete and verified. The rest of
-M25 is open. M20 is the next piece of work.
+M25.1 (silent refresh session continuity) and M25.2 (device PIN for sensitive actions) are complete and verified. M20 offline mobile client foundation is complete.
 
 Deferred by design, not planned here: AI forecasting, community/network module,
 supplier marketplace, fleet tracking, automated bank integrations, full WhatsApp
@@ -2551,7 +2550,7 @@ did not know. He also asked the question that matters: **what exactly is the int
       refresh token's default life is a year - which is what "sign in once" means for a trader on a phone
       he owns. Safe here because it is revocable, it rotates, and it is useless without its HttpOnly
       cookie.
-- [ ] **M25.2 A PIN for sensitive actions.** The trader's own idea, and the right shape for this trade:
+- [x] **M25.2 A PIN for sensitive actions.** The trader's own idea, and the right shape for this trade:
       changing a price, removing a staff member, or confirming a payout asks for a short PIN that never
       leaves the device, while browsing the shop all day asks for nothing. Long session, short leash on
       the few actions that can cost money.
@@ -4143,3 +4142,22 @@ Completed M20 requirements for native market trader workflows:
    - Live search filter across cached products.
    - One-tap "Live / Hidden" publication toggle.
    - Customer lists view displaying arrived orders, line item counts, category badges, and "Cannot get" toggle.
+
+## 14. Move Category Inside Another Folder with Cycle Guard (Like Moving Folders on a Phone)
+
+Allows traders to reorganize categories flexibly on the shelf:
+
+1. **Backend Category Update (`parent_id`)**:
+   - `CategoryUpdateSchema` accepts `parent_id: UUID | None = None`.
+   - `CategoryService.update_category` safely parses UUIDs and strings, and invokes `_require_move_is_possible` to prevent circular ancestor loops up to 32 levels deep.
+   - Moving a category to root is performed by sending `parent_id: null`.
+   - Moving a category inside itself or any of its descendants raises `InvalidInputError` (HTTP 422).
+2. **Frontend Category Move API**:
+   - `moveCategory(tenantId, categoryId, parentId)` added to `web/lib/api.ts`.
+3. **Trader Move Dialog & Interactive Picker (`/app/items`)**:
+   - Every category card in Folder drill-down, Search results, and Full Family Tree views features an accessible "Move" action button.
+   - Tapping "Move" opens a dedicated modal dialog showing eligible destinations with full breadcrumb hierarchy paths.
+   - Client-side cycle prevention automatically excludes the category itself and all its recursive descendants from destination choices.
+   - "Shelf Root (Top Level)" option enables moving any subcategory out to the root shelf in one tap.
+   - Current location is clearly badged and disabled.
+   - Successful moves immediately update the category tree and display an affirmative toast confirmation.
