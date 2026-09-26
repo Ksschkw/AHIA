@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   CheckMarkIcon,
+  ChevronDownIcon,
   ChevronRightIcon,
   CloseIcon,
   CopyIcon,
@@ -82,6 +83,29 @@ export default function Items() {
   const [query, setQuery] = useState("");
   const [currentCategoryId, setCurrentCategoryId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"folder" | "tree">("folder");
+  const [collapsedCategoryIds, setCollapsedCategoryIds] = useState<Set<string>>(new Set());
+  const [showTreeItems, setShowTreeItems] = useState(true);
+
+  const toggleCollapseCategory = useCallback((categoryId: string) => {
+    setCollapsedCategoryIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(categoryId)) {
+        next.delete(categoryId);
+      } else {
+        next.add(categoryId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleExpandAllTree = useCallback(() => {
+    setCollapsedCategoryIds(new Set());
+  }, []);
+
+  const handleCollapseAllTree = useCallback(() => {
+    setCollapsedCategoryIds(new Set(categories.map((c) => c.id)));
+  }, [categories]);
+
   const [state, setState] = useState<"loading" | "ready">(() =>
     rememberedBusinessId() ? "ready" : "loading",
   );
@@ -996,7 +1020,7 @@ export default function Items() {
                 return (
                   <div key={cat.id} className={styles.folderCard}>
                     <div
-                      className={styles.folderCardMain}
+                      className={styles.folderCardBody}
                       onClick={() => {
                         setCurrentCategoryId(cat.id);
                         setQuery("");
@@ -1010,38 +1034,48 @@ export default function Items() {
                         }
                       }}
                     >
-                      <span className={styles.folderMain}>
-                        <span className={styles.folderIcon}>
-                          <FolderIcon size={20} />
-                        </span>
-                        <div>
+                      <div className={styles.folderCardHeaderRow}>
+                        <div className={styles.folderTitleWrap}>
+                          <span className={styles.folderIcon}>
+                            <FolderIcon size={18} />
+                          </span>
                           <span className={styles.folderName}>{cat.name}</span>
-                          {cat.default_normal_price || cat.default_wholesale_price ? (
-                            <div className={styles.catPriceDefaults}>
-                              {cat.default_normal_price
-                                ? `Retail: ${formatMoneyOrOnRequest(cat.default_normal_price, currency)}`
-                                : ""}
-                              {cat.default_normal_price && cat.default_wholesale_price ? " - " : ""}
-                              {cat.default_wholesale_price
-                                ? `Wholesale: ${formatMoneyOrOnRequest(cat.default_wholesale_price, currency)}`
-                                : ""}
-                            </div>
+                        </div>
+                        <div className={styles.folderHeaderRight}>
+                          <span className={styles.folderCount}>
+                            {stats.subcategories > 0 ? `${stats.subcategories} sub - ` : ""}
+                            {stats.products} items
+                          </span>
+                          <ChevronRightIcon size={16} className={styles.folderChev} />
+                        </div>
+                      </div>
+
+                      {cat.default_normal_price || cat.default_wholesale_price ? (
+                        <div className={styles.catPriceDefaults}>
+                          {cat.default_normal_price ? (
+                            <span className={styles.retailBadge}>
+                              Retail: {formatMoneyOrOnRequest(cat.default_normal_price, currency)}
+                            </span>
+                          ) : null}
+                          {cat.default_wholesale_price ? (
+                            <span className={styles.wholesaleBadge}>
+                              Wholesale: {formatMoneyOrOnRequest(cat.default_wholesale_price, currency)}
+                              {cat.default_pieces_per_pack ? ` (${cat.default_pieces_per_pack}/pk)` : ""}
+                            </span>
                           ) : null}
                         </div>
-                      </span>
-                      <span className={styles.folderCount}>
-                        {stats.products} items
-                      </span>
-                      <ChevronRightIcon size={16} className={styles.folderChev} />
+                      ) : null}
                     </div>
-                    <div className={styles.folderBtnGroup} onClick={(e) => e.stopPropagation()}>
+
+                    <div className={styles.folderCardFooter} onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
                         className={styles.folderEditBtn}
                         title={`Edit "${cat.name}"`}
                         onClick={() => openEditCategory(cat)}
                       >
-                        Edit
+                        <EditIcon size={12} />
+                        <span>Edit</span>
                       </button>
                       <button
                         type="button"
@@ -1049,7 +1083,7 @@ export default function Items() {
                         title={`Move "${cat.name}" into another folder`}
                         onClick={() => setMovingCategory(cat)}
                       >
-                        Move
+                        <span>Move</span>
                       </button>
                       <button
                         type="button"
@@ -1057,7 +1091,8 @@ export default function Items() {
                         title={`Delete "${cat.name}"`}
                         onClick={() => setDeletingCategory(cat)}
                       >
-                        Delete
+                        <TrashIcon size={12} />
+                        <span>Delete</span>
                       </button>
                     </div>
                   </div>
@@ -1160,13 +1195,38 @@ export default function Items() {
       ) : viewMode === "tree" ? (
         /* Full Family Tree View (Genuine Branching Diagram) */
         <section className={styles.treeContainer}>
-          <div style={{ marginBottom: "16px" }}>
-            <h2 className={styles.sectionTitle} style={{ marginTop: 0 }}>
-              Visual Category Family Tree
-            </h2>
-            <p style={{ fontSize: "12px", color: "var(--ink-3)", margin: "2px 0 0" }}>
-              Interactive hierarchy with connecting branches, wholesale defaults, and quick copy/move actions
-            </p>
+          <div className={styles.treeHeader}>
+            <div className={styles.treeTitleGroup}>
+              <h2 className={styles.sectionTitle} style={{ margin: 0 }}>
+                Visual Category Family Tree
+              </h2>
+              <p style={{ fontSize: "12px", color: "var(--ink-3)", margin: "2px 0 0" }}>
+                Interactive hierarchy with connecting branches, wholesale defaults, and quick copy/move actions
+              </p>
+            </div>
+            <div className={styles.treeControls}>
+              <button
+                type="button"
+                className={styles.treeControlBtn}
+                onClick={handleExpandAllTree}
+              >
+                Expand All
+              </button>
+              <button
+                type="button"
+                className={styles.treeControlBtn}
+                onClick={handleCollapseAllTree}
+              >
+                Collapse All
+              </button>
+              <button
+                type="button"
+                className={styles.treeControlBtn}
+                onClick={() => setShowTreeItems((prev) => !prev)}
+              >
+                {showTreeItems ? "Categories Only" : "Show Items in Tree"}
+              </button>
+            </div>
           </div>
           <div className={styles.treeRoot}>
             <FamilyTreeRenderer
@@ -1175,6 +1235,9 @@ export default function Items() {
               stock={stock}
               currency={currency}
               parentId={null}
+              collapsedCategoryIds={collapsedCategoryIds}
+              onToggleCollapseCategory={toggleCollapseCategory}
+              showTreeItems={showTreeItems}
               onSelectCategory={(id) => {
                 setCurrentCategoryId(id);
                 setViewMode("folder");
@@ -1205,7 +1268,7 @@ export default function Items() {
                   return (
                     <div key={cat.id} className={styles.folderCard}>
                       <div
-                        className={styles.folderCardMain}
+                        className={styles.folderCardBody}
                         onClick={() => setCurrentCategoryId(cat.id)}
                         role="button"
                         tabIndex={0}
@@ -1215,40 +1278,48 @@ export default function Items() {
                           }
                         }}
                       >
-                        <span className={styles.folderMain}>
-                          <span className={styles.folderIcon}>
-                            <FolderIcon size={20} />
-                          </span>
-                          <div>
+                        <div className={styles.folderCardHeaderRow}>
+                          <div className={styles.folderTitleWrap}>
+                            <span className={styles.folderIcon}>
+                              <FolderIcon size={18} />
+                            </span>
                             <span className={styles.folderName}>{cat.name}</span>
-                            {cat.default_normal_price || cat.default_wholesale_price ? (
-                              <div className={styles.catPriceDefaults}>
-                                {cat.default_normal_price
-                                  ? `Retail: ${formatMoneyOrOnRequest(cat.default_normal_price, currency)}`
-                                  : ""}
-                                {cat.default_normal_price && cat.default_wholesale_price ? " - " : ""}
-                                {cat.default_wholesale_price
-                                  ? `Wholesale: ${formatMoneyOrOnRequest(cat.default_wholesale_price, currency)}`
-                                  : ""}
+                          </div>
+                          <div className={styles.folderHeaderRight}>
+                            <span className={styles.folderCount}>
+                              {stats.subcategories > 0 ? `${stats.subcategories} sub - ` : ""}
+                              {stats.products} items
+                            </span>
+                            <ChevronRightIcon size={16} className={styles.folderChev} />
+                          </div>
+                        </div>
+
+                        {cat.default_normal_price || cat.default_wholesale_price ? (
+                          <div className={styles.catPriceDefaults}>
+                            {cat.default_normal_price ? (
+                              <span className={styles.retailBadge}>
+                                Retail: {formatMoneyOrOnRequest(cat.default_normal_price, currency)}
+                              </span>
+                            ) : null}
+                            {cat.default_wholesale_price ? (
+                              <span className={styles.wholesaleBadge}>
+                                Wholesale: {formatMoneyOrOnRequest(cat.default_wholesale_price, currency)}
                                 {cat.default_pieces_per_pack ? ` (${cat.default_pieces_per_pack}/pk)` : ""}
-                              </div>
+                              </span>
                             ) : null}
                           </div>
-                        </span>
-                        <span className={styles.folderCount}>
-                          {stats.subcategories > 0 ? `${stats.subcategories} sub - ` : ""}
-                          {stats.products} items
-                        </span>
-                        <ChevronRightIcon size={16} className={styles.folderChev} />
+                        ) : null}
                       </div>
-                      <div className={styles.folderBtnGroup} onClick={(e) => e.stopPropagation()}>
+
+                      <div className={styles.folderCardFooter} onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
                           className={styles.folderEditBtn}
                           title={`Edit "${cat.name}"`}
                           onClick={() => openEditCategory(cat)}
                         >
-                          Edit
+                          <EditIcon size={12} />
+                          <span>Edit</span>
                         </button>
                         <button
                           type="button"
@@ -1256,7 +1327,7 @@ export default function Items() {
                           title={`Move "${cat.name}" into another folder`}
                           onClick={() => setMovingCategory(cat)}
                         >
-                          Move
+                          <span>Move</span>
                         </button>
                         <button
                           type="button"
@@ -1264,7 +1335,8 @@ export default function Items() {
                           title={`Delete "${cat.name}"`}
                           onClick={() => setDeletingCategory(cat)}
                         >
-                          Delete
+                          <TrashIcon size={12} />
+                          <span>Delete</span>
                         </button>
                       </div>
                     </div>
@@ -2176,6 +2248,9 @@ function FamilyTreeRenderer({
   stock,
   currency,
   parentId,
+  collapsedCategoryIds,
+  onToggleCollapseCategory,
+  showTreeItems,
   onSelectCategory,
   onStartEditCategory,
   onStartDeleteCategory,
@@ -2191,6 +2266,9 @@ function FamilyTreeRenderer({
   stock: InventoryLevel[];
   currency: string;
   parentId: string | null;
+  collapsedCategoryIds: Set<string>;
+  onToggleCollapseCategory: (categoryId: string) => void;
+  showTreeItems: boolean;
   onSelectCategory: (id: string) => void;
   onStartEditCategory?: (category: Category) => void;
   onStartDeleteCategory?: (category: Category) => void;
@@ -2202,7 +2280,7 @@ function FamilyTreeRenderer({
   busyAction: string | null;
 }) {
   const childCategories = categories.filter((c) => (c.parent_id ?? null) === parentId);
-  const directProducts = products.filter((p) => (p.category_id ?? null) === parentId);
+  const directProducts = showTreeItems ? products.filter((p) => (p.category_id ?? null) === parentId) : [];
 
   if (childCategories.length === 0 && directProducts.length === 0) {
     return null;
@@ -2213,29 +2291,71 @@ function FamilyTreeRenderer({
       {childCategories.map((cat) => {
         const catDirectProducts = products.filter((p) => p.category_id === cat.id);
         const subCats = categories.filter((c) => c.parent_id === cat.id);
+        const hasChildren = subCats.length > 0 || (showTreeItems && catDirectProducts.length > 0);
+        const isCollapsed = collapsedCategoryIds.has(cat.id);
         return (
           <div key={cat.id} className={styles.treeItemWrap}>
             {parentId !== null ? <div className={styles.treeConnectorElbow} /> : null}
-            <div className={styles.treeCategoryCard} onClick={() => onSelectCategory(cat.id)}>
-              <div className={styles.treeCategoryInfo}>
-                <FolderIcon size={18} className={styles.treeFolderIcon} />
-                <span className={styles.treeCategoryName}>{cat.name}</span>
-                <span className={styles.treeCategoryMeta}>
-                  ({catDirectProducts.length} items{subCats.length > 0 ? `, ${subCats.length} sub` : ""})
-                </span>
-                {cat.default_normal_price || cat.default_wholesale_price ? (
-                  <span className={styles.catPriceDefaults}>
-                    {cat.default_normal_price
-                      ? `Retail: ${formatMoneyOrOnRequest(cat.default_normal_price, currency)}`
-                      : ""}
-                    {cat.default_normal_price && cat.default_wholesale_price ? " - " : ""}
-                    {cat.default_wholesale_price
-                      ? `Wholesale: ${formatMoneyOrOnRequest(cat.default_wholesale_price, currency)}`
-                      : ""}
+            <div className={styles.treeCategoryCard}>
+              <div className={styles.treeCategoryHeader}>
+                <div
+                  className={styles.treeCategoryMain}
+                  onClick={() => {
+                    if (hasChildren) {
+                      onToggleCollapseCategory(cat.id);
+                    }
+                  }}
+                >
+                  {hasChildren ? (
+                    <button
+                      type="button"
+                      className={styles.treeCollapseBtn}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleCollapseCategory(cat.id);
+                      }}
+                      aria-label={isCollapsed ? `Expand ${cat.name}` : `Collapse ${cat.name}`}
+                    >
+                      {isCollapsed ? <ChevronRightIcon size={14} /> : <ChevronDownIcon size={14} />}
+                    </button>
+                  ) : (
+                    <span style={{ width: 24, display: "inline-block" }} />
+                  )}
+                  <FolderIcon size={18} className={styles.treeFolderIcon} />
+                  <span className={styles.treeCategoryName}>{cat.name}</span>
+                  <span className={styles.treeCategoryMeta}>
+                    {catDirectProducts.length} items{subCats.length > 0 ? `, ${subCats.length} sub` : ""}
                   </span>
-                ) : null}
+                </div>
+
+                <button
+                  type="button"
+                  className={styles.treeOpenFolderBtn}
+                  onClick={() => onSelectCategory(cat.id)}
+                  title={`Open ${cat.name} folder`}
+                >
+                  <FolderOpenIcon size={13} />
+                  <span>Open Folder</span>
+                </button>
               </div>
-              <div className={styles.treeActions} onClick={(e) => e.stopPropagation()}>
+
+              {cat.default_normal_price || cat.default_wholesale_price ? (
+                <div className={styles.treeCategoryPrices}>
+                  {cat.default_normal_price ? (
+                    <span className={styles.retailBadge}>
+                      Retail: {formatMoneyOrOnRequest(cat.default_normal_price, currency)}
+                    </span>
+                  ) : null}
+                  {cat.default_wholesale_price ? (
+                    <span className={styles.wholesaleBadge}>
+                      Wholesale: {formatMoneyOrOnRequest(cat.default_wholesale_price, currency)}
+                      {cat.default_pieces_per_pack ? ` (${cat.default_pieces_per_pack}/pk)` : ""}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className={styles.treeCategoryFooter}>
                 {onStartEditCategory ? (
                   <button
                     type="button"
@@ -2243,7 +2363,8 @@ function FamilyTreeRenderer({
                     title={`Edit ${cat.name}`}
                     onClick={() => onStartEditCategory(cat)}
                   >
-                    Edit
+                    <EditIcon size={12} />
+                    <span>Edit</span>
                   </button>
                 ) : null}
                 {catDirectProducts.length > 0 ? (
@@ -2255,7 +2376,8 @@ function FamilyTreeRenderer({
                       onStartBatchProduct("copy", catDirectProducts.map((p) => p.id), `${cat.name} items`)
                     }
                   >
-                    Copy All Items
+                    <CopyIcon size={12} />
+                    <span>Copy All ({catDirectProducts.length})</span>
                   </button>
                 ) : null}
                 {onStartMoveCategory ? (
@@ -2265,7 +2387,7 @@ function FamilyTreeRenderer({
                     title={`Move ${cat.name} folder`}
                     onClick={() => onStartMoveCategory(cat)}
                   >
-                    Move
+                    <span>Move</span>
                   </button>
                 ) : null}
                 {onStartDeleteCategory ? (
@@ -2275,15 +2397,15 @@ function FamilyTreeRenderer({
                     title={`Delete ${cat.name} folder`}
                     onClick={() => onStartDeleteCategory(cat)}
                   >
-                    Delete
+                    <TrashIcon size={12} />
+                    <span>Delete</span>
                   </button>
                 ) : null}
-                <ChevronRightIcon size={14} className={styles.treeChevIcon} />
               </div>
             </div>
 
-            {/* Connecting branch for children */}
-            {subCats.length > 0 || catDirectProducts.length > 0 ? (
+            {/* Connecting branch for children (only if not collapsed) */}
+            {!isCollapsed && (subCats.length > 0 || (showTreeItems && catDirectProducts.length > 0)) ? (
               <div className={styles.treeBranch}>
                 <FamilyTreeRenderer
                   categories={categories}
@@ -2291,6 +2413,9 @@ function FamilyTreeRenderer({
                   stock={stock}
                   currency={currency}
                   parentId={cat.id}
+                  collapsedCategoryIds={collapsedCategoryIds}
+                  onToggleCollapseCategory={onToggleCollapseCategory}
+                  showTreeItems={showTreeItems}
                   onSelectCategory={onSelectCategory}
                   onStartEditCategory={onStartEditCategory}
                   onStartDeleteCategory={onStartDeleteCategory}
@@ -2307,16 +2432,29 @@ function FamilyTreeRenderer({
         );
       })}
 
-      {directProducts.map((prod) => {
-        const curStock = stock.find((s) => s.product_id === prod.id);
-        return (
-          <div key={prod.id} className={styles.treeItemWrap}>
-            {parentId !== null ? <div className={styles.treeConnectorElbow} /> : null}
-            <div className={styles.treeProductCard}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                <ItemBoxIcon size={15} className={styles.treeProductIcon} />
-                <span className={styles.treeCategoryName}>{prod.name}</span>
-                <div className={styles.pricesMeta}>
+      {showTreeItems &&
+        directProducts.map((prod) => {
+          const curStock = stock.find((s) => s.product_id === prod.id);
+          return (
+            <div key={prod.id} className={styles.treeItemWrap}>
+              {parentId !== null ? <div className={styles.treeConnectorElbow} /> : null}
+              <div className={styles.treeProductCard}>
+                <div className={styles.treeProductHeader}>
+                  <div className={styles.treeProductMain}>
+                    <ItemBoxIcon size={15} className={styles.treeProductIcon} />
+                    <span className={styles.treeProductName}>{prod.name}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className={`${styles.publishToggleBtn} ${prod.is_published ? styles.published : ""}`}
+                    disabled={busyAction === `pub-${prod.id}`}
+                    onClick={() => onTogglePublish(prod)}
+                  >
+                    {prod.is_published ? "In shop" : "Hidden"}
+                  </button>
+                </div>
+
+                <div className={styles.treeProductPrices}>
                   <span className={styles.retailBadge}>
                     Retail: {formatMoneyOrOnRequest(prod.effective_normal_price, currency)}
                   </span>
@@ -2330,57 +2468,52 @@ function FamilyTreeRenderer({
                     - {formatQuantity(curStock?.available_quantity ?? "0")} in stock
                   </span>
                 </div>
-              </div>
-              <div className={styles.treeActions}>
-                {onStartEditProduct ? (
+
+                <div className={styles.treeProductFooter}>
+                  {onStartEditProduct ? (
+                    <button
+                      type="button"
+                      className={styles.itemEditBtn}
+                      onClick={() => onStartEditProduct(prod)}
+                      title={`Edit ${prod.name}`}
+                    >
+                      <EditIcon size={12} />
+                      <span>Edit</span>
+                    </button>
+                  ) : null}
                   <button
                     type="button"
-                    className={styles.itemEditBtn}
-                    onClick={() => onStartEditProduct(prod)}
-                    title={`Edit ${prod.name}`}
+                    className={styles.copyItemBtn}
+                    onClick={() => onStartBatchProduct("copy", [prod.id], prod.name)}
+                    title={`Copy ${prod.name} to another category`}
                   >
-                    Edit
+                    <CopyIcon size={12} />
+                    <span>Copy</span>
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  className={styles.copyItemBtn}
-                  onClick={() => onStartBatchProduct("copy", [prod.id], prod.name)}
-                  title={`Copy ${prod.name} to another category`}
-                >
-                  Copy
-                </button>
-                <button
-                  type="button"
-                  className={styles.moveItemBtn}
-                  onClick={() => onStartBatchProduct("move", [prod.id], prod.name)}
-                  title={`Move ${prod.name} to another category`}
-                >
-                  Move
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.publishToggleBtn} ${prod.is_published ? styles.published : ""}`}
-                  disabled={busyAction === `pub-${prod.id}`}
-                  onClick={() => onTogglePublish(prod)}
-                >
-                  {prod.is_published ? "In shop" : "Hidden"}
-                </button>
-                {onStartDeleteProduct ? (
                   <button
                     type="button"
-                    className={styles.itemDeleteBtn}
-                    onClick={() => onStartDeleteProduct(prod)}
-                    title={`Delete ${prod.name}`}
+                    className={styles.moveItemBtn}
+                    onClick={() => onStartBatchProduct("move", [prod.id], prod.name)}
+                    title={`Move ${prod.name} to another category`}
                   >
-                    Delete
+                    <span>Move</span>
                   </button>
-                ) : null}
+                  {onStartDeleteProduct ? (
+                    <button
+                      type="button"
+                      className={styles.itemDeleteBtn}
+                      onClick={() => onStartDeleteProduct(prod)}
+                      title={`Delete ${prod.name}`}
+                    >
+                      <TrashIcon size={12} />
+                      <span>Delete</span>
+                    </button>
+                  ) : null}
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
     </>
   );
 }

@@ -197,24 +197,114 @@
 
 .folderGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: var(--space-2);
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: var(--space-3);
+}
+
+@media (max-width: 600px) {
+  .folderGrid {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
 }
 
 .folderCard {
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
   display: flex;
-  align-items: center;
+  flex-direction: column;
   justify-content: space-between;
-  gap: var(--space-2);
-  transition: border-color 0.15s ease, background 0.15s ease;
+  gap: 8px;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .folderCard:hover {
   border-color: var(--leaf);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.folderCardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.folderCardHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.folderTitleWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.folderIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--leaf);
+  flex-shrink: 0;
+  background: var(--leaf-soft);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+}
+
+.folderName {
+  font-size: var(--text-base);
+  font-weight: 750;
+  color: var(--ink);
+  word-break: break-word;
+  line-height: 1.25;
+}
+
+.folderCardBody:hover .folderName {
+  color: var(--leaf-dark);
+}
+
+.folderHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.folderCount {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--leaf-dark);
+  background: var(--leaf-soft);
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.folderChev {
+  color: var(--ink-3);
+  flex-shrink: 0;
+}
+
+.folderCardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  margin-top: 2px;
+  flex-wrap: wrap;
 }
 
 .folderCardMain {
@@ -294,39 +384,6 @@
   min-width: 0;
 }
 
-.folderIcon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--leaf);
-  flex-shrink: 0;
-}
-
-.folderName {
-  font-size: var(--text-base);
-  font-weight: 700;
-  color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.folderCount {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--leaf-dark);
-  background: var(--leaf-soft);
-  padding: 2px 8px;
-  border-radius: 999px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.folderChev {
-  color: var(--ink-3);
-  flex-shrink: 0;
-}
-
 /* Products List in Category */
 .productsList {
   display: flex;
@@ -355,6 +412,7 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  flex: 1;
 }
 
 .productNameRow {
@@ -395,6 +453,22 @@
   flex-shrink: 0;
 }
 
+@media (max-width: 680px) {
+  .productRow {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+
+  .productActions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    padding-top: 8px;
+    border-top: 1px dashed var(--line);
+  }
+}
+
 .publishToggleBtn {
   min-height: 28px;
   padding: 0 var(--space-2);
@@ -408,9 +482,9 @@
 }
 
 .publishToggleBtn.published {
-  background: #def7ec;
-  border-color: #31c48d;
-  color: #03543f;
+  background: var(--leaf-soft);
+  border-color: var(--leaf);
+  color: var(--leaf-dark);
 }
 
 .moveItemBtn {
@@ -475,23 +549,72 @@
   border-radius: var(--radius-sm);
   padding: var(--space-4);
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.treeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.treeTitleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.treeControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.treeControlBtn {
+  background: var(--sand);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.treeControlBtn:hover {
+  background: var(--card);
+  border-color: var(--leaf);
+  color: var(--leaf-dark);
 }
 
 .treeRoot {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 280px;
 }
 
 .treeBranch {
   position: relative;
   margin-left: 20px;
   padding-left: 18px;
-  border-left: 2px solid #b7c7b8;
+  border-left: 2px solid var(--line-strong);
   display: flex;
   flex-direction: column;
   gap: 10px;
   margin-top: 6px;
+}
+
+:global([data-theme="dark"]) .treeBranch {
+  border-left-color: #3b5042;
 }
 
 .treeItemWrap {
@@ -506,70 +629,206 @@
   left: -18px;
   width: 16px;
   height: 2px;
-  background: #b7c7b8;
+  background: var(--line-strong);
+}
+
+:global([data-theme="dark"]) .treeConnectorElbow {
+  background: #3b5042;
 }
 
 .treeCategoryCard {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 8px 12px;
-  background: #f9fbf9;
-  border: 1px solid #c9decb;
+  background: var(--card);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  cursor: pointer;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .treeCategoryCard:hover {
-  background: var(--leaf-soft);
   border-color: var(--leaf);
 }
 
-.treeProductCard {
+.treeCategoryHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
   gap: 8px;
-  padding: 6px 12px;
-  background: var(--sand);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  transition: all 0.15s ease;
 }
 
-.treeProductCard:hover {
-  border-color: var(--line-strong);
-}
-
-.treeCategoryInfo {
+.treeCategoryMain {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  min-width: 0;
+  flex: 1;
+  cursor: pointer;
+  user-select: none;
+}
+
+.treeCollapseBtn {
+  background: var(--sand);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 4px;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.treeCollapseBtn:hover {
+  color: var(--ink);
+  background: var(--leaf-soft);
+  border-color: var(--leaf);
 }
 
 .treeCategoryName {
   font-size: var(--text-sm);
   font-weight: 750;
   color: var(--ink);
+  word-break: break-word;
 }
 
 .treeCategoryMeta {
   font-size: 11px;
+  font-weight: 600;
   color: var(--ink-2);
+  background: var(--sand);
+  padding: 2px 6px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
 }
 
-.treeFolderIcon {
-  color: var(--leaf);
+.treeOpenFolderBtn {
+  background: var(--sand);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--leaf-dark);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
   flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.treeOpenFolderBtn:hover {
+  background: var(--leaf-soft);
+  border-color: var(--leaf);
+}
+
+.treeCategoryPrices {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.treeCategoryFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.treeProductCard {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.treeProductCard:hover {
+  border-color: var(--leaf);
+}
+
+.treeProductHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.treeProductMain {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
 }
 
 .treeProductIcon {
   color: var(--ink-3);
+  flex-shrink: 0;
+}
+
+.treeProductName {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.treeProductPrices {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.treeProductFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+  border-top: 1px dashed var(--line);
+}
+
+@media (max-width: 640px) {
+  .treeContainer {
+    padding: var(--space-2);
+  }
+
+  .treeBranch {
+    margin-left: 10px;
+    padding-left: 10px;
+  }
+
+  .treeConnectorElbow {
+    left: -10px;
+    width: 8px;
+  }
+
+  .treeCategoryCard,
+  .treeProductCard {
+    padding: 8px 10px;
+  }
+}
+
+.treeFolderIcon {
+  color: var(--leaf);
   flex-shrink: 0;
 }
 
@@ -594,7 +853,7 @@
 }
 
 .productRowSelected {
-  background: #f0f7f2 !important;
+  background: var(--leaf-soft) !important;
   border-color: var(--leaf) !important;
 }
 
@@ -612,9 +871,9 @@
 }
 
 .copyItemBtn:hover {
-  background: #e8f4fd;
-  border-color: #70b3e5;
-  color: #1a56db;
+  background: var(--leaf-soft);
+  border-color: var(--leaf);
+  color: var(--leaf-dark);
 }
 
 .copyAllBtn {
