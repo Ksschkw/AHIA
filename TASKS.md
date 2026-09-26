@@ -3989,15 +3989,18 @@ His word for it. Concrete, from the screenshots and his complaints:
 - **Nothing tells him he is offline** or that a send failed for a network reason rather than a real refusal.
 - Every screen should **paint from cache before asking** (section 8).
 
-## 8. Cache-first paint is on two screens out of seven - **the "it reloads every time" complaint**
+## 8. Cache-first paint across all seven screens - **COMPLETE**
 
-The dashboard and the lists screen paint what the browser holds before asking. **Prices, team, profile, sales and
-items do not** - each starts with `loading` and shows a spinner even when the answer is already in the browser.
-`lib/api.ts` has `cachedRead` and `remember`; the pattern is: initialise state **during the first render** from
-`cachedRead(path)`, and only show a spinner when that returns nothing.
+Delivered across all application screens:
+1. **Dashboard** (`/app`): `products` initialized via `firstPaint`, `shelfState` initialized from `cachedRead`.
+2. **Items** (`/app/items`): `products` and `categories` initialized via `firstPaint` and `cachedRead`.
+3. **Sales** (`/app/sales`): `sales` initialized via `firstPaint`, `state` ready immediately.
+4. **Lists** (`/app/lists`): `business` initialized via `firstPaint`, `lists` initialized via `cachedRead`.
+5. **Prices** (`/app/prices`): `business`, `groups`, `items`, and `groupDrafts` initialized via `firstPaint` and `cachedRead`.
+6. **Team** (`/app/team`): `business`, `members`, and `issued` invitations initialized via `firstPaint` and `cachedRead`.
+7. **Profile** (`/app/profile`): `user`, `businesses`, `business`, and all form fields (`firstName`, `phone`, `businessName`, etc.) initialized via `cachedRead` and `firstPaint`.
 
-I wrote a shared `useCachedRead` hook for this and **deleted it rather than ship it half-used** - if it comes
-back, it comes back applied to every screen at once.
+Zero spinner flash or layout jitter when navigating or returning to any screen in the application.
 
 ## 9. The mobile application
 

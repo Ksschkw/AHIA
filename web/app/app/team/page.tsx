@@ -23,15 +23,18 @@ import {
   ApiError,
   MEMBER_ROLES,
   acceptInvitation,
+  cachedRead,
   changeMemberRole,
   changeMemberStatus,
   currentUser,
+  firstPaint,
   getBusiness,
   inviteMember,
   listBusinesses,
   listIssuedInvitations,
   listMembers,
   listMyInvitations,
+  rememberedBusinessId,
   removeMember,
   type AcceptedInvitation,
   type Member,
@@ -57,10 +60,22 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function Team() {
   const router = useRouter();
-  const [business, setBusiness] = useState<Tenant | null>(null);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [issued, setIssued] = useState<MembershipInvitation[]>([]);
-  const [mine, setMine] = useState<PendingInvitation[]>([]);
+  const [business, setBusiness] = useState<Tenant | null>(() =>
+    firstPaint<Tenant>(rememberedBusinessId(), (id) => `/api/v1/tenants/${id}`),
+  );
+  const [members, setMembers] = useState<Member[]>(() => {
+    const id = rememberedBusinessId();
+    if (!id) return [];
+    return cachedRead<Member[]>(`/api/v1/tenants/${id}/members`) ?? [];
+  });
+  const [issued, setIssued] = useState<MembershipInvitation[]>(() => {
+    const id = rememberedBusinessId();
+    if (!id) return [];
+    return cachedRead<MembershipInvitation[]>(`/api/v1/tenants/${id}/invitations`) ?? [];
+  });
+  const [mine, setMine] = useState<PendingInvitation[]>(() => {
+    return cachedRead<PendingInvitation[]>("/api/v1/invitations/mine") ?? [];
+  });
   const [busyAction, setBusyAction] = useState<string | null>(null);
   //: The action waiting on the question, if the person holding the phone has not answered yet.
   const [gated, setGated] = useState<{ run: () => void } | null>(null);
@@ -124,6 +139,13 @@ export default function Team() {
           router.replace("/app");
           return;
         }
+        const rememberedMembers = cachedRead<Member[]>(`/api/v1/tenants/${chosen.id}/members`);
+        if (rememberedMembers) setMembers(rememberedMembers);
+        const rememberedIssued = cachedRead<MembershipInvitation[]>(`/api/v1/tenants/${chosen.id}/invitations`);
+        if (rememberedIssued) setIssued(rememberedIssued);
+        const rememberedMine = cachedRead<PendingInvitation[]>("/api/v1/invitations/mine");
+        if (rememberedMine) setMine(rememberedMine);
+
         setBusiness(await getBusiness(chosen.id));
         await refresh(chosen.id);
         setMine(await listMyInvitations());

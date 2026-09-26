@@ -16,11 +16,14 @@ import { ArrowLeftIcon } from "@/components/icons";
 import { Button, Card, Field, Pill, PasswordField, Toast } from "@/components/ui";
 import {
   ApiError,
+  cachedRead,
   changePassword,
   currentUser,
+  firstPaint,
   getBusiness,
   getStorefront,
   listBusinesses,
+  rememberedBusinessId,
   updateBusiness,
   updateProfile,
   updateStorefront,
@@ -41,24 +44,26 @@ type Notice = { message: string; tone: "good" | "bad"; hint?: string };
 
 export default function Profile() {
   const router = useRouter();
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [businesses, setBusinesses] = useState<TenantSummary[]>([]);
-  const [business, setBusiness] = useState<Tenant | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(() => cachedRead<UserProfile>("/api/v1/users/me"));
+  const [businesses, setBusinesses] = useState<TenantSummary[]>(() => cachedRead<TenantSummary[]>("/api/v1/tenants") ?? []);
+  const [business, setBusiness] = useState<Tenant | null>(() =>
+    firstPaint<Tenant>(rememberedBusinessId(), (id) => `/api/v1/tenants/${id}`),
+  );
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
 
   // Your details
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState(() => cachedRead<UserProfile>("/api/v1/users/me")?.first_name ?? "");
+  const [lastName, setLastName] = useState(() => cachedRead<UserProfile>("/api/v1/users/me")?.last_name ?? "");
+  const [phone, setPhone] = useState(() => cachedRead<UserProfile>("/api/v1/users/me")?.phone ?? "");
+  const [email, setEmail] = useState(() => cachedRead<UserProfile>("/api/v1/users/me")?.email ?? "");
 
   // The business's details
-  const [businessName, setBusinessName] = useState("");
-  const [businessPhone, setBusinessPhone] = useState("");
-  const [businessAddress, setBusinessAddress] = useState("");
-  const [businessCity, setBusinessCity] = useState("");
-  const [businessState, setBusinessState] = useState("");
+  const [businessName, setBusinessName] = useState(() => firstPaint<Tenant>(rememberedBusinessId(), (id) => `/api/v1/tenants/${id}`)?.name ?? "");
+  const [businessPhone, setBusinessPhone] = useState(() => firstPaint<Tenant>(rememberedBusinessId(), (id) => `/api/v1/tenants/${id}`)?.phone ?? "");
+  const [businessAddress, setBusinessAddress] = useState(() => firstPaint<Tenant>(rememberedBusinessId(), (id) => `/api/v1/tenants/${id}`)?.address ?? "");
+  const [businessCity, setBusinessCity] = useState(() => firstPaint<Tenant>(rememberedBusinessId(), (id) => `/api/v1/tenants/${id}`)?.city ?? "");
+  const [businessState, setBusinessState] = useState(() => firstPaint<Tenant>(rememberedBusinessId(), (id) => `/api/v1/tenants/${id}`)?.state ?? "");
 
   // Shop Customization
   const [storefrontHeadline, setStorefrontHeadline] = useState("");

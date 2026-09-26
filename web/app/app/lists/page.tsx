@@ -36,9 +36,11 @@ import {
   cachedRead,
   confirmCustomerList,
   currentUser,
+  firstPaint,
   getBusiness,
   listBusinesses,
   listCustomerLists,
+  rememberedBusinessId,
   workListLine,
   type CustomerList,
   type CustomerListLine,
@@ -60,9 +62,20 @@ const STATE_LABEL: Record<string, string> = {
 };
 
 export default function Lists() {
-  const [business, setBusiness] = useState<Tenant | null>(null);
-  const [lists, setLists] = useState<CustomerList[]>([]);
-  const [state, setState] = useState<"loading" | "ready">("loading");
+  const [business, setBusiness] = useState<Tenant | null>(() =>
+    firstPaint<Tenant>(rememberedBusinessId(), (id) => `/api/v1/tenants/${id}`),
+  );
+  const [lists, setLists] = useState<CustomerList[]>(() => {
+    const id = rememberedBusinessId();
+    if (!id) return [];
+    return cachedRead<CustomerList[]>(`/api/v1/tenants/${id}/requests`) ?? [];
+  });
+  const [state, setState] = useState<"loading" | "ready">(() => {
+    const id = rememberedBusinessId();
+    if (!id) return "loading";
+    const hasCached = cachedRead(`/api/v1/tenants/${id}/requests`);
+    return hasCached ? "ready" : "loading";
+  });
   const [openId, setOpenId] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   //: The action waiting on the question, if the person holding the phone has not answered yet.

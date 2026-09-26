@@ -31,13 +31,16 @@ import { EmptyShelfIllustration } from "@/components/illustrations";
 import { PinGate } from "@/components/pin-gate";
 import { Button, Card, Empty, Field, Loading, Pill, Select, Toast } from "@/components/ui";
 import {
+  cachedRead,
   createCategory,
   currentUser,
+  firstPaint,
   getBusiness,
   listBusinesses,
   listCategories,
   listProducts,
   moveItemToGroup,
+  rememberedBusinessId,
   setGroupPrices,
   setItemPrices,
   type Category,
@@ -64,16 +67,49 @@ interface ItemDraft {
 
 export default function Prices() {
   const router = useRouter();
-  const [business, setBusiness] = useState<Tenant | null>(null);
-  const [groups, setGroups] = useState<Category[]>([]);
-  const [items, setItems] = useState<Product[]>([]);
-  const [currency, setCurrency] = useState("NGN");
-  const [state, setState] = useState<"loading" | "ready">("loading");
+  const [business, setBusiness] = useState<Tenant | null>(() =>
+    firstPaint<Tenant>(rememberedBusinessId(), (id) => `/api/v1/tenants/${id}`),
+  );
+  const [groups, setGroups] = useState<Category[]>(() => {
+    const id = rememberedBusinessId();
+    if (!id) return [];
+    return cachedRead<Category[]>(`/api/v1/tenants/${id}/categories`) ?? [];
+  });
+  const [items, setItems] = useState<Product[]>(() => {
+    const id = rememberedBusinessId();
+    if (!id) return [];
+    return cachedRead<Product[]>(`/api/v1/tenants/${id}/products`) ?? [];
+  });
+  const [currency, setCurrency] = useState(() => {
+    const id = rememberedBusinessId();
+    if (!id) return "NGN";
+    return cachedRead<Tenant>(`/api/v1/tenants/${id}`)?.currency ?? "NGN";
+  });
+  const [state, setState] = useState<"loading" | "ready">(() => {
+    const id = rememberedBusinessId();
+    if (!id) return "loading";
+    const hasCached = cachedRead(`/api/v1/tenants/${id}/categories`) || cachedRead(`/api/v1/tenants/${id}/products`);
+    return hasCached ? "ready" : "loading";
+  });
   const [query, setQuery] = useState("");
 
   // Edit states
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
-  const [groupDrafts, setGroupDrafts] = useState<Record<string, GroupDraft>>({});
+  const [groupDrafts, setGroupDrafts] = useState<Record<string, GroupDraft>>(() => {
+    const id = rememberedBusinessId();
+    if (!id) return {};
+    const cachedCats = cachedRead<Category[]>(`/api/v1/tenants/${id}/categories`) ?? [];
+    return Object.fromEntries(
+      cachedCats.map((group) => [
+        group.id,
+        {
+          normal: group.default_normal_price ?? "",
+          wholesale: group.default_wholesale_price ?? "",
+          pack: group.default_pieces_per_pack?.toString() ?? "",
+        },
+      ]),
+    );
+  });
 
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [itemDraft, setItemDraft] = useState<ItemDraft>({ normal: "", wholesale: "", groupId: "" });
@@ -150,6 +186,29 @@ export default function Prices() {
         const detail = await getBusiness(chosen.id);
         setBusiness(detail);
         setCurrency(detail.currency);
+
+        const rememberedCats = cachedRead<Category[]>(`/api/v1/tenants/${chosen.id}/categories`);
+        if (rememberedCats) {
+          setGroups(rememberedCats);
+          setGroupDrafts(
+            Object.fromEntries(
+              rememberedCats.map((group) => [
+                group.id,
+                {
+                  normal: group.default_normal_price ?? "",
+                  wholesale: group.default_wholesale_price ?? "",
+                  pack: group.default_pieces_per_pack?.toString() ?? "",
+                },
+              ]),
+            ),
+          );
+          setState("ready");
+        }
+        const rememberedProds = cachedRead<Product[]>(`/api/v1/tenants/${chosen.id}/products`);
+        if (rememberedProds) {
+          setItems(rememberedProds);
+        }
+
         await load(chosen.id);
       } catch {
         router.replace("/start");
