@@ -37,10 +37,39 @@
   flex-wrap: wrap;
 }
 
+.openShopBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 var(--space-4);
+  background: var(--leaf);
+  color: #ffffff;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: 750;
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+.openShopBtn:hover {
+  opacity: 0.9;
+}
+
 .meta {
   font-size: var(--text-sm);
   color: var(--ink-2);
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.phoneMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .headPills {
@@ -96,6 +125,17 @@
   min-width: 0;
 }
 
+.lineNameRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lineItemIcon {
+  color: var(--ink-3);
+  flex-shrink: 0;
+}
+
 .lineName {
   font-size: var(--text-md);
   font-weight: 700;
@@ -148,6 +188,9 @@
   font-weight: 700;
   cursor: pointer;
   align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .cannotGetOn {
@@ -237,12 +280,28 @@
   font-size: var(--text-sm);
   font-weight: 700;
   color: var(--leaf-dark);
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .lineUnpriced {
   font-size: var(--text-sm);
   color: var(--ink-3);
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pricedCheck {
+  color: var(--leaf);
+  flex-shrink: 0;
+}
+
+.unpricedClock {
+  color: var(--ink-3);
+  flex-shrink: 0;
 }
 
 .quote {

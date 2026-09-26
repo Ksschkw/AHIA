@@ -16,6 +16,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import {
+  ChevronRightIcon,
+  FolderIcon,
+  FolderOpenIcon,
+  ItemBoxIcon,
+  PlusIcon,
+  SearchIcon,
+} from "@/components/icons";
+import { EmptyShelfIllustration } from "@/components/illustrations";
 import { Empty, Field, Loading, Toast } from "@/components/ui";
 import {
   cachedRead,
@@ -277,13 +286,14 @@ export default function Items() {
               setQuery("");
             }}
           >
-            Shelf Root
+            <FolderOpenIcon size={16} />
+            <span>Shelf Root</span>
           </button>
           {breadcrumbs.map((crumb, idx) => {
             const isLast = idx === breadcrumbs.length - 1;
             return (
               <span key={crumb.id} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                <span className={styles.crumbSep}>/</span>
+                <ChevronRightIcon size={13} className={styles.crumbSep} />
                 {isLast ? (
                   <span className={styles.crumbCurrent}>{crumb.name}</span>
                 ) : (
@@ -306,14 +316,17 @@ export default function Items() {
 
       {/* Search and Action Toolbar */}
       <section className={styles.toolbar}>
-        <input
-          className={styles.search}
-          id="items_search"
-          value={query}
-          placeholder="Search items or categories across all levels..."
-          aria-label="Search items or categories"
-          onChange={(event) => setQuery(event.target.value)}
-        />
+        <div className={styles.searchWrap}>
+          <SearchIcon size={18} className={styles.searchIcon} />
+          <input
+            className={styles.search}
+            id="items_search"
+            value={query}
+            placeholder="Search items or categories across all levels..."
+            aria-label="Search items or categories"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
 
         <div className={styles.actionsRow}>
           <div className={styles.btnGroup}>
@@ -326,7 +339,8 @@ export default function Items() {
                 setShowAddProduct(false);
               }}
             >
-              + Add Category
+              <PlusIcon size={15} />
+              <span>Add Category</span>
             </button>
             <button
               type="button"
@@ -336,7 +350,8 @@ export default function Items() {
                 setShowAddCategory(false);
               }}
             >
-              + Add Item
+              <PlusIcon size={15} />
+              <span>Add Item</span>
             </button>
           </div>
         </div>
@@ -465,12 +480,15 @@ export default function Items() {
                     }}
                   >
                     <span className={styles.folderMain}>
-                      <span className={styles.folderIcon}>[DIR]</span>
+                      <span className={styles.folderIcon}>
+                        <FolderIcon size={20} />
+                      </span>
                       <span className={styles.folderName}>{cat.name}</span>
                     </span>
                     <span className={styles.folderCount}>
                       {stats.products} items
                     </span>
+                    <ChevronRightIcon size={16} className={styles.folderChev} />
                   </button>
                 );
               })}
@@ -485,7 +503,10 @@ export default function Items() {
                 return (
                   <div key={prod.id} className={styles.productRow}>
                     <div className={styles.productInfo}>
-                      <span className={styles.productName}>{prod.name}</span>
+                      <span className={styles.productNameRow}>
+                        <ItemBoxIcon size={16} className={styles.productIcon} />
+                        <span className={styles.productName}>{prod.name}</span>
+                      </span>
                       <span className={styles.productMeta}>
                         <span className={styles.productPrice}>
                           {formatMoneyOrOnRequest(prod.effective_normal_price, currency)}
@@ -555,16 +576,16 @@ export default function Items() {
                       onClick={() => setCurrentCategoryId(cat.id)}
                     >
                       <span className={styles.folderMain}>
-                        <span className={styles.folderIcon}>[DIR]</span>
+                        <span className={styles.folderIcon}>
+                          <FolderIcon size={20} />
+                        </span>
                         <span className={styles.folderName}>{cat.name}</span>
                       </span>
                       <span className={styles.folderCount}>
                         {stats.subcategories > 0 ? `${stats.subcategories} sub - ` : ""}
                         {stats.products} items
                       </span>
-                      <span className={styles.folderChev} aria-hidden>
-                        &gt;
-                      </span>
+                      <ChevronRightIcon size={16} className={styles.folderChev} />
                     </button>
                   );
                 })}
@@ -580,9 +601,39 @@ export default function Items() {
             </h2>
 
             {currentProducts.length === 0 && currentSubcategories.length === 0 ? (
-              <Empty>
-                This category is empty. Tap &quot;+ Add Category&quot; to add a subcategory or &quot;+ Add Item&quot;
-                to add products here.
+              <Empty
+                illustration={<EmptyShelfIllustration size={110} />}
+                action={
+                  <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      className={styles.actionBtn}
+                      onClick={() => {
+                        setNewCatParentId(currentCategoryId);
+                        setShowAddCategory(true);
+                        setShowAddProduct(false);
+                      }}
+                    >
+                      <PlusIcon size={14} /> Add Category
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.actionBtnSecondary}
+                      onClick={() => {
+                        setShowAddProduct(true);
+                        setShowAddCategory(false);
+                      }}
+                    >
+                      <PlusIcon size={14} /> Add Item
+                    </button>
+                  </div>
+                }
+              >
+                {currentCategoryId
+                  ? `"${breadcrumbs[breadcrumbs.length - 1]?.name ?? "This category"}" is empty.`
+                  : "Your shelf is empty."}
+                <br />
+                Add categories to organize your goods, or add items directly.
               </Empty>
             ) : currentProducts.length === 0 ? (
               <p style={{ fontSize: "13px", color: "var(--ink-3)", padding: "8px 0" }}>
@@ -595,7 +646,10 @@ export default function Items() {
                   return (
                     <div key={prod.id} className={styles.productRow}>
                       <div className={styles.productInfo}>
-                        <span className={styles.productName}>{prod.name}</span>
+                        <span className={styles.productNameRow}>
+                          <ItemBoxIcon size={16} className={styles.productIcon} />
+                          <span className={styles.productName}>{prod.name}</span>
+                        </span>
                         <span className={styles.productMeta}>
                           <span className={styles.productPrice}>
                             {formatMoneyOrOnRequest(prod.effective_normal_price, currency)}
@@ -667,9 +721,9 @@ function FamilyTreeRenderer({
       {childCategories.map((cat) => (
         <div key={cat.id} style={{ marginBottom: "6px" }}>
           <div className={styles.treeRow} onClick={() => onSelectCategory(cat.id)}>
-            <span>[dir]</span>
+            <FolderIcon size={16} className={styles.treeFolderIcon} />
             <span className={styles.treeNodeName}>{cat.name}</span>
-            <span className={styles.treeNodeMeta}>(tap to enter folder)</span>
+            <ChevronRightIcon size={14} className={styles.treeChevIcon} />
           </div>
           <FamilyTreeRenderer
             categories={categories}
@@ -693,7 +747,7 @@ function FamilyTreeRenderer({
             style={{ paddingLeft: "16px", justifyContent: "space-between" }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span>[item]</span>
+              <ItemBoxIcon size={15} className={styles.treeProductIcon} />
               <span className={styles.treeNodeName}>{prod.name}</span>
               <span className={styles.treeNodeMeta}>
                 {formatMoneyOrOnRequest(prod.effective_normal_price, currency)} -{" "}

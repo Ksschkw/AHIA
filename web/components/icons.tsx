@@ -189,3 +189,145 @@ export function Icon({ name, ...rest }: IconProps & { name: NavigationIconName }
 export const NAVIGATION_ICON_NAMES = Object.keys(
   NAVIGATION_GLYPHS,
 ) as NavigationIconName[];
+
+/* ---------------------------------------------------------------------------
+ * Descriptive action & entity icons.
+ *
+ * Drawn on the same 24-unit grid with matching line weights. Used across the
+ * category tree, request workbench, search, and list builder to replace text
+ * bloat with intuitive visual iconography.
+ * ------------------------------------------------------------------------- */
+
+/** A category folder: tab + body. */
+export function FolderIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
+    </Frame>
+  );
+}
+
+/** An open category folder. */
+export function FolderOpenIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <path d="m6 14 1.5-6.5A2 2 0 0 1 9.4 6H20a2 2 0 0 1 2 2v1" />
+      <path d="M3 8V5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v1" />
+      <path d="M2.5 21h17.2a2 2 0 0 0 1.95-1.55L23 13.5A2 2 0 0 0 21 11H5.4a2 2 0 0 0-1.95 1.55L1 20a1 1 0 0 0 1.5 1Z" />
+    </Frame>
+  );
+}
+
+/** An item box / product carton. */
+export function ItemBoxIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+      <path d="m3.3 7 8.7 5 8.7-5" />
+      <path d="M12 22V12" />
+    </Frame>
+  );
+}
+
+/** Plus: add action. */
+export function PlusIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <path d="M12 5v14M5 12h14" />
+    </Frame>
+  );
+}
+
+/** Chevron right: navigation drill-down / breadcrumb. */
+export function ChevronRightIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <path d="m9 18 6-6-6-6" />
+    </Frame>
+  );
+}
+
+/** Chevron down: accordion or dropdown expand. */
+export function ChevronDownIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <path d="m6 9 6 6 6-6" />
+    </Frame>
+  );
+}
+
+/** Search: magnifying glass. */
+export function SearchIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.35-4.35" />
+    </Frame>
+  );
+}
+
+/** Checkmark: completed / saved. */
+export function CheckMarkIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <polyline points="20 6 9 17 4 12" />
+    </Frame>
+  );
+}
+
+/** Cannot get: circle with diagonal line. */
+export function CannotGetIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+    </Frame>
+  );
+}
+
+/** Trash: remove item. */
+export function TrashIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+    </Frame>
+  );
+}
+
+/** Clock: pending / waiting. */
+export function ClockIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </Frame>
+  );
+}
+
+/** Phone / call. */
+export function PhoneIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+    </Frame>
+  );
+}
+
+/** Sparkles / Magic / Quick paste. */
+export function SparklesIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z" />
+    </Frame>
+  );
+}
+
+/** Arrow Left / Back. */
+export function ArrowLeftIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12 19 5 12 12 5" />
+    </Frame>
+  );
+}

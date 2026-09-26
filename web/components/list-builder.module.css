@@ -358,6 +358,20 @@
   margin-bottom: var(--space-2);
 }
 
+.searchWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 14px;
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
 .search {
   width: 100%;
   min-height: 52px;
@@ -368,6 +382,10 @@
   font-family: inherit;
   font-size: var(--text-md);
   color: var(--ink);
+}
+
+.searchWrap .search {
+  padding-left: 44px;
 }
 
 .search:focus {
@@ -480,6 +498,10 @@
   font-size: var(--text-md);
   font-weight: 700;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .ownForm {
@@ -599,6 +621,31 @@
   font-size: var(--text-xs);
   font-weight: 700;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rowNameRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rowItemIcon {
+  color: var(--ink-3);
+  flex-shrink: 0;
+}
+
+.emptyCartBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px 12px;
+  gap: 8px;
+  color: var(--leaf);
 }
 
 .who {
@@ -771,6 +818,9 @@
   text-decoration: underline;
   cursor: pointer;
   padding: var(--space-1) 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .quickPasteBox {

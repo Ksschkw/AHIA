@@ -191,6 +191,31 @@
   padding: 8px 0;
 }
 
+.emptyContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 28px 16px;
+  gap: 10px;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.emptyIllustration {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--leaf);
+  opacity: 0.85;
+  margin-bottom: 2px;
+}
+
+.emptyAction {
+  margin-top: 6px;
+}
+
 .scrim {
   position: fixed;
   inset: 0;
@@ -467,6 +492,14 @@
   background: #991b1b;
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: #ffffff;
+}
+
+.toastIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  margin-top: 1px;
 }
 
 .toastText {

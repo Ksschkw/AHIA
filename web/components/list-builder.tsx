@@ -25,6 +25,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import {
+  ChevronRightIcon,
+  ItemBoxIcon,
+  PhoneIcon,
+  PlusIcon,
+  SearchIcon,
+  SparklesIcon,
+  TrashIcon,
+} from "@/components/icons";
+import { EmptyBasketIllustration } from "@/components/illustrations";
 import { getCustomerPastLists, type CustomerListSummary } from "@/lib/api";
 import { formatMoneyOrOnRequest } from "@/lib/format";
 import styles from "./list-builder.module.css";
@@ -600,7 +610,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
             <button type="button" className={styles.crumbLink} onClick={() => setOpenGroup(null)}>
               All of the shop
             </button>
-            <span className={styles.crumbSep}>/</span>
+            <ChevronRightIcon size={12} className={styles.crumbSep} />
             <span className={styles.crumbNow}>{openGroup}</span>
           </nav>
         )}
@@ -662,13 +672,16 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
         <label className={styles.searchLabel} htmlFor="list_search">
           What are you looking for?
         </label>
-        <input
-          className={styles.search}
-          id="list_search"
-          value={query}
-          placeholder="Type anything - 21D, privacy, charger"
-          onChange={(event) => setQuery(event.target.value)}
-        />
+        <div className={styles.searchWrap}>
+          <SearchIcon size={18} className={styles.searchIcon} />
+          <input
+            className={styles.search}
+            id="list_search"
+            value={query}
+            placeholder="Type anything - 21D, privacy, charger"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
         {found.length > 0 ? (
           <ul className={styles.rows}>
             {found.map((product) => {
@@ -746,9 +759,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
                         : "priced when they get it"}
                     </span>
                   </button>
-                  <span className={styles.chev} aria-hidden>
-                    &gt;
-                  </span>
+                  <ChevronRightIcon size={16} className={styles.chev} />
                 </li>
               ))}
             </ul>
@@ -813,7 +824,8 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
 
       <section className={styles.section}>
         <button type="button" className={styles.ownButton} onClick={() => setAddingOwn((open) => !open)}>
-          + Can&apos;t find it? Add your own
+          <PlusIcon size={16} />
+          <span>Can&apos;t find it? Add your own</span>
         </button>
         {addingOwn ? (
           <div className={styles.ownForm}>
@@ -893,7 +905,8 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
               className={styles.quickPasteToggle}
               onClick={() => setQuickPaste((open) => !open)}
             >
-              {quickPaste ? "Hide quick paste" : "+ Paste list from WhatsApp"}
+              <SparklesIcon size={15} />
+              <span>{quickPaste ? "Hide quick paste" : "Paste list from WhatsApp"}</span>
             </button>
             {quickPaste ? (
               <div className={styles.quickPasteBox}>
@@ -953,7 +966,12 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
       {showingList ? (
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>My list</h2>
-          {chosen.length === 0 ? <p className={styles.nothing}>Nothing on it yet.</p> : null}
+          {chosen.length === 0 ? (
+            <div className={styles.emptyCartBox}>
+              <EmptyBasketIllustration size={90} />
+              <p className={styles.nothing}>Nothing on it yet. Add items from the shop above or type your own.</p>
+            </div>
+          ) : null}
           {chosen.map((line) => (
             <div
               key={line.key}
@@ -968,13 +986,17 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
                     onClick={() => removeLine(line.key)}
                     aria-label={`Remove heading ${line.text}`}
                   >
-                    Remove
+                    <TrashIcon size={14} />
+                    <span>Remove</span>
                   </button>
                 </div>
               ) : (
                 <div className={styles.lineRow}>
                   <span className={styles.rowBody}>
-                    <span className={styles.rowName}>{line.text}</span>
+                    <span className={styles.rowNameRow}>
+                      <ItemBoxIcon size={16} className={styles.rowItemIcon} />
+                      <span className={styles.rowName}>{line.text}</span>
+                    </span>
                     {line.groupName ? (
                       <span className={styles.categoryBadge}>{line.groupName}</span>
                     ) : null}
@@ -1008,7 +1030,8 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
                       onClick={() => removeLine(line.key)}
                       aria-label={`Remove ${line.text}`}
                     >
-                      Remove
+                      <TrashIcon size={14} />
+                      <span>Remove</span>
                     </button>
                   </span>
                 </div>
@@ -1029,11 +1052,12 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
             <button
               type="button"
               className={styles.historyAction}
-              style={{ marginTop: "4px" }}
+              style={{ marginTop: "4px", display: "inline-flex", alignItems: "center", gap: "6px" }}
               disabled={loadingPast || phone.trim().length < 7}
               onClick={() => void loadPastListsForCustomer()}
             >
-              {loadingPast ? "Finding your past lists..." : "Find past lists for this phone number"}
+              <PhoneIcon size={14} />
+              <span>{loadingPast ? "Finding your past lists..." : "Find past lists for this phone number"}</span>
             </button>
             {pastError ? <p className={styles.problem}>{pastError}</p> : null}
             {pastLists && pastLists.length > 0 ? (

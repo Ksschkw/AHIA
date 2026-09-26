@@ -21,6 +21,14 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import {
+  CannotGetIcon,
+  CheckMarkIcon,
+  ClockIcon,
+  ItemBoxIcon,
+  PhoneIcon,
+} from "@/components/icons";
+import { EmptyRequestsIllustration } from "@/components/illustrations";
 import { Button, Card, Empty, Field, Loading, Pill, Toast } from "@/components/ui";
 import {
   LINE_STATES,
@@ -142,16 +150,30 @@ export default function Lists() {
       <header className={styles.header}>
         <h1 className={styles.title}>Lists customers sent</h1>
         <p className={styles.lede}>
-          Work through a list, line by line: say whether you have it, whether you are going to find it,
-          and what it costs. What you paid and what you charge are both yours to set.
+          Review customer requests, set your prices, and confirm orders.
         </p>
       </header>
 
       {state === "loading" ? <Loading label="Fetching the lists..." /> : null}
 
       {state === "ready" && lists.length === 0 ? (
-        <Empty>
-          No lists yet. Share your shop link and the lists your customers build will arrive here.
+        <Empty
+          illustration={<EmptyRequestsIllustration size={110} />}
+          action={
+            business.slug ? (
+              <Link
+                href={`/shop/${business.slug}`}
+                target="_blank"
+                className={styles.openShopBtn}
+              >
+                View your public shop
+              </Link>
+            ) : null
+          }
+        >
+          No customer lists yet.
+          <br />
+          Share your shop link with customers on WhatsApp and their orders will arrive directly here.
         </Empty>
       ) : null}
 
@@ -169,7 +191,12 @@ export default function Lists() {
           >
             <div className={styles.listHead}>
               <span className={styles.meta}>
-                {list.customer_phone} - {new Date(list.created_at).toLocaleString()}
+                <span className={styles.phoneMeta}>
+                  <PhoneIcon size={14} />
+                  <span>{list.customer_phone}</span>
+                </span>
+                <span> - </span>
+                <span>{new Date(list.created_at).toLocaleString()}</span>
               </span>
               <div className={styles.headPills}>
                 <Pill tone={list.status === "confirmed" ? "good" : "warn"}>
@@ -230,7 +257,10 @@ export default function Lists() {
                           {line.group_name ? (
                             <span className={styles.categoryBadge}>{line.group_name}</span>
                           ) : null}
-                          <span className={styles.lineName}>{itemName}</span>
+                          <span className={styles.lineNameRow}>
+                            <ItemBoxIcon size={16} className={styles.lineItemIcon} />
+                            <span className={styles.lineName}>{itemName}</span>
+                          </span>
                           <span className={styles.lineMeta}>
                             {qtyFormatted}
                             {line.note && line.note !== "heading" ? ` - ${line.note}` : ""}
@@ -312,19 +342,24 @@ export default function Lists() {
                               })
                             }
                           >
-                            {isUnavailable ? "Cannot get" : "Cannot get?"}
+                            <CannotGetIcon size={14} />
+                            <span>{isUnavailable ? "Cannot get" : "Cannot get?"}</span>
                           </button>
                         </div>
 
                         {line.line_total ? (
                           <p className={styles.lineTotal}>
-                            Comes to {formatMoneyOrOnRequest(line.line_total)}
+                            <CheckMarkIcon size={14} className={styles.pricedCheck} />
+                            <span>Comes to {formatMoneyOrOnRequest(line.line_total)}</span>
                             {line.margin
                               ? ` - you make ${formatMoneyOrOnRequest(line.margin)}`
                               : ""}
                           </p>
                         ) : (
-                          <p className={styles.lineUnpriced}>Not priced yet</p>
+                          <p className={styles.lineUnpriced}>
+                            <ClockIcon size={14} className={styles.unpricedClock} />
+                            <span>Not priced yet</span>
+                          </p>
                         )}
                       </li>
                     );

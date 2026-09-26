@@ -49,8 +49,11 @@
   font-weight: 700;
   font-size: var(--text-sm);
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 2px 6px;
   border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .crumbLink:hover {
@@ -75,6 +78,20 @@
   gap: var(--space-2);
 }
 
+.searchWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 12px;
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
 .search {
   width: 100%;
   min-height: 44px;
@@ -85,6 +102,10 @@
   font-size: var(--text-base);
   color: var(--ink);
   box-sizing: border-box;
+}
+
+.searchWrap .search {
+  padding-left: 38px;
 }
 
 .search:focus {
@@ -207,7 +228,10 @@
 }
 
 .folderIcon {
-  font-size: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--leaf);
   flex-shrink: 0;
 }
 
@@ -232,9 +256,8 @@
 }
 
 .folderChev {
-  font-size: 14px;
-  font-weight: 700;
   color: var(--ink-3);
+  flex-shrink: 0;
 }
 
 /* Products List in Category */
@@ -265,6 +288,17 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+}
+
+.productNameRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.productIcon {
+  color: var(--ink-3);
+  flex-shrink: 0;
 }
 
 .productName {
@@ -387,4 +421,19 @@
 .treeNodeMeta {
   font-size: 11px;
   color: var(--ink-3);
+}
+
+.treeFolderIcon {
+  color: var(--leaf);
+  flex-shrink: 0;
+}
+
+.treeChevIcon {
+  color: var(--ink-3);
+  margin-left: auto;
+}
+
+.treeProductIcon {
+  color: var(--ink-3);
+  flex-shrink: 0;
 }

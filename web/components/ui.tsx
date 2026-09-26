@@ -351,6 +351,37 @@ export function Toast({
       role="status"
       aria-live={tone === "good" ? "polite" : "assertive"}
     >
+      <span className={styles.toastIcon} aria-hidden>
+        {tone === "good" ? (
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        ) : (
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+        )}
+      </span>
       <span className={styles.toastText}>
         <span className={styles.toastMessage}>{message}</span>
         {hint ? <span className={styles.toastHint}>{hint}</span> : null}
@@ -383,8 +414,25 @@ export function Loading({
   );
 }
 
-export function Empty({ children }: { children: ReactNode }) {
-  return <p className={styles.empty}>{children}</p>;
+export function Empty({
+  children,
+  illustration,
+  action,
+}: {
+  children: ReactNode;
+  illustration?: ReactNode;
+  action?: ReactNode;
+}) {
+  if (!illustration && !action) {
+    return <p className={styles.empty}>{children}</p>;
+  }
+  return (
+    <div className={styles.emptyContainer}>
+      {illustration ? <div className={styles.emptyIllustration}>{illustration}</div> : null}
+      <p className={styles.empty}>{children}</p>
+      {action ? <div className={styles.emptyAction}>{action}</div> : null}
+    </div>
+  );
 }
 
 export function Card({
