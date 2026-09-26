@@ -18,7 +18,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ArrowLeftIcon } from "@/components/icons";
-import { Button, Card, Field, Pill, Select, Toast } from "@/components/ui";
+import { EmptyTeamIllustration } from "@/components/illustrations";
+import { Button, Card, Empty, Field, Pill, Select, Toast } from "@/components/ui";
 import {
   ApiError,
   MEMBER_ROLES,
@@ -302,69 +303,76 @@ export default function Team() {
         </Card>
 
         <Card title={`People (${people.length})`}>
-          <ul className={styles.list}>
-            {people.map((member) => (
-              <li key={member.id} className={styles.memberRow}>
-                <div className={styles.memberWho}>
-                  <span className={styles.rowName}>{member.full_name || "No name yet"}</span>
-                  <span className={styles.rowMeta}>
-                    {member.phone ?? member.email ?? "no contact"}
-                  </span>
-                </div>
-                <Pill tone={member.status === "active" ? "good" : "warn"}>
-                  {STATUS_LABEL[member.status] ?? member.status}
-                </Pill>
-                <Select
-                  label="Role"
-                  id={`role_${member.id}`}
-                  value={member.role_name as MemberRole}
-                  options={MEMBER_ROLES.map((role) => ({ value: role.value, label: role.label }))}
-                  onChange={(value) =>
-                    run(`role-${member.id}`, async () => {
-                      await changeMemberRole(business.id, member.id, value as MemberRole);
-                      await refresh(business.id);
-                      setNotice({ message: `${member.full_name} is now ${value}.`, tone: "good" });
-                    })
-                  }
-                />
-                <div className={styles.memberActions}>
-                  <button
-                    className={styles.linkButton}
-                    // Named and guarded: a control that runs a request has to be able to say it is running,
-                    // and has to refuse a second press while it is.
-                    id={`member_status_${member.id}`}
-                    disabled={busyAction !== null}
-                    onClick={() =>
-                      run(`status-${member.id}`, async () => {
-                        await changeMemberStatus(
-                          business.id,
-                          member.id,
-                          member.status === "active" ? "suspended" : "active",
-                        );
+          {people.length === 0 ? (
+            <Empty illustration={<EmptyTeamIllustration size={100} />}>
+              No staff members yet. Send an invitation above to bring your sales staff, manager, or
+              stock keeper on board.
+            </Empty>
+          ) : (
+            <ul className={styles.list}>
+              {people.map((member) => (
+                <li key={member.id} className={styles.memberRow}>
+                  <div className={styles.memberWho}>
+                    <span className={styles.rowName}>{member.full_name || "No name yet"}</span>
+                    <span className={styles.rowMeta}>
+                      {member.phone ?? member.email ?? "no contact"}
+                    </span>
+                  </div>
+                  <Pill tone={member.status === "active" ? "good" : "warn"}>
+                    {STATUS_LABEL[member.status] ?? member.status}
+                  </Pill>
+                  <Select
+                    label="Role"
+                    id={`role_${member.id}`}
+                    value={member.role_name as MemberRole}
+                    options={MEMBER_ROLES.map((role) => ({ value: role.value, label: role.label }))}
+                    onChange={(value) =>
+                      run(`role-${member.id}`, async () => {
+                        await changeMemberRole(business.id, member.id, value as MemberRole);
                         await refresh(business.id);
+                        setNotice({ message: `${member.full_name} is now ${value}.`, tone: "good" });
                       })
                     }
-                  >
-                    {member.status === "active" ? "Suspend" : "Let them back in"}
-                  </button>
-                  <button
-                    className={styles.dangerLink}
-                    id={`member_remove_${member.id}`}
-                    disabled={busyAction !== null}
-                    onClick={() =>
-                      run(`remove-${member.id}`, async () => {
-                        await removeMember(business.id, member.id);
-                        await refresh(business.id);
-                        setNotice({ message: `${member.full_name} no longer has access.`, tone: "good" });
-                      })
-                    }
-                  >
-                    Remove
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
+                  />
+                  <div className={styles.memberActions}>
+                    <button
+                      className={styles.linkButton}
+                      // Named and guarded: a control that runs a request has to be able to say it is running,
+                      // and has to refuse a second press while it is.
+                      id={`member_status_${member.id}`}
+                      disabled={busyAction !== null}
+                      onClick={() =>
+                        run(`status-${member.id}`, async () => {
+                          await changeMemberStatus(
+                            business.id,
+                            member.id,
+                            member.status === "active" ? "suspended" : "active",
+                          );
+                          await refresh(business.id);
+                        })
+                      }
+                    >
+                      {member.status === "active" ? "Suspend" : "Let them back in"}
+                    </button>
+                    <button
+                      className={styles.dangerLink}
+                      id={`member_remove_${member.id}`}
+                      disabled={busyAction !== null}
+                      onClick={() =>
+                        run(`remove-${member.id}`, async () => {
+                          await removeMember(business.id, member.id);
+                          await refresh(business.id);
+                          setNotice({ message: `${member.full_name} no longer has access.`, tone: "good" });
+                        })
+                      }
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
           {people.length < members.length ? (
             <p className={styles.note}>
               {members.length - people.length} removed. They no longer have access, and their record is

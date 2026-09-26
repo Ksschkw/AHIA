@@ -8,8 +8,11 @@
  * summarises, and it shows what is already in the browser **before** it asks, so arriving here is instant.
  */
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { SaleIcon } from "@/components/icons";
+import { EmptySalesIllustration } from "@/components/illustrations";
 import { Card, Empty, Loading, Pill, Toast } from "@/components/ui";
 import {
   cachedRead,
@@ -81,7 +84,32 @@ export default function Sales() {
 
       {state === "loading" ? <Loading label="Fetching your sales..." /> : null}
       {state === "ready" && (sales ?? []).length === 0 ? (
-        <Empty>Nothing sold yet. The shelf is where the first one starts.</Empty>
+        <Empty
+          illustration={<EmptySalesIllustration size={110} />}
+          action={
+            <Link
+              href="/app"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "8px 16px",
+                borderRadius: "999px",
+                background: "var(--leaf)",
+                color: "#fff",
+                fontWeight: 700,
+                fontSize: "12px",
+                textDecoration: "none",
+              }}
+            >
+              <SaleIcon size={14} /> Record First Sale on Shelf
+            </Link>
+          }
+        >
+          No sales recorded yet.
+          <br />
+          Record customer sales directly from your shelf to track your daily revenue.
+        </Empty>
       ) : null}
 
       {(sales ?? []).length > 0 ? (
@@ -93,7 +121,13 @@ export default function Sales() {
             {(sales ?? []).map((sale) => (
               <li key={sale.id} className={styles.row}>
                 <span className={styles.rowMain}>
-                  <span className={styles.rowName}>{sale.receipt_number}</span>
+                  <span
+                    className={styles.rowName}
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+                  >
+                    <SaleIcon size={16} style={{ color: "var(--leaf)", flexShrink: 0 }} />
+                    <span>{sale.receipt_number}</span>
+                  </span>
                   <span className={styles.rowMeta}>
                     {new Date(sale.occurred_at).toLocaleString()}
                     {sale.payment_status ? ` - ${sale.payment_status.toLowerCase()}` : ""}

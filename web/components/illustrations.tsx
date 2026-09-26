@@ -129,3 +129,75 @@ export function EmptyBasketIllustration({ size = 120, ...rest }: IllustrationPro
     </svg>
   );
 }
+
+/** Empty sales: register receipt and coin awaiting first transaction. */
+export function EmptySalesIllustration({ size = 120, ...rest }: IllustrationProps) {
+  return (
+    <svg
+      width={size}
+      height={Math.round((size * 5) / 6)}
+      viewBox="0 0 120 100"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      {...rest}
+    >
+      {/* Receipt paper with zig-zag bottom */}
+      <path d="M38 18h44v58l-5.5-4-5.5 4-5.5-4-5.5 4-5.5-4-5.5 4-5.5-4-5.5 4V18Z" />
+      {/* Receipt header line */}
+      <line x1="48" y1="28" x2="72" y2="28" strokeWidth="2.2" />
+      {/* Receipt item lines */}
+      <line x1="46" y1="38" x2="60" y2="38" opacity="0.6" />
+      <line x1="68" y1="38" x2="74" y2="38" opacity="0.6" />
+      <line x1="46" y1="46" x2="58" y2="46" opacity="0.6" />
+      <line x1="68" y1="46" x2="74" y2="46" opacity="0.6" />
+      {/* Divider */}
+      <line x1="44" y1="54" x2="76" y2="54" strokeDasharray="2 2" opacity="0.8" />
+      {/* Total line */}
+      <line x1="46" y1="62" x2="74" y2="62" strokeWidth="2" />
+      {/* Coin badge on bottom right */}
+      <circle cx="82" cy="70" r="14" fill="var(--card, #fff)" />
+      <circle cx="82" cy="70" r="10" strokeDasharray="1.5 1.5" />
+      <path d="M82 65v10M79 67h6M79 73h6" />
+    </svg>
+  );
+}
+
+/** Empty team: placeholder badge awaiting staff invitations. */
+export function EmptyTeamIllustration({ size = 120, ...rest }: IllustrationProps) {
+  return (
+    <svg
+      width={size}
+      height={Math.round((size * 5) / 6)}
+      viewBox="0 0 120 100"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      {...rest}
+    >
+      {/* Center user avatar */}
+      <circle cx="60" cy="38" r="14" />
+      <path d="M40 76c0-11 9-20 20-20s20 9 20 20" />
+
+      {/* Left dotted avatar */}
+      <circle cx="28" cy="42" r="10" strokeDasharray="2 2" opacity="0.5" />
+      <path d="M14 74c0-8 6-15 14-15" strokeDasharray="2 2" opacity="0.5" />
+
+      {/* Right dotted avatar with plus */}
+      <circle cx="92" cy="42" r="10" strokeDasharray="2 2" opacity="0.5" />
+      <path d="M92 59c8 0 14 7 14 15" strokeDasharray="2 2" opacity="0.5" />
+      <circle cx="92" cy="42" r="14" strokeDasharray="none" opacity="0.8" />
+      <line x1="92" y1="36" x2="92" y2="48" />
+      <line x1="86" y1="42" x2="98" y2="42" />
+
+      {/* Base baseline */}
+      <line x1="10" y1="84" x2="110" y2="84" strokeWidth="1.2" opacity="0.4" />
+    </svg>
+  );
+}

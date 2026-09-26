@@ -4122,7 +4122,7 @@ Directly addressing the product owner's requirements:
 9. **Beginner-Friendly Polish, Descriptive Icons, and Visual Illustrations**:
    - Added a unified suite of pure-ASCII 24-unit SVG icons to `web/components/icons.tsx` (`FolderIcon`, `FolderOpenIcon`, `ItemBoxIcon`, `PlusIcon`, `ChevronRightIcon`, `ChevronDownIcon`, `SearchIcon`, `CheckMarkIcon`, `CannotGetIcon`, `TrashIcon`, `ClockIcon`, `PhoneIcon`, `SparklesIcon`, `ArrowLeftIcon`).
    - Replaced text placeholders (`[DIR]`, `[item]`, `[dir]`, `>`) across `/app/items`, `/app/lists`, and `ListBuilder` with stroke-matched action icons.
-   - Created pure-ASCII SVG empty state illustrations (`EmptyShelfIllustration`, `EmptyRequestsIllustration`, `EmptyBasketIllustration`) in `web/components/illustrations.tsx` accompanied by actionable CTA buttons (`Add Category`, `Add Item`, `View Public Shop`), replacing walls of text.
+   - Created pure-ASCII SVG empty state illustrations (`EmptyShelfIllustration`, `EmptyRequestsIllustration`, `EmptyBasketIllustration`, `EmptySalesIllustration`, `EmptyTeamIllustration`) in `web/components/illustrations.tsx` accompanied by actionable CTA buttons across the dashboard (`/app`), shelf (`/app/items`), requests (`/app/lists`), sales (`/app/sales`), and team roster (`/app/team`), replacing walls of text.
    - Enhanced `Toast` with immediate visual indicators (green checkmark for success, red alert circle for errors) so traders immediately recognize outcomes without reading.
    - Streamlined headers and workbench rows for effortless mobile navigation and low cognitive load.
 

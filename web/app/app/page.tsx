@@ -23,6 +23,7 @@ import {
   SaleIcon,
   StockIcon,
 } from "@/components/icons";
+import { EmptySalesIllustration, EmptyShelfIllustration } from "@/components/illustrations";
 import {
   Button,
   Card,
@@ -437,7 +438,16 @@ export default function Dashboard() {
               // and a list nobody has fetched are different states and have to read differently.
               <Loading label="Fetching your shelf..." />
             ) : products.length === 0 ? (
-              <Empty>No products yet. Add the first thing you sell.</Empty>
+              <Empty
+                illustration={<EmptyShelfIllustration size={100} />}
+                action={
+                  <button className={styles.linkButton} onClick={() => setSheet("product")}>
+                    + Add First Product
+                  </button>
+                }
+              >
+                No products yet. Add the first thing you sell.
+              </Empty>
             ) : (
               <ul className={styles.shelf}>
                 {products.map((product) => {
@@ -583,13 +593,28 @@ export default function Dashboard() {
           <div className={styles.sideColumn}>
             <Card title="Recent sales">
               {recentSales.length === 0 ? (
-                <Empty>Nothing sold yet.</Empty>
+                <Empty
+                  illustration={<EmptySalesIllustration size={90} />}
+                  action={
+                    <button className={styles.linkButton} onClick={() => setSheet("sale")}>
+                      + Record Sale
+                    </button>
+                  }
+                >
+                  Nothing sold yet today.
+                </Empty>
               ) : (
                 <ul className={styles.list}>
                   {recentSales.map((sale) => (
                     <li key={sale.id} className={styles.row}>
                       <div className={styles.rowMain}>
-                        <span className={styles.rowName}>{sale.receipt_number}</span>
+                        <span
+                          className={styles.rowName}
+                          style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+                        >
+                          <SaleIcon size={15} style={{ color: "var(--leaf)", flexShrink: 0 }} />
+                          <span>{sale.receipt_number}</span>
+                        </span>
                         <span className={styles.rowMeta}>{sale.payment_status}</span>
                       </div>
                       <span className={`${styles.amount} tabular`}>
