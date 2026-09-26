@@ -83,11 +83,11 @@ export default function Items() {
   const [query, setQuery] = useState("");
   const [currentCategoryId, setCurrentCategoryId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"folder" | "tree">("folder");
-  const [collapsedCategoryIds, setCollapsedCategoryIds] = useState<Set<string>>(new Set());
-  const [showTreeItems, setShowTreeItems] = useState(true);
+  const [expandedCategoryIds, setExpandedCategoryIds] = useState<Set<string>>(new Set());
+  const [showTreeItems, setShowTreeItems] = useState(false);
 
-  const toggleCollapseCategory = useCallback((categoryId: string) => {
-    setCollapsedCategoryIds((prev) => {
+  const toggleExpandCategory = useCallback((categoryId: string) => {
+    setExpandedCategoryIds((prev) => {
       const next = new Set(prev);
       if (next.has(categoryId)) {
         next.delete(categoryId);
@@ -99,12 +99,28 @@ export default function Items() {
   }, []);
 
   const handleExpandAllTree = useCallback(() => {
-    setCollapsedCategoryIds(new Set());
-  }, []);
+    setExpandedCategoryIds(new Set(categories.map((c) => c.id)));
+  }, [categories]);
 
   const handleCollapseAllTree = useCallback(() => {
-    setCollapsedCategoryIds(new Set(categories.map((c) => c.id)));
-  }, [categories]);
+    setExpandedCategoryIds(new Set());
+  }, []);
+
+  const handleToggleViewMode = useCallback(() => {
+    setViewMode((m) => {
+      const nextMode = m === "folder" ? "tree" : "folder";
+      if (nextMode === "tree" && currentCategoryId) {
+        const ancestors = new Set<string>();
+        let cur = categories.find((c) => c.id === currentCategoryId);
+        while (cur) {
+          if (cur.parent_id) ancestors.add(cur.parent_id);
+          cur = categories.find((c) => c.id === cur?.parent_id);
+        }
+        setExpandedCategoryIds(ancestors);
+      }
+      return nextMode;
+    });
+  }, [currentCategoryId, categories]);
 
   const [state, setState] = useState<"loading" | "ready">(() =>
     rememberedBusinessId() ? "ready" : "loading",
@@ -736,7 +752,7 @@ export default function Items() {
           <button
             type="button"
             className={styles.toggleViewBtn}
-            onClick={() => setViewMode((m) => (m === "folder" ? "tree" : "folder"))}
+            onClick={handleToggleViewMode}
           >
             {viewMode === "folder" ? "View Full Family Tree" : "View Folders"}
           </button>
@@ -1229,28 +1245,34 @@ export default function Items() {
             </div>
           </div>
           <div className={styles.treeRoot}>
-            <FamilyTreeRenderer
-              categories={categories}
-              products={products ?? []}
-              stock={stock}
-              currency={currency}
-              parentId={null}
-              collapsedCategoryIds={collapsedCategoryIds}
-              onToggleCollapseCategory={toggleCollapseCategory}
-              showTreeItems={showTreeItems}
-              onSelectCategory={(id) => {
-                setCurrentCategoryId(id);
-                setViewMode("folder");
-              }}
-              onStartEditCategory={openEditCategory}
-              onStartDeleteCategory={setDeletingCategory}
-              onStartMoveCategory={setMovingCategory}
-              onStartEditProduct={openEditProduct}
-              onStartDeleteProduct={setDeletingProduct}
-              onStartBatchProduct={openBatchModal}
-              onTogglePublish={handleTogglePublish}
-              busyAction={busyAction}
-            />
+            {categories.length === 0 ? (
+              <Empty illustration={<EmptyShelfIllustration size={110} />}>
+                No categories created yet. Click &quot;+ Add Category&quot; to build your hierarchy.
+              </Empty>
+            ) : (
+              <FamilyTreeRenderer
+                categories={categories}
+                products={products ?? []}
+                stock={stock}
+                currency={currency}
+                parentId={null}
+                expandedCategoryIds={expandedCategoryIds}
+                onToggleExpandCategory={toggleExpandCategory}
+                showTreeItems={showTreeItems}
+                onSelectCategory={(id) => {
+                  setCurrentCategoryId(id);
+                  setViewMode("folder");
+                }}
+                onStartEditCategory={openEditCategory}
+                onStartDeleteCategory={setDeletingCategory}
+                onStartMoveCategory={setMovingCategory}
+                onStartEditProduct={openEditProduct}
+                onStartDeleteProduct={setDeletingProduct}
+                onStartBatchProduct={openBatchModal}
+                onTogglePublish={handleTogglePublish}
+                busyAction={busyAction}
+              />
+            )}
           </div>
         </section>
       ) : (
@@ -2248,8 +2270,8 @@ function FamilyTreeRenderer({
   stock,
   currency,
   parentId,
-  collapsedCategoryIds,
-  onToggleCollapseCategory,
+  expandedCategoryIds,
+  onToggleExpandCategory,
   showTreeItems,
   onSelectCategory,
   onStartEditCategory,
@@ -2266,8 +2288,8 @@ function FamilyTreeRenderer({
   stock: InventoryLevel[];
   currency: string;
   parentId: string | null;
-  collapsedCategoryIds: Set<string>;
-  onToggleCollapseCategory: (categoryId: string) => void;
+  expandedCategoryIds: Set<string>;
+  onToggleExpandCategory: (categoryId: string) => void;
   showTreeItems: boolean;
   onSelectCategory: (id: string) => void;
   onStartEditCategory?: (category: Category) => void;
@@ -2292,7 +2314,7 @@ function FamilyTreeRenderer({
         const catDirectProducts = products.filter((p) => p.category_id === cat.id);
         const subCats = categories.filter((c) => c.parent_id === cat.id);
         const hasChildren = subCats.length > 0 || (showTreeItems && catDirectProducts.length > 0);
-        const isCollapsed = collapsedCategoryIds.has(cat.id);
+        const isExpanded = expandedCategoryIds.has(cat.id);
         return (
           <div key={cat.id} className={styles.treeItemWrap}>
             {parentId !== null ? <div className={styles.treeConnectorElbow} /> : null}
@@ -2302,7 +2324,7 @@ function FamilyTreeRenderer({
                   className={styles.treeCategoryMain}
                   onClick={() => {
                     if (hasChildren) {
-                      onToggleCollapseCategory(cat.id);
+                      onToggleExpandCategory(cat.id);
                     }
                   }}
                 >
@@ -2312,11 +2334,11 @@ function FamilyTreeRenderer({
                       className={styles.treeCollapseBtn}
                       onClick={(e) => {
                         e.stopPropagation();
-                        onToggleCollapseCategory(cat.id);
+                        onToggleExpandCategory(cat.id);
                       }}
-                      aria-label={isCollapsed ? `Expand ${cat.name}` : `Collapse ${cat.name}`}
+                      aria-label={isExpanded ? `Collapse ${cat.name}` : `Expand ${cat.name}`}
                     >
-                      {isCollapsed ? <ChevronRightIcon size={14} /> : <ChevronDownIcon size={14} />}
+                      {isExpanded ? <ChevronDownIcon size={14} /> : <ChevronRightIcon size={14} />}
                     </button>
                   ) : (
                     <span style={{ width: 24, display: "inline-block" }} />
@@ -2404,8 +2426,8 @@ function FamilyTreeRenderer({
               </div>
             </div>
 
-            {/* Connecting branch for children (only if not collapsed) */}
-            {!isCollapsed && (subCats.length > 0 || (showTreeItems && catDirectProducts.length > 0)) ? (
+            {/* Connecting branch for children (only if expanded) */}
+            {isExpanded && (subCats.length > 0 || (showTreeItems && catDirectProducts.length > 0)) ? (
               <div className={styles.treeBranch}>
                 <FamilyTreeRenderer
                   categories={categories}
@@ -2413,8 +2435,8 @@ function FamilyTreeRenderer({
                   stock={stock}
                   currency={currency}
                   parentId={cat.id}
-                  collapsedCategoryIds={collapsedCategoryIds}
-                  onToggleCollapseCategory={onToggleCollapseCategory}
+                  expandedCategoryIds={expandedCategoryIds}
+                  onToggleExpandCategory={onToggleExpandCategory}
                   showTreeItems={showTreeItems}
                   onSelectCategory={onSelectCategory}
                   onStartEditCategory={onStartEditCategory}
