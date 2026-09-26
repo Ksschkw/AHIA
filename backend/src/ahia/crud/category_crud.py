@@ -34,6 +34,12 @@ from sqlalchemy import (
     func,
     select,
 )
+from sqlalchemy import (
+    delete as delete_stmt,
+)
+from sqlalchemy import (
+    update as update_stmt,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
@@ -245,3 +251,51 @@ async def count_for_tenant(session: AsyncSession, tenant_id: UUID) -> int:
         .where(CategoryRecord.tenant_id == tenant_id)
     )
     return int(result.scalar_one())
+
+
+async def count_children(
+    session: AsyncSession,
+    *,
+    tenant_id: UUID,
+    category_id: UUID,
+) -> int:
+    """Return the number of direct child categories under a category."""
+    result = await session.execute(
+        select(func.count())
+        .select_from(CategoryRecord)
+        .where(CategoryRecord.tenant_id == tenant_id)
+        .where(CategoryRecord.parent_id == category_id)
+    )
+    return int(result.scalar_one())
+
+
+async def reparent_children(
+    session: AsyncSession,
+    *,
+    tenant_id: UUID,
+    old_parent_id: UUID,
+    new_parent_id: UUID | None,
+) -> int:
+    """Move all direct child categories to a new parent (or root)."""
+    result = await session.execute(
+        update_stmt(CategoryRecord)
+        .where(CategoryRecord.tenant_id == tenant_id)
+        .where(CategoryRecord.parent_id == old_parent_id)
+        .values(parent_id=new_parent_id)
+    )
+    return result.rowcount  # type: ignore[return-value]
+
+
+async def delete(
+    session: AsyncSession,
+    *,
+    tenant_id: UUID,
+    category_id: UUID,
+) -> bool:
+    """Delete a category scoped to its business."""
+    result = await session.execute(
+        delete_stmt(CategoryRecord)
+        .where(CategoryRecord.id == category_id)
+        .where(CategoryRecord.tenant_id == tenant_id)
+    )
+    return bool(result.rowcount and result.rowcount > 0)

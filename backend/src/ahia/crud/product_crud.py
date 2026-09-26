@@ -49,6 +49,9 @@ from sqlalchemy import (
     select,
     text,
 )
+from sqlalchemy import (
+    update as update_stmt,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
@@ -391,3 +394,36 @@ async def count_for_tenant(session: AsyncSession, tenant_id: UUID) -> int:
         select(func.count()).select_from(ProductRecord).where(ProductRecord.tenant_id == tenant_id)
     )
     return int(result.scalar_one())
+
+
+async def count_by_category(
+    session: AsyncSession,
+    *,
+    tenant_id: UUID,
+    category_id: UUID,
+) -> int:
+    """Return the count of products assigned to a category in a business."""
+    result = await session.execute(
+        select(func.count())
+        .select_from(ProductRecord)
+        .where(ProductRecord.tenant_id == tenant_id)
+        .where(ProductRecord.category_id == category_id)
+    )
+    return int(result.scalar_one())
+
+
+async def reparent_category_products(
+    session: AsyncSession,
+    *,
+    tenant_id: UUID,
+    old_category_id: UUID,
+    new_category_id: UUID | None,
+) -> int:
+    """Move all products of old_category_id to new_category_id (or null)."""
+    result = await session.execute(
+        update_stmt(ProductRecord)
+        .where(ProductRecord.tenant_id == tenant_id)
+        .where(ProductRecord.category_id == old_category_id)
+        .values(category_id=new_category_id)
+    )
+    return result.rowcount  # type: ignore[return-value]

@@ -143,12 +143,12 @@ export function AppShell({
   useEffect(() => {
     if (typeof window === "undefined") return;
     const saved = window.localStorage.getItem("ahia.theme");
-    if (saved === "dark" || saved === "light") {
-      setTheme(saved);
-      document.documentElement.setAttribute("data-theme", saved);
-    } else if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) {
+    if (saved === "dark") {
       setTheme("dark");
       document.documentElement.setAttribute("data-theme", "dark");
+    } else {
+      setTheme("light");
+      document.documentElement.removeAttribute("data-theme");
     }
   }, []);
 
@@ -157,7 +157,11 @@ export function AppShell({
       const next = current === "dark" ? "light" : "dark";
       if (typeof window !== "undefined") {
         window.localStorage.setItem("ahia.theme", next);
-        document.documentElement.setAttribute("data-theme", next);
+        if (next === "dark") {
+          document.documentElement.setAttribute("data-theme", "dark");
+        } else {
+          document.documentElement.removeAttribute("data-theme");
+        }
       }
       return next;
     });

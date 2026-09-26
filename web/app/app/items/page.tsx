@@ -20,11 +20,13 @@ import {
   ChevronRightIcon,
   CloseIcon,
   CopyIcon,
+  EditIcon,
   FolderIcon,
   FolderOpenIcon,
   ItemBoxIcon,
   PlusIcon,
   SearchIcon,
+  TrashIcon,
 } from "@/components/icons";
 import { EmptyShelfIllustration } from "@/components/illustrations";
 import { Empty, Field, Loading, Toast } from "@/components/ui";
@@ -37,9 +39,13 @@ import {
   listBusinesses,
   listCategories,
   createCategory,
+  updateCategory,
+  deleteCategory,
   moveCategory,
   listProducts,
   createProduct,
+  updateProduct,
+  deleteProduct,
   publishProduct,
   unpublishProduct,
   listStock,
@@ -90,6 +96,39 @@ export default function Items() {
   // Moving category state
   const [movingCategory, setMovingCategory] = useState<Category | null>(null);
   const [busyMove, setBusyMove] = useState(false);
+
+  // Editing category state
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editCatName, setEditCatName] = useState("");
+  const [editCatParentId, setEditCatParentId] = useState<string | null>(null);
+  const [editCatNormalPrice, setEditCatNormalPrice] = useState("");
+  const [editCatWholesalePrice, setEditCatWholesalePrice] = useState("");
+  const [editCatPiecesPerPack, setEditCatPiecesPerPack] = useState("");
+  const [busyEditCat, setBusyEditCat] = useState(false);
+
+  // Deleting category state
+  const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
+  const [deleteCatStrategy, setDeleteCatStrategy] = useState<"move_up" | "hide" | "cascade">("move_up");
+  const [busyDeleteCat, setBusyDeleteCat] = useState(false);
+
+  // Editing product state
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editProdName, setEditProdName] = useState("");
+  const [editProdDescription, setEditProdDescription] = useState("");
+  const [editProdSellingPrice, setEditProdSellingPrice] = useState("");
+  const [editProdWholesalePrice, setEditProdWholesalePrice] = useState("");
+  const [editProdPiecesPerPack, setEditProdPiecesPerPack] = useState("");
+  const [editProdCategoryId, setEditProdCategoryId] = useState<string | null>(null);
+  const [editProdPublish, setEditProdPublish] = useState(false);
+  const [busyEditProd, setBusyEditProd] = useState(false);
+
+  // Deleting product state
+  const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
+  const [busyDeleteProd, setBusyDeleteProd] = useState(false);
+
+  // Batch delete confirm state
+  const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
+  const [busyBatchDelete, setBusyBatchDelete] = useState(false);
 
   // Forms state
   const [showAddCategory, setShowAddCategory] = useState(false);
@@ -448,6 +487,218 @@ export default function Items() {
     }
   }
 
+  // Open and update category
+  const openEditCategory = (cat: Category) => {
+    setEditingCategory(cat);
+    setEditCatName(cat.name);
+    setEditCatParentId(cat.parent_id ?? null);
+    setEditCatNormalPrice(cat.default_normal_price ?? "");
+    setEditCatWholesalePrice(cat.default_wholesale_price ?? "");
+    setEditCatPiecesPerPack(cat.default_pieces_per_pack ? String(cat.default_pieces_per_pack) : "");
+  };
+
+  const isEditCatDirty = useMemo(() => {
+    if (!editingCategory) return false;
+    return (
+      editCatName.trim() !== editingCategory.name ||
+      (editCatParentId ?? null) !== (editingCategory.parent_id ?? null) ||
+      editCatNormalPrice.trim() !== (editingCategory.default_normal_price ?? "") ||
+      editCatWholesalePrice.trim() !== (editingCategory.default_wholesale_price ?? "") ||
+      editCatPiecesPerPack.trim() !== (editingCategory.default_pieces_per_pack ? String(editingCategory.default_pieces_per_pack) : "")
+    );
+  }, [editingCategory, editCatName, editCatParentId, editCatNormalPrice, editCatWholesalePrice, editCatPiecesPerPack]);
+
+  const eligibleEditCatParents = useMemo(() => {
+    if (!editingCategory) return [];
+    const descendantIds = getDescendantCategoryIds(editingCategory.id, categories);
+    return categories
+      .filter((cat) => cat.id !== editingCategory.id && !descendantIds.has(cat.id))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [editingCategory, categories, getDescendantCategoryIds]);
+
+  async function handleUpdateCategory() {
+    if (!business || !editingCategory || editCatName.trim().length < 1) return;
+    setBusyEditCat(true);
+    try {
+      const packParsed = editCatPiecesPerPack.trim()
+        ? parseInt(editCatPiecesPerPack.trim(), 10)
+        : null;
+      await updateCategory(business.id, editingCategory.id, {
+        name: editCatName.trim(),
+        parent_id: editCatParentId,
+        default_normal_price: editCatNormalPrice.trim() || null,
+        default_wholesale_price: editCatWholesalePrice.trim() || null,
+        default_pieces_per_pack: Number.isFinite(packParsed) ? packParsed : null,
+      });
+      await load(business.id);
+      setEditingCategory(null);
+      setNotice({ message: `Category "${editCatName.trim()}" updated.`, tone: "good" });
+    } catch {
+      setNotice({ message: "Could not update category. Please check your values.", tone: "bad" });
+    } finally {
+      setBusyEditCat(false);
+    }
+  }
+
+  // Open and update product
+  const openEditProduct = (prod: Product) => {
+    setEditingProduct(prod);
+    setEditProdName(prod.name);
+    setEditProdDescription(prod.description ?? "");
+    setEditProdSellingPrice(prod.selling_price ?? "");
+    setEditProdWholesalePrice(
+      !prod.wholesale_price_from_group ? (prod.effective_wholesale_price ?? "") : "",
+    );
+    setEditProdPiecesPerPack(
+      !prod.wholesale_price_from_group && prod.effective_pieces_per_pack
+        ? String(prod.effective_pieces_per_pack)
+        : "",
+    );
+    setEditProdCategoryId(prod.category_id ?? null);
+    setEditProdPublish(prod.is_published);
+  };
+
+  const isEditProdDirty = useMemo(() => {
+    if (!editingProduct) return false;
+    const currentWholesale = !editingProduct.wholesale_price_from_group
+      ? (editingProduct.effective_wholesale_price ?? "")
+      : "";
+    const currentPieces =
+      !editingProduct.wholesale_price_from_group && editingProduct.effective_pieces_per_pack
+        ? String(editingProduct.effective_pieces_per_pack)
+        : "";
+
+    return (
+      editProdName.trim() !== editingProduct.name ||
+      editProdDescription.trim() !== (editingProduct.description ?? "") ||
+      editProdSellingPrice.trim() !== (editingProduct.selling_price ?? "") ||
+      editProdWholesalePrice.trim() !== currentWholesale ||
+      editProdPiecesPerPack.trim() !== currentPieces ||
+      (editProdCategoryId ?? null) !== (editingProduct.category_id ?? null) ||
+      editProdPublish !== editingProduct.is_published
+    );
+  }, [editingProduct, editProdName, editProdDescription, editProdSellingPrice, editProdWholesalePrice, editProdPiecesPerPack, editProdCategoryId, editProdPublish]);
+
+  async function handleUpdateProduct() {
+    if (!business || !editingProduct || editProdName.trim().length < 1) return;
+    setBusyEditProd(true);
+    try {
+      const packParsed = editProdPiecesPerPack.trim()
+        ? parseInt(editProdPiecesPerPack.trim(), 10)
+        : null;
+      await updateProduct(business.id, editingProduct.id, {
+        name: editProdName.trim(),
+        description: editProdDescription.trim() || null,
+        selling_price: editProdSellingPrice.trim() || null,
+        wholesale_price: editProdWholesalePrice.trim() || null,
+        pieces_per_pack: Number.isFinite(packParsed) ? packParsed : null,
+        category_id: editProdCategoryId,
+      });
+
+      if (editProdPublish && !editingProduct.is_published) {
+        await publishProduct(business.id, editingProduct.id);
+      } else if (!editProdPublish && editingProduct.is_published) {
+        await unpublishProduct(business.id, editingProduct.id);
+      }
+
+      await load(business.id);
+      setEditingProduct(null);
+      setNotice({ message: `Item "${editProdName.trim()}" updated.`, tone: "good" });
+    } catch {
+      setNotice({ message: "Could not update item. Please check your values.", tone: "bad" });
+    } finally {
+      setBusyEditProd(false);
+    }
+  }
+
+  // Deleting category with confirmation safeguards
+  async function handleConfirmDeleteCategory() {
+    if (!business || !deletingCategory) return;
+    setBusyDeleteCat(true);
+    try {
+      const childCats = categories.filter((c) => c.parent_id === deletingCategory.id);
+      const catProds = (products ?? []).filter((p) => p.category_id === deletingCategory.id);
+      const hasContents = childCats.length > 0 || catProds.length > 0;
+
+      if (hasContents && deleteCatStrategy === "hide") {
+        const publishedProds = catProds.filter((p) => p.is_published);
+        for (const p of publishedProds) {
+          await unpublishProduct(business.id, p.id);
+        }
+        await load(business.id);
+        setDeletingCategory(null);
+        setNotice({
+          message: `Unpublished ${publishedProds.length} product(s) in "${deletingCategory.name}". Category is hidden from customers.`,
+          tone: "good",
+        });
+        return;
+      }
+
+      const strategyToUse: "move_up" | "cascade" | "restrict" = hasContents
+        ? (deleteCatStrategy === "cascade" ? "cascade" : "move_up")
+        : "restrict";
+      await deleteCategory(business.id, deletingCategory.id, strategyToUse);
+
+      if (currentCategoryId === deletingCategory.id) {
+        setCurrentCategoryId(deletingCategory.parent_id ?? null);
+      }
+
+      await load(business.id);
+      setDeletingCategory(null);
+      setNotice({
+        message: strategyToUse === "move_up"
+          ? `Deleted "${deletingCategory.name}". Contents moved up to parent.`
+          : `Deleted "${deletingCategory.name}".`,
+        tone: "good",
+      });
+    } catch {
+      setNotice({ message: "Could not delete category. Please try again.", tone: "bad" });
+    } finally {
+      setBusyDeleteCat(false);
+    }
+  }
+
+  // Deleting single product
+  async function handleConfirmDeleteProduct() {
+    if (!business || !deletingProduct) return;
+    setBusyDeleteProd(true);
+    try {
+      await deleteProduct(business.id, deletingProduct.id);
+      setSelectedProductIds((prev) => {
+        const next = new Set(prev);
+        next.delete(deletingProduct.id);
+        return next;
+      });
+      await load(business.id);
+      setDeletingProduct(null);
+      setNotice({ message: `Removed "${deletingProduct.name}" from catalog.`, tone: "good" });
+    } catch {
+      setNotice({ message: "Could not remove item. Please try again.", tone: "bad" });
+    } finally {
+      setBusyDeleteProd(false);
+    }
+  }
+
+  // Batch delete selected products
+  async function handleExecuteBatchDelete() {
+    if (!business || selectedProductIds.size === 0) return;
+    setBusyBatchDelete(true);
+    try {
+      const ids = Array.from(selectedProductIds);
+      for (const id of ids) {
+        await deleteProduct(business.id, id);
+      }
+      setSelectedProductIds(new Set());
+      await load(business.id);
+      setConfirmBatchDelete(false);
+      setNotice({ message: `Removed ${ids.length} selected items from catalog.`, tone: "good" });
+    } catch {
+      setNotice({ message: "Could not delete all selected items.", tone: "bad" });
+    } finally {
+      setBusyBatchDelete(false);
+    }
+  }
+
   return (
     <main className={styles.page}>
       <header className={styles.header}>
@@ -502,6 +753,27 @@ export default function Items() {
               </span>
             );
           })}
+
+          {currentCategory ? (
+            <div className={styles.currentCategoryHeaderActions}>
+              <button
+                type="button"
+                className={styles.folderEditBtn}
+                title={`Edit "${currentCategory.name}" name and price defaults`}
+                onClick={() => openEditCategory(currentCategory)}
+              >
+                Edit Folder
+              </button>
+              <button
+                type="button"
+                className={styles.folderDeleteBtn}
+                title={`Delete "${currentCategory.name}"`}
+                onClick={() => setDeletingCategory(currentCategory)}
+              >
+                Delete Folder
+              </button>
+            </div>
+          ) : null}
         </nav>
       </header>
 
@@ -762,17 +1034,32 @@ export default function Items() {
                       </span>
                       <ChevronRightIcon size={16} className={styles.folderChev} />
                     </div>
-                    <button
-                      type="button"
-                      className={styles.moveFolderBtn}
-                      title={`Move ${cat.name} into another folder`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setMovingCategory(cat);
-                      }}
-                    >
-                      Move
-                    </button>
+                    <div className={styles.folderBtnGroup} onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        className={styles.folderEditBtn}
+                        title={`Edit "${cat.name}"`}
+                        onClick={() => openEditCategory(cat)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.moveFolderBtn}
+                        title={`Move "${cat.name}" into another folder`}
+                        onClick={() => setMovingCategory(cat)}
+                      >
+                        Move
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.folderDeleteBtn}
+                        title={`Delete "${cat.name}"`}
+                        onClick={() => setDeletingCategory(cat)}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -821,6 +1108,14 @@ export default function Items() {
                     <div className={styles.productActions}>
                       <button
                         type="button"
+                        className={styles.itemEditBtn}
+                        title={`Edit "${prod.name}"`}
+                        onClick={() => openEditProduct(prod)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
                         className={styles.copyItemBtn}
                         title={`Copy ${prod.name} into another folder`}
                         onClick={() => openBatchModal("copy", [prod.id], prod.name)}
@@ -842,6 +1137,14 @@ export default function Items() {
                         onClick={() => void handleTogglePublish(prod)}
                       >
                         {prod.is_published ? "In shop" : "Hidden"}
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.itemDeleteBtn}
+                        title={`Delete "${prod.name}"`}
+                        onClick={() => setDeletingProduct(prod)}
+                      >
+                        Delete
                       </button>
                     </div>
                   </div>
@@ -876,7 +1179,11 @@ export default function Items() {
                 setCurrentCategoryId(id);
                 setViewMode("folder");
               }}
+              onStartEditCategory={openEditCategory}
+              onStartDeleteCategory={setDeletingCategory}
               onStartMoveCategory={setMovingCategory}
+              onStartEditProduct={openEditProduct}
+              onStartDeleteProduct={setDeletingProduct}
               onStartBatchProduct={openBatchModal}
               onTogglePublish={handleTogglePublish}
               busyAction={busyAction}
@@ -934,17 +1241,32 @@ export default function Items() {
                         </span>
                         <ChevronRightIcon size={16} className={styles.folderChev} />
                       </div>
-                      <button
-                        type="button"
-                        className={styles.moveFolderBtn}
-                        title={`Move ${cat.name} into another folder`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setMovingCategory(cat);
-                        }}
-                      >
-                        Move
-                      </button>
+                      <div className={styles.folderBtnGroup} onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          className={styles.folderEditBtn}
+                          title={`Edit "${cat.name}"`}
+                          onClick={() => openEditCategory(cat)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.moveFolderBtn}
+                          title={`Move "${cat.name}" into another folder`}
+                          onClick={() => setMovingCategory(cat)}
+                        >
+                          Move
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.folderDeleteBtn}
+                          title={`Delete "${cat.name}"`}
+                          onClick={() => setDeletingCategory(cat)}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -1058,6 +1380,14 @@ export default function Items() {
                       <div className={styles.productActions}>
                         <button
                           type="button"
+                          className={styles.itemEditBtn}
+                          title={`Edit "${prod.name}"`}
+                          onClick={() => openEditProduct(prod)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
                           className={styles.copyItemBtn}
                           title={`Copy ${prod.name} into another folder`}
                           onClick={() => openBatchModal("copy", [prod.id], prod.name)}
@@ -1079,6 +1409,14 @@ export default function Items() {
                           onClick={() => void handleTogglePublish(prod)}
                         >
                           {prod.is_published ? "In shop" : "Hidden"}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.itemDeleteBtn}
+                          title={`Delete "${prod.name}"`}
+                          onClick={() => setDeletingProduct(prod)}
+                        >
+                          Delete
                         </button>
                       </div>
                     </div>
@@ -1112,6 +1450,14 @@ export default function Items() {
               onClick={() => openBatchModal("move", Array.from(selectedProductIds))}
             >
               <span>Move to...</span>
+            </button>
+            <button
+              type="button"
+              className={styles.selectionBtnDanger}
+              onClick={() => setConfirmBatchDelete(true)}
+            >
+              <TrashIcon size={13} />
+              <span>Delete selected ({selectedProductIds.size})</span>
             </button>
             <button
               type="button"
@@ -1309,6 +1655,508 @@ export default function Items() {
         </div>
       ) : null}
 
+      {/* Edit Category Modal */}
+      {editingCategory !== null ? (
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-category-title"
+          onClick={() => !busyEditCat && setEditingCategory(null)}
+        >
+          <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div>
+                <h2 id="edit-category-title" className={styles.modalTitle}>
+                  Edit Category &quot;{editingCategory.name}&quot;
+                </h2>
+                <p className={styles.modalSubtitle}>
+                  Update category name, parent folder, and price defaults
+                </p>
+              </div>
+              <button
+                type="button"
+                className={styles.modalClose}
+                aria-label="Close modal"
+                disabled={busyEditCat}
+                onClick={() => setEditingCategory(null)}
+              >
+                <CloseIcon size={16} />
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              <Field
+                label="Category name"
+                id="edit_category_name"
+                value={editCatName}
+                placeholder="e.g. Screenguards, Cases"
+                onChange={setEditCatName}
+              />
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label htmlFor="edit_category_parent" style={{ fontSize: "12px", fontWeight: 700, color: "var(--ink-2)" }}>
+                  Parent Folder
+                </label>
+                <select
+                  id="edit_category_parent"
+                  value={editCatParentId ?? ""}
+                  onChange={(e) => setEditCatParentId(e.target.value ? e.target.value : null)}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "var(--radius-sm)",
+                    border: "1px solid var(--line-strong)",
+                    background: "var(--card)",
+                    color: "var(--ink)",
+                    fontSize: "13px",
+                  }}
+                >
+                  <option value="">Shelf Root (Top Level)</option>
+                  {eligibleEditCatParents.map((parent) => (
+                    <option key={parent.id} value={parent.id}>
+                      {getCategoryPath(parent, categories)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <Field
+                label="Default Retail Price"
+                id="edit_category_normal_price"
+                value={editCatNormalPrice}
+                placeholder="e.g. 500"
+                inputMode="decimal"
+                optional
+                onChange={setEditCatNormalPrice}
+              />
+
+              <Field
+                label="Default Wholesale Price"
+                id="edit_category_wholesale_price"
+                value={editCatWholesalePrice}
+                placeholder="e.g. 350"
+                inputMode="decimal"
+                optional
+                onChange={setEditCatWholesalePrice}
+              />
+
+              <Field
+                label="Default Pack Size"
+                id="edit_category_pack"
+                value={editCatPiecesPerPack}
+                placeholder="e.g. 10"
+                inputMode="numeric"
+                optional
+                onChange={setEditCatPiecesPerPack}
+              />
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "12px" }}>
+                <button
+                  type="button"
+                  className={styles.actionBtnSecondary}
+                  disabled={busyEditCat}
+                  onClick={() => setEditingCategory(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className={styles.actionBtn}
+                  disabled={busyEditCat || !isEditCatDirty || editCatName.trim().length < 1}
+                  onClick={() => void handleUpdateCategory()}
+                >
+                  {busyEditCat ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Delete Category Safeguard Modal */}
+      {deletingCategory !== null ? (() => {
+        const childCats = categories.filter((c) => c.parent_id === deletingCategory.id);
+        const catProds = (products ?? []).filter((p) => p.category_id === deletingCategory.id);
+        const hasContents = childCats.length > 0 || catProds.length > 0;
+        const parentName = deletingCategory.parent_id
+          ? categories.find((c) => c.id === deletingCategory.parent_id)?.name ?? "Parent folder"
+          : "Shelf Root (Top Level)";
+
+        return (
+          <div
+            className={styles.modalOverlay}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-category-title"
+            onClick={() => !busyDeleteCat && setDeletingCategory(null)}
+          >
+            <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+              <div className={styles.modalHeader}>
+                <div>
+                  <h2 id="delete-category-title" className={styles.modalTitle}>
+                    Delete Category &quot;{deletingCategory.name}&quot;
+                  </h2>
+                  <p className={styles.modalSubtitle}>
+                    {hasContents
+                      ? `This folder contains ${childCats.length} subcategories and ${catProds.length} items.`
+                      : "This folder is currently empty."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className={styles.modalClose}
+                  aria-label="Close modal"
+                  disabled={busyDeleteCat}
+                  onClick={() => setDeletingCategory(null)}
+                >
+                  <CloseIcon size={16} />
+                </button>
+              </div>
+
+              <div className={styles.modalBody}>
+                {hasContents ? (
+                  <>
+                    <p style={{ fontSize: "13px", color: "var(--ink-2)", margin: "0 0 4px" }}>
+                      Choose how you want to handle the contents inside this folder:
+                    </p>
+
+                    <div
+                      className={`${styles.strategyCard} ${deleteCatStrategy === "move_up" ? styles.strategyCardSelected : ""}`}
+                      onClick={() => setDeleteCatStrategy("move_up")}
+                      role="radio"
+                      aria-checked={deleteCatStrategy === "move_up"}
+                      tabIndex={0}
+                    >
+                      <div className={styles.strategyHeader}>
+                        <span className={styles.strategyTitle}>Move contents up (Keep everything)</span>
+                        <span className={styles.recommendedPill}>Recommended</span>
+                      </div>
+                      <span className={styles.strategyDesc}>
+                        Keep all {childCats.length} subcategories and {catProds.length} items by moving them directly up to &quot;{parentName}&quot;. Nothing is lost.
+                      </span>
+                    </div>
+
+                    <div
+                      className={`${styles.strategyCard} ${deleteCatStrategy === "hide" ? styles.strategyCardSelected : ""}`}
+                      onClick={() => setDeleteCatStrategy("hide")}
+                      role="radio"
+                      aria-checked={deleteCatStrategy === "hide"}
+                      tabIndex={0}
+                    >
+                      <div className={styles.strategyHeader}>
+                        <span className={styles.strategyTitle}>Hide folder instead</span>
+                      </div>
+                      <span className={styles.strategyDesc}>
+                        Do not delete. Unpublishes all {catProds.length} items inside so customers cannot see them in your public shop, preserving your structure.
+                      </span>
+                    </div>
+
+                    <div
+                      className={`${styles.strategyCard} ${deleteCatStrategy === "cascade" ? styles.strategyCardSelected : ""}`}
+                      onClick={() => setDeleteCatStrategy("cascade")}
+                      role="radio"
+                      aria-checked={deleteCatStrategy === "cascade"}
+                      tabIndex={0}
+                    >
+                      <div className={styles.strategyHeader}>
+                        <span className={styles.strategyTitle} style={{ color: "var(--danger)" }}>
+                          Delete category and all contents
+                        </span>
+                      </div>
+                      <span className={styles.strategyDesc}>
+                        Permanently deletes this category, all its {childCats.length} subfolders, and all {catProds.length} items inside. This cannot be undone.
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <p style={{ fontSize: "13px", color: "var(--ink)", margin: "8px 0" }}>
+                    Are you sure you want to delete &quot;{deletingCategory.name}&quot;? Since it contains no items or subfolders, it will be safely removed.
+                  </p>
+                )}
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "12px" }}>
+                  <button
+                    type="button"
+                    className={styles.actionBtnSecondary}
+                    disabled={busyDeleteCat}
+                    onClick={() => setDeletingCategory(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.dangerBtn}
+                    disabled={busyDeleteCat}
+                    onClick={() => void handleConfirmDeleteCategory()}
+                  >
+                    {busyDeleteCat
+                      ? "Processing..."
+                      : deleteCatStrategy === "hide" && hasContents
+                        ? "Hide Items"
+                        : "Delete Category"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })() : null}
+
+      {/* Edit Product Modal */}
+      {editingProduct !== null ? (
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-product-title"
+          onClick={() => !busyEditProd && setEditingProduct(null)}
+        >
+          <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div>
+                <h2 id="edit-product-title" className={styles.modalTitle}>
+                  Edit Item &quot;{editingProduct.name}&quot;
+                </h2>
+                <p className={styles.modalSubtitle}>
+                  Update item details, prices, folder location, and publication status
+                </p>
+              </div>
+              <button
+                type="button"
+                className={styles.modalClose}
+                aria-label="Close modal"
+                disabled={busyEditProd}
+                onClick={() => setEditingProduct(null)}
+              >
+                <CloseIcon size={16} />
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              <Field
+                label="Item name"
+                id="edit_product_name"
+                value={editProdName}
+                placeholder="e.g. Hot 8, Hot 9, Camon 30"
+                onChange={setEditProdName}
+              />
+
+              <Field
+                label="Description (optional)"
+                id="edit_product_description"
+                value={editProdDescription}
+                placeholder="Item notes or customer information"
+                optional
+                onChange={setEditProdDescription}
+              />
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label htmlFor="edit_product_category" style={{ fontSize: "12px", fontWeight: 700, color: "var(--ink-2)" }}>
+                  Category Folder
+                </label>
+                <select
+                  id="edit_product_category"
+                  value={editProdCategoryId ?? ""}
+                  onChange={(e) => setEditProdCategoryId(e.target.value ? e.target.value : null)}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "var(--radius-sm)",
+                    border: "1px solid var(--line-strong)",
+                    background: "var(--card)",
+                    color: "var(--ink)",
+                    fontSize: "13px",
+                  }}
+                >
+                  <option value="">Shelf Root (Uncategorized)</option>
+                  {categories
+                    .slice()
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {getCategoryPath(cat, categories)}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <Field
+                label="Retail Price (leave empty to follow category default)"
+                id="edit_product_selling_price"
+                value={editProdSellingPrice}
+                placeholder="e.g. 2500"
+                inputMode="decimal"
+                optional
+                onChange={setEditProdSellingPrice}
+              />
+
+              <Field
+                label="Wholesale Price (leave empty to follow category default)"
+                id="edit_product_wholesale_price"
+                value={editProdWholesalePrice}
+                placeholder="e.g. 1800"
+                inputMode="decimal"
+                optional
+                onChange={setEditProdWholesalePrice}
+              />
+
+              <Field
+                label="Pieces per pack (optional)"
+                id="edit_product_pack"
+                value={editProdPiecesPerPack}
+                placeholder="e.g. 10"
+                inputMode="numeric"
+                optional
+                onChange={setEditProdPiecesPerPack}
+              />
+
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer", marginTop: "4px" }}>
+                <input
+                  type="checkbox"
+                  checked={editProdPublish}
+                  onChange={(e) => setEditProdPublish(e.target.checked)}
+                />
+                Publish in public shop
+              </label>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "12px" }}>
+                <button
+                  type="button"
+                  className={styles.actionBtnSecondary}
+                  disabled={busyEditProd}
+                  onClick={() => setEditingProduct(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className={styles.actionBtn}
+                  disabled={busyEditProd || !isEditProdDirty || editProdName.trim().length < 1}
+                  onClick={() => void handleUpdateProduct()}
+                >
+                  {busyEditProd ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Delete Product Confirmation Modal */}
+      {deletingProduct !== null ? (
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-product-title"
+          onClick={() => !busyDeleteProd && setDeletingProduct(null)}
+        >
+          <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div>
+                <h2 id="delete-product-title" className={styles.modalTitle}>
+                  Remove &quot;{deletingProduct.name}&quot;?
+                </h2>
+                <p className={styles.modalSubtitle}>
+                  This item will be deleted from your catalog
+                </p>
+              </div>
+              <button
+                type="button"
+                className={styles.modalClose}
+                aria-label="Close modal"
+                disabled={busyDeleteProd}
+                onClick={() => setDeletingProduct(null)}
+              >
+                <CloseIcon size={16} />
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              <p style={{ fontSize: "13px", color: "var(--ink)", margin: "4px 0 12px" }}>
+                Are you sure you want to remove &quot;{deletingProduct.name}&quot; from your catalog? Existing sales receipts and history will keep their recorded sales lines, but this item will no longer appear on your shelves.
+              </p>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+                <button
+                  type="button"
+                  className={styles.actionBtnSecondary}
+                  disabled={busyDeleteProd}
+                  onClick={() => setDeletingProduct(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className={styles.dangerBtn}
+                  disabled={busyDeleteProd}
+                  onClick={() => void handleConfirmDeleteProduct()}
+                >
+                  {busyDeleteProd ? "Removing..." : "Delete Item"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Batch Delete Confirmation Modal */}
+      {confirmBatchDelete ? (
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="batch-delete-title"
+          onClick={() => !busyBatchDelete && setConfirmBatchDelete(false)}
+        >
+          <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div>
+                <h2 id="batch-delete-title" className={styles.modalTitle}>
+                  Delete {selectedProductIds.size} Selected Items?
+                </h2>
+                <p className={styles.modalSubtitle}>
+                  Batch removal confirmation
+                </p>
+              </div>
+              <button
+                type="button"
+                className={styles.modalClose}
+                aria-label="Close modal"
+                disabled={busyBatchDelete}
+                onClick={() => setConfirmBatchDelete(false)}
+              >
+                <CloseIcon size={16} />
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              <p style={{ fontSize: "13px", color: "var(--ink)", margin: "4px 0 12px" }}>
+                Are you sure you want to permanently remove {selectedProductIds.size} selected items from your catalog? This action cannot be undone.
+              </p>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+                <button
+                  type="button"
+                  className={styles.actionBtnSecondary}
+                  disabled={busyBatchDelete}
+                  onClick={() => setConfirmBatchDelete(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className={styles.dangerBtn}
+                  disabled={busyBatchDelete}
+                  onClick={() => void handleExecuteBatchDelete()}
+                >
+                  {busyBatchDelete ? "Deleting..." : `Delete ${selectedProductIds.size} Items`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {notice ? (
         <Toast
           message={notice.message}
@@ -1329,7 +2177,11 @@ function FamilyTreeRenderer({
   currency,
   parentId,
   onSelectCategory,
+  onStartEditCategory,
+  onStartDeleteCategory,
   onStartMoveCategory,
+  onStartEditProduct,
+  onStartDeleteProduct,
   onStartBatchProduct,
   onTogglePublish,
   busyAction,
@@ -1340,7 +2192,11 @@ function FamilyTreeRenderer({
   currency: string;
   parentId: string | null;
   onSelectCategory: (id: string) => void;
+  onStartEditCategory?: (category: Category) => void;
+  onStartDeleteCategory?: (category: Category) => void;
   onStartMoveCategory?: (category: Category) => void;
+  onStartEditProduct?: (product: Product) => void;
+  onStartDeleteProduct?: (product: Product) => void;
   onStartBatchProduct: (mode: "copy" | "move", productIds: string[], sourceName?: string) => void;
   onTogglePublish: (prod: Product) => void;
   busyAction: string | null;
@@ -1380,6 +2236,16 @@ function FamilyTreeRenderer({
                 ) : null}
               </div>
               <div className={styles.treeActions} onClick={(e) => e.stopPropagation()}>
+                {onStartEditCategory ? (
+                  <button
+                    type="button"
+                    className={styles.folderEditBtn}
+                    title={`Edit ${cat.name}`}
+                    onClick={() => onStartEditCategory(cat)}
+                  >
+                    Edit
+                  </button>
+                ) : null}
                 {catDirectProducts.length > 0 ? (
                   <button
                     type="button"
@@ -1402,6 +2268,16 @@ function FamilyTreeRenderer({
                     Move
                   </button>
                 ) : null}
+                {onStartDeleteCategory ? (
+                  <button
+                    type="button"
+                    className={styles.folderDeleteBtn}
+                    title={`Delete ${cat.name} folder`}
+                    onClick={() => onStartDeleteCategory(cat)}
+                  >
+                    Delete
+                  </button>
+                ) : null}
                 <ChevronRightIcon size={14} className={styles.treeChevIcon} />
               </div>
             </div>
@@ -1416,7 +2292,11 @@ function FamilyTreeRenderer({
                   currency={currency}
                   parentId={cat.id}
                   onSelectCategory={onSelectCategory}
+                  onStartEditCategory={onStartEditCategory}
+                  onStartDeleteCategory={onStartDeleteCategory}
                   onStartMoveCategory={onStartMoveCategory}
+                  onStartEditProduct={onStartEditProduct}
+                  onStartDeleteProduct={onStartDeleteProduct}
                   onStartBatchProduct={onStartBatchProduct}
                   onTogglePublish={onTogglePublish}
                   busyAction={busyAction}
@@ -1452,6 +2332,16 @@ function FamilyTreeRenderer({
                 </div>
               </div>
               <div className={styles.treeActions}>
+                {onStartEditProduct ? (
+                  <button
+                    type="button"
+                    className={styles.itemEditBtn}
+                    onClick={() => onStartEditProduct(prod)}
+                    title={`Edit ${prod.name}`}
+                  >
+                    Edit
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className={styles.copyItemBtn}
@@ -1476,6 +2366,16 @@ function FamilyTreeRenderer({
                 >
                   {prod.is_published ? "In shop" : "Hidden"}
                 </button>
+                {onStartDeleteProduct ? (
+                  <button
+                    type="button"
+                    className={styles.itemDeleteBtn}
+                    onClick={() => onStartDeleteProduct(prod)}
+                    title={`Delete ${prod.name}`}
+                  >
+                    Delete
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>

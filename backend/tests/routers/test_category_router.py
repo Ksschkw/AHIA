@@ -459,3 +459,57 @@ async def test_an_unauthenticated_request_is_refused(database: Database) -> None
         response = await client.get(categories_path(tenant["id"]))
 
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_owner_can_delete_empty_category(database: Database) -> None:
+    async with running_application() as (client, _application):
+        owner, tenant = await owner_with_business(client)
+        created = await client.post(
+            categories_path(tenant["id"]), headers=auth(owner), json={"name": "Disposable"}
+        )
+        cat_id = created.json()["id"]
+
+        deleted = await client.delete(
+            f"{categories_path(tenant['id'])}/{cat_id}",
+            headers=auth(owner),
+        )
+        assert deleted.status_code == 204
+
+        listed = await client.get(categories_path(tenant["id"]), headers=auth(owner))
+        assert cat_id not in [c["id"] for c in listed.json()]
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_delete_category_with_move_up_strategy(database: Database) -> None:
+    async with running_application() as (client, _application):
+        owner, tenant = await owner_with_business(client)
+        parent = await client.post(
+            categories_path(tenant["id"]), headers=auth(owner), json={"name": "Parent"}
+        )
+        child = await client.post(
+            categories_path(tenant["id"]),
+            headers=auth(owner),
+            json={"name": "Child", "parent_id": parent.json()["id"]},
+        )
+        grandchild = await client.post(
+            categories_path(tenant["id"]),
+            headers=auth(owner),
+            json={"name": "Grandchild", "parent_id": child.json()["id"]},
+        )
+
+        deleted = await client.delete(
+            f"{categories_path(tenant['id'])}/{child.json()['id']}?strategy=move_up",
+            headers=auth(owner),
+        )
+        assert deleted.status_code == 204
+
+        # Grandchild is now reparented to Parent
+        read_grandchild = await client.get(
+            f"{categories_path(tenant['id'])}/{grandchild.json()['id']}",
+            headers=auth(owner),
+        )
+        assert read_grandchild.status_code == 200
+        assert read_grandchild.json()["parent_id"] == parent.json()["id"]

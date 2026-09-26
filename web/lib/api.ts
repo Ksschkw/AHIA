@@ -578,6 +578,35 @@ export function moveCategory(
   });
 }
 
+export function updateCategory(
+  tenantId: string,
+  categoryId: string,
+  input: {
+    name?: string;
+    parent_id?: string | null;
+    description?: string | null;
+    default_normal_price?: string | null;
+    default_wholesale_price?: string | null;
+    default_pieces_per_pack?: number | null;
+  },
+): Promise<Category> {
+  return request<Category>(`/api/v1/tenants/${tenantId}/categories/${categoryId}`, {
+    method: "PATCH",
+    body: input satisfies Schemas["CategoryUpdateSchema"],
+  });
+}
+
+export function deleteCategory(
+  tenantId: string,
+  categoryId: string,
+  strategy: "move_up" | "cascade" | "restrict" = "move_up",
+): Promise<void> {
+  return request<void>(`/api/v1/tenants/${tenantId}/categories/${categoryId}`, {
+    method: "DELETE",
+    query: { strategy },
+  });
+}
+
 /**
  * Set an item's own prices, or clear them back to following its group.
  *
@@ -609,6 +638,35 @@ export function moveItemToGroup(
   return request<Product>(`/api/v1/tenants/${tenantId}/products/${productId}`, {
     method: "PATCH",
     body: { category_id: categoryId } satisfies Schemas["ProductUpdateSchema"],
+  });
+}
+
+export function updateProduct(
+  tenantId: string,
+  productId: string,
+  input: {
+    name?: string;
+    description?: string | null;
+    selling_price?: string | null;
+    wholesale_price?: string | null;
+    pieces_per_pack?: number | null;
+    category_id?: string | null;
+    cost_price?: string | null;
+    low_stock_threshold?: number | null;
+  },
+): Promise<Product> {
+  return request<Product>(`/api/v1/tenants/${tenantId}/products/${productId}`, {
+    method: "PATCH",
+    body: input satisfies Schemas["ProductUpdateSchema"],
+  });
+}
+
+export function deleteProduct(
+  tenantId: string,
+  productId: string,
+): Promise<Product> {
+  return request<Product>(`/api/v1/tenants/${tenantId}/products/${productId}`, {
+    method: "DELETE",
   });
 }
 

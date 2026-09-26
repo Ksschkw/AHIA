@@ -28,11 +28,12 @@ from ahia.core.errors import InvalidInputError, NotFoundError
 from ahia.core.logging import StructuredLogger, get_logger
 from ahia.core.permissions.product_permissions import (
     PRODUCTS_CREATE,
+    PRODUCTS_DELETE,
     PRODUCTS_READ,
     PRODUCTS_UPDATE,
 )
 from ahia.core.tenant_context import TenantContext
-from ahia.crud import category_crud
+from ahia.crud import category_crud, product_crud
 from ahia.models.entities.category_model import CategoryModel
 from ahia.services.audit_event_service import AuditEventService
 
@@ -370,6 +371,124 @@ class CategoryService:
             changed_fields=sorted(changes),
         )
         return stored
+
+    # ------------------------------------------------------------------
+    # Deleting
+    # ------------------------------------------------------------------
+
+    async def delete_category(
+        self,
+        tenant_context: TenantContext,
+        *,
+        category_id: UUID,
+        strategy: str = "move_up",
+    ) -> None:
+        """Delete a category with safeguards for its child categories and items.
+
+        Allowed strategies:
+        - "move_up": Re-parents direct child categories and products to this category's parent
+          (or shelf root), preserving all items and subfolders, then removes the category.
+        - "cascade": Moves products to root (to preserve sales history) and deletes the category.
+        - "restrict": Rejects deletion if the category has items or subcategories inside it.
+        """
+        tenant_context.require_permission(
+            PRODUCTS_DELETE,
+            operation="delete_category",
+            resource_type="category",
+            resource_id=str(category_id),
+            logger=self._logger,
+        )
+
+        if strategy not in {"move_up", "cascade", "restrict"}:
+            raise InvalidInputError(
+                operation="delete_category",
+                entity="category",
+                identifier=str(category_id),
+                detail=f"unknown deletion strategy: {strategy}",
+            )
+
+        now = datetime.now(UTC)
+        unit_of_work = self._unit_of_work_factory()
+        async with unit_of_work:
+            session = unit_of_work.session_handle
+            category = await self._require_category(
+                session,
+                tenant_context=tenant_context,
+                category_id=category_id,
+            )
+
+            child_categories_count = await category_crud.count_children(
+                session,  # type: ignore[arg-type]
+                tenant_id=tenant_context.tenant_id,
+                category_id=category_id,
+            )
+            products_count = await product_crud.count_by_category(
+                session,  # type: ignore[arg-type]
+                tenant_id=tenant_context.tenant_id,
+                category_id=category_id,
+            )
+            has_contents = child_categories_count > 0 or products_count > 0
+
+            if strategy == "restrict" and has_contents:
+                raise InvalidInputError(
+                    operation="delete_category",
+                    entity="category",
+                    identifier=str(category_id),
+                    detail="cannot delete category with items or subcategories; choose a strategy",
+                )
+
+            if strategy == "move_up":
+                target_parent = category.parent_id
+                await category_crud.reparent_children(
+                    session,  # type: ignore[arg-type]
+                    tenant_id=tenant_context.tenant_id,
+                    old_parent_id=category_id,
+                    new_parent_id=target_parent,
+                )
+                await product_crud.reparent_category_products(
+                    session,  # type: ignore[arg-type]
+                    tenant_id=tenant_context.tenant_id,
+                    old_category_id=category_id,
+                    new_category_id=target_parent,
+                )
+            elif strategy == "cascade":
+                await product_crud.reparent_category_products(
+                    session,  # type: ignore[arg-type]
+                    tenant_id=tenant_context.tenant_id,
+                    old_category_id=category_id,
+                    new_category_id=None,
+                )
+                await category_crud.reparent_children(
+                    session,  # type: ignore[arg-type]
+                    tenant_id=tenant_context.tenant_id,
+                    old_parent_id=category_id,
+                    new_parent_id=None,
+                )
+
+            await category_crud.delete(
+                session,  # type: ignore[arg-type]
+                tenant_id=tenant_context.tenant_id,
+                category_id=category_id,
+            )
+
+            await self._audit.record_audit_event(
+                session,
+                tenant_context,
+                action="delete_category",
+                entity_type="category",
+                entity_id=category.id,
+                now=now,
+                detail={"name": category.name, "strategy": strategy},
+            )
+            await unit_of_work.commit()
+
+        self._logger.info(
+            "category_deleted",
+            tenant_id=str(tenant_context.tenant_id),
+            actor_id=str(tenant_context.user_id),
+            category_id=str(category_id),
+            strategy=strategy,
+        )
 
     # ------------------------------------------------------------------
     # Shared lookups

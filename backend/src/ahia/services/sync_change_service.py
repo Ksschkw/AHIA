@@ -61,6 +61,7 @@ CHANGE_TYPE_FOR_ACTION: Final[dict[str, ChangeType]] = {
     # Catalogue
     "create_category": ChangeType.CREATED,
     "update_category": ChangeType.UPDATED,
+    "delete_category": ChangeType.DELETED,
     "create_product": ChangeType.CREATED,
     "update_product": ChangeType.UPDATED,
     "publish_product": ChangeType.UPDATED,

@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Annotated, Final
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 
 from ahia.core.tenant_context import TenantContext
 from ahia.routers.tenant_router import require_tenant_context
@@ -112,3 +112,18 @@ async def update_category(
         changes=payload.to_entity_changes(),
     )
     return CategoryResponseSchema.from_entity(category)
+
+
+@router.delete(
+    "/categories/{category_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a category with confirmation safeguards",
+)
+async def delete_category(
+    category_id: UUID,
+    tenant_context: TenantContextDependency,
+    service: CategoryServiceDependency,
+    strategy: Annotated[str, Query(description="move_up, cascade, or restrict")] = "move_up",
+) -> None:
+    """Delete a category using the chosen content safeguard strategy."""
+    await service.delete_category(tenant_context, category_id=category_id, strategy=strategy)
