@@ -810,6 +810,27 @@ export default function Profile() {
                           color: "#1e1b16",
                         }}
                       >
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                          <span
+                            style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: "6px",
+                              background: themeColor,
+                              color: "#fff",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontWeight: 800,
+                              fontSize: "11px",
+                            }}
+                          >
+                            {business.name.slice(0, 2).toUpperCase()}
+                          </span>
+                          <span style={{ fontSize: "11px", fontWeight: 700, color: themeColor }}>
+                            Official Storefront
+                          </span>
+                        </div>
                         <span className={styles.mockupTitle}>{business.name}</span>
                         <span className={styles.mockupHeadline}>
                           {storefrontHeadline || "Wholesale & Retail Market Catalog"}

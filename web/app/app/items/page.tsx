@@ -146,8 +146,8 @@ export default function Items() {
   }, [currentCategoryId, categories]);
 
   const [userRole, setUserRole] = useState<string>(() => {
-    if (typeof window === "undefined") return "OWNER";
-    return window.localStorage.getItem("ahia.business.role") ?? "OWNER";
+    if (typeof window === "undefined") return "SALES";
+    return window.localStorage.getItem("ahia.business.role") ?? "SALES";
   });
 
   const normalizedRole = userRole.toUpperCase();

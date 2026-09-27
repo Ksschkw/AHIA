@@ -138,42 +138,55 @@ export default async function ShopPage({ params }: Params) {
     >
       <header className={styles.header}>
         <div className={styles.headerInner}>
-          <span className={styles.brand}>
-            <BrandMark size={26} />
-            <Wordmark />
-          </span>
-          {whatsapp ? (
-            <a className={styles.headerCta} href={whatsapp} rel="noreferrer noopener" target="_blank">
-              Send a list
-            </a>
-          ) : null}
+          <div className={styles.shopBrandHeader}>
+            <span className={styles.businessAvatar}>
+              {shop.business_name.slice(0, 2).toUpperCase()}
+            </span>
+            <div className={styles.businessTitleGroup}>
+              <span className={styles.businessNameTop}>{shop.business_name}</span>
+              <span className={styles.verifiedStoreBadge}>Direct Market Storefront</span>
+            </div>
+          </div>
+          <div className={styles.headerRight}>
+            <Link className={styles.listShortcutBtn} href={`/list/${shop.tenant_slug}`}>
+              Build List
+            </Link>
+            {whatsapp ? (
+              <a className={styles.headerCta} href={whatsapp} rel="noreferrer noopener" target="_blank">
+                WhatsApp Order
+              </a>
+            ) : null}
+          </div>
         </div>
       </header>
 
       <section className={styles.hero}>
-        <p className={styles.kicker}>You are looking at</p>
+        <div className={styles.heroBadgeRow}>
+          <span className={styles.verifiedPill}>Official Market Storefront</span>
+          <span className={styles.kicker}>Direct Wholesale & Retail</span>
+        </div>
         <h1 className={styles.shopName}>{shop.business_name}</h1>
         {shop.headline ? <p className={styles.headline}>{shop.headline}</p> : null}
         {cleanDescription ? <p className={styles.description}>{cleanDescription}</p> : null}
 
         <div className={styles.heroActions}>
           <Link className={styles.primary} href={`/list/${shop.tenant_slug}`}>
-            Build your list here
+            Build Waybill List (PDF & Image)
           </Link>
           {whatsapp ? (
-            <a className={styles.primary} href={whatsapp} rel="noreferrer noopener" target="_blank">
-              Send your list on WhatsApp
+            <a className={styles.secondary} href={whatsapp} rel="noreferrer noopener" target="_blank">
+              Order on WhatsApp
             </a>
           ) : null}
           {call ? (
-            <a className={styles.secondary} href={call}>
+            <a className={styles.tertiaryBtn} href={call}>
               Call {shop.contact_phone}
             </a>
           ) : null}
         </div>
 
         <p className={styles.promise}>
-          Not everything is on this page - if you do not see it, ask for it and we will get it.
+          Not everything is on this page - if you do not see it, ask for it in your list and we will get it directly from the market.
         </p>
       </section>
 
@@ -203,10 +216,15 @@ export default async function ShopPage({ params }: Params) {
       </section>
 
       <footer className={styles.footer}>
-        <span className={styles.footerBrand}>
-          <BrandMark size={16} /> {shop.business_name}
-        </span>
-        <span className={styles.footerNote}>Verified Merchant - Powered by AHIA</span>
+        <div className={styles.footerInner}>
+          <div className={styles.footerBrand}>
+            <span className={styles.businessAvatarSmall}>
+              {shop.business_name.slice(0, 2).toUpperCase()}
+            </span>
+            <span className={styles.footerBusinessName}>{shop.business_name}</span>
+          </div>
+          <span className={styles.footerNote}>Verified Merchant - Powered by AHIA</span>
+        </div>
       </footer>
     </main>
   );

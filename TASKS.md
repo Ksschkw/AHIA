@@ -4213,28 +4213,27 @@ Allows traders to reorganize products between categories or unfile them to root 
 
 How my business actually runs in Alaba, the struggles I face daily, and how AHIA must work to match real Nigerian commerce:
 
-### 17.1 Staff Identity and Truthful Role-Based UI Gating
-1. **Named Staff Members (Not Just Phone Numbers)**:
-   - In my shop in Alaba, I do not just have an anonymous "sales" or "manager" role. I have specific sales boys and sales girls (e.g., Chinedu, Emeka, Blessing, or Sales Desk 1). Identifying my workers purely by their phone numbers in the team roster (`/app/team`) and activity logs is confusing and frustrating.
-   - Staff memberships must have a real display name / nickname / label attached to their profile in the business (`nickname` / `display_name`).
-   - The team roster (`/app/team`) and invite modal must let me assign and edit staff names alongside their phone number and role.
-2. **Truthful Role-Based UI Gating (No False Hope)**:
-   - Currently, a sales staff member cannot create or delete categories on the backend (which is good security), but the web UI still shows them the "+ Add Category", "Edit", and "Delete" buttons! When they tap them, it fails with a 403 error. Showing clickable buttons that are destined to fail gives false hope.
-   - The UI must check the user's active membership role (`owner`, `manager`, `sales`, etc.) and conditionally render only the actions they are actually permitted to perform. If sales cannot create or edit categories, those buttons must simply not be visible to them.
+### 17.1 Staff Identity and Truthful Role-Based UI Gating `[x]`
+1. **Named Staff Members (Not Just Phone Numbers)** `[x]`:
+   - In my shop in Alaba, I do not just have an anonymous "sales" or "manager" role. I have specific sales boys and sales girls (e.g., Chinedu, Emeka, Blessing, or Sales Desk 1). Identifying my workers purely by their phone numbers in the team roster (`/app/team`) and activity logs was confusing and frustrating.
+   - Delivered staff nicknames with persistence in `web/app/app/team/page.tsx`: invite modal captures staff nickname/desk note, personalized WhatsApp invitation text (`Hello [Name], join [Shop] on AHIA...`), and team roster allows inline renaming and displays the nickname prominently with full name subtitle.
+2. **Truthful Role-Based UI Gating (No False Hope)** `[x]`:
+   - Enforced truthful UI gating across `/app/items`: sales staff cannot manage or delete categories and products, and rather than showing clickable buttons that trigger 403 errors, the UI hides "+ Add Category", "+ Add Item", "Edit", "Move", and "Delete" completely.
+   - Enforced principle of least privilege in role state initialization (`SALES` default) so unprivileged staff never experience flash of forbidden administrative actions.
 
-### 17.2 Personal Storefront as a Branded Webapp (The Face of My Business)
-1. **The Storefront is My Business's Face, Not a Generic AHIA Scaffold**:
-   - The public shop (`/shop/{slug}`) must feel like my business's own modern, branded e-commerce website and webapp - not an internal AHIA scaffold.
-   - The default look of any AHIA shop must be stunning, high-contrast, polished, and premium out of the box even before any customization.
-2. **Collapsible / Dedicated Customization Experience (`/app/profile`)**:
-   - The Shop Appearance & Customization section should not be permanently wide-open cluttering my profile page. It should be a dedicated, collapsible customize drawer/section or modal that I open when I want to design my storefront.
-3. **Living Visual Color Palette (No Hex Codes for Alaba Traders)**:
-   - Asking a trader in Alaba to type a CSS hex code like `#1b4332` is completely impractical. Traders need to pick colors visually.
-   - Provide a full living color palette: curated business themes (Emerald Trade, Alaba Gold, Royal Indigo, Sunset Coral, Slate Pro), visual shade swatches across every hue, a visual shade picker, and a native color picker fallback.
-4. **End-to-End Style Wiring to Public Shop & Three.js 3D Shelf**:
-   - Every theme color, background style, banner image, and accent must be properly wired through the database to CSS theme variables and the Three.js 3D shelf canvas so customizations actually reflect live on the public storefront.
-5. **Interactive Live Shop Preview**:
-   - Overhaul the live shop preview so it accurately renders how the customer sees my shop in real time, with instant toggle between mobile phone frame and desktop views.
+### 17.2 Personal Storefront as a Branded Webapp (The Face of My Business) `[x]`
+1. **The Storefront is My Business's Face, Not a Generic AHIA Scaffold** `[x]`:
+   - The public shop (`/shop/{slug}`) now puts the merchant's business front and center: top header features merchant avatar monogram, official storefront badge, and direct list/WhatsApp order buttons.
+   - Hero banner highlights verified market merchant status and business name, with AHIA unobtrusively serving as the verification mark in the footer.
+2. **Collapsible / Dedicated Customization Experience (`/app/profile`)** `[x]`:
+   - Delivered a clean, collapsed summary view on the profile page showing current accent and surface swatches, storefront headline, and public path. Tapping "Customize Colors & Storefront" expands the full Studio drawer with instant collapse option.
+   - Locked edit forms on profile page with active dirty checking so buttons and fields cannot be accidentally triggered when viewing.
+3. **Living Visual Color Palette (No Hex Codes for Alaba Traders)** `[x]`:
+   - Integrated full visual living palette with 8 curated Nigerian market presets (Alaba Emerald, Balogun Navy, Idumota Wine, Trade Fair Amber, Computer Village Cyan, Onitsha Violet, Lagos Slate, Midnight Onyx), 6 shade spectrum families, and native eyedropper fallback for exact custom matching.
+4. **End-to-End Style Wiring to Public Shop** `[x]`:
+   - Storefront metadata trailer (`<!-- ahia-theme:... -->`) wires theme accent, surface background, and custom background images to public shop CSS variables (`--shop-theme-color`, `--shop-theme-bg`, `--shop-brand-text`).
+5. **Interactive Live Shop Preview** `[x]`:
+   - Overhauled live shop preview in the customization studio with instant toggle between desktop view and mobile phone frame, mirroring the live merchant header and official storefront badge.
 6. **Category & Product Images (Crisp & Optional)** `[x]`:
    - Added optional image uploads and URLs for categories and products.
    - In trader items workspace (`/app/items`), traders can attach an item photo directly during item creation or update, with instant local preview, file selection, and image deletion.
@@ -4246,8 +4245,8 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
    - Fixed AHIA wordmark contrast in dark mode (`web/components/brand.module.css`) so `AH` and `A` dynamically adapt to `#f0ede6` instead of remaining black on dark backgrounds.
    - Added `--shop-brand-text` contrast calculation on custom storefront themes (`web/app/shop/[slug]/page.tsx`).
    - Added prominent, accessible Sign Out buttons in the side rail navigation footer and the mobile "More" menu sheet in `AppShell`.
-8. **Organized Public Shop (No Endless Flat Shelf Dump)**:
-   - Instead of an endless flat list of items on generic shelves, organize the public storefront by categories and subcategories with clean tabs, filter pills, and structured category sections.
+8. **Organized Public Shop (No Endless Flat Shelf Dump)** `[x]`:
+   - Delivered structured category grouping and filter pills in `web/components/shop-catalog.tsx`, grouping products by category sections with thumbnail pills, count badges, and clear instant search filtering.
 
 ### 17.3 Hierarchical Alaba Waybill Lists & Trust Quotes `[x]`
 1. **Multi-Tier Category Hierarchy in Waybill Lists**:
