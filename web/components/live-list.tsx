@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 /**
  * A list, kept current while two people work on it.
  *
@@ -151,6 +153,22 @@ export function LiveList({
             ? `Checked at ${checkedAt.toLocaleTimeString()} - this page updates on its own`
             : "This page updates on its own as the shop works."}
         </span>
+        <div style={{ marginTop: "16px", display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "center" }}>
+          <Link
+            href={`/list/${slug}`}
+            style={{
+              padding: "10px 18px",
+              borderRadius: "10px",
+              background: "var(--leaf)",
+              color: "#ffffff",
+              fontWeight: 700,
+              fontSize: "14px",
+              textDecoration: "none",
+            }}
+          >
+            Create New List at {list.business_name}
+          </Link>
+        </div>
       </section>
     </main>
   );

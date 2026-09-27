@@ -23,6 +23,7 @@
  * under it, and can put a heading under that. Nothing he writes touches the trader's catalogue.
  */
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -132,7 +133,13 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
   );
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const [sent, setSent] = useState<number | null>(null);
+  interface SentInfo {
+    count: number;
+    listPath: string | null;
+    requestId: string | null;
+  }
+  const [sent, setSent] = useState<SentInfo | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [picture, setPicture] = useState<string | null>(null);
 
   const [restoredDraft, setRestoredDraft] = useState(false);
@@ -444,6 +451,19 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
       subs.get(sub)!.push(line);
     }
 
+    // Ensure customer custom headings appear even if no items added yet
+    for (const h of headings) {
+      const path = resolveHeadingHierarchy(h.key, headings);
+      const root = path[0] || h.text;
+      const sub = path.length > 1 ? path.slice(1).join(" > ") : null;
+      if (!rootMap.has(root)) {
+        rootMap.set(root, new Map());
+      }
+      if (sub && !rootMap.get(root)!.has(sub)) {
+        rootMap.get(root)!.set(sub, []);
+      }
+    }
+
     for (const item of items) {
       let path: string[];
       if (item.underKey) {
@@ -701,7 +721,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
         }),
       });
       const body = (await response.json().catch(() => null)) as
-        | { line_count?: number; error?: { message?: string } }
+        | { request_id?: string; line_count?: number; list_path?: string; error?: { message?: string } }
         | null;
       if (!response.ok) {
         setProblem(body?.error?.message ?? "The list did not go through. Try again.");
@@ -715,6 +735,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
             date: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
             count: items.length,
             lines: ordered,
+            listPath: body?.list_path ?? null,
           };
           const updated = [record, ...(Array.isArray(past) ? past.slice(0, 4) : [])];
           window.localStorage.setItem(historyKey, JSON.stringify(updated));
@@ -723,11 +744,49 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
         }
       }
       setRestoredDraft(false);
-      setSent(body?.line_count ?? items.length);
+      setSent({
+        count: body?.line_count ?? items.length,
+        listPath: body?.list_path ?? null,
+        requestId: body?.request_id ?? null,
+      });
     } catch {
       setProblem("We could not reach the shop. Check your connection and try again.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  function shareOnWhatsApp() {
+    const cleanNumber = (shop.contact_phone ?? "").replace(/[^\d]/g, "");
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const listUrl = sent?.listPath ? `${origin}${sent.listPath}` : `${origin}/list/${shop.tenant_slug}`;
+    const structuredSections = buildHierarchicalSections();
+
+    let itemsSummary = "";
+    for (const sec of structuredSections) {
+      itemsSummary += `\n*${sec.rootName.toUpperCase()}*\n`;
+      for (const sub of sec.subs) {
+        if (sub.subName) {
+          itemsSummary += ` _> ${sub.subName}_\n`;
+        }
+        for (const line of sub.lines) {
+          const pricePart = includePrices && line.price ? ` - ${formatMoneyOrOnRequest(line.price)}` : "";
+          itemsSummary += ` - ${line.quantity}x ${line.text}${pricePart}\n`;
+        }
+      }
+    }
+
+    const message =
+      `Hello ${shop.business_name}, I just created an order list (${items.length} items):\n` +
+      itemsSummary +
+      `\nOrder Reference Link (View/Edit): ${listUrl}\n` +
+      `Customer: ${name.trim() || "Customer"} (${phone.trim()})\n` +
+      `Mode: ${includePrices ? "Estimated Catalog Prices" : "Market Trust Mode (Quantities Only)"}`;
+
+    if (cleanNumber) {
+      window.open(`https://wa.me/${cleanNumber}?text=${encodeURIComponent(message)}`, "_blank");
+    } else {
+      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
     }
   }
 
@@ -745,27 +804,66 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
       link.href = picture;
       link.download = file.name;
       link.click();
-      const number = (shop.contact_phone ?? "").replace(/[^\d]/g, "");
-      if (number) window.open(`https://wa.me/${number}?text=${encodeURIComponent(message)}`, "_blank");
+      shareOnWhatsApp();
     } catch {
       // A share somebody cancelled is not a failure worth telling them about.
     }
   }
 
   if (sent !== null) {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const listUrl = sent.listPath ? `${origin}${sent.listPath}` : `${origin}/list/${shop.tenant_slug}`;
+
     return (
       <main className={styles.page}>
         <section className={styles.done}>
           <h1 className={styles.doneTitle}>Your list has reached {shop.business_name}</h1>
           <p className={styles.doneText}>
-            {sent} {sent === 1 ? "item" : "items"} sent. They will get back to you on {phone}.
+            {sent.count} {sent.count === 1 ? "item" : "items"} recorded. They will get back to you on {phone}.
           </p>
-          <div className={styles.doneActions}>
-            {picture ? (
-              <button type="button" className={styles.primary} onClick={() => void sharePicture()}>
-                Send the list on WhatsApp
+
+          <div className={styles.referenceCard}>
+            <div className={styles.referenceHeader}>
+              <span className={styles.referenceBadge}>Order Reference Link</span>
+              <span style={{ fontSize: "12px", color: "var(--ink-3)" }}>Share or edit anytime</span>
+            </div>
+            <div className={styles.referenceUrlBox}>
+              <span>{listUrl}</span>
+            </div>
+            <div className={styles.referenceActions}>
+              <button
+                type="button"
+                className={styles.referenceCopyBtn}
+                onClick={() => {
+                  void navigator.clipboard.writeText(listUrl);
+                  setCopiedLink(true);
+                  setTimeout(() => setCopiedLink(false), 2500);
+                }}
+              >
+                {copiedLink ? "Link Copied!" : "Copy Reference Link"}
               </button>
-            ) : null}
+              {sent.listPath ? (
+                <Link href={sent.listPath} className={styles.referenceOpenBtn}>
+                  Open Live Order Tracker
+                </Link>
+              ) : null}
+              <button
+                type="button"
+                className={styles.referenceReorderBtn}
+                onClick={() => {
+                  setSent(null);
+                  setShowingList(false);
+                }}
+              >
+                Build Another List
+              </button>
+            </div>
+          </div>
+
+          <div className={styles.doneActions}>
+            <button type="button" className={styles.primary} onClick={shareOnWhatsApp}>
+              Send on WhatsApp (Direct Link & Breakdown)
+            </button>
             <button
               type="button"
               className={styles.secondaryPdf}
@@ -777,7 +875,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
           {picture ? (
             <>
               <p className={styles.doneText}>
-                This is the list they received. You can send it on WhatsApp or keep your downloaded list for transporters, market waybills, and your records.
+                This is the waybill list generated from your order. Keep your downloaded copy for transporters, market drivers, and physical waybills.
               </p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img className={styles.preview} src={picture} alt="Your list" />
@@ -1196,74 +1294,104 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
               <p className={styles.nothing}>Nothing on it yet. Add items from the shop above or type your own.</p>
             </div>
           ) : null}
-          {chosen.map((line) => (
-            <div
-              key={line.key}
-              className={line.underKey !== null ? styles.lineUnder : styles.lineTop}
-            >
-              {line.isHeading ? (
-                <div className={styles.headingRow}>
-                  <span className={styles.headingName}>{line.text}</span>
-                  <button
-                    type="button"
-                    className={styles.remove}
-                    onClick={() => removeLine(line.key)}
-                    aria-label={`Remove heading ${line.text}`}
-                  >
-                    <TrashIcon size={14} />
-                    <span>Remove</span>
-                  </button>
-                </div>
-              ) : (
-                <div className={styles.lineRow}>
-                  <span className={styles.rowBody}>
-                    <span className={styles.rowNameRow}>
-                      <ItemBoxIcon size={16} className={styles.rowItemIcon} />
-                      <span className={styles.rowName}>{line.text}</span>
-                    </span>
-                    {line.groupName ? (
-                      <span className={styles.categoryBadge}>{line.groupName}</span>
-                    ) : null}
-                    <span className={styles.rowMeta}>
-                      {includePrices
-                        ? line.price === null
-                          ? "the shop will price it"
-                          : formatMoneyOrOnRequest(line.price)
-                        : "Priced upon confirmation / Trust quote"}
-                    </span>
-                  </span>
-                  <span className={styles.stepper}>
-                    <button
-                      type="button"
-                      className={styles.stepButton}
-                      onClick={() => changeQuantity(line.key, -1)}
-                      aria-label={`One fewer ${line.text}`}
-                    >
-                      {"-"}
-                    </button>
-                    <span className={styles.stepValue}>{line.quantity}</span>
-                    <button
-                      type="button"
-                      className={styles.stepButton}
-                      onClick={() => changeQuantity(line.key, 1)}
-                      aria-label={`One more ${line.text}`}
-                    >
-                      +
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.remove}
-                      onClick={() => removeLine(line.key)}
-                      aria-label={`Remove ${line.text}`}
-                    >
-                      <TrashIcon size={14} />
-                      <span>Remove</span>
-                    </button>
-                  </span>
-                </div>
-              )}
+          {items.length === 0 && headings.length === 0 ? (
+            <p className={styles.nothing}>Your list is empty. Pick items from the catalog or type your own.</p>
+          ) : (
+            <div className={styles.reviewHierarchicalWrap}>
+              {buildHierarchicalSections().map((sec) => {
+                const totalSecItems = sec.subs.reduce((acc, s) => acc + s.lines.length, 0);
+                const isCustomHeading = headings.some((h) => h.text.toLowerCase() === sec.rootName.toLowerCase());
+                const headingLine = headings.find((h) => h.text.toLowerCase() === sec.rootName.toLowerCase());
+
+                return (
+                  <div key={sec.rootName} className={styles.reviewGroup}>
+                    <div className={styles.reviewGroupHeader}>
+                      <span className={styles.reviewGroupTitle}>{sec.rootName}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span className={styles.reviewGroupCount}>
+                          {totalSecItems} {totalSecItems === 1 ? "item" : "items"}
+                        </span>
+                        {isCustomHeading && headingLine ? (
+                          <button
+                            type="button"
+                            className={styles.remove}
+                            onClick={() => removeLine(headingLine.key)}
+                            aria-label={`Remove heading ${sec.rootName}`}
+                          >
+                            <TrashIcon size={14} />
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {sec.subs.map((sub) => (
+                      <div key={sub.subName || "__direct__"} className={styles.reviewSubGroup}>
+                        {sub.subName ? (
+                          <div className={styles.reviewSubHeader}>
+                            <span className={styles.reviewSubIcon}>&rsaquo;</span>
+                            <span className={styles.reviewSubTitle}>{sub.subName}</span>
+                          </div>
+                        ) : null}
+                        <div className={styles.reviewLinesList}>
+                          {sub.lines.length === 0 ? (
+                            <p className={styles.nothing} style={{ padding: "8px 12px", margin: 0 }}>
+                              No items yet under this heading.
+                            </p>
+                          ) : (
+                            sub.lines.map((line) => (
+                              <div key={line.key} className={styles.lineRow}>
+                                <span className={styles.rowBody}>
+                                  <span className={styles.rowNameRow}>
+                                    <ItemBoxIcon size={16} className={styles.rowItemIcon} />
+                                    <span className={styles.rowName}>{line.text}</span>
+                                  </span>
+                                  <span className={styles.rowMeta}>
+                                    {includePrices
+                                      ? line.price === null
+                                        ? "the shop will price it"
+                                        : formatMoneyOrOnRequest(line.price)
+                                      : "Priced upon confirmation / Trust quote"}
+                                  </span>
+                                </span>
+                                <span className={styles.stepper}>
+                                  <button
+                                    type="button"
+                                    className={styles.stepButton}
+                                    onClick={() => changeQuantity(line.key, -1)}
+                                    aria-label={`One fewer ${line.text}`}
+                                  >
+                                    {"-"}
+                                  </button>
+                                  <span className={styles.stepValue}>{line.quantity}</span>
+                                  <button
+                                    type="button"
+                                    className={styles.stepButton}
+                                    onClick={() => changeQuantity(line.key, 1)}
+                                    aria-label={`One more ${line.text}`}
+                                  >
+                                    +
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={styles.remove}
+                                    onClick={() => removeLine(line.key)}
+                                    aria-label={`Remove ${line.text}`}
+                                  >
+                                    <TrashIcon size={14} />
+                                    <span>Remove</span>
+                                  </button>
+                                </span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
-          ))}
+          )}
 
           {chosen.length > 0 ? (
             <div className={styles.trustModeCard}>

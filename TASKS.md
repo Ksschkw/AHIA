@@ -4310,3 +4310,14 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
 5. **Merchant-Editable Storefront Closing Writeups & LocalStorage Theme Synchronization** `[x]`:
    - Businesses can now customize the closing message shown below the catalog on their public shop page (`/shop/[slug]`) directly from the Shop Appearance editor in `/app/profile`.
    - Theme variables (`ahia.theme.[slug]`) are now saved under both `tenant_id`, `public_path`, and `slug` so live public storefront previews and customer-facing pages instantly hydrate the merchant's chosen accent color, background surface, and closing notes without delay.
+
+### 17.7 Hierarchical Category Review Drawer, Unique Reference Links & Direct WhatsApp Routing `[x]`
+1. **Multi-Tier Category & Subcategory Grouping in List Review Drawer** `[x]`:
+   - In Alaba market procurement, a customer's list can have identically named models across different categories (for instance, "Hot 8" under Screenguard > 21D, "Hot 8" under Screenguard > Privacy, and "Hot 8" under Phone Pouches). Showing a flat list of names without category headings made it impossible to know which physical product was being ordered.
+   - Replaced flat review list with structured hierarchical category grouping in `web/components/list-builder.tsx`. Each group renders a clear category banner, horizontal accent rule, indented subcategory divider (`> 21D`, `> Privacy`), and individual line steppers. Custom customer headings and uncategorized items group cleanly.
+2. **Direct WhatsApp Routing & Categorized Order Summaries** `[x]`:
+   - When a customer clicks "Send on WhatsApp", the action now hyperlinks directly to `wa.me/[phone]` for the business.
+   - The generated WhatsApp message includes a full structured text breakdown with category headings and item quantities, plus a direct permanent reference link (`/list/[slug]/[token]`) so the merchant can open the live order with one tap.
+3. **Permanent List Reference Tracking & Reordering** `[x]`:
+   - On submitting a list, the completion screen displays an Order Reference Card with the permanent live tracker URL, an instant "Copy Reference Link" button, a link to open the live interactive tracker (`web/components/live-list.tsx`), and a "Build Another List" option.
+   - The live list tracker screen (`/list/[slug]/[token]`) gives customers a direct action to build a new list from an existing order.

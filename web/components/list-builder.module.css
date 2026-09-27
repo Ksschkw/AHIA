@@ -1095,3 +1095,186 @@
 .secondaryPdf:hover {
   background: var(--leaf-soft);
 }
+
+/* -------------------------------------------------------------------------
+   Hierarchical Review Sheet Grouping (Root Category + Subcategories)
+   ------------------------------------------------------------------------- */
+
+.reviewHierarchicalWrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+.reviewGroup {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.reviewGroupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background: var(--leaf-soft);
+  border-bottom: 2px solid var(--leaf);
+}
+
+.reviewGroupTitle {
+  font-size: var(--text-sm);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--leaf-dark);
+}
+
+.reviewGroupCount {
+  font-size: 11px;
+  font-weight: 700;
+  background: #ffffff;
+  color: var(--leaf-dark);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+}
+
+.reviewSubGroup {
+  border-bottom: 1px solid var(--line);
+}
+
+.reviewSubGroup:last-child {
+  border-bottom: none;
+}
+
+.reviewSubHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px var(--space-4) 4px;
+  background: var(--sand);
+  font-size: 12px;
+  font-weight: 750;
+  color: var(--ink-2);
+  letter-spacing: 0.02em;
+}
+
+.reviewSubIcon {
+  color: var(--leaf);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.reviewSubTitle {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.reviewLinesList {
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--space-3);
+}
+
+/* Reference card on submission screen */
+.referenceCard {
+  background: var(--card);
+  border: 1.5px solid var(--leaf);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  margin: var(--space-4) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  text-align: left;
+}
+
+.referenceHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.referenceBadge {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--leaf-dark);
+  background: var(--leaf-soft);
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+}
+
+.referenceUrlBox {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  background: var(--sand);
+  border: 1px solid var(--line);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-family: monospace;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.referenceActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.referenceCopyBtn,
+.referenceOpenBtn,
+.referenceReorderBtn {
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 750;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  transition: all 0.15s ease;
+  text-decoration: none;
+}
+
+.referenceCopyBtn {
+  background: var(--card);
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+}
+
+.referenceCopyBtn:hover {
+  border-color: var(--leaf);
+  color: var(--leaf);
+}
+
+.referenceOpenBtn {
+  background: var(--leaf);
+  border: 1px solid var(--leaf);
+  color: #ffffff;
+}
+
+.referenceOpenBtn:hover {
+  background: var(--leaf-dark);
+}
+
+.referenceReorderBtn {
+  background: var(--sand-2);
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+}
+
+.referenceReorderBtn:hover {
+  background: var(--card);
+}
