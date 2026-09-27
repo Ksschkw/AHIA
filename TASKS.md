@@ -101,8 +101,9 @@ assertion in a commit message.
 | M23 | Responsiveness, truthful loading states, perceived speed | `[x]` | M22 |
 | M24 | Storefront, lists, shelf, button states, render split | `[x]` | M23 |
 | M25 | Authentication continuity and the device PIN | `[x]` | M19 |
+| M26 | Named staff roles, storefront brand webapp, hierarchical waybills & trust quotes | `[ ]` | M24 |
 
-M25.1 (silent refresh session continuity) and M25.2 (device PIN for sensitive actions) are complete and verified. M20 offline mobile client foundation is complete.
+M25.1 (silent refresh session continuity) and M25.2 (device PIN for sensitive actions) are complete and verified. M20 offline mobile client foundation is complete. M26 captures real Alaba market operations, staff access gating, storefront personal branding, living color palette, and hierarchical waybills.
 
 Deferred by design, not planned here: AI forecasting, community/network module,
 supplier marketplace, fleet tracking, automated bank integrations, full WhatsApp
@@ -3878,7 +3879,7 @@ The rule for this section: if it is here, it was asked for and has not been buil
 
 ## 1. URGENT: sending a list on the live shop still fails, and the cause is known to the line
 
-**Symptom** (photographed by the product owner, 21 September): the customer presses "Send my list" and reads
+**Symptom** (what I saw and photographed on 21 September): the customer presses "Send my list" and reads
 *"We could not reach the shop. Check your connection and try again."*
 
 **Diagnosed by curl, twice, and it is not the API:**
@@ -4009,7 +4010,7 @@ Foundation committed, **never run**: `cd mobile && npm install && npx expo start
 the shelf from a local store, the outbox that makes "sell one" work with no signal, then the lists workbench.
 Releases: Android APK on a GitHub Release; iOS by TestFlight only.
 
-## 10. Housekeeping for the product owner, not for an agent
+## 10. Housekeeping
 
 - **Rotate the Neon password.** A command of mine echoed it into a chat log.
 - **`.env` holds the dead Neon password, `.env.deploy` the live one.** Confirm which each target reads.
@@ -4090,7 +4091,7 @@ Built directly to address the market buyer workflow and prevent loss of work:
 
 ## 12. Deep Category Hierarchy, Trader Workbench Overhaul, and Returning Customer Workflows
 
-Directly addressing the product owner's requirements:
+Directly addressing what I need for my shop and my market workflow:
 
 1. **GitHub CI Backend-Check Gate**: Resolved the six storefront integration test failures (`NotFoundError: no open shop matches`). Category hierarchy traversal (`_build_category_path`) now pre-fetches category headings within the tenant scope, avoiding N+1 queries and context boundary drops. 100% of storefront tests pass.
 2. **Category Separation in List Picture & Customer Review**: Both the generated canvas list image and the customer review sheet now structure and group items by their full category breadcrumb path (e.g. `PHONE ACCESSORIES > SCREENGUARDS > 21D` vs `PHONE ACCESSORIES > SCREENGUARDS > PRIVACY`). Duplicate model names (e.g. `Hot 8` 10 pcs under 21D vs `Hot 8` 5 pcs under Privacy) are cleanly separated under clear category section headers with accent banners.
@@ -4207,3 +4208,47 @@ Allows traders to reorganize products between categories or unfile them to root 
 7. **Dark Mode**:
    - Pure CSS variables in `web/app/globals.css` with `[data-theme="dark"]` and `@media (prefers-color-scheme: dark)`.
    - Theme toggle in side rail and mobile topbar with `localStorage` persistence.
+
+## 17. Real Market Operations: Named Staff Access, Personal Storefront Brand & Living Palette, Hierarchical Waybill Lists & Trust Quotes
+
+How my business actually runs in Alaba, the struggles I face daily, and how AHIA must work to match real Nigerian commerce:
+
+### 17.1 Staff Identity and Truthful Role-Based UI Gating
+1. **Named Staff Members (Not Just Phone Numbers)**:
+   - In my shop in Alaba, I do not just have an anonymous "sales" or "manager" role. I have specific sales boys and sales girls (e.g., Chinedu, Emeka, Blessing, or Sales Desk 1). Identifying my workers purely by their phone numbers in the team roster (`/app/team`) and activity logs is confusing and frustrating.
+   - Staff memberships must have a real display name / nickname / label attached to their profile in the business (`nickname` / `display_name`).
+   - The team roster (`/app/team`) and invite modal must let me assign and edit staff names alongside their phone number and role.
+2. **Truthful Role-Based UI Gating (No False Hope)**:
+   - Currently, a sales staff member cannot create or delete categories on the backend (which is good security), but the web UI still shows them the "+ Add Category", "Edit", and "Delete" buttons! When they tap them, it fails with a 403 error. Showing clickable buttons that are destined to fail gives false hope.
+   - The UI must check the user's active membership role (`owner`, `manager`, `sales`, etc.) and conditionally render only the actions they are actually permitted to perform. If sales cannot create or edit categories, those buttons must simply not be visible to them.
+
+### 17.2 Personal Storefront as a Branded Webapp (The Face of My Business)
+1. **The Storefront is My Business's Face, Not a Generic AHIA Scaffold**:
+   - The public shop (`/shop/{slug}`) must feel like my business's own modern, branded e-commerce website and webapp - not an internal AHIA scaffold.
+   - The default look of any AHIA shop must be stunning, high-contrast, polished, and premium out of the box even before any customization.
+2. **Collapsible / Dedicated Customization Experience (`/app/profile`)**:
+   - The Shop Appearance & Customization section should not be permanently wide-open cluttering my profile page. It should be a dedicated, collapsible customize drawer/section or modal that I open when I want to design my storefront.
+3. **Living Visual Color Palette (No Hex Codes for Alaba Traders)**:
+   - Asking a trader in Alaba to type a CSS hex code like `#1b4332` is completely impractical. Traders need to pick colors visually.
+   - Provide a full living color palette: curated business themes (Emerald Trade, Alaba Gold, Royal Indigo, Sunset Coral, Slate Pro), visual shade swatches across every hue, a visual shade picker, and a native color picker fallback.
+4. **End-to-End Style Wiring to Public Shop & Three.js 3D Shelf**:
+   - Every theme color, background style, banner image, and accent must be properly wired through the database to CSS theme variables and the Three.js 3D shelf canvas so customizations actually reflect live on the public storefront.
+5. **Interactive Live Shop Preview**:
+   - Overhaul the live shop preview so it accurately renders how the customer sees my shop in real time, with instant toggle between mobile phone frame and desktop views.
+6. **Category & Product Images (Crisp & Optional)**:
+   - Allow optional image uploads/URLs for categories and products.
+   - If provided, render tiny, crisp, beautiful thumbnails on category cards and public catalog items.
+   - If left empty, fall back gracefully to clean, stroke-matched icons with zero layout breakage.
+7. **Organized Public Shop (No Endless Flat Shelf Dump)**:
+   - Instead of an endless flat list of items on generic shelves, organize the public storefront by categories and subcategories with clean tabs, filter pills, and structured category sections.
+
+### 17.3 Hierarchical Alaba Waybill Lists & Trust Quotes
+1. **Multi-Tier Category Hierarchy in Waybill Lists**:
+   - In Alaba market, when making a waybill list or procurement order, items follow a strict hierarchy: a major heading (e.g., Screenguard), then subcategories (Privacy, 21D, Ceramic), and then the phone models with quantities (Hot 8 - 10 pcs, Hot 9 - 10 pcs).
+   - The list builder and order generator must preserve this multi-tier hierarchy without flattening everything.
+2. **Downloadable PDF Waybill for Long Orders**:
+   - While canvas image generation works great for short lists, a large customer order with dozens or hundreds of items across many subcategories creates an impractically tall image that WhatsApp compresses into unreadable blur.
+   - Provide a clean, branded PDF export option that pagination-splits long waybill orders with header, line numbers, category headings, and totals.
+3. **Decoupling Prices from List Building ("Trust Mode" / Market Quotes)**:
+   - In Alaba trade, customers (like my dad's customer in Ibadan who sends 1 million Naira or sends a list first to be sourced) don't always need or want prices during initial list preparation. The market trader goes into the market, confirms availability across lines, and calculates the balance/quote afterwards.
+   - List generation must support an optional "Quote / Waybill Mode" without forced pricing. Prices are finalized when generating the invoice or confirming the order.
