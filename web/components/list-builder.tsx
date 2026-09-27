@@ -354,10 +354,26 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     }
   }, [shop.products]);
 
+  function headingKeyFor(groupName: string | null): string | null {
+    if (!groupName) return null;
+    const match = headings.find(
+      (h) =>
+        h.text.toLowerCase() === groupName.toLowerCase() ||
+        h.groupName?.toLowerCase() === groupName.toLowerCase(),
+    );
+    return match?.key ?? null;
+  }
+
   function addHeading(asSub: boolean = false) {
     const text = newHeading.trim();
     if (text.length < 2) return;
     const key = `head-${Date.now()}`;
+    const currentGroupPath = openGroup
+      ? groupTrail.length > 0
+        ? groupTrail.join(" > ")
+        : openGroup
+      : null;
+
     setChosen((current) => [
       ...current,
       {
@@ -366,6 +382,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
         text,
         quantity: 1,
         price: null,
+        groupName: asSub && ownUnder ? null : currentGroupPath,
         underKey: asSub && ownUnder ? ownUnder : null,
         isHeading: true,
         note: "heading",
@@ -441,17 +458,32 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     return hierarchy.length > 0 ? hierarchy : [groupName.trim()];
   }
 
-  function resolveHeadingHierarchy(headingKey: string, allHeadings: ChosenLine[]): string[] {
+  function resolveHeadingHierarchy(
+    headingKey: string,
+    allHeadings: ChosenLine[],
+    shopGroups: ListShopGroup[],
+  ): string[] {
     const hierarchy: string[] = [];
     let currentKey: string | null = headingKey;
+    let topGroup: string | null = null;
     const visited = new Set<string>();
+
     while (currentKey && !visited.has(currentKey)) {
       visited.add(currentKey);
       const h = allHeadings.find((line) => line.key === currentKey);
       if (!h) break;
       hierarchy.unshift(h.text);
+      if (h.groupName && !topGroup) {
+        topGroup = h.groupName;
+      }
       currentKey = h.underKey;
     }
+
+    if (topGroup) {
+      const parentParts = resolveGroupHierarchy(topGroup, shopGroups);
+      return [...parentParts, ...hierarchy];
+    }
+
     return hierarchy.length > 0 ? hierarchy : ["General Items"];
   }
 
@@ -483,7 +515,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
 
     // Ensure customer custom headings appear even if no items added yet
     for (const h of headings) {
-      const path = resolveHeadingHierarchy(h.key, headings);
+      const path = resolveHeadingHierarchy(h.key, headings, shop.groups);
       const root = path[0] || h.text;
       const sub = path.length > 1 ? path.slice(1).join(" > ") : null;
       if (!rootMap.has(root)) {
@@ -497,7 +529,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     for (const item of items) {
       let path: string[];
       if (item.underKey) {
-        path = resolveHeadingHierarchy(item.underKey, headings);
+        path = resolveHeadingHierarchy(item.underKey, headings, shop.groups);
       } else if (item.groupName) {
         path = resolveGroupHierarchy(item.groupName, shop.groups);
       } else {
@@ -915,6 +947,22 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     );
   }
 
+  const customHeadingsHere = useMemo(() => {
+    const currentScope = openGroup
+      ? groupTrail.length > 0
+        ? groupTrail.join(" > ")
+        : openGroup
+      : null;
+    return headings.filter((h) => {
+      if (currentScope === null) {
+        return !h.groupName && !h.underKey;
+      }
+      const hGroup = (h.groupName ?? "").toLowerCase();
+      const scopeLower = currentScope.toLowerCase();
+      return hGroup === scopeLower || hGroup.includes(scopeLower);
+    });
+  }, [headings, openGroup, groupTrail]);
+
   return (
     <main className={styles.page}>
       <header className={styles.header}>
@@ -1086,8 +1134,6 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
                 <li key={group.name} className={styles.row}>
                   <button
                     type="button"
-                    // Named, so a check can find the row rather than the first button whose text mentions the
-                    // same words - which is how a product's Add button got pressed instead of a group once.
                     id={`group_${group.name}`}
                     className={styles.rowOpen}
                     onClick={() => setOpenGroup(group.name)}
@@ -1104,6 +1150,104 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
               ))}
             </ul>
           )}
+
+          {/* Custom Subcategories inside this group / scope */}
+          {customHeadingsHere.length > 0 ? (
+            <div style={{ marginTop: "12px", borderTop: "1px dashed var(--line)", paddingTop: "12px" }}>
+              <p className={styles.onlyThese} style={{ color: "var(--leaf-dark)", fontWeight: 700 }}>
+                Your custom {openGroup ? "subcategories" : "categories"} in {openGroup || "the shop"}:
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {customHeadingsHere.map((h) => {
+                  const itemsUnderH = items.filter((it) => it.underKey === h.key);
+                  return (
+                    <div
+                      key={h.key}
+                      style={{
+                        background: "var(--sand-2)",
+                        border: "1px solid var(--line-strong)",
+                        borderRadius: "var(--radius-sm)",
+                        padding: "10px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginBottom: itemsUnderH.length > 0 ? "8px" : "0",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontWeight: 800, fontSize: "14px", color: "var(--ink)" }}>
+                            {h.text}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              fontWeight: 700,
+                              background: "var(--leaf-soft)",
+                              color: "var(--leaf-dark)",
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                            }}
+                          >
+                            Custom Subcategory
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className={styles.addHere}
+                          style={{ fontSize: "12px", padding: "4px 8px" }}
+                          onClick={() => {
+                            setOwnUnder(h.key);
+                            setAddingOwn(true);
+                          }}
+                        >
+                          + Add item here
+                        </button>
+                      </div>
+
+                      {itemsUnderH.length > 0 ? (
+                        <ul className={styles.rows} style={{ marginTop: "6px" }}>
+                          {itemsUnderH.map((line) => (
+                            <li key={line.key} className={styles.row}>
+                              <span className={styles.rowBody}>
+                                <span className={styles.rowName}>{line.text}</span>
+                                {includePrices && line.price ? (
+                                  <span className={styles.rowMeta}>{formatMoneyOrOnRequest(line.price)}</span>
+                                ) : null}
+                              </span>
+                              <div className={styles.stepperInline}>
+                                <button
+                                  type="button"
+                                  className={styles.stepButtonSmall}
+                                  onClick={() => changeQuantity(line.key, -1)}
+                                  aria-label={`One fewer ${line.text}`}
+                                >
+                                  -
+                                </button>
+                                <span className={styles.stepValueSmall}>{line.quantity}</span>
+                                <button
+                                  type="button"
+                                  className={styles.stepButtonSmall}
+                                  onClick={() => changeQuantity(line.key, 1)}
+                                  aria-label={`One more ${line.text}`}
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
           {productsHere.length > 0 ? (
             <div style={{ marginTop: "12px" }}>
               <p className={styles.onlyThese}>Items in {openGroup}:</p>
@@ -1169,7 +1313,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
         </button>
         {addingOwn ? (
           <div className={styles.ownForm}>
-            {openGroup ? (
+            {openGroup || ownUnder ? (
               <div
                 style={{
                   marginBottom: "8px",
@@ -1181,14 +1325,25 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
                   fontWeight: 700,
                 }}
               >
-                Adding item under category: {groupTrail.length > 0 ? groupTrail.join(" > ") : openGroup}
+                Target category:{" "}
+                {ownUnder
+                  ? resolveHeadingHierarchy(ownUnder, headings, shop.groups).join(" > ")
+                  : groupTrail.length > 0
+                    ? groupTrail.join(" > ")
+                    : openGroup}
               </div>
             ) : null}
             <input
               className={styles.search}
               id="list_own_text"
               value={ownText}
-              placeholder={openGroup ? `Item name for ${openGroup}...` : "What do you want? e.g. universal metal frame"}
+              placeholder={
+                ownUnder
+                  ? `Item name inside ${resolveHeadingHierarchy(ownUnder, headings, shop.groups).slice(-1)[0]}...`
+                  : openGroup
+                    ? `Item name for ${openGroup}...`
+                    : "What do you want? e.g. universal metal frame"
+              }
               onChange={(event) => setOwnText(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
@@ -1219,14 +1374,28 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
             </div>
             <p className={styles.nothing}>The shop will put a price on it. Keep adding items or tap Done when finished.</p>
 
-            <p className={styles.onlyThese}>Or start your own heading, with things under it:</p>
+            <p className={styles.onlyThese}>
+              {openGroup
+                ? `Create a subcategory inside ${openGroup}:`
+                : "Or start your own category / heading:"}
+            </p>
             <div className={styles.ownRow}>
               <input
                 className={styles.search}
                 id="list_new_heading"
                 value={newHeading}
-                placeholder="e.g. Screenguard, Ceramic, Privacy"
+                placeholder={
+                  openGroup
+                    ? `e.g. Ceramic, Privacy, 21D (inside ${openGroup})`
+                    : "e.g. Screenguard, Chargers, Pouches"
+                }
                 onChange={(event) => setNewHeading(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addHeading(Boolean(ownUnder));
+                  }
+                }}
               />
               {ownUnder ? (
                 <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
@@ -1239,7 +1408,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
                 </div>
               ) : (
                 <button type="button" className={styles.addHere} onClick={() => addHeading(false)}>
-                  Add heading
+                  {openGroup ? "+ Add Subcategory" : "+ Add Heading"}
                 </button>
               )}
             </div>
@@ -1251,18 +1420,21 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
                   className={ownUnder === null ? styles.underOn : styles.underOff}
                   onClick={() => setOwnUnder(null)}
                 >
-                  Nothing - top of my list
+                  {openGroup ? `Direct in ${openGroup}` : "Nothing - top of my list"}
                 </button>
-                {headings.map((heading) => (
-                  <button
-                    key={heading.key}
-                    type="button"
-                    className={ownUnder === heading.key ? styles.underOn : styles.underOff}
-                    onClick={() => setOwnUnder(heading.key)}
-                  >
-                    {heading.text}
-                  </button>
-                ))}
+                {headings.map((heading) => {
+                  const resolvedPath = resolveHeadingHierarchy(heading.key, headings, shop.groups).join(" > ");
+                  return (
+                    <button
+                      key={heading.key}
+                      type="button"
+                      className={ownUnder === heading.key ? styles.underOn : styles.underOff}
+                      onClick={() => setOwnUnder(heading.key)}
+                    >
+                      {resolvedPath}
+                    </button>
+                  );
+                })}
               </div>
             ) : null}
 
@@ -1566,15 +1738,4 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
       </div>
     </main>
   );
-
-  /**
-   * The customer heading that matches the shop group they are browsing, if they made one.
-   *
-   * It answers `null` for "not browsing anything", which is what the caller has: making this require a string
-   * would mean every call site asserting one it cannot prove.
-   */
-  function headingKeyFor(group: string | null): string | null {
-    if (group === null) return null;
-    return headings.find((line) => line.text.toLowerCase() === group.toLowerCase())?.key ?? null;
-  }
 }

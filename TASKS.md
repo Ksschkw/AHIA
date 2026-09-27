@@ -4350,3 +4350,20 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
    - Added a clear indicator banner in the custom entry form showing `"Adding item under category: [Category Path]"`.
 3. **Direct WhatsApp DM Opening (`wa.me/234...`)** `[x]`:
    - Added `formatWaNumber` to reliably format any Nigerian merchant phone into the international standard (`234XXXXXXXXXX`), eliminating generic contact-picker redirection and routing directly into the 1-on-1 business chat with the structured order breakdown and live link.
+
+### 17.11 Custom Error Boundaries, Missing List Recovery Screen & UX Resilience `[x]`
+1. **Custom 404 & Global Error Fallbacks (`web/app/not-found.tsx`, `web/app/error.tsx`, `web/app/global-error.tsx`)** `[x]`:
+   - Replaced default Vercel/Next.js 404 and unhandled runtime error pages with AHIA-branded error boundaries.
+   - Provided clear, jargon-free explanations, a prominent "Try Again / Retry" button, direct navigation back to the Trader Dashboard (`/app`), and safe fallback to AHIA Home (`/`).
+2. **Graceful Order List Recovery Screen (`web/components/list-not-found.tsx`)** `[x]`:
+   - When an invalid, expired, or deleted order reference link (`/list/[slug]/[token]`) is visited, the app now shows an informative recovery page explaining that the list may have been deleted or fulfilled by the merchant.
+   - Integrated a phone number lookup form allowing the customer to find past lists submitted to that merchant and instantly build a new order from a previous list.
+   - Included direct links to "Create a New List" for that shop or browse the merchant's live catalog.
+
+### 17.12 In-Category Custom Headings as Subcategories & Dynamic Category Nesting `[x]`
+1. **In-Category Custom Headings as Subcategories (`web/components/list-builder.tsx`)** `[x]`:
+   - When a customer is browsing inside a category (e.g. `Screenguard` or `Screenguard > 21D`) and creates a custom heading (e.g. `Ceramic` or `Privacy`), the heading now automatically binds to that parent category (`groupName: groupTrail.join(" > ")`).
+   - The custom heading adapts as a true subcategory within that scope, displayed directly in the browsing section alongside shop categories with a `Custom Subcategory` badge.
+2. **Adding Items Directly Under Custom Subcategories** `[x]`:
+   - Custom subcategories display their current item counts, +/- quantity steppers, and a one-tap `+ Add item here` button that focuses the custom item input with the subcategory pre-selected.
+   - Hierarchy resolution (`resolveHeadingHierarchy`) walks the full ancestor chain, prepending the parent group and rendering multi-level tables in the list review drawer, canvas waybill image, and PDF download.

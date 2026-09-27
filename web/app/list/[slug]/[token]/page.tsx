@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 
+import { ListNotFound } from "@/components/list-not-found";
 import { LiveList } from "@/components/live-list";
-import { fetchPublicList } from "@/lib/server-api";
+import { fetchPublicList, fetchPublicShop } from "@/lib/server-api";
 
 /**
  * One customer's list, at its own address.
@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug, token } = await params;
   const list = await fetchPublicList(slug, token);
   if (!list) {
-    return { title: "List not found" };
+    return { title: "Order List Not Found" };
   }
   return {
     title: `Your list for ${list.business_name}`,
@@ -35,7 +35,8 @@ export default async function ListPage({ params }: Params) {
   const { slug, token } = await params;
   const list = await fetchPublicList(slug, token);
   if (!list) {
-    notFound();
+    const shop = await fetchPublicShop(slug).catch(() => null);
+    return <ListNotFound slug={slug} businessName={shop?.business_name} />;
   }
   return <LiveList initial={list} slug={slug} token={token} />;
 }
