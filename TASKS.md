@@ -4279,3 +4279,17 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
    - Polished product cards in `web/components/shop-catalog.tsx` with subtle hover elevations, Naira currency formatting, and a dedicated 1-tap "Add to list +" action button.
    - Added direct URL query parameter support (`/list/[slug]?add=[product_slug]`) so tapping "Add to list +" on any catalog card immediately adds the item and opens the list review drawer.
    - Added sticky mobile floating action bar (`Build your list` and `WhatsApp`) for one-thumb mobile shopping.
+
+### 17.5 Adaptive Copy Pricing & Universal Nigerian Market Breadth `[x]`
+1. **Price Adaptation on Product Duplication / Copying** `[x]`:
+   - When I copy products across categories in my shop catalog (`/app/items`), their previous category's price overrides must not follow them like baggage. If I duplicate a batch of items into a new category with its own normal and wholesale default prices, the copied items must automatically adapt to the destination category's prices (`selling_price = None`, `wholesale_price = None`).
+   - If the destination category has no standard defaults set (e.g., uncategorized root shelf), the copied items fall back safely to resolved source prices so items never become unpriced.
+   - Updated `copy_products` in `backend/src/ahia/services/product_service.py` and integration tests in `backend/tests/routers/test_product_router.py`.
+2. **Universal Trade Generalization (Beyond Screenguards)** `[x]`:
+   - AHIA is built for every Nigerian wholesale and retail merchant, not just phone screenguards. General wholesalers, auto spare parts dealers, electronics suppliers, fashion distributors, and foodstuff packagers all run on AHIA.
+   - Replaced screenguard-specific placeholders, examples, and mockup cards across the platform:
+     - `web/app/app/items/page.tsx`: category and product creation and editing placeholders now use universal examples (`"e.g. Electronics, Spare Parts, Wholesale Goods"` and `"e.g. Universal Model X, Standard 10-Pack"`).
+     - `web/app/app/prices/page.tsx`: category group placeholder and empty state now use `"e.g. Electronics, Spare Parts, Wholesale Goods"` and `"e.g. Wholesale Goods"`.
+     - `web/app/app/profile/page.tsx`: shop headline and description placeholders generalized (`"e.g. Direct wholesale & retail market distributor"` and `"e.g. Direct wholesale and retail distribution. Tell us what you need and we will source and pack it."`), and the live customization preview cards feature universal master packs and premium units.
+     - `web/components/list-builder.tsx`: search input and quick-paste guidance generalized (`"Type anything - items, brands, models, packs"` and `"5 Units Model A\n2 Fast Chargers\n10 Pcs Heavy Duty"`).
+     - Generalized internal shelf hierarchy comments in `web/app/app/page.tsx` and `web/lib/api.ts`.

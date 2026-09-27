@@ -548,7 +548,7 @@ export function createCategory(
  *
  * One request for all three, because they answer one question: what do the items under this heading
  * cost. Every item that has no price of its own follows this immediately, which is what makes "all of
- * the 21D are 350" a single action rather than twenty.
+ * the items in this category are 350" a single action rather than twenty.
  */
 export function setGroupPrices(
   tenantId: string,
@@ -613,7 +613,7 @@ export function deleteCategory(
  *
  * `null` is the meaningful value here: it removes the override, and the item goes back to whatever
  * its group says. That is the difference between "this model costs 370" and "this model costs the same
- * as the rest of the 21D".
+ * as the rest of the category".
  */
 export function setItemPrices(
   tenantId: string,

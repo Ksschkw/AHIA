@@ -891,7 +891,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
             className={styles.search}
             id="list_search"
             value={query}
-            placeholder="Type anything - 21D, privacy, charger"
+            placeholder="Type anything - items, brands, models, packs"
             onChange={(event) => setQuery(event.target.value)}
           />
         </div>
@@ -1126,17 +1126,17 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
                 <p className={styles.nothing}>
                   Paste lines from WhatsApp, messages, or notes. One item per line:
                   <br />
-                  e.g. 5 Hot 8 21D
+                  e.g. 5 Units Model A
                   <br />
-                  e.g. 2 Camon 30
+                  e.g. 2 Fast Chargers
                   <br />
-                  e.g. Charger Type C - 10pcs
+                  e.g. 10 Pcs Heavy Duty
                 </p>
                 <textarea
                   className={styles.search}
                   rows={4}
                   value={quickPasteText}
-                  placeholder={"5 Hot 8 21D\n2 Camon 30\nCharger Type C - 10pcs"}
+                  placeholder={"5 Units Model A\n2 Fast Chargers\n10 Pcs Heavy Duty"}
                   onChange={(event) => setQuickPasteText(event.target.value)}
                 />
                 <button

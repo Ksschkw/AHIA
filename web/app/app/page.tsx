@@ -126,7 +126,7 @@ export default function Dashboard() {
   const [runningOut, setRunningOut] = useState<LowStockProduct[]>([]);
   const [categories, setCategories] = useState<ExpenseCategoryList | null>(null);
   // The product groups, which are a different thing from the spending categories above: these are how
-  // the shelf is arranged - Screenguard, 21D - and what a list is read under.
+  // the shelf is arranged - Category, Subcategory - and what a list is read under.
   const [productGroups, setProductGroups] = useState<Category[]>([]);
   //: Photos per product, loaded after the shelf and never blocking it. An empty map means "not read
   //: yet", which is why the shelf shows a placeholder rather than nothing while it fills in.
@@ -1087,7 +1087,7 @@ function ProductSheet({
   const [groupId, setGroupId] = useState("");
 
   // The groups, in the order a person reads them: a heading, then what hangs under it, indented. A flat
-  // run of names would make "21D" and "Screenguard" look like siblings when one is inside the other.
+  // run of names would make "Subcategory" and "Category" look like siblings when one is inside the other.
   const ordered = orderGroups(categories);
 
   return (

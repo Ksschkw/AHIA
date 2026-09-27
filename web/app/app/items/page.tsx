@@ -7,7 +7,7 @@
  * - Categories nest without limit: Root -> Parent -> Child -> Grandchild.
  * - Dual pricing: Wholesale and Retail prices defined at category level or overridden on items.
  * - Multi-select item checkboxes with a sticky bottom action bar (Copy to..., Move to..., Select All).
- * - Quick batch copying: duplicate entire product lines (e.g. Hot 8, Hot 9, Camon 30) across categories in one click.
+ * - Quick batch copying: duplicate entire product lines (e.g. Model X, Model Y, Pack A) across categories in one click.
  * - Copied items inherit destination category default prices automatically.
  * - Authentic visual family tree diagram with connecting stems, branch elbows, and leaves.
  * - Cache-first rendering with instant local search across all nesting levels.
@@ -1054,7 +1054,7 @@ export default function Items() {
               label="Category name"
               id="new_category_name"
               value={newCatName}
-              placeholder="e.g. Screenguards, 21D, Privacy, Silicone Cases"
+              placeholder="e.g. Electronics, Spare Parts, Wholesale Goods"
               onChange={setNewCatName}
             />
             <Field
@@ -1124,7 +1124,7 @@ export default function Items() {
               label="Item name"
               id="new_product_name"
               value={newProdName}
-              placeholder="e.g. Hot 8, Hot 9, Camon 30"
+              placeholder="e.g. Universal Model X, Standard 10-Pack"
               onChange={setNewProdName}
             />
             <Field
@@ -2079,7 +2079,7 @@ export default function Items() {
                 label="Category name"
                 id="edit_category_name"
                 value={editCatName}
-                placeholder="e.g. Screenguards, Cases"
+                placeholder="e.g. Electronics, Spare Parts, Wholesale Goods"
                 onChange={setEditCatName}
               />
 
@@ -2335,7 +2335,7 @@ export default function Items() {
                 label="Item name"
                 id="edit_product_name"
                 value={editProdName}
-                placeholder="e.g. Hot 8, Hot 9, Camon 30"
+                placeholder="e.g. Universal Model X, Standard 10-Pack"
                 onChange={setEditProdName}
               />
 

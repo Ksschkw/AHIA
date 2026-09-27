@@ -765,11 +765,13 @@ async def test_copy_products_into_another_category(database: Database) -> None:
         assert c1["effective_wholesale_price"] == "700.00"
         assert c1["normal_price_from_group"] is True
 
-        # Second copied item kept its custom price override
+        # Second copied item's prices did not follow it; they adapted to Privacy category
         c2 = next(item for item in copied if item["name"] == "Hot 9")
         assert c2["category_id"] == target_group["id"]
-        assert c2["selling_price"] == "600.00"
-        assert c2["normal_price_from_group"] is False
+        assert c2["effective_normal_price"] == "1000.00"
+        assert c2["effective_wholesale_price"] == "700.00"
+        assert c2["normal_price_from_group"] is True
+        assert c2["selling_price"] is None
 
 
 @pytest.mark.asyncio

@@ -235,8 +235,11 @@ class ProductService:
                 )
 
                 # Determine selling price:
+                # When copying into a category with a default normal price,
+                # the copied items must adapt to the target category's prices rather than
+                # having the old category's price overrides follow them.
                 if target_defaults.normal_price is not None:
-                    new_selling_price = source.selling_price
+                    new_selling_price = None
                 else:
                     new_selling_price = (
                         source.selling_price
@@ -246,7 +249,7 @@ class ProductService:
 
                 # Determine wholesale price:
                 if target_defaults.wholesale_price is not None:
-                    new_wholesale_price = source.wholesale_price
+                    new_wholesale_price = None
                 else:
                     new_wholesale_price = (
                         source.wholesale_price

@@ -3,7 +3,7 @@
 /**
  * The price book: category group prices and item overrides.
  *
- * Market traders set prices by grade/category ("All 21D are 500 normal, 350 wholesale").
+ * Market traders set prices by grade/category ("All Grade A items are 500 normal, 350 wholesale").
  * Every item under that category automatically uses that price unless specifically given an override.
  *
  * Built for clarity and low cognitive load:
@@ -313,7 +313,7 @@ export default function Prices() {
               label="Category name"
               id="new_group_name"
               value={newGroupName}
-              placeholder="e.g. 21D, Privacy, Chargers"
+              placeholder="e.g. Electronics, Spare Parts, Wholesale Goods"
               onChange={setNewGroupName}
             />
             <Field
@@ -386,7 +386,7 @@ export default function Prices() {
         >
           No price categories yet.
           <br />
-          Create your first category (e.g. &quot;21D Screenguards&quot;) to set standard prices across
+          Create your first category (e.g. &quot;Wholesale Goods&quot;) to set standard prices across
           multiple items at once.
         </Empty>
       ) : null}

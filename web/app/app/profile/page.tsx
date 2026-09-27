@@ -753,7 +753,7 @@ export default function Profile() {
                     id="shop_headline"
                     value={storefrontHeadline}
                     onChange={setStorefrontHeadline}
-                    placeholder="e.g. Phone accessories, wholesale & retail"
+                    placeholder="e.g. Direct wholesale & retail market distributor"
                     hint="Appears prominently at the top of your public shop."
                   />
                   <Field
@@ -770,7 +770,7 @@ export default function Profile() {
                     id="shop_description"
                     value={storefrontDescription}
                     onChange={setStorefrontDescription}
-                    placeholder="e.g. We stock 21D screenguards, pouches, fast chargers and accessories in Alaba."
+                    placeholder="e.g. Direct wholesale and retail distribution. Tell us what you need and we will source and pack it."
                     optional
                   />
                   <div>
@@ -929,7 +929,7 @@ export default function Profile() {
                               color: "#334155",
                             }}
                           >
-                            Screenguards (8)
+                            Wholesale Packs (8)
                           </span>
                           <span
                             style={{
@@ -941,23 +941,23 @@ export default function Profile() {
                               color: "#334155",
                             }}
                           >
-                            Chargers (4)
+                            Featured Stock (4)
                           </span>
                         </div>
 
                         <div className={styles.mockupProductGrid}>
                           <div className={styles.mockupProductCard}>
                             <div className={styles.mockupProductThumb}>
-                              21D Hot 8
+                              Wholesale Pack
                             </div>
                             <div className={styles.mockupProductDetails}>
-                              <span className={styles.mockupProductTag}>Screenguard</span>
-                              <span className={styles.mockupProductName}>21D Hot 8 / Hot 9</span>
+                              <span className={styles.mockupProductTag}>Wholesale</span>
+                              <span className={styles.mockupProductName}>Standard Master Pack</span>
                               <span
                                 className={styles.mockupProductPrice}
                                 style={{ color: themeColor }}
                               >
-                                {formatMoney(350)} / pack
+                                {formatMoney(3500)} / carton
                               </span>
                             </div>
                             <div className={styles.mockupCardAdd} style={{ color: themeColor }}>
@@ -966,11 +966,11 @@ export default function Profile() {
                           </div>
                           <div className={styles.mockupProductCard}>
                             <div className={styles.mockupProductThumb}>
-                              65W Fast
+                              Premium Unit
                             </div>
                             <div className={styles.mockupProductDetails}>
-                              <span className={styles.mockupProductTag}>Accessories</span>
-                              <span className={styles.mockupProductName}>Fast 65W Type-C</span>
+                              <span className={styles.mockupProductTag}>Retail Unit</span>
+                              <span className={styles.mockupProductName}>Universal Unit - Model X</span>
                               <span
                                 className={styles.mockupProductPrice}
                                 style={{ color: themeColor }}
