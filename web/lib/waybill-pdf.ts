@@ -166,7 +166,7 @@ export function generateWaybillPdfBlob(doc: WaybillDocument): Blob {
       if (doc.includePrices && doc.totalPrice) {
         stream += `(Mode: Catalog Prices Included | Estimated Total: ${escapePdfText(doc.totalPrice)}) Tj\n`;
       } else {
-        stream += `(Mode: Market Trust Waybill | Prices Quoted Upon Packing & Dispatch) Tj\n`;
+        stream += `(Order Waybill | Items & Quantities) Tj\n`;
       }
       stream += "ET\n";
     } else {

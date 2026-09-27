@@ -4329,3 +4329,14 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
 2. **Hovering Unanswered Customer Lists Badge & Banner on Mobile** `[x]`:
    - Added live `unansweredCount` detection to the mobile client. An orange notification badge hovers over the "Customer Lists" tab button when there are customer requests awaiting confirmation.
    - Added an urgent top action banner above the mobile catalog when unconfirmed orders exist, allowing one-tap switching to the Customer Lists tab.
+
+### 17.9 Accurate Multi-Tier Category Hierarchy Resolution & Clean Waybill Design `[x]`
+1. **Accurate Category & Subcategory Path Parsing in List Builder** `[x]`:
+   - Products carrying category hierarchy paths (e.g., `Screenguards > 21D` or `Screenguards > Privacy`) were previously failing group resolution because the lookup looked for the full combined string inside individual node names, causing items to fall back to `General Items`.
+   - Updated `resolveGroupHierarchy` in `web/components/list-builder.tsx` to directly parse multi-tier breadcrumb strings (`" > "`) as well as recursive parent node traversal.
+   - Products and custom user-entered items added while browsing inside any category branch automatically inherit the active category hierarchy path (`groupTrail`).
+2. **Simplified UI Copy & Clean Order Waybills** `[x]`:
+   - Removed confusing jargon ("Priced upon confirmation / Trust quote", "Market Trust Mode (Quantities Only)").
+   - Canvas order images and PDF downloads now render cleanly with `ORDER WAYBILL` header, crisp category group banners, and clean item counts without bloated mode descriptions.
+3. **Direct WhatsApp Chat DM Hyperlinking (`wa.me/[phone]`)** `[x]`:
+   - WhatsApp link generation sanitizes the merchant's phone number to full international Nigerian format (`234XXXXXXXXXX`), opening the direct DM chat with the formatted order breakdown and permanent tracker reference link.

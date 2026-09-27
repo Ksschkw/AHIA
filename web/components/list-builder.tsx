@@ -303,6 +303,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
           line.key === existing.key ? { ...line, quantity: line.quantity + 1 } : line,
         );
       }
+      const inferredGroup = product.group_name || (openGroup ? groupTrail.join(" > ") : null);
       return [
         ...current,
         {
@@ -311,7 +312,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
           text: product.name,
           quantity: 1,
           price: product.selling_price,
-          groupName: product.group_name ?? null,
+          groupName: inferredGroup,
           underKey: under,
           isHeading: false,
           note: "",
@@ -361,6 +362,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
   function addOwnItem() {
     const text = ownText.trim();
     if (text.length < 2) return;
+    const currentGroupPath = openGroup ? groupTrail.join(" > ") : null;
     setChosen((current) => [
       ...current,
       {
@@ -369,7 +371,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
         text,
         quantity: Math.max(1, Number(ownQuantity) || 1),
         price: null,
-        groupName: null,
+        groupName: currentGroupPath,
         underKey: ownUnder,
         isHeading: false,
         note: "",
@@ -398,17 +400,25 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
   }
 
   function resolveGroupHierarchy(groupName: string | null, groups: ListShopGroup[]): string[] {
-    if (!groupName) return ["General Items"];
+    if (!groupName || !groupName.trim()) return ["General Items"];
+
+    // If groupName already contains hierarchy path (e.g. "Screenguard > 21D")
+    if (groupName.includes(" > ")) {
+      const parts = groupName.split(" > ").map((s) => s.trim()).filter(Boolean);
+      if (parts.length > 0) return parts;
+    }
+
+    // Otherwise walk the parent_name links in groups
     const hierarchy: string[] = [];
-    let current: string | null = groupName;
+    let current: string | null = groupName.trim();
     const visited = new Set<string>();
     while (current && !visited.has(current.toLowerCase())) {
       visited.add(current.toLowerCase());
       hierarchy.unshift(current);
       const foundGroup = groups.find((g) => g.name.toLowerCase() === current!.toLowerCase());
-      current = foundGroup?.parent_name ?? null;
+      current = foundGroup?.parent_name ? foundGroup.parent_name.trim() : null;
     }
-    return hierarchy.length > 0 ? hierarchy : [groupName];
+    return hierarchy.length > 0 ? hierarchy : [groupName.trim()];
   }
 
   function resolveHeadingHierarchy(headingKey: string, allHeadings: ChosenLine[]): string[] {
@@ -579,7 +589,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     context.fillStyle = "#0b5d3b";
     context.font = "bold 22px system-ui, sans-serif";
     context.fillText(
-      includePrices ? "ORDER LIST (ESTIMATED PRICES)" : "MARKET TRUST WAYBILL (QUANTITIES ONLY)",
+      includePrices ? "ORDER LIST" : "ORDER WAYBILL",
       48,
       172,
     );
@@ -658,7 +668,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
       );
     } else {
       context.fillText(
-        `Total: ${items.length} ${items.length === 1 ? "item" : "items"} (Trust Waybill - Quote upon confirmation)`,
+        `Total: ${items.length} ${items.length === 1 ? "item" : "items"}`,
         48,
         y + 54,
       );
@@ -757,7 +767,10 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
   }
 
   function shareOnWhatsApp() {
-    const cleanNumber = (shop.contact_phone ?? "").replace(/[^\d]/g, "");
+    let cleanNumber = (shop.contact_phone ?? "").replace(/[^\d]/g, "");
+    if (cleanNumber.startsWith("0")) {
+      cleanNumber = "234" + cleanNumber.slice(1);
+    }
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     const listUrl = sent?.listPath ? `${origin}${sent.listPath}` : `${origin}/list/${shop.tenant_slug}`;
     const structuredSections = buildHierarchicalSections();
@@ -1345,13 +1358,11 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
                                     <ItemBoxIcon size={16} className={styles.rowItemIcon} />
                                     <span className={styles.rowName}>{line.text}</span>
                                   </span>
-                                  <span className={styles.rowMeta}>
-                                    {includePrices
-                                      ? line.price === null
-                                        ? "the shop will price it"
-                                        : formatMoneyOrOnRequest(line.price)
-                                      : "Priced upon confirmation / Trust quote"}
-                                  </span>
+                                  {includePrices ? (
+                                    <span className={styles.rowMeta}>
+                                      {line.price === null ? "Price to be confirmed" : formatMoneyOrOnRequest(line.price)}
+                                    </span>
+                                  ) : null}
                                 </span>
                                 <span className={styles.stepper}>
                                   <button
@@ -1397,22 +1408,17 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
             <div className={styles.trustModeCard}>
               <div className={styles.trustModeHeader}>
                 <span className={styles.trustModeBadge}>
-                  {includePrices ? "Catalog Prices Shown" : "Market Trust Mode (Quantities Only)"}
+                  {includePrices ? "Catalog Prices Included" : "Quantities Only"}
                 </span>
                 <button
                   type="button"
                   className={styles.trustModeToggleBtn}
                   onClick={() => setIncludePrices((p) => !p)}
                 >
-                  {includePrices ? "Switch to Quantities Only" : "Show Estimated Prices"}
+                  {includePrices ? "Show Quantities Only" : "Show Catalog Prices"}
                 </button>
               </div>
-              <p className={styles.trustModeDesc}>
-                {includePrices
-                  ? "Items display catalog reference prices. Final balance is confirmed upon packing."
-                  : "Prices omitted from the order waybill. Quantities are confirmed first, and your quote or balance is settled after market sourcing."}
-              </p>
-              <div className={styles.waybillDownloadRow}>
+              <div className={styles.waybillDownloadRow} style={{ marginTop: "10px" }}>
                 <button
                   type="button"
                   className={styles.pdfDownloadBtn}
