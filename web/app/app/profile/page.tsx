@@ -32,6 +32,7 @@ import {
   type UserProfile,
 } from "@/lib/api";
 import { explainFailure, type Explained } from "@/lib/errors";
+import { formatMoney } from "@/lib/format";
 import {
   PASSWORD_MINIMUM_LENGTH,
   passwordChecks,
@@ -41,6 +42,23 @@ import { CheckList, StrengthMeter } from "@/components/ui";
 import styles from "./profile.module.css";
 
 type Notice = { message: string; tone: "good" | "bad"; hint?: string };
+
+function isDarkColor(hex: string): boolean {
+  const clean = hex.replace("#", "");
+  if (clean.length === 3) {
+    const r = parseInt(clean[0] + clean[0], 16);
+    const g = parseInt(clean[1] + clean[1], 16);
+    const b = parseInt(clean[2] + clean[2], 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5;
+  }
+  if (clean.length === 6) {
+    const r = parseInt(clean.slice(0, 2), 16);
+    const g = parseInt(clean.slice(2, 4), 16);
+    const b = parseInt(clean.slice(4, 6), 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5;
+  }
+  return false;
+}
 
 export default function Profile() {
   const router = useRouter();
@@ -140,11 +158,31 @@ export default function Profile() {
           let loadedHeadline = "";
           let loadedDesc = "";
           let loadedPhone = "";
+          let themeColorFromDesc: string | null = null;
+          let themeBgFromDesc: string | null = null;
+          let themeBgImageFromDesc: string | null = null;
           try {
             const sf = await getStorefront(chosen.id);
             loadedHeadline = sf.headline ?? "";
-            loadedDesc = sf.description ?? "";
+            const rawDesc = sf.description ?? "";
             loadedPhone = sf.contact_phone ?? "";
+
+            // Parse embedded theme if present
+            const themeMatch = rawDesc.match(/<!--\s*ahia-theme:({[\s\S]*?})\s*-->/);
+            if (themeMatch) {
+              try {
+                const parsed = JSON.parse(themeMatch[1]);
+                if (parsed.color) themeColorFromDesc = parsed.color;
+                if (parsed.bg) themeBgFromDesc = parsed.bg;
+                if (parsed.bgImage) themeBgImageFromDesc = parsed.bgImage;
+              } catch {
+                // ignore parse failure
+              }
+              loadedDesc = rawDesc.replace(/<!--\s*ahia-theme:[\s\S]*?-->/g, "").trim();
+            } else {
+              loadedDesc = rawDesc;
+            }
+
             setStorefrontHeadline(loadedHeadline);
             setStorefrontDescription(loadedDesc);
             setStorefrontPhone(loadedPhone);
@@ -152,9 +190,9 @@ export default function Profile() {
             // storefront might not be created or published yet
           }
 
-          let loadedColor = "#084a2f";
-          let loadedBg = "#fbf7f0";
-          let loadedBgImage = "";
+          let loadedColor = themeColorFromDesc || "#084a2f";
+          let loadedBg = themeBgFromDesc || "#fbf7f0";
+          let loadedBgImage = themeBgImageFromDesc || "";
           if (typeof window !== "undefined") {
             try {
               const savedTheme = window.localStorage.getItem(`ahia.theme.${chosen.id}`);
@@ -162,21 +200,21 @@ export default function Profile() {
                 const parsed = JSON.parse(savedTheme);
                 if (parsed.color) {
                   loadedColor = parsed.color;
-                  setThemeColor(parsed.color);
                 }
                 if (parsed.bg) {
                   loadedBg = parsed.bg;
-                  setThemeBg(parsed.bg);
                 }
                 if (parsed.bgImage) {
                   loadedBgImage = parsed.bgImage;
-                  setThemeBgImage(parsed.bgImage);
                 }
               }
             } catch {
               // ignore parse errors
             }
           }
+          setThemeColor(loadedColor);
+          setThemeBg(loadedBg);
+          setThemeBgImage(loadedBgImage);
 
           setInitialAppearance({
             headline: loadedHeadline,
@@ -578,14 +616,14 @@ export default function Profile() {
                   </span>
                   <div className={styles.presetThemesGrid}>
                     {[
-                      { name: "Alaba Emerald", color: "#084a2f", bg: "#fbf7f0" },
-                      { name: "Balogun Navy", color: "#1e3a8a", bg: "#f8fafc" },
-                      { name: "Idumota Wine", color: "#831843", bg: "#fff1f2" },
-                      { name: "Trade Fair Amber", color: "#b45309", bg: "#fefce8" },
-                      { name: "Computer Village Cyan", color: "#0e7490", bg: "#f0fdfa" },
-                      { name: "Onitsha Violet", color: "#581c87", bg: "#faf5ff" },
-                      { name: "Lagos Slate", color: "#1e293b", bg: "#f1f5f9" },
-                      { name: "Midnight Onyx", color: "#0f172a", bg: "#18181b" },
+                      { name: "Classic Forest Green", color: "#084a2f", bg: "#fbf7f0" },
+                      { name: "Deep Navy Blue", color: "#1e3a8a", bg: "#f8fafc" },
+                      { name: "Burgundy Wine", color: "#831843", bg: "#fff1f2" },
+                      { name: "Warm Amber Gold", color: "#b45309", bg: "#fefce8" },
+                      { name: "Steel Cyan", color: "#0e7490", bg: "#f0fdfa" },
+                      { name: "Royal Purple", color: "#581c87", bg: "#faf5ff" },
+                      { name: "Charcoal Slate", color: "#1e293b", bg: "#f1f5f9" },
+                      { name: "Dark Onyx", color: "#0f172a", bg: "#18181b" },
                     ].map((preset) => {
                       const isSelected = themeColor === preset.color && themeBg === preset.bg;
                       return (
@@ -677,10 +715,10 @@ export default function Profile() {
                   <span style={{ fontSize: "13px", fontWeight: 700 }}>Shop Background Surface</span>
                   <div className={styles.shadesRow} style={{ marginTop: "8px" }}>
                     {[
-                      { name: "Warm Sand", color: "#fbf7f0" },
-                      { name: "Clean White", color: "#ffffff" },
-                      { name: "Soft Cream", color: "#fefce8" },
-                      { name: "Cool Frost", color: "#f8fafc" },
+                      { name: "Warm Sand (Default)", color: "#fbf7f0" },
+                      { name: "Pure White", color: "#ffffff" },
+                      { name: "Soft Ivory", color: "#fefce8" },
+                      { name: "Cool Ice", color: "#f8fafc" },
                       { name: "Pale Mint", color: "#f0fdf4" },
                       { name: "Dark Charcoal", color: "#18181b" },
                     ].map((item) => (
@@ -802,35 +840,52 @@ export default function Profile() {
                           : styles.previewFrameDesktop
                       }
                     >
+                      {previewMode === "desktop" ? (
+                        <div className={styles.browserChrome}>
+                          <div className={styles.browserDots}>
+                            <span className={styles.browserDotRed} />
+                            <span className={styles.browserDotYellow} />
+                            <span className={styles.browserDotGreen} />
+                          </div>
+                          <div className={styles.browserUrlBar}>
+                            ahia.ng/shop/{business.public_path}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className={styles.phoneNotchBar}>
+                          <div className={styles.phoneSpeaker} />
+                        </div>
+                      )}
+
+                      {/* Storefront Header */}
+                      <div className={styles.mockupHeader}>
+                        <div className={styles.mockupBrandGroup}>
+                          <span
+                            className={styles.mockupAvatar}
+                            style={{ background: themeColor }}
+                          >
+                            {business.name.slice(0, 2).toUpperCase()}
+                          </span>
+                          <span className={styles.mockupShopNameTop}>{business.name}</span>
+                        </div>
+                        <span className={styles.mockupListBtn}>Build your list</span>
+                      </div>
+
+                      {/* Storefront Hero Banner */}
                       <div
                         className={styles.mockupBanner}
                         style={{
                           backgroundColor: themeBg,
                           backgroundImage: themeBgImage ? `url(${themeBgImage})` : undefined,
-                          color: "#1e1b16",
+                          color: isDarkColor(themeBg) ? "#f0ede6" : "var(--ink)",
                         }}
                       >
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                          <span
-                            style={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: "6px",
-                              background: themeColor,
-                              color: "#fff",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontWeight: 800,
-                              fontSize: "11px",
-                            }}
-                          >
-                            {business.name.slice(0, 2).toUpperCase()}
-                          </span>
-                          <span style={{ fontSize: "11px", fontWeight: 700, color: themeColor }}>
-                            Official Storefront
-                          </span>
-                        </div>
+                        <span
+                          className={styles.mockupBadge}
+                          style={{ background: themeColor }}
+                        >
+                          Official Storefront
+                        </span>
                         <span className={styles.mockupTitle}>{business.name}</span>
                         <span className={styles.mockupHeadline}>
                           {storefrontHeadline || "Wholesale & Retail Market Catalog"}
@@ -838,16 +893,20 @@ export default function Profile() {
                         {storefrontDescription ? (
                           <p className={styles.mockupDesc}>{storefrontDescription}</p>
                         ) : null}
-                        <span
-                          className={styles.mockupPhoneBadge}
-                          style={{ background: themeColor, color: "#ffffff" }}
-                        >
-                          Order on WhatsApp: {storefrontPhone || business.phone || "08012345678"}
-                        </span>
+                        <div className={styles.mockupActionsRow}>
+                          <span
+                            className={styles.mockupPrimaryBtn}
+                            style={{ background: themeColor }}
+                          >
+                            Build your list
+                          </span>
+                          <span className={styles.mockupWhatsAppBtn}>WhatsApp</span>
+                        </div>
                       </div>
 
+                      {/* Storefront Content Grid */}
                       <div className={styles.mockupContent}>
-                        <div style={{ display: "flex", gap: "8px", overflowX: "hidden" }}>
+                        <div className={styles.mockupPillsRow}>
                           <span
                             style={{
                               fontSize: "11px",
@@ -858,7 +917,7 @@ export default function Profile() {
                               color: "#fff",
                             }}
                           >
-                            All Items
+                            All Items (12)
                           </span>
                           <span
                             style={{
@@ -866,11 +925,11 @@ export default function Profile() {
                               fontWeight: 600,
                               padding: "4px 10px",
                               borderRadius: "999px",
-                              background: "#e7dfd2",
-                              color: "#1e1b16",
+                              background: "#e2e8f0",
+                              color: "#334155",
                             }}
                           >
-                            Screenguards
+                            Screenguards (8)
                           </span>
                           <span
                             style={{
@@ -878,35 +937,70 @@ export default function Profile() {
                               fontWeight: 600,
                               padding: "4px 10px",
                               borderRadius: "999px",
-                              background: "#e7dfd2",
-                              color: "#1e1b16",
+                              background: "#e2e8f0",
+                              color: "#334155",
                             }}
                           >
-                            Fast Chargers
+                            Chargers (4)
                           </span>
                         </div>
 
                         <div className={styles.mockupProductGrid}>
                           <div className={styles.mockupProductCard}>
-                            <span className={styles.mockupProductName}>21D Hot 8 / Hot 9</span>
-                            <span
-                              className={styles.mockupProductPrice}
-                              style={{ color: themeColor }}
-                            >
-                              NGN 350 / pack
-                            </span>
+                            <div className={styles.mockupProductThumb}>
+                              21D Hot 8
+                            </div>
+                            <div className={styles.mockupProductDetails}>
+                              <span className={styles.mockupProductTag}>Screenguard</span>
+                              <span className={styles.mockupProductName}>21D Hot 8 / Hot 9</span>
+                              <span
+                                className={styles.mockupProductPrice}
+                                style={{ color: themeColor }}
+                              >
+                                {formatMoney(350)} / pack
+                              </span>
+                            </div>
+                            <div className={styles.mockupCardAdd} style={{ color: themeColor }}>
+                              Add to list +
+                            </div>
                           </div>
                           <div className={styles.mockupProductCard}>
-                            <span className={styles.mockupProductName}>Fast 65W Type-C Cable</span>
-                            <span
-                              className={styles.mockupProductPrice}
-                              style={{ color: themeColor }}
-                            >
-                              NGN 1,200
-                            </span>
+                            <div className={styles.mockupProductThumb}>
+                              65W Fast
+                            </div>
+                            <div className={styles.mockupProductDetails}>
+                              <span className={styles.mockupProductTag}>Accessories</span>
+                              <span className={styles.mockupProductName}>Fast 65W Type-C</span>
+                              <span
+                                className={styles.mockupProductPrice}
+                                style={{ color: themeColor }}
+                              >
+                                {formatMoney(1200)}
+                              </span>
+                            </div>
+                            <div className={styles.mockupCardAdd} style={{ color: themeColor }}>
+                              Add to list +
+                            </div>
                           </div>
                         </div>
                       </div>
+
+                      {previewMode === "mobile" ? (
+                        <div className={styles.mockupMobileFloatingBar}>
+                          <span
+                            className={styles.mockupPrimaryBtn}
+                            style={{ background: themeColor, flex: 1, textAlign: "center" }}
+                          >
+                            Build your list
+                          </span>
+                          <span
+                            className={styles.mockupWhatsAppBtn}
+                            style={{ flex: 1, textAlign: "center" }}
+                          >
+                            WhatsApp
+                          </span>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -937,7 +1031,9 @@ export default function Profile() {
                           bg: themeBg,
                           bgImage: themeBgImage.startsWith("http") ? themeBgImage.trim() : "",
                         })} -->`;
-                        const fullDescription = `${storefrontDescription.trim()}${themeTrailer}`;
+                        const cleanDesc = storefrontDescription.replace(/<!--\s*ahia-theme:[\s\S]*?-->/g, "").trim();
+                        const safeDesc = cleanDesc.slice(0, 800);
+                        const fullDescription = `${safeDesc}${themeTrailer}`;
 
                         await updateStorefront(business.id, {
                           headline: storefrontHeadline.trim() || null,

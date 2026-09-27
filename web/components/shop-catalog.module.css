@@ -174,28 +174,51 @@
   flex-direction: column;
 }
 
+.cardInner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.cardInner:hover {
+  transform: translateY(-2px);
+  border-color: var(--shop-accent, var(--leaf));
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
 .cardLink {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  height: 100%;
+  flex: 1;
   padding: var(--space-2);
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
   text-decoration: none;
   color: inherit;
-  box-shadow: var(--shadow-sm);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.cardLink:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+.quickAddBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px;
+  background: var(--sand-2);
+  color: var(--shop-accent, var(--leaf-dark));
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  border-top: 1px solid var(--line);
+  transition: all 0.15s ease;
 }
 
-.cardLink:active {
-  transform: scale(0.985);
+.quickAddBtn:hover {
+  background: var(--shop-accent, var(--leaf));
+  color: #ffffff;
 }
 
 .imageWrap {

@@ -219,6 +219,23 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     return shop.groups.filter((group) => group.parent_name === openGroup);
   }, [openGroup, shop.groups]);
 
+  /** The full ancestor chain for the currently open group so customers can step back up through each parent. */
+  const groupTrail = useMemo(() => {
+    if (!openGroup) return [];
+    const trail: string[] = [];
+    let curr: string | null = openGroup;
+    const visited = new Set<string>();
+    while (curr && !visited.has(curr.toLowerCase())) {
+      visited.add(curr.toLowerCase());
+      trail.unshift(curr);
+      const parent = shop.groups.find(
+        (g) => g.name.toLowerCase() === curr!.toLowerCase(),
+      )?.parent_name ?? null;
+      curr = parent;
+    }
+    return trail;
+  }, [openGroup, shop.groups]);
+
   const specialsHere = useMemo(() => {
     if (openGroup === null) return [];
     return shop.products.filter(
@@ -296,6 +313,22 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     });
     setProblem(null);
   }
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const addSlug = params.get("add");
+    if (addSlug) {
+      const match = shop.products.find((p) => p.product_slug === addSlug);
+      if (match) {
+        addProduct(match);
+        setShowingList(true);
+        const url = new URL(window.location.href);
+        url.searchParams.delete("add");
+        window.history.replaceState({}, "", url.toString());
+      }
+    }
+  }, [shop.products]);
 
   function addHeading() {
     const text = newHeading.trim();
@@ -738,13 +771,13 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
               className={styles.secondaryPdf}
               onClick={downloadPdfDocument}
             >
-              Download Multi-Page PDF Waybill
+              Download Printable Order List
             </button>
           </div>
           {picture ? (
             <>
               <p className={styles.doneText}>
-                This is the list they received. You can send it on WhatsApp or keep the downloaded PDF for transporters, driver waybills, and your records.
+                This is the list they received. You can send it on WhatsApp or keep your downloaded list for transporters, market waybills, and your records.
               </p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img className={styles.preview} src={picture} alt="Your list" />
@@ -760,19 +793,40 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
       <header className={styles.header}>
         <p className={styles.kicker}>Sending a list to</p>
         <h1 className={styles.shopName}>{shop.business_name}</h1>
-        {openGroup === null ? (
-          <nav className={styles.crumbs} aria-label="Where you are">
+        <nav className={styles.crumbs} aria-label="Where you are">
+          {groupTrail.length === 0 ? (
             <span className={styles.crumbNow}>All of the shop</span>
-          </nav>
-        ) : (
-          <nav className={styles.crumbs} aria-label="Where you are">
-            <button type="button" className={styles.crumbLink} onClick={() => setOpenGroup(null)}>
-              All of the shop
-            </button>
-            <ChevronRightIcon size={12} className={styles.crumbSep} />
-            <span className={styles.crumbNow}>{openGroup}</span>
-          </nav>
-        )}
+          ) : (
+            <>
+              <button
+                type="button"
+                className={styles.crumbLink}
+                onClick={() => setOpenGroup(null)}
+              >
+                All of the shop
+              </button>
+              {groupTrail.map((crumb, idx) => {
+                const isLast = idx === groupTrail.length - 1;
+                return (
+                  <span key={crumb} className={styles.crumbItem}>
+                    <ChevronRightIcon size={12} className={styles.crumbSep} />
+                    {isLast ? (
+                      <span className={styles.crumbNow}>{crumb}</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className={styles.crumbLink}
+                        onClick={() => setOpenGroup(crumb)}
+                      >
+                        {crumb}
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
+            </>
+          )}
+        </nav>
       </header>
 
       {isOffline ? (
@@ -1225,7 +1279,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
                   className={styles.pdfDownloadBtn}
                   onClick={downloadPdfDocument}
                 >
-                  Download Waybill PDF
+                  Download Printable Order List
                 </button>
               </div>
             </div>

@@ -226,34 +226,43 @@ function ProductCard({
 }) {
   return (
     <li className={styles.card}>
-      <Link
-        className={styles.cardLink}
-        href={`/shop/${tenantSlug}/product/${product.product_slug}`}
-        prefetch
-      >
-        <span className={styles.imageWrap}>
-          {product.primary_image_url ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              className={styles.image}
-              src={product.primary_image_url}
-              alt={product.name}
-              loading="lazy"
-              decoding="async"
-            />
-          ) : (
-            <span className={styles.imagePlaceholder} aria-hidden>
-              <BrandMark size={24} />
-            </span>
-          )}
-          {product.is_special ? <span className={styles.specialBadge}>Special</span> : null}
-        </span>
-        {product.group_name ? (
-          <span className={styles.categoryTag}>{product.group_name}</span>
-        ) : null}
-        <span className={styles.productName}>{product.name}</span>
-        <span className={styles.price}>{formatMoneyOrOnRequest(product.selling_price)}</span>
-      </Link>
+      <div className={styles.cardInner}>
+        <Link
+          className={styles.cardLink}
+          href={`/shop/${tenantSlug}/product/${product.product_slug}`}
+          prefetch
+        >
+          <span className={styles.imageWrap}>
+            {product.primary_image_url ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                className={styles.image}
+                src={product.primary_image_url}
+                alt={product.name}
+                loading="lazy"
+                decoding="async"
+              />
+            ) : (
+              <span className={styles.imagePlaceholder} aria-hidden>
+                <BrandMark size={24} />
+              </span>
+            )}
+            {product.is_special ? <span className={styles.specialBadge}>Special</span> : null}
+          </span>
+          {product.group_name ? (
+            <span className={styles.categoryTag}>{product.group_name}</span>
+          ) : null}
+          <span className={styles.productName}>{product.name}</span>
+          <span className={styles.price}>{formatMoneyOrOnRequest(product.selling_price)}</span>
+        </Link>
+        <Link
+          className={styles.quickAddBtn}
+          href={`/list/${tenantSlug}?add=${encodeURIComponent(product.product_slug)}`}
+          aria-label={`Add ${product.name} to list`}
+        >
+          <span>Add to list +</span>
+        </Link>
+      </div>
     </li>
   );
 }

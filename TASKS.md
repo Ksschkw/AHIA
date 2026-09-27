@@ -4259,3 +4259,23 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
 3. **Decoupling Prices from List Building ("Trust Mode" / Market Quotes)**:
    - In Alaba trade, customers (like my dad's customer in Ibadan who sends 1 million Naira or sends a list first to be sourced) don't always need or want prices during initial list preparation. The market trader goes into the market, confirms availability across lines, and calculates the balance/quote afterwards.
    - Delivered Alaba Trust Mode (`includePrices: false` by default). The canvas waybill image and PDF waybill document clearly format as `MARKET TRUST WAYBILL (QUANTITIES ONLY)` with prices omitted until market sourcing and packing. Customers can switch between Trust Mode and Catalog Reference Prices via an interactive toggle in list review.
+
+### 17.4 Multi-Tier Breadcrumbs, Instant Customization Reflection & Natural Market Voice `[x]`
+1. **Multi-Tier Breadcrumb Hierarchy in List Builder (`/list/[slug]`)** `[x]`:
+   - When tapping through categories and subcategories in the list builder (e.g. from Screenguard into 21D), the breadcrumb previously only showed `All of the shop > 21d`. If you tap a subcategory, you need to see the full path `All of the shop > screenguard > 21d` so you can tap any parent level to step straight back up without getting lost or sent all the way back to the root.
+   - Built recursive ancestor traversal (`groupTrail`) in `web/components/list-builder.tsx` walking `parent_name` up the category chain. Every parent node renders as a clickable link with chevron separators, and the active leaf is clearly styled.
+2. **Natural Market Language (No Technical File Jargon)** `[x]`:
+   - Alaba traders and customers do not talk about "Build waybill list/pdf" or "PDF & Image". They want to make their order list cleanly.
+   - Replaced all technical format jargon across `web/app/shop/[slug]/page.tsx` and `web/components/list-builder.tsx` with natural trader phrasing: "Build your list" and "Download Printable Order List".
+3. **Clean Aesthetic Theme Names & High-Fidelity Studio Preview (`/app/profile`)** `[x]`:
+   - Replaced artificial market preset labels with clean, professional aesthetic themes: Classic Forest Green, Deep Navy Blue, Burgundy Wine, Warm Amber Gold, Steel Cyan, Royal Purple, Charcoal Slate, and Dark Onyx.
+   - Replaced generic preview mockup with a responsive, high-fidelity miniature matching the real public shop: macOS browser chrome header with URL bar in desktop mode, phone notch bar in mobile mode, verified store badges, category pills with counts, realistic product cards with Naira prices, and mobile floating quick-order bottom bar.
+4. **Instant Theme Reflection (No Edge Caching Delays)** `[x]`:
+   - Previously, Next.js server edge caching (`revalidate = 60`) caused public shop pages to serve stale HTML for 60 seconds after a trader saved theme changes in the studio.
+   - Switched public storefront to dynamic on-demand rendering (`dynamic = "force-dynamic"`, `revalidate = 0`) and disabled caching in server API fetches (`cache: "no-store"`).
+   - Added synchronous inline hydration script in `web/app/shop/[slug]/page.tsx` to immediately apply localStorage theme variables with 0ms latency on the merchant's device.
+   - Cleaned `description` loading and saving in `/app/profile` to prevent duplicate theme comment accumulation and enforce description length limits.
+5. **Modern Storefront Webapp UI/UX Overhaul (`/shop/[slug]`)** `[x]`:
+   - Polished product cards in `web/components/shop-catalog.tsx` with subtle hover elevations, Naira currency formatting, and a dedicated 1-tap "Add to list +" action button.
+   - Added direct URL query parameter support (`/list/[slug]?add=[product_slug]`) so tapping "Add to list +" on any catalog card immediately adds the item and opens the list review drawer.
+   - Added sticky mobile floating action bar (`Build your list` and `WhatsApp`) for one-thumb mobile shopping.

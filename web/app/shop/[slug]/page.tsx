@@ -52,12 +52,8 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   };
 }
 
-/**
- * Regenerated in the background at most once a minute, and served from the edge in between.
- * A shop's page changes when the trader edits it and not before, so making a customer wait for a fresh
- * round trip on every visit was paying for nothing.
- */
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function extractStorefrontTheme(description: string | null | undefined): {
   cleanDescription: string;
@@ -126,6 +122,7 @@ export default async function ShopPage({ params }: Params) {
 
   return (
     <main
+      id="shop_root"
       className={styles.page}
       style={
         {
@@ -136,6 +133,11 @@ export default async function ShopPage({ params }: Params) {
         } as React.CSSProperties
       }
     >
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `(function(){try{var s=window.localStorage.getItem('ahia.theme.${shop.tenant_slug}');if(s){var d=JSON.parse(s);var el=document.getElementById('shop_root');if(el){if(d.color)el.style.setProperty('--shop-theme-color',d.color);if(d.bg)el.style.setProperty('--shop-theme-bg',d.bg);if(d.bgImage)el.style.setProperty('--shop-theme-bg-image','url('+d.bgImage+')');}}}catch(e){}})();`,
+        }}
+      />
       <header className={styles.header}>
         <div className={styles.headerInner}>
           <div className={styles.shopBrandHeader}>
@@ -149,7 +151,7 @@ export default async function ShopPage({ params }: Params) {
           </div>
           <div className={styles.headerRight}>
             <Link className={styles.listShortcutBtn} href={`/list/${shop.tenant_slug}`}>
-              Build List
+              Build your list
             </Link>
             {whatsapp ? (
               <a className={styles.headerCta} href={whatsapp} rel="noreferrer noopener" target="_blank">
@@ -171,7 +173,7 @@ export default async function ShopPage({ params }: Params) {
 
         <div className={styles.heroActions}>
           <Link className={styles.primary} href={`/list/${shop.tenant_slug}`}>
-            Build Waybill List (PDF & Image)
+            Build your list
           </Link>
           {whatsapp ? (
             <a className={styles.secondary} href={whatsapp} rel="noreferrer noopener" target="_blank">
@@ -205,7 +207,7 @@ export default async function ShopPage({ params }: Params) {
         </p>
         <div className={styles.heroActions}>
           <Link className={styles.primary} href={`/list/${shop.tenant_slug}`}>
-            Build your list here
+            Build your list
           </Link>
           {whatsapp ? (
             <a className={styles.secondary} href={whatsapp} rel="noreferrer noopener" target="_blank">
@@ -226,6 +228,22 @@ export default async function ShopPage({ params }: Params) {
           <span className={styles.footerNote}>Verified Merchant - Powered by AHIA</span>
         </div>
       </footer>
+
+      <div className={styles.mobileFloatingBar}>
+        <Link className={styles.mobileFloatingPrimary} href={`/list/${shop.tenant_slug}`}>
+          Build your list
+        </Link>
+        {whatsapp ? (
+          <a
+            className={styles.mobileFloatingWhatsApp}
+            href={whatsapp}
+            rel="noreferrer noopener"
+            target="_blank"
+          >
+            WhatsApp
+          </a>
+        ) : null}
+      </div>
     </main>
   );
 }

@@ -70,7 +70,7 @@ async function getJson<T>(path: string): Promise<T | null> {
     // second click is instant, a price he changed a minute ago is already live, and the shop stays
     // readable even while the API is briefly unwell.
     const response = await fetch(`${API_BASE_URL}${path}`, {
-      next: { revalidate: 60, tags: [`shop:${path}`] },
+      cache: "no-store",
       headers: { Accept: "application/json" },
     });
     if (!response.ok) {
