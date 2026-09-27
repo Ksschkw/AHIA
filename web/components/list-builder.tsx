@@ -37,6 +37,7 @@ import {
 import { EmptyBasketIllustration } from "@/components/illustrations";
 import { getCustomerPastLists, type CustomerListSummary } from "@/lib/api";
 import { formatMoneyOrOnRequest } from "@/lib/format";
+import { downloadWaybillPdf, type WaybillDocument, type WaybillSection } from "@/lib/waybill-pdf";
 import styles from "./list-builder.module.css";
 
 export interface ListShopProduct {
@@ -139,6 +140,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
   const [isOffline, setIsOffline] = useState(false);
   const [quickPaste, setQuickPaste] = useState(false);
   const [quickPasteText, setQuickPasteText] = useState("");
+  const [includePrices, setIncludePrices] = useState(false);
 
   const headings = chosen.filter((line) => line.isHeading);
   const items = chosen.filter((line) => !line.isHeading);
@@ -355,24 +357,48 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     setChosen((current) => current.filter((line) => line.key !== key && line.underKey !== key));
   }
 
-  /** The list, drawn as the paper it replaces: category headings, the things under them, and the counts. */
-  async function drawList(): Promise<Blob | null> {
-    const width = 900;
-    const row = 44;
-
-    // Group items hierarchically: Root Category -> Sub-categories -> Items
-    interface SubSection {
-      subName: string | null;
-      lines: ChosenLine[];
+  function resolveGroupHierarchy(groupName: string | null, groups: ListShopGroup[]): string[] {
+    if (!groupName) return ["General Items"];
+    const hierarchy: string[] = [];
+    let current: string | null = groupName;
+    const visited = new Set<string>();
+    while (current && !visited.has(current.toLowerCase())) {
+      visited.add(current.toLowerCase());
+      hierarchy.unshift(current);
+      const foundGroup = groups.find((g) => g.name.toLowerCase() === current!.toLowerCase());
+      current = foundGroup?.parent_name ?? null;
     }
-    interface RootSection {
-      rootName: string;
-      subs: SubSection[];
-    }
+    return hierarchy.length > 0 ? hierarchy : [groupName];
+  }
 
+  function resolveHeadingHierarchy(headingKey: string, allHeadings: ChosenLine[]): string[] {
+    const hierarchy: string[] = [];
+    let currentKey: string | null = headingKey;
+    const visited = new Set<string>();
+    while (currentKey && !visited.has(currentKey)) {
+      visited.add(currentKey);
+      const h = allHeadings.find((line) => line.key === currentKey);
+      if (!h) break;
+      hierarchy.unshift(h.text);
+      currentKey = h.underKey;
+    }
+    return hierarchy.length > 0 ? hierarchy : ["General Items"];
+  }
+
+  interface ResolvedSubSection {
+    subName: string | null;
+    lines: ChosenLine[];
+  }
+
+  interface ResolvedRootSection {
+    rootName: string;
+    subs: ResolvedSubSection[];
+  }
+
+  function buildHierarchicalSections(): ResolvedRootSection[] {
     const rootMap = new Map<string, Map<string, ChosenLine[]>>();
 
-    function addLineToHierarchy(rootCategory: string, subCategory: string | null, line: ChosenLine) {
+    function addLine(rootCategory: string, subCategory: string | null, line: ChosenLine) {
       const root = rootCategory.trim() || "General Items";
       const sub = subCategory ? subCategory.trim() : "__direct__";
       if (!rootMap.has(root)) {
@@ -385,47 +411,24 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
       subs.get(sub)!.push(line);
     }
 
-    if (headings.length > 0) {
-      // Top-level headings have underKey === null
-      const topHeadings = headings.filter((h) => h.underKey === null);
-      for (const th of topHeadings) {
-        // Direct child items
-        const directItems = items.filter((l) => l.underKey === th.key);
-        for (const item of directItems) {
-          addLineToHierarchy(th.text, null, item);
-        }
-        // Sub-headings under this top heading
-        const childHeadings = headings.filter((h) => h.underKey === th.key);
-        for (const ch of childHeadings) {
-          const subItems = items.filter((l) => l.underKey === ch.key);
-          for (const item of subItems) {
-            addLineToHierarchy(th.text, ch.text, item);
-          }
-        }
+    for (const item of items) {
+      let path: string[];
+      if (item.underKey) {
+        path = resolveHeadingHierarchy(item.underKey, headings);
+      } else if (item.groupName) {
+        path = resolveGroupHierarchy(item.groupName, shop.groups);
+      } else {
+        path = ["General Items"];
       }
-      // Any items without customer heading assignment: use groupName hierarchy if available
-      const unassigned = items.filter((l) => l.underKey === null);
-      for (const item of unassigned) {
-        const path = item.groupName ?? "Other Items";
-        const parts = path.split(" > ").map((p) => p.trim());
-        const root = parts[0] || "Other Items";
-        const sub = parts.length > 1 ? parts.slice(1).join(" > ") : null;
-        addLineToHierarchy(root, sub, item);
-      }
-    } else {
-      // Group by catalogue category hierarchy (e.g. Screenguard > Privacy, Screenguard > 21D)
-      for (const item of items) {
-        const path = item.groupName ?? "Items";
-        const parts = path.split(" > ").map((p) => p.trim());
-        const root = parts[0] || "Items";
-        const sub = parts.length > 1 ? parts.slice(1).join(" > ") : null;
-        addLineToHierarchy(root, sub, item);
-      }
+
+      const root = path[0] || "General Items";
+      const sub = path.length > 1 ? path.slice(1).join(" > ") : null;
+      addLine(root, sub, item);
     }
 
-    const sections: RootSection[] = [];
+    const sections: ResolvedRootSection[] = [];
     for (const [rootName, subsMap] of rootMap.entries()) {
-      const subs: SubSection[] = [];
+      const subs: ResolvedSubSection[] = [];
       for (const [subKey, lines] of subsMap.entries()) {
         subs.push({
           subName: subKey === "__direct__" ? null : subKey,
@@ -434,6 +437,66 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
       }
       sections.push({ rootName, subs });
     }
+    return sections;
+  }
+
+  function downloadPdfDocument() {
+    const structuredSections = buildHierarchicalSections();
+    const pdfSections: WaybillSection[] = structuredSections.map((sec) => {
+      const directSubs = sec.subs.filter((s) => s.subName === null);
+      const namedSubs = sec.subs.filter((s) => s.subName !== null);
+      const directItems = directSubs.flatMap((s) =>
+        s.lines.map((l) => ({
+          text: l.text,
+          quantity: l.quantity,
+          price: l.price ? formatMoneyOrOnRequest(l.price) : null,
+        })),
+      );
+      const subsections = namedSubs.map((s) => ({
+        subtitle: s.subName!,
+        items: s.lines.map((l) => ({
+          text: l.text,
+          quantity: l.quantity,
+          price: l.price ? formatMoneyOrOnRequest(l.price) : null,
+        })),
+      }));
+
+      return {
+        title: sec.rootName,
+        items: directItems.length > 0 ? directItems : undefined,
+        subsections: subsections.length > 0 ? subsections : undefined,
+      };
+    });
+
+    const doc: WaybillDocument = {
+      shopName: shop.business_name,
+      customerName: name.trim() || "A Customer",
+      customerPhone: phone.trim() || shop.contact_phone || "Not specified",
+      date: new Date().toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }),
+      includePrices,
+      totalPrice: includePrices
+        ? toBePriced > 0
+          ? `${formatMoneyOrOnRequest(total.toFixed(2))} + ${toBePriced} to price`
+          : formatMoneyOrOnRequest(total.toFixed(2))
+        : null,
+      sections: pdfSections,
+    };
+
+    const safeShopName = shop.tenant_slug || "market";
+    const dateStr = new Date().toISOString().slice(0, 10);
+    downloadWaybillPdf(doc, `${safeShopName}-waybill-${dateStr}.pdf`);
+  }
+
+  /** The list, drawn as the paper it replaces: category headings, the things under them, and the counts. */
+  async function drawList(): Promise<Blob | null> {
+    const width = 900;
+    const row = 44;
+
+    const sections = buildHierarchicalSections();
 
     const totalLinesCount = items.length;
     let totalSubsCount = 0;
@@ -462,7 +525,11 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     context.fillText(`${name.trim() || "A customer"} - ${phone.trim()}`, 48, 122);
     context.fillStyle = "#0b5d3b";
     context.font = "bold 22px system-ui, sans-serif";
-    context.fillText("ORDER LIST", 48, 172);
+    context.fillText(
+      includePrices ? "ORDER LIST (ESTIMATED PRICES)" : "MARKET TRUST WAYBILL (QUANTITIES ONLY)",
+      48,
+      172,
+    );
     context.fillStyle = "#e7dfd2";
     context.fillRect(48, 186, width - 96, 2);
 
@@ -495,16 +562,8 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
           context.fillStyle = "#1e1b16";
           context.font = "22px system-ui, sans-serif";
           const indent = sub.subName !== null ? 86 : 72;
-          let displayName = line.text;
-          if (
-            line.groupName &&
-            sub.subName !== line.groupName &&
-            sec.rootName !== line.groupName &&
-            !displayName.toLowerCase().includes(line.groupName.toLowerCase())
-          ) {
-            displayName = `${line.text} (${line.groupName})`;
-          }
-          const maxChars = sub.subName !== null ? 42 : 46;
+          const displayName = line.text;
+          const maxChars = includePrices ? 38 : 46;
           const label =
             displayName.length > maxChars
               ? `${displayName.slice(0, maxChars - 1)}...`
@@ -514,7 +573,15 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
           context.fillStyle = "#084a2f";
           context.font = "bold 22px system-ui, sans-serif";
           context.textAlign = "right";
-          context.fillText(`${line.quantity} pcs`, width - 48, y);
+
+          if (includePrices && line.price) {
+            context.fillText(`${line.quantity} pcs`, width - 180, y);
+            context.fillStyle = "#5c5549";
+            context.font = "20px system-ui, sans-serif";
+            context.fillText(formatMoneyOrOnRequest(line.price), width - 48, y);
+          } else {
+            context.fillText(`${line.quantity} pcs`, width - 48, y);
+          }
           context.textAlign = "left";
 
           y += row;
@@ -527,17 +594,25 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     context.fillStyle = "#e7dfd2";
     context.fillRect(48, y + 8, width - 96, 2);
     context.fillStyle = "#084a2f";
-    context.font = "bold 26px system-ui, sans-serif";
-    context.fillText(
-      toBePriced > 0
-        ? `${formatMoneyOrOnRequest(total.toFixed(2))} + ${toBePriced} to price`
-        : formatMoneyOrOnRequest(total.toFixed(2)),
-      48,
-      y + 58,
-    );
+    context.font = "bold 24px system-ui, sans-serif";
+    if (includePrices) {
+      context.fillText(
+        toBePriced > 0
+          ? `${formatMoneyOrOnRequest(total.toFixed(2))} + ${toBePriced} to price`
+          : formatMoneyOrOnRequest(total.toFixed(2)),
+        48,
+        y + 54,
+      );
+    } else {
+      context.fillText(
+        `Total: ${items.length} ${items.length === 1 ? "item" : "items"} (Trust Waybill - Quote upon confirmation)`,
+        48,
+        y + 54,
+      );
+    }
     context.fillStyle = "#8b8377";
     context.font = "18px system-ui, sans-serif";
-    context.fillText("Sent with AHIA", 48, y + 94);
+    context.fillText("Sent with AHIA - Alaba & Trade Fair Market Operating System", 48, y + 90);
 
     return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
   }
@@ -652,16 +727,27 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
           <p className={styles.doneText}>
             {sent} {sent === 1 ? "item" : "items"} sent. They will get back to you on {phone}.
           </p>
-          {picture ? (
-            <>
-              <p className={styles.doneText}>
-                This is the list they received. Send it on WhatsApp as well, so it sits in their messages.
-              </p>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img className={styles.preview} src={picture} alt="Your list" />
+          <div className={styles.doneActions}>
+            {picture ? (
               <button type="button" className={styles.primary} onClick={() => void sharePicture()}>
                 Send the list on WhatsApp
               </button>
+            ) : null}
+            <button
+              type="button"
+              className={styles.secondaryPdf}
+              onClick={downloadPdfDocument}
+            >
+              Download Multi-Page PDF Waybill
+            </button>
+          </div>
+          {picture ? (
+            <>
+              <p className={styles.doneText}>
+                This is the list they received. You can send it on WhatsApp or keep the downloaded PDF for transporters, driver waybills, and your records.
+              </p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img className={styles.preview} src={picture} alt="Your list" />
             </>
           ) : null}
         </section>
@@ -1074,9 +1160,11 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
                       <span className={styles.categoryBadge}>{line.groupName}</span>
                     ) : null}
                     <span className={styles.rowMeta}>
-                      {line.price === null
-                        ? "the shop will price it"
-                        : formatMoneyOrOnRequest(line.price)}
+                      {includePrices
+                        ? line.price === null
+                          ? "the shop will price it"
+                          : formatMoneyOrOnRequest(line.price)
+                        : "Priced upon confirmation / Trust quote"}
                     </span>
                   </span>
                   <span className={styles.stepper}>
@@ -1111,6 +1199,37 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
               )}
             </div>
           ))}
+
+          {chosen.length > 0 ? (
+            <div className={styles.trustModeCard}>
+              <div className={styles.trustModeHeader}>
+                <span className={styles.trustModeBadge}>
+                  {includePrices ? "Catalog Prices Shown" : "Market Trust Mode (Quantities Only)"}
+                </span>
+                <button
+                  type="button"
+                  className={styles.trustModeToggleBtn}
+                  onClick={() => setIncludePrices((p) => !p)}
+                >
+                  {includePrices ? "Switch to Quantities Only" : "Show Estimated Prices"}
+                </button>
+              </div>
+              <p className={styles.trustModeDesc}>
+                {includePrices
+                  ? "Items display catalog reference prices. Final balance is confirmed upon packing."
+                  : "Prices omitted from the order waybill. Quantities are confirmed first, and your quote or balance is settled after market sourcing."}
+              </p>
+              <div className={styles.waybillDownloadRow}>
+                <button
+                  type="button"
+                  className={styles.pdfDownloadBtn}
+                  onClick={downloadPdfDocument}
+                >
+                  Download Waybill PDF
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           <div className={styles.who}>
             <input
@@ -1198,7 +1317,9 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
           <span className={styles.barTotal}>
             {items.length === 0
               ? "Empty"
-              : `${formatMoneyOrOnRequest(total.toFixed(2))}${toBePriced > 0 ? ` + ${toBePriced} to price` : ""}`}
+              : includePrices
+                ? `${formatMoneyOrOnRequest(total.toFixed(2))}${toBePriced > 0 ? ` + ${toBePriced} to price` : ""}`
+                : "Trust Mode (Quantities only)"}
           </span>
           <span className={styles.barAction}>{showingList ? "Hide" : "Review"}</span>
         </button>

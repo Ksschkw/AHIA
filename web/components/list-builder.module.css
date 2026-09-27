@@ -943,3 +943,109 @@
   font-weight: 700;
   cursor: pointer;
 }
+
+.trustModeCard {
+  background: var(--leaf-soft);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.trustModeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.trustModeBadge {
+  font-size: var(--text-xs);
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--leaf-dark);
+}
+
+.trustModeToggleBtn {
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--leaf-dark);
+  background: var(--card);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.trustModeToggleBtn:hover {
+  background: var(--sand-soft);
+}
+
+.trustModeDesc {
+  font-size: var(--text-xs);
+  color: var(--ink-2);
+  line-height: var(--leading-normal);
+  margin: 0;
+}
+
+.waybillDownloadRow {
+  display: flex;
+  margin-top: var(--space-1);
+}
+
+.pdfDownloadBtn {
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--leaf);
+  background: var(--card);
+  color: var(--leaf-dark);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 750;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  transition: all 0.15s ease;
+}
+
+.pdfDownloadBtn:hover {
+  background: var(--leaf-soft);
+}
+
+.doneActions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.secondaryPdf {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--leaf);
+  background: var(--card);
+  color: var(--leaf-dark);
+  font-size: var(--text-md);
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.secondaryPdf:hover {
+  background: var(--leaf-soft);
+}

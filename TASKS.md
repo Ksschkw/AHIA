@@ -101,7 +101,7 @@ assertion in a commit message.
 | M23 | Responsiveness, truthful loading states, perceived speed | `[x]` | M22 |
 | M24 | Storefront, lists, shelf, button states, render split | `[x]` | M23 |
 | M25 | Authentication continuity and the device PIN | `[x]` | M19 |
-| M26 | Named staff roles, storefront brand webapp, hierarchical waybills & trust quotes | `[ ]` | M24 |
+| M26 | Named staff roles, storefront brand webapp, hierarchical waybills & trust quotes | `[x]` | M24 |
 
 M25.1 (silent refresh session continuity) and M25.2 (device PIN for sensitive actions) are complete and verified. M20 offline mobile client foundation is complete. M26 captures real Alaba market operations, staff access gating, storefront personal branding, living color palette, and hierarchical waybills.
 
@@ -4242,13 +4242,14 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
 7. **Organized Public Shop (No Endless Flat Shelf Dump)**:
    - Instead of an endless flat list of items on generic shelves, organize the public storefront by categories and subcategories with clean tabs, filter pills, and structured category sections.
 
-### 17.3 Hierarchical Alaba Waybill Lists & Trust Quotes
+### 17.3 Hierarchical Alaba Waybill Lists & Trust Quotes `[x]`
 1. **Multi-Tier Category Hierarchy in Waybill Lists**:
    - In Alaba market, when making a waybill list or procurement order, items follow a strict hierarchy: a major heading (e.g., Screenguard), then subcategories (Privacy, 21D, Ceramic), and then the phone models with quantities (Hot 8 - 10 pcs, Hot 9 - 10 pcs).
-   - The list builder and order generator must preserve this multi-tier hierarchy without flattening everything.
+   - Delivered `resolveGroupHierarchy` and `resolveHeadingHierarchy` in `web/components/list-builder.tsx`, recursively walking `shop.groups` (`parent_name`) and customer headings (`underKey`) to preserve multi-tier breadcrumb depth.
 2. **Downloadable PDF Waybill for Long Orders**:
    - While canvas image generation works great for short lists, a large customer order with dozens or hundreds of items across many subcategories creates an impractically tall image that WhatsApp compresses into unreadable blur.
-   - Provide a clean, branded PDF export option that pagination-splits long waybill orders with header, line numbers, category headings, and totals.
+   - Built pure-TypeScript multi-page PDF-1.4 generator (`web/lib/waybill-pdf.ts`) with zero external dependencies. Features market header branding, customer contact card, category headers with green accents, subcategory dividers, quantity badges, running page numbering (`Page X of Y`), and legal market footer.
+   - Added instant PDF download triggers to both the list builder completion screen and the review drawer.
 3. **Decoupling Prices from List Building ("Trust Mode" / Market Quotes)**:
    - In Alaba trade, customers (like my dad's customer in Ibadan who sends 1 million Naira or sends a list first to be sourced) don't always need or want prices during initial list preparation. The market trader goes into the market, confirms availability across lines, and calculates the balance/quote afterwards.
-   - List generation must support an optional "Quote / Waybill Mode" without forced pricing. Prices are finalized when generating the invoice or confirming the order.
+   - Delivered Alaba Trust Mode (`includePrices: false` by default). The canvas waybill image and PDF waybill document clearly format as `MARKET TRUST WAYBILL (QUANTITIES ONLY)` with prices omitted until market sourcing and packing. Customers can switch between Trust Mode and Catalog Reference Prices via an interactive toggle in list review.
