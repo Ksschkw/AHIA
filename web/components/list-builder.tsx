@@ -112,6 +112,18 @@ function parseQuickPaste(raw: string): Array<{ text: string; quantity: number }>
     });
 }
 
+function formatWaNumber(rawPhone: string | null | undefined): string | null {
+  if (!rawPhone) return null;
+  let digits = rawPhone.replace(/[^\d]/g, "");
+  if (!digits) return null;
+  if (digits.startsWith("234")) return digits;
+  if (digits.startsWith("0")) return "234" + digits.slice(1);
+  if (digits.length === 10 && (digits.startsWith("7") || digits.startsWith("8") || digits.startsWith("9"))) {
+    return "234" + digits;
+  }
+  return digits;
+}
+
 export function ListBuilder({ shop }: { shop: ListShop }) {
   const draftKey = `ahia.draft.${shop.tenant_slug}`;
   const historyKey = `ahia.history.${shop.tenant_slug}`;
@@ -243,11 +255,15 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     return trail;
   }, [openGroup, shop.groups]);
 
-  const specialsHere = useMemo(() => {
+  const productsHere = useMemo(() => {
     if (openGroup === null) return [];
-    return shop.products.filter(
-      (product) => product.is_special && product.group_name === openGroup,
-    );
+    const openLower = openGroup.toLowerCase();
+    return shop.products.filter((product) => {
+      if (!product.group_name) return false;
+      const gLower = product.group_name.toLowerCase();
+      const parts = gLower.split(" > ").map((p) => p.trim());
+      return parts.includes(openLower) || gLower === openLower;
+    });
   }, [openGroup, shop.products]);
 
   const [pastLists, setPastLists] = useState<CustomerListSummary[] | null>(null);
@@ -362,7 +378,11 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
   function addOwnItem() {
     const text = ownText.trim();
     if (text.length < 2) return;
-    const currentGroupPath = openGroup ? groupTrail.join(" > ") : null;
+    const currentGroupPath = openGroup
+      ? groupTrail.length > 0
+        ? groupTrail.join(" > ")
+        : openGroup
+      : null;
     setChosen((current) => [
       ...current,
       {
@@ -767,10 +787,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
   }
 
   function shareOnWhatsApp() {
-    let cleanNumber = (shop.contact_phone ?? "").replace(/[^\d]/g, "");
-    if (cleanNumber.startsWith("0")) {
-      cleanNumber = "234" + cleanNumber.slice(1);
-    }
+    const cleanNumber = formatWaNumber(shop.contact_phone);
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     const listUrl = sent?.listPath ? `${origin}${sent.listPath}` : `${origin}/list/${shop.tenant_slug}`;
     const structuredSections = buildHierarchicalSections();
@@ -790,17 +807,16 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     }
 
     const message =
-      `Hello ${shop.business_name}, I just created an order list (${items.length} items):\n` +
+      `Hello ${shop.business_name}, here is my order list (${items.length} items):\n` +
       itemsSummary +
-      `\nOrder Reference Link (View/Edit): ${listUrl}\n` +
-      `Customer: ${name.trim() || "Customer"} (${phone.trim()})\n` +
-      `Mode: ${includePrices ? "Estimated Catalog Prices" : "Market Trust Mode (Quantities Only)"}`;
+      `\nOpen & Edit Live Order: ${listUrl}\n` +
+      `Customer: ${name.trim() || "Customer"} (${phone.trim()})`;
 
-    if (cleanNumber) {
-      window.open(`https://wa.me/${cleanNumber}?text=${encodeURIComponent(message)}`, "_blank");
-    } else {
-      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
-    }
+    const waUrl = cleanNumber
+      ? `https://wa.me/${cleanNumber}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`;
+
+    window.open(waUrl, "_blank");
   }
 
   async function sharePicture() {
@@ -1088,11 +1104,11 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
               ))}
             </ul>
           )}
-          {specialsHere.length > 0 ? (
-            <>
-              <p className={styles.onlyThese}>Priced differently here:</p>
+          {productsHere.length > 0 ? (
+            <div style={{ marginTop: "12px" }}>
+              <p className={styles.onlyThese}>Items in {openGroup}:</p>
               <ul className={styles.rows}>
-                {specialsHere.map((product) => {
+                {productsHere.map((product) => {
                   const currentLine = chosen.find((line) => line.productSlug === product.product_slug);
                   return (
                     <li key={product.product_slug} className={styles.row}>
@@ -1136,7 +1152,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
                   );
                 })}
               </ul>
-            </>
+            </div>
           ) : null}
           {openGroup !== null ? (
             <p className={styles.nothing}>
@@ -1153,11 +1169,26 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
         </button>
         {addingOwn ? (
           <div className={styles.ownForm}>
+            {openGroup ? (
+              <div
+                style={{
+                  marginBottom: "8px",
+                  padding: "6px 10px",
+                  background: "var(--leaf-soft)",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  color: "var(--leaf-dark)",
+                  fontWeight: 700,
+                }}
+              >
+                Adding item under category: {groupTrail.length > 0 ? groupTrail.join(" > ") : openGroup}
+              </div>
+            ) : null}
             <input
               className={styles.search}
               id="list_own_text"
               value={ownText}
-              placeholder="What do you want? e.g. universal metal frame"
+              placeholder={openGroup ? `Item name for ${openGroup}...` : "What do you want? e.g. universal metal frame"}
               onChange={(event) => setOwnText(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {

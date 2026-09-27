@@ -4340,3 +4340,13 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
    - Canvas order images and PDF downloads now render cleanly with `ORDER WAYBILL` header, crisp category group banners, and clean item counts without bloated mode descriptions.
 3. **Direct WhatsApp Chat DM Hyperlinking (`wa.me/[phone]`)** `[x]`:
    - WhatsApp link generation sanitizes the merchant's phone number to full international Nigerian format (`234XXXXXXXXXX`), opening the direct DM chat with the formatted order breakdown and permanent tracker reference link.
+
+### 17.10 Category Browsing Catalog Items, Custom Item Category Inheritance & Direct WhatsApp DM Routing `[x]`
+1. **Listing All Products When Browsing Inside Categories (`/list/[slug]`)** `[x]`:
+   - When tapping into a category in the "Or look through the shop" section (such as `21D` or `Privacy`), previously only items flagged with `is_special` were displayed, leaving ordinary catalog products hidden.
+   - Updated `productsHere` in `web/components/list-builder.tsx` to match and render all products associated with the active category or any part of its path (`parts.includes(openLower)`), allowing customers to see and tap `Add` / steppers directly on all category items.
+2. **Category Context Inheritance for Custom Items** `[x]`:
+   - When a customer is browsing inside an active category (e.g. `Screenguard > 21D`) and taps "Can't find it? Add your own", the new item now automatically inherits that category's full breadcrumb path (`groupTrail.join(" > ")`).
+   - Added a clear indicator banner in the custom entry form showing `"Adding item under category: [Category Path]"`.
+3. **Direct WhatsApp DM Opening (`wa.me/234...`)** `[x]`:
+   - Added `formatWaNumber` to reliably format any Nigerian merchant phone into the international standard (`234XXXXXXXXXX`), eliminating generic contact-picker redirection and routing directly into the 1-on-1 business chat with the structured order breakdown and live link.
