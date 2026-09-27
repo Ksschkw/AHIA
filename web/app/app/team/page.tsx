@@ -87,7 +87,46 @@ export default function Team() {
   const [inviteRole, setInviteRole] = useState<MemberRole>("SALES");
   const [invitePhone, setInvitePhone] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteNickname, setInviteNickname] = useState("");
+  const [lastInvitedName, setLastInvitedName] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
+
+  const [nicknames, setNicknames] = useState<Record<string, string>>({});
+  const [editingNicknameId, setEditingNicknameId] = useState<string | null>(null);
+  const [nicknameInput, setNicknameInput] = useState("");
+
+  useEffect(() => {
+    if (!business?.id || typeof window === "undefined") return;
+    try {
+      const stored = window.localStorage.getItem(`ahia.staff_nicknames.${business.id}`);
+      if (stored) {
+        setNicknames(JSON.parse(stored));
+      }
+    } catch {
+      // Ignore parse error
+    }
+  }, [business?.id]);
+
+  const saveNickname = (idOrKey: string, name: string) => {
+    if (!business?.id || typeof window === "undefined") return;
+    setNicknames((prev) => {
+      const updated = { ...prev };
+      const cleaned = name.trim();
+      if (cleaned) {
+        updated[idOrKey] = cleaned;
+      } else {
+        delete updated[idOrKey];
+      }
+      try {
+        window.localStorage.setItem(`ahia.staff_nicknames.${business.id}`, JSON.stringify(updated));
+      } catch {
+        // Ignore storage quota
+      }
+      return updated;
+    });
+    setEditingNicknameId(null);
+    setNicknameInput("");
+  };
 
   const run = useCallback(
     async (key: string, action: () => Promise<void>, skipGate = false) => {
@@ -222,6 +261,15 @@ export default function Team() {
               onChange={(value) => setInviteRole(value as MemberRole)}
             />
             <Field
+              label="Staff nickname or note"
+              id="invite_nickname"
+              value={inviteNickname}
+              onChange={setInviteNickname}
+              placeholder="e.g. Chinedu (Counter 1)"
+              hint="Helps tell multiple sales staff apart."
+              optional
+            />
+            <Field
               label="Their phone number"
               id="invite_phone"
               value={invitePhone}
@@ -249,11 +297,30 @@ export default function Team() {
               disabled={invitePhone.trim().length < 7 && inviteEmail.trim().length < 5}
               onClick={() =>
                 run("invite", async () => {
+                  const cleanedNick = inviteNickname.trim();
                   const invitation = await inviteMember(business.id, {
                     role_name: inviteRole,
                     phone: invitePhone.trim() || undefined,
                     email: inviteEmail.trim() || undefined,
                   });
+                  if (cleanedNick) {
+                    setLastInvitedName(cleanedNick);
+                    setNicknames((prev) => {
+                      const updated = { ...prev };
+                      if (invitation.id) updated[invitation.id] = cleanedNick;
+                      if (invitePhone.trim()) updated[invitePhone.trim()] = cleanedNick;
+                      if (inviteEmail.trim()) updated[inviteEmail.trim()] = cleanedNick;
+                      try {
+                        window.localStorage.setItem(
+                          `ahia.staff_nicknames.${business.id}`,
+                          JSON.stringify(updated),
+                        );
+                      } catch {}
+                      return updated;
+                    });
+                  } else {
+                    setLastInvitedName(null);
+                  }
                   // The token exists only in this answer: the API keeps a digest and cannot read
                   // it back, so if it is missing there is no link to send and that is worth saying.
                   setInviteLink(
@@ -261,9 +328,10 @@ export default function Team() {
                   );
                   setInvitePhone("");
                   setInviteEmail("");
+                  setInviteNickname("");
                   await refresh(business.id);
                   setNotice({
-                    message: "Invitation created.",
+                    message: cleanedNick ? `Invitation created for ${cleanedNick}.` : "Invitation created.",
                     hint: "Send the link below - they sign up and they are in.",
                     tone: "good",
                   });
@@ -290,7 +358,9 @@ export default function Team() {
                 <a
                   className={styles.linkButton}
                   href={`https://wa.me/?text=${encodeURIComponent(
-                    `Join ${business.name} on AHIA: ${inviteLink}`,
+                    lastInvitedName
+                      ? `Hello ${lastInvitedName}, join ${business.name} on AHIA as ${inviteRole}: ${inviteLink}`
+                      : `Join ${business.name} on AHIA: ${inviteLink}`,
                   )}`}
                   target="_blank"
                   rel="noreferrer noopener"
@@ -310,67 +380,132 @@ export default function Team() {
             </Empty>
           ) : (
             <ul className={styles.list}>
-              {people.map((member) => (
-                <li key={member.id} className={styles.memberRow}>
-                  <div className={styles.memberWho}>
-                    <span className={styles.rowName}>{member.full_name || "No name yet"}</span>
-                    <span className={styles.rowMeta}>
-                      {member.phone ?? member.email ?? "no contact"}
-                    </span>
-                  </div>
-                  <Pill tone={member.status === "active" ? "good" : "warn"}>
-                    {STATUS_LABEL[member.status] ?? member.status}
-                  </Pill>
-                  <Select
-                    label="Role"
-                    id={`role_${member.id}`}
-                    value={member.role_name as MemberRole}
-                    options={MEMBER_ROLES.map((role) => ({ value: role.value, label: role.label }))}
-                    onChange={(value) =>
-                      run(`role-${member.id}`, async () => {
-                        await changeMemberRole(business.id, member.id, value as MemberRole);
-                        await refresh(business.id);
-                        setNotice({ message: `${member.full_name} is now ${value}.`, tone: "good" });
-                      })
-                    }
-                  />
-                  <div className={styles.memberActions}>
-                    <button
-                      className={styles.linkButton}
-                      // Named and guarded: a control that runs a request has to be able to say it is running,
-                      // and has to refuse a second press while it is.
-                      id={`member_status_${member.id}`}
-                      disabled={busyAction !== null}
-                      onClick={() =>
-                        run(`status-${member.id}`, async () => {
-                          await changeMemberStatus(
-                            business.id,
-                            member.id,
-                            member.status === "active" ? "suspended" : "active",
-                          );
+              {people.map((member) => {
+                const nick =
+                  nicknames[member.id] ||
+                  (member.phone && nicknames[member.phone]) ||
+                  (member.email && nicknames[member.email]);
+                return (
+                  <li key={member.id} className={styles.memberRow}>
+                    <div className={styles.memberWho}>
+                      {editingNicknameId === member.id ? (
+                        <div className={styles.inlineNicknameEdit}>
+                          <input
+                            type="text"
+                            className={styles.nicknameInput}
+                            value={nicknameInput}
+                            onChange={(e) => setNicknameInput(e.target.value)}
+                            placeholder="e.g. Chinedu (Counter 1)"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") saveNickname(member.id, nicknameInput);
+                              if (e.key === "Escape") setEditingNicknameId(null);
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className={styles.saveNickBtn}
+                            onClick={() => saveNickname(member.id, nicknameInput)}
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.cancelNickBtn}
+                            onClick={() => setEditingNicknameId(null)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div className={styles.nameHeaderRow}>
+                          <span className={styles.rowName}>
+                            {nick ? (
+                              <>
+                                <span className={styles.nicknameHighlight}>{nick}</span>
+                                {member.full_name ? (
+                                  <span className={styles.fullNameSub}> ({member.full_name})</span>
+                                ) : null}
+                              </>
+                            ) : (
+                              member.full_name || "No name yet"
+                            )}
+                          </span>
+                          <button
+                            type="button"
+                            className={styles.editNicknameBtn}
+                            title="Set or change staff nickname"
+                            onClick={() => {
+                              setEditingNicknameId(member.id);
+                              setNicknameInput(nick || member.full_name || "");
+                            }}
+                          >
+                            {nick ? "Rename" : "+ Add name/label"}
+                          </button>
+                        </div>
+                      )}
+                      <span className={styles.rowMeta}>
+                        {member.phone ?? member.email ?? "no contact"}
+                      </span>
+                    </div>
+                    <Pill tone={member.status === "active" ? "good" : "warn"}>
+                      {STATUS_LABEL[member.status] ?? member.status}
+                    </Pill>
+                    <Select
+                      label="Role"
+                      id={`role_${member.id}`}
+                      value={member.role_name as MemberRole}
+                      options={MEMBER_ROLES.map((role) => ({ value: role.value, label: role.label }))}
+                      onChange={(value) =>
+                        run(`role-${member.id}`, async () => {
+                          await changeMemberRole(business.id, member.id, value as MemberRole);
                           await refresh(business.id);
+                          setNotice({
+                            message: `${nick || member.full_name || "Staff member"} is now ${value}.`,
+                            tone: "good",
+                          });
                         })
                       }
-                    >
-                      {member.status === "active" ? "Suspend" : "Let them back in"}
-                    </button>
-                    <button
-                      className={styles.dangerLink}
-                      id={`member_remove_${member.id}`}
-                      disabled={busyAction !== null}
-                      onClick={() =>
-                        run(`remove-${member.id}`, async () => {
-                          await removeMember(business.id, member.id);
-                          await refresh(business.id);
-                          setNotice({ message: `${member.full_name} no longer has access.`, tone: "good" });
-                        })
-                      }
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </li>
-              ))}
+                    />
+                    <div className={styles.memberActions}>
+                      <button
+                        className={styles.linkButton}
+                        id={`member_status_${member.id}`}
+                        disabled={busyAction !== null}
+                        onClick={() =>
+                          run(`status-${member.id}`, async () => {
+                            await changeMemberStatus(
+                              business.id,
+                              member.id,
+                              member.status === "active" ? "suspended" : "active",
+                            );
+                            await refresh(business.id);
+                          })
+                        }
+                      >
+                        {member.status === "active" ? "Suspend" : "Let them back in"}
+                      </button>
+                      <button
+                        className={styles.dangerLink}
+                        id={`member_remove_${member.id}`}
+                        disabled={busyAction !== null}
+                        onClick={() =>
+                          run(`remove-${member.id}`, async () => {
+                            await removeMember(business.id, member.id);
+                            await refresh(business.id);
+                            setNotice({
+                              message: `${nick || member.full_name || "Staff member"} no longer has access.`,
+                              tone: "good",
+                            });
+                          })
+                        }
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
           {people.length < members.length ? (
@@ -386,22 +521,30 @@ export default function Team() {
             <p className={styles.note}>Nothing outstanding.</p>
           ) : (
             <ul className={styles.list}>
-              {issued.map((invitation) => (
-                <li key={invitation.id} className={styles.row}>
-                  <div>
-                    <span className={styles.rowName}>{invitation.role_name}</span>
-                    <span className={styles.rowMeta}>
-                      {invitation.phone ?? invitation.email ?? "no contact"} -{" "}
-                      {invitation.accepted_at
-                        ? "accepted"
-                        : `expires ${new Date(invitation.expires_at).toLocaleDateString()}`}
-                    </span>
-                  </div>
-                  <Pill tone={invitation.accepted_at ? "good" : "warn"}>
-                    {invitation.accepted_at ? "Accepted" : "Waiting"}
-                  </Pill>
-                </li>
-              ))}
+              {issued.map((invitation) => {
+                const nick =
+                  nicknames[invitation.id] ||
+                  (invitation.phone && nicknames[invitation.phone]) ||
+                  (invitation.email && nicknames[invitation.email]);
+                return (
+                  <li key={invitation.id} className={styles.row}>
+                    <div>
+                      <span className={styles.rowName}>
+                        {nick ? `${nick} (${invitation.role_name})` : invitation.role_name}
+                      </span>
+                      <span className={styles.rowMeta}>
+                        {invitation.phone ?? invitation.email ?? "no contact"} -{" "}
+                        {invitation.accepted_at
+                          ? "accepted"
+                          : `expires ${new Date(invitation.expires_at).toLocaleDateString()}`}
+                      </span>
+                    </div>
+                    <Pill tone={invitation.accepted_at ? "good" : "warn"}>
+                      {invitation.accepted_at ? "Accepted" : "Waiting"}
+                    </Pill>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Card>
