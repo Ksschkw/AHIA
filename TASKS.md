@@ -4321,3 +4321,11 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
 3. **Permanent List Reference Tracking & Reordering** `[x]`:
    - On submitting a list, the completion screen displays an Order Reference Card with the permanent live tracker URL, an instant "Copy Reference Link" button, a link to open the live interactive tracker (`web/components/live-list.tsx`), and a "Build Another List" option.
    - The live list tracker screen (`/list/[slug]/[token]`) gives customers a direct action to build a new list from an existing order.
+
+### 17.8 Mobile Client Category Grouping & Unanswered Customer Lists Synchronization `[x]`
+1. **Replicating Category Hierarchy on Mobile Expo App (`mobile/app/home.tsx`)** `[x]`:
+   - Replicated the web app's category-grouped shelf on the native mobile app. Products on the mobile shelf now group under clean sticky category headers with count pills and dedicated section dividers.
+   - Searching via the mobile search bar switches dynamically to a flat list for fast inline lookup.
+2. **Hovering Unanswered Customer Lists Badge & Banner on Mobile** `[x]`:
+   - Added live `unansweredCount` detection to the mobile client. An orange notification badge hovers over the "Customer Lists" tab button when there are customer requests awaiting confirmation.
+   - Added an urgent top action banner above the mobile catalog when unconfirmed orders exist, allowing one-tap switching to the Customer Lists tab.

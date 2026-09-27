@@ -25,6 +25,8 @@ import {
   sellOneProduct,
   unpublishProduct,
   workListLine,
+  listCategories,
+  type Category,
   type CustomerList,
   type Product,
   type TenantSummary,
@@ -53,6 +55,7 @@ export default function Home() {
 
   const [tab, setTab] = useState<"shelf" | "lists">("shelf");
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [customerLists, setCustomerLists] = useState<CustomerList[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -80,14 +83,16 @@ export default function Home() {
 
     // 2. Fetch fresh from API
     try {
-      const [freshProducts, freshLists] = await Promise.all([
+      const [freshProducts, freshLists, freshCategories] = await Promise.all([
         listProducts(tenantId).catch(() => cached),
         listCustomerLists(tenantId).catch(() => []),
+        listCategories(tenantId).catch(() => []),
       ]);
 
       setProducts(freshProducts);
       cacheProducts(tenantId, freshProducts);
       setCustomerLists(freshLists);
+      setCategories(freshCategories);
       setProblem(null);
     } catch {
       if (cached.length === 0) {
@@ -226,9 +231,39 @@ export default function Home() {
     );
   };
 
+  const unansweredCount = customerLists.filter((l) => l.status !== "confirmed").length;
+
   const filteredProducts = products.filter((p) =>
     p.name.toLowerCase().includes(searchQuery.trim().toLowerCase()),
   );
+
+  // Hierarchical category grouping for shelf
+  const categoryById = new Map(categories.map((c) => [c.id, c]));
+  type ShelfGroup = { categoryId: string | null; label: string; items: Product[] };
+  const shelfGroups: ShelfGroup[] = [];
+
+  if (!searchQuery.trim()) {
+    const grouped = new Map<string | null, Product[]>();
+    for (const p of products) {
+      const key = p.category_id ?? null;
+      const list = grouped.get(key);
+      if (list) list.push(p);
+      else grouped.set(key, [p]);
+    }
+    const sortedKeys = [...grouped.keys()].sort((a, b) => {
+      const nameA = a ? (categoryById.get(a)?.name ?? "Unknown") : "zzz";
+      const nameB = b ? (categoryById.get(b)?.name ?? "Unknown") : "zzz";
+      return nameA.localeCompare(nameB);
+    });
+    for (const key of sortedKeys) {
+      const label = key ? (categoryById.get(key)?.name ?? "Unknown") : "Uncategorised";
+      shelfGroups.push({
+        categoryId: key,
+        label,
+        items: (grouped.get(key) ?? []).sort((a, b) => a.name.localeCompare(b.name)),
+      });
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -282,7 +317,7 @@ export default function Home() {
           }}
         >
           <Text style={[styles.tabText, tab === "shelf" && styles.activeTabText]}>
-            Catalog ({products.length})
+            Stock ({products.length})
           </Text>
         </Pressable>
         <Pressable
@@ -292,9 +327,16 @@ export default function Home() {
             setTab("lists");
           }}
         >
-          <Text style={[styles.tabText, tab === "lists" && styles.activeTabText]}>
-            Customer Lists ({customerLists.length})
-          </Text>
+          <View style={styles.tabWithBadge}>
+            <Text style={[styles.tabText, tab === "lists" && styles.activeTabText]}>
+              Customer Lists ({customerLists.length})
+            </Text>
+            {unansweredCount > 0 ? (
+              <View style={styles.tabHoverBadge}>
+                <Text style={styles.tabHoverBadgeText}>{unansweredCount}</Text>
+              </View>
+            ) : null}
+          </View>
         </Pressable>
       </View>
 
@@ -310,11 +352,33 @@ export default function Home() {
         </View>
       ) : tab === "shelf" ? (
         <View style={styles.contentWrap}>
+          {/* Unanswered lists callout banner */}
+          {unansweredCount > 0 ? (
+            <Pressable
+              style={styles.unansweredCallout}
+              onPress={() => {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setTab("lists");
+              }}
+            >
+              <View style={styles.unansweredBadge}>
+                <Text style={styles.unansweredBadgeText}>{unansweredCount}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.unansweredTitle}>
+                  {unansweredCount === 1 ? "1 customer list waiting" : `${unansweredCount} customer lists waiting`}
+                </Text>
+                <Text style={styles.unansweredSub}>Orders waiting for your review</Text>
+              </View>
+              <Text style={styles.unansweredAction}>Open</Text>
+            </Pressable>
+          ) : null}
+
           {/* Search Bar */}
           <View style={styles.searchBar}>
             <TextInput
               style={styles.searchInput}
-              placeholder="Search your items..."
+              placeholder="Search your stock..."
               placeholderTextColor="#8b8377"
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -322,69 +386,132 @@ export default function Home() {
             />
           </View>
 
-          <FlatList
-            data={filteredProducts}
-            keyExtractor={(item) => item.id}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={() => {
-                  if (activeBusiness) {
-                    setRefreshing(true);
-                    void loadData(activeBusiness.id);
-                  }
-                }}
-                colors={["#0b5d3b"]}
-              />
-            }
-            contentContainerStyle={styles.listContainer}
-            renderItem={({ item }) => (
-              <View style={styles.productCard}>
-                <View style={styles.productInfo}>
-                  <Text style={styles.productName}>{item.name}</Text>
-                  <Text style={styles.productPrice}>
-                    Retail: {formatMoney(item.selling_price ?? item.effective_normal_price)}
-                  </Text>
-                  {item.effective_wholesale_price ? (
-                    <Text style={styles.productWholesalePrice}>
-                      Wholesale: {formatMoney(item.effective_wholesale_price)}
+          {searchQuery.trim() ? (
+            /* Flat search results */
+            <FlatList
+              data={filteredProducts}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.listContainer}
+              renderItem={({ item }) => (
+                <View style={styles.productCard}>
+                  <View style={styles.productInfo}>
+                    <Text style={styles.productName}>{item.name}</Text>
+                    <Text style={styles.productPrice}>
+                      Retail: {formatMoney(item.selling_price ?? item.effective_normal_price)}
                     </Text>
-                  ) : null}
-                  <View style={styles.pillRow}>
-                    <Pressable
-                      style={[styles.statusPill, item.is_published ? styles.livePill : styles.hiddenPill]}
-                      onPress={() => void handleTogglePublish(item)}
-                    >
-                      <Text
-                        style={[
-                          styles.statusPillText,
-                          item.is_published ? styles.livePillText : styles.hiddenPillText,
-                        ]}
-                      >
-                        {item.is_published ? "Live" : "Hidden"}
+                    {item.effective_wholesale_price ? (
+                      <Text style={styles.productWholesalePrice}>
+                        Wholesale: {formatMoney(item.effective_wholesale_price)}
                       </Text>
+                    ) : null}
+                    <View style={styles.pillRow}>
+                      <Pressable
+                        style={[styles.statusPill, item.is_published ? styles.livePill : styles.hiddenPill]}
+                        onPress={() => void handleTogglePublish(item)}
+                      >
+                        <Text
+                          style={[
+                            styles.statusPillText,
+                            item.is_published ? styles.livePillText : styles.hiddenPillText,
+                          ]}
+                        >
+                          {item.is_published ? "Live" : "Hidden"}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardActions}>
+                    <Pressable style={styles.copyBtn} onPress={() => void handleCopyProduct(item)}>
+                      <Text style={styles.copyBtnText}>Copy</Text>
+                    </Pressable>
+                    <Pressable style={styles.sellBtn} onPress={() => void handleSellOne(item)}>
+                      <Text style={styles.sellBtnText}>Sell 1</Text>
                     </Pressable>
                   </View>
                 </View>
-
-                {/* Actions Button Group */}
-                <View style={styles.cardActions}>
-                  <Pressable style={styles.copyBtn} onPress={() => void handleCopyProduct(item)}>
-                    <Text style={styles.copyBtnText}>Copy</Text>
-                  </Pressable>
-                  <Pressable style={styles.sellBtn} onPress={() => void handleSellOne(item)}>
-                    <Text style={styles.sellBtnText}>Sell 1</Text>
-                  </Pressable>
+              )}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyTitle}>Nothing matches &ldquo;{searchQuery}&rdquo;</Text>
                 </View>
-              </View>
-            )}
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyTitle}>No items on the shelf</Text>
-                <Text style={styles.emptyDesc}>Items created in your shop will appear here.</Text>
-              </View>
-            }
-          />
+              }
+            />
+          ) : (
+            /* Category Grouped Shelf */
+            <FlatList
+              data={shelfGroups}
+              keyExtractor={(group) => group.categoryId ?? "__none__"}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={() => {
+                    if (activeBusiness) {
+                      setRefreshing(true);
+                      void loadData(activeBusiness.id);
+                    }
+                  }}
+                  colors={["#0b5d3b"]}
+                />
+              }
+              contentContainerStyle={styles.listContainer}
+              renderItem={({ item: group }) => (
+                <View style={styles.groupSection}>
+                  <View style={styles.groupHeader}>
+                    <Text style={styles.groupTitle}>{group.label}</Text>
+                    <View style={styles.groupCountBadge}>
+                      <Text style={styles.groupCountText}>{group.items.length}</Text>
+                    </View>
+                  </View>
+                  {group.items.map((item) => (
+                    <View key={item.id} style={styles.productCard}>
+                      <View style={styles.productInfo}>
+                        <Text style={styles.productName}>{item.name}</Text>
+                        <Text style={styles.productPrice}>
+                          Retail: {formatMoney(item.selling_price ?? item.effective_normal_price)}
+                        </Text>
+                        {item.effective_wholesale_price ? (
+                          <Text style={styles.productWholesalePrice}>
+                            Wholesale: {formatMoney(item.effective_wholesale_price)}
+                          </Text>
+                        ) : null}
+                        <View style={styles.pillRow}>
+                          <Pressable
+                            style={[styles.statusPill, item.is_published ? styles.livePill : styles.hiddenPill]}
+                            onPress={() => void handleTogglePublish(item)}
+                          >
+                            <Text
+                              style={[
+                                styles.statusPillText,
+                                item.is_published ? styles.livePillText : styles.hiddenPillText,
+                              ]}
+                            >
+                              {item.is_published ? "Live" : "Hidden"}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </View>
+
+                      <View style={styles.cardActions}>
+                        <Pressable style={styles.copyBtn} onPress={() => void handleCopyProduct(item)}>
+                          <Text style={styles.copyBtnText}>Copy</Text>
+                        </Pressable>
+                        <Pressable style={styles.sellBtn} onPress={() => void handleSellOne(item)}>
+                          <Text style={styles.sellBtnText}>Sell 1</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyTitle}>No items on the shelf</Text>
+                  <Text style={styles.emptyDesc}>Items created in your shop will appear here.</Text>
+                </View>
+              }
+            />
+          )}
         </View>
       ) : (
         <FlatList
@@ -490,6 +617,104 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
+  tabWithBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  tabHoverBadge: {
+    backgroundColor: "#c2571f",
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 999,
+  },
+  tabHoverBadgeText: {
+    color: "#ffffff",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  unansweredCallout: {
+    backgroundColor: "#ffffff",
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#c2571f",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  unansweredBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#fbe9dd",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  unansweredBadgeText: {
+    color: "#c2571f",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  unansweredTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1e1b16",
+  },
+  unansweredSub: {
+    fontSize: 11,
+    color: "#5c5549",
+    marginTop: 1,
+  },
+  unansweredAction: {
+    backgroundColor: "#c2571f",
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "700",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  groupSection: {
+    marginBottom: 16,
+  },
+  groupHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#f3ece1",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  groupTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    color: "#5c5549",
+  },
+  groupCountBadge: {
+    backgroundColor: "#ffffff",
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#e7dfd2",
+  },
+  groupCountText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#5c5549",
+  },
+
   safeArea: {
     flex: 1,
     backgroundColor: "#f7f3ec",

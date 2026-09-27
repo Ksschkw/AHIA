@@ -119,6 +119,15 @@ export interface TenantSummary {
   slug: string;
 }
 
+export interface Category {
+  id: string;
+  tenant_id: string;
+  name: string;
+  slug: string;
+  parent_id: string | null;
+  position: number;
+}
+
 export interface Product {
   id: string;
   tenant_id: string;
@@ -163,6 +172,10 @@ export interface CustomerList {
 
 export function listBusinesses(): Promise<TenantSummary[]> {
   return request<TenantSummary[]>("/api/v1/tenants");
+}
+
+export function listCategories(tenantId: string): Promise<Category[]> {
+  return request<Category[]>(`/api/v1/tenants/${tenantId}/categories`);
 }
 
 export function listProducts(tenantId: string): Promise<Product[]> {
