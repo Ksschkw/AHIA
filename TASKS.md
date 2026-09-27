@@ -4293,3 +4293,20 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
      - `web/app/app/profile/page.tsx`: shop headline and description placeholders generalized (`"e.g. Direct wholesale & retail market distributor"` and `"e.g. Direct wholesale and retail distribution. Tell us what you need and we will source and pack it."`), and the live customization preview cards feature universal master packs and premium units.
      - `web/components/list-builder.tsx`: search input and quick-paste guidance generalized (`"Type anything - items, brands, models, packs"` and `"5 Units Model A\n2 Fast Chargers\n10 Pcs Heavy Duty"`).
      - Generalized internal shelf hierarchy comments in `web/app/app/page.tsx` and `web/lib/api.ts`.
+
+### 17.6 Dashboard Shelf Grouping, Stock Thresholds, Light Mode & Custom Writeups `[x]`
+1. **Category-Grouped Shelf Hierarchy on the Trader Dashboard (`/app`)** `[x]`:
+   - My stock page was previously dumping all products as one long flat list without respecting the categories and sub-categories I carefully arranged.
+   - Replaced flat list rendering with depth-sorted hierarchical category grouping in `web/app/app/page.tsx`. Each group renders with a sticky category header, item count badge, and depth-based indentations for subcategories. Products without a category group cleanly into an "Uncategorised" section at the end.
+   - When searching via the inline shelf search filter, results switch to a clean flat view to minimize noise.
+2. **Accurate Stock Status & False Positive Threshold Fix** `[x]`:
+   - Products where I never entered inventory counts were previously all flagging as "Out" or "Running Out" on the dashboard because quantity `0` was compared against default threshold `0` (`0 <= 0` evaluating to true).
+   - Fixed stock level evaluation in `web/app/app/page.tsx`: products without an explicit inventory level record show no false out-of-stock badges, and only products with tracked depleted stock trigger running-out alerts.
+3. **AHIA Brand Wordmark in Light Mode** `[x]`:
+   - Simplified `web/components/brand.module.css` so the AHIA wordmark reliably uses `--ink` (`#1e1b16` in light mode, `#f0ede6` in dark mode) without conflicting media query overrides causing light mode text to fade or render in white.
+4. **Storefront Link Canonicalization & Double Slash Fix** `[x]`:
+   - `Tenant.public_path` returns `/shop/[slug]`. Prepending `/shop/` caused broken links like `/shop//shop/[slug]`.
+   - Fixed all public path references across `web/app/app/profile/page.tsx` so the "View Live Public Shop" button and URL cards link directly to `{business.public_path}`.
+5. **Merchant-Editable Storefront Closing Writeups & LocalStorage Theme Synchronization** `[x]`:
+   - Businesses can now customize the closing message shown below the catalog on their public shop page (`/shop/[slug]`) directly from the Shop Appearance editor in `/app/profile`.
+   - Theme variables (`ahia.theme.[slug]`) are now saved under both `tenant_id`, `public_path`, and `slug` so live public storefront previews and customer-facing pages instantly hydrate the merchant's chosen accent color, background surface, and closing notes without delay.

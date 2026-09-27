@@ -94,6 +94,7 @@ export default function Profile() {
   const [themeColor, setThemeColor] = useState("#084a2f");
   const [themeBg, setThemeBg] = useState("#fbf7f0");
   const [themeBgImage, setThemeBgImage] = useState("");
+  const [storefrontClosing, setStorefrontClosing] = useState("");
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
   const [isAppearanceExpanded, setIsAppearanceExpanded] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -106,6 +107,7 @@ export default function Profile() {
     color: "#084a2f",
     bg: "#fbf7f0",
     bgImage: "",
+    closing: "",
   });
 
   // Password
@@ -161,6 +163,7 @@ export default function Profile() {
           let themeColorFromDesc: string | null = null;
           let themeBgFromDesc: string | null = null;
           let themeBgImageFromDesc: string | null = null;
+          let themeClosingFromDesc: string | null = null;
           try {
             const sf = await getStorefront(chosen.id);
             loadedHeadline = sf.headline ?? "";
@@ -175,6 +178,7 @@ export default function Profile() {
                 if (parsed.color) themeColorFromDesc = parsed.color;
                 if (parsed.bg) themeBgFromDesc = parsed.bg;
                 if (parsed.bgImage) themeBgImageFromDesc = parsed.bgImage;
+                if (parsed.closing) themeClosingFromDesc = parsed.closing;
               } catch {
                 // ignore parse failure
               }
@@ -186,6 +190,7 @@ export default function Profile() {
             setStorefrontHeadline(loadedHeadline);
             setStorefrontDescription(loadedDesc);
             setStorefrontPhone(loadedPhone);
+            setStorefrontClosing(themeClosingFromDesc || "");
           } catch {
             // storefront might not be created or published yet
           }
@@ -223,6 +228,7 @@ export default function Profile() {
             color: loadedColor,
             bg: loadedBg,
             bgImage: loadedBgImage,
+            closing: themeClosingFromDesc || "",
           });
         }
       } catch {
@@ -258,11 +264,12 @@ export default function Profile() {
       storefrontHeadline.trim() !== initialAppearance.headline ||
       storefrontDescription.trim() !== initialAppearance.description ||
       storefrontPhone.trim() !== initialAppearance.phone ||
+      storefrontClosing.trim() !== initialAppearance.closing ||
       themeColor !== initialAppearance.color ||
       themeBg !== initialAppearance.bg ||
       themeBgImage.trim() !== initialAppearance.bgImage
     );
-  }, [storefrontHeadline, storefrontDescription, storefrontPhone, themeColor, themeBg, themeBgImage, initialAppearance]);
+  }, [storefrontHeadline, storefrontDescription, storefrontPhone, storefrontClosing, themeColor, themeBg, themeBgImage, initialAppearance]);
 
   const handleImageFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -465,7 +472,7 @@ export default function Profile() {
                 </div>
                 <p className={styles.note}>
                   Money is recorded in {business.currency}, and the public shop address is{" "}
-                  <strong>/shop/{business.public_path}</strong>.
+                  <strong>{business.public_path}</strong>.
                 </p>
               </div>
             ) : (
@@ -506,7 +513,7 @@ export default function Profile() {
                 </div>
                 <p className={styles.note}>
                   Money is recorded in {business.currency}, and the public address is{" "}
-                  <strong>/shop/{business.public_path}</strong>.
+                  <strong>{business.public_path}</strong>.
                 </p>
                 <div className={styles.formActions}>
                   <button
@@ -574,7 +581,7 @@ export default function Profile() {
                       {storefrontHeadline || "Wholesale & Retail Market Catalog"}
                     </span>
                     <span className={styles.summaryPath}>
-                      Public storefront: /shop/{business.public_path}
+                      Public storefront: {business.public_path}
                     </span>
                   </div>
                 </div>
@@ -773,6 +780,15 @@ export default function Profile() {
                     placeholder="e.g. Direct wholesale and retail distribution. Tell us what you need and we will source and pack it."
                     optional
                   />
+                  <Field
+                    label="Shop closing writeup / footer message"
+                    id="shop_closing"
+                    value={storefrontClosing}
+                    onChange={setStorefrontClosing}
+                    placeholder="e.g. Add anything to your order list - if it exists we will source it, pack it and send it across. Bulk orders welcome."
+                    optional
+                    hint="Custom note displayed below the catalog on your public shop."
+                  />
                   <div>
                     <Field
                       label="Background Image URL"
@@ -848,7 +864,7 @@ export default function Profile() {
                             <span className={styles.browserDotGreen} />
                           </div>
                           <div className={styles.browserUrlBar}>
-                            ahia.ng/shop/{business.public_path}
+                            ahia.ng{business.public_path}
                           </div>
                         </div>
                       ) : (
@@ -1030,6 +1046,7 @@ export default function Profile() {
                           color: themeColor,
                           bg: themeBg,
                           bgImage: themeBgImage.startsWith("http") ? themeBgImage.trim() : "",
+                          closing: storefrontClosing.trim() || undefined,
                         })} -->`;
                         const cleanDesc = storefrontDescription.replace(/<!--\s*ahia-theme:[\s\S]*?-->/g, "").trim();
                         const safeDesc = cleanDesc.slice(0, 800);
@@ -1048,6 +1065,9 @@ export default function Profile() {
                           });
                           window.localStorage.setItem(`ahia.theme.${business.id}`, themeData);
                           window.localStorage.setItem(`ahia.theme.${business.public_path}`, themeData);
+                          if (business.slug) {
+                            window.localStorage.setItem(`ahia.theme.${business.slug}`, themeData);
+                          }
                         }
                         setInitialAppearance({
                           headline: storefrontHeadline.trim(),
@@ -1056,6 +1076,7 @@ export default function Profile() {
                           color: themeColor,
                           bg: themeBg,
                           bgImage: themeBgImage.trim(),
+                          closing: storefrontClosing.trim(),
                         });
                         setNotice({
                           message: "Shop appearance and branding saved.",

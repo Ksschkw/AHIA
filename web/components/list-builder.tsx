@@ -330,7 +330,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     }
   }, [shop.products]);
 
-  function addHeading() {
+  function addHeading(asSub: boolean = false) {
     const text = newHeading.trim();
     if (text.length < 2) return;
     const key = `head-${Date.now()}`;
@@ -342,7 +342,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
         text,
         quantity: 1,
         price: null,
-        underKey: null,
+        underKey: asSub && ownUnder ? ownUnder : null,
         isHeading: true,
         note: "heading",
       },
@@ -1083,12 +1083,23 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
                 className={styles.search}
                 id="list_new_heading"
                 value={newHeading}
-                placeholder="e.g. Items for my shop"
+                placeholder="e.g. Screenguard, Ceramic, Privacy"
                 onChange={(event) => setNewHeading(event.target.value)}
               />
-              <button type="button" className={styles.addHere} onClick={addHeading}>
-                Add heading
-              </button>
+              {ownUnder ? (
+                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                  <button type="button" className={styles.addHere} onClick={() => addHeading(false)}>
+                    + Top heading
+                  </button>
+                  <button type="button" className={styles.addHere} onClick={() => addHeading(true)}>
+                    + Subheading
+                  </button>
+                </div>
+              ) : (
+                <button type="button" className={styles.addHere} onClick={() => addHeading(false)}>
+                  Add heading
+                </button>
+              )}
             </div>
             {headings.length > 0 ? (
               <div className={styles.chooseUnder}>

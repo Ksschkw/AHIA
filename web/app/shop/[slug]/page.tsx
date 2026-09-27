@@ -60,12 +60,14 @@ function extractStorefrontTheme(description: string | null | undefined): {
   themeColor: string;
   themeBg: string;
   themeBgImage: string;
+  closingMessage: string;
 } {
   const defaultTheme = {
     cleanDescription: description ?? "",
     themeColor: "#084a2f",
     themeBg: "#fbf7f0",
     themeBgImage: "",
+    closingMessage: "",
   };
   if (!description) return defaultTheme;
 
@@ -80,6 +82,7 @@ function extractStorefrontTheme(description: string | null | undefined): {
       themeColor: parsed.color || defaultTheme.themeColor,
       themeBg: parsed.bg || defaultTheme.themeBg,
       themeBgImage: parsed.bgImage || "",
+      closingMessage: parsed.closing || "",
     };
   } catch {
     return defaultTheme;
@@ -110,7 +113,7 @@ export default async function ShopPage({ params }: Params) {
     notFound();
   }
 
-  const { cleanDescription, themeColor, themeBg, themeBgImage } = extractStorefrontTheme(
+  const { cleanDescription, themeColor, themeBg, themeBgImage, closingMessage } = extractStorefrontTheme(
     shop.description,
   );
   const isBgDark = isDarkColor(themeBg);
@@ -202,8 +205,8 @@ export default async function ShopPage({ params }: Params) {
       <section className={styles.closing}>
         <h2 className={styles.closingTitle}>Not seeing what you need?</h2>
         <p className={styles.closingText}>
-          Just add it to your order list - if it exists we will source it, pack it and
-          send it across. Bulk and wholesale orders welcome.
+          {closingMessage ||
+            "Just add it to your order list - if it exists we will source it, pack it and send it across. Bulk and wholesale orders welcome."}
         </p>
         <div className={styles.heroActions}>
           <Link className={styles.primary} href={`/list/${shop.tenant_slug}`}>
