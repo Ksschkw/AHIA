@@ -585,7 +585,7 @@ export default function Profile() {
                   </Button>
                   <a
                     className={styles.secondaryAction}
-                    href={`/shop/${business.public_path}`}
+                    href={business.public_path}
                     target="_blank"
                     rel="noreferrer noopener"
                     style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}

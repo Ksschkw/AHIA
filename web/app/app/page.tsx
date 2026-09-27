@@ -378,6 +378,68 @@ export default function Dashboard() {
       )
     : products;
 
+  // Build a grouped, hierarchical view of the shelf. The trader arranged their stock into
+  // categories (and sub-categories, and sub-sub-categories) and the shelf should reflect that
+  // arrangement, not ignore it. Products without a category go last under "Uncategorised".
+  //
+  // The rendering is intentionally flat after the sort: we do not render nested collapsible trees,
+  // we render heading -> items -> heading -> items, but the headings are in depth-first order so a
+  // subcategory always appears right under its parent heading.
+  const categoryById = new Map(productGroups.map((c) => [c.id, c]));
+  const depthOf = (id: string | null): number => {
+    let depth = 0;
+    let cur = id;
+    while (cur) {
+      const parent = categoryById.get(cur)?.parent_id ?? null;
+      if (parent === cur) break; // guard against malformed cycles
+      cur = parent;
+      depth++;
+    }
+    return depth;
+  };
+  // Resolve the full ancestor path for a category so we can sort lexicographically by hierarchy.
+  const pathOf = (id: string | null): string => {
+    const parts: string[] = [];
+    let cur: string | null = id;
+    while (cur) {
+      const cat = categoryById.get(cur);
+      if (!cat) break;
+      parts.unshift(cat.name.toLowerCase());
+      cur = cat.parent_id ?? null;
+    }
+    return parts.join("\0"); // null-byte separator keeps the comparison simple
+  };
+
+  // Group products by their direct category. When searching, skip the group headings to reduce
+  // noise - the search result is already small enough that headings add no value.
+  type ShelfGroup = { categoryId: string | null; label: string; depth: number; items: Product[] };
+  const shelfGroups: ShelfGroup[] = [];
+  if (!shelfQuery.trim()) {
+    const grouped = new Map<string | null, Product[]>();
+    for (const p of products) {
+      const key = p.category_id ?? null;
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.push(p);
+      } else {
+        grouped.set(key, [p]);
+      }
+    }
+    // Sort groups: root categories first (shallowest), then alphabetically within each depth level.
+    const sortedKeys = [...grouped.keys()].sort((a, b) => {
+      const depthA = depthOf(a);
+      const depthB = depthOf(b);
+      if (depthA !== depthB) return depthA - depthB;
+      return pathOf(a).localeCompare(pathOf(b));
+    });
+    for (const key of sortedKeys) {
+      const label = key ? (categoryById.get(key)?.name ?? "Unknown") : "Uncategorised";
+      const depth = depthOf(key);
+      const items = (grouped.get(key) ?? []).sort((a, b) => a.name.localeCompare(b.name));
+      shelfGroups.push({ categoryId: key, label, depth, items });
+    }
+  }
+
   // No holding screen: a person sees the sign-in card at once, and the dashboard replaces it if the
   // session cookie turns out to be valid. A probe that is slow, or a backend that is unreachable,
   // delays nothing and blocks nothing.
@@ -537,149 +599,125 @@ export default function Dashboard() {
                     ) : null}
                   </div>
                 ) : null}
-                {filteredShelf.length === 0 ? (
+                {filteredShelf.length === 0 && shelfQuery ? (
                   <p className={styles.shelfEmptySearch}>
                     Nothing on your shelf matches &ldquo;{shelfQuery}&rdquo;.
                   </p>
-                ) : (
+                ) : shelfQuery.trim() ? (
+                  /* Flat list when searching - headings add noise, the result is already small */
                   <ul className={styles.shelf}>
                     {filteredShelf.map((product) => {
-                  const level = levelFor(product.id);
-                  const quantity = Number(level?.available_quantity ?? "0");
-                  const out = level?.is_out_of_stock ?? true;
-                  const cover = coverPhoto(photos[product.id]);
-                  return (
-                    <li key={product.id} className={styles.shelfRow}>
-                      {/* The photograph is the anchor of the row: a trader recognises his stock by
-                          sight long before he reads a name, and a shelf of photographs is a shelf
-                          somebody can scan while a customer waits. */}
-                      {photosAvailable !== false ? (
-                        <button
-                          className={styles.shelfThumb}
-                          onClick={() => setPhotoProduct(product)}
-                          aria-label={
-                            cover ? `Photos of ${product.name}` : `Add a photo of ${product.name}`
-                          }
+                      const level = levelFor(product.id);
+                      const quantity = Number(level?.available_quantity ?? "0");
+                      const out = level?.is_out_of_stock ?? false;
+                      const cover = coverPhoto(photos[product.id]);
+                      return <ShelfRow
+                        key={product.id}
+                        product={product}
+                        level={level}
+                        quantity={quantity}
+                        out={out}
+                        cover={cover}
+                        busy={busy}
+                        photosAvailable={photosAvailable}
+                        currency={currency}
+                        styles={styles}
+                        onPhoto={() => setPhotoProduct(product)}
+                        onSell={() => {
+                          void run(async () => {
+                            if (!businessId) return;
+                            const receipt = await recordSale(businessId, {
+                              discount_amount: "0.00",
+                              lines: [{ product_id: product.id, quantity: "1.000", discount_amount: "0.00" }],
+                              payments: [{ amount: product.effective_normal_price ?? "0.00", method: "CASH" }],
+                            });
+                            await refresh();
+                            setNotice({ message: `Sold one ${product.name} - ${receipt.sale.receipt_number} for ${formatMoney(receipt.sale.total_amount, currency)}`, tone: "good" });
+                          });
+                        }}
+                        onTogglePublish={() => {
+                          void runShop(async () => {
+                            if (!businessId) return;
+                            const wasPublished = product.is_published;
+                            setProducts((current) => current.map((c) => c.id === product.id ? { ...c, is_published: !wasPublished } : c));
+                            try {
+                              if (wasPublished) { await unpublishProduct(businessId, product.id); }
+                              else { await publishProduct(businessId, product.id); }
+                            } catch (error) {
+                              setProducts((current) => current.map((c) => c.id === product.id ? { ...c, is_published: wasPublished } : c));
+                              throw error;
+                            }
+                            await refresh();
+                            setNotice({ message: product.is_published ? `${product.name} is hidden from the shop.` : `${product.name} is now in your shop.`, tone: "good" });
+                          });
+                        }}
+                      />;
+                    })}
+                  </ul>
+                ) : (
+                  /* Grouped view - categories as headings, products nested beneath */
+                  <div className={styles.shelfGrouped}>
+                    {shelfGroups.map((group) => (
+                      <div key={group.categoryId ?? "__none__"} className={styles.shelfGroup}>
+                        <h3
+                          className={styles.shelfGroupHeading}
+                          style={{ paddingLeft: `${group.depth * 12}px` }}
                         >
-                          {cover?.delivery_url ? (
-                            /* eslint-disable-next-line @next/next/no-img-element */
-                            <img src={cover.delivery_url} alt="" className={styles.shelfThumbImage} />
-                          ) : (
-                            <span className={styles.shelfThumbEmpty}>+</span>
-                          )}
-                        </button>
-                      ) : null}
-
-                      <span className={styles.shelfMain}>
-                        <span className={styles.shelfName}>{product.name}</span>
-                        <span className={styles.shelfFacts}>
-                          <span className={`${styles.shelfPrice} tabular`}>
-                            {formatMoneyOrOnRequest(product.selling_price, currency)}
-                          </span>
-                          {out ? (
-                            <span className={styles.shelfOut}>Out</span>
-                          ) : (
-                            <span className={quantity <= 3 ? styles.shelfLow : styles.shelfCount}>
-                              {formatQuantity(level?.available_quantity ?? "0")} left
-                            </span>
-                          )}
-                          <span className={product.is_published ? styles.shelfLive : styles.shelfHidden}>
-                            {product.is_published ? "In shop" : "Hidden"}
-                          </span>
-                        </span>
-                      </span>
-
-                      <span className={styles.shelfActions}>
-                        <button
-                          className={styles.shelfSell}
-                          disabled={busy || out}
-                          onClick={() => {
-                            void run(async () => {
-                              if (!businessId) return;
-                              const receipt = await recordSale(businessId, {
-                                discount_amount: "0.00",
-                                lines: [
-                                  {
-                                    product_id: product.id,
-                                    quantity: "1.000",
+                          {group.label}
+                          <span className={styles.shelfGroupCount}>{group.items.length}</span>
+                        </h3>
+                        <ul className={styles.shelf}>
+                          {group.items.map((product) => {
+                            const level = levelFor(product.id);
+                            const quantity = Number(level?.available_quantity ?? "0");
+                            const out = level?.is_out_of_stock ?? false;
+                            const cover = coverPhoto(photos[product.id]);
+                            return <ShelfRow
+                              key={product.id}
+                              product={product}
+                              level={level}
+                              quantity={quantity}
+                              out={out}
+                              cover={cover}
+                              busy={busy}
+                              photosAvailable={photosAvailable}
+                              currency={currency}
+                              styles={styles}
+                              onPhoto={() => setPhotoProduct(product)}
+                              onSell={() => {
+                                void run(async () => {
+                                  if (!businessId) return;
+                                  const receipt = await recordSale(businessId, {
                                     discount_amount: "0.00",
-                                  },
-                                ],
-                                payments: [
-                                  {
-                                    amount: product.effective_normal_price ?? "0.00",
-                                    method: "CASH",
-                                  },
-                                ],
-                              });
-                              await refresh();
-                              setNotice({
-                                message: `Sold one ${product.name} - ${receipt.sale.receipt_number} for ${formatMoney(receipt.sale.total_amount, currency)}`,
-                                tone: "good",
-                              });
-                            });
-                          }}
-                        >
-                          Sell one
-                        </button>
-                        <button
-                          className={styles.shelfToggle}
-                          disabled={busy}
-                          aria-pressed={product.is_published}
-                          title={
-                            product.is_published
-                              ? "Hide this from the public shop"
-                              : "Show this in the public shop"
-                          }
-                          onClick={() => {
-                            void runShop(async () => {
-                              if (!businessId) return;
-                              // **The switch moves first, the request follows.** Hiding something is a
-                              // decision the trader has already made, with a customer possibly standing
-                              // in front of him; waiting for a round trip to another continent to see his
-                              // own decision is what makes a product feel broken. If it fails, the change
-                              // comes back and the notice says so.
-                              const wasPublished = product.is_published;
-                              setProducts((current) =>
-                                current.map((candidate) =>
-                                  candidate.id === product.id
-                                    ? { ...candidate, is_published: !wasPublished }
-                                    : candidate,
-                                ),
-                              );
-                              try {
-                                if (wasPublished) {
-                                  await unpublishProduct(businessId, product.id);
-                                } else {
-                                  await publishProduct(businessId, product.id);
-                                }
-                              } catch (error) {
-                                setProducts((current) =>
-                                  current.map((candidate) =>
-                                    candidate.id === product.id
-                                      ? { ...candidate, is_published: wasPublished }
-                                      : candidate,
-                                  ),
-                                );
-                                throw error;
-                              }
-                              await refresh();
-                              setNotice({
-                                message: product.is_published
-                                  ? `${product.name} is hidden from the shop.`
-                                  : `${product.name} is now in your shop.`,
-                                tone: "good",
-                              });
-                            });
-                          }}
-                        >
-                          {product.is_published ? "Hide" : "Show"}
-                        </button>
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
+                                    lines: [{ product_id: product.id, quantity: "1.000", discount_amount: "0.00" }],
+                                    payments: [{ amount: product.effective_normal_price ?? "0.00", method: "CASH" }],
+                                  });
+                                  await refresh();
+                                  setNotice({ message: `Sold one ${product.name} - ${receipt.sale.receipt_number} for ${formatMoney(receipt.sale.total_amount, currency)}`, tone: "good" });
+                                });
+                              }}
+                              onTogglePublish={() => {
+                                void runShop(async () => {
+                                  if (!businessId) return;
+                                  const wasPublished = product.is_published;
+                                  setProducts((current) => current.map((c) => c.id === product.id ? { ...c, is_published: !wasPublished } : c));
+                                  try {
+                                    if (wasPublished) { await unpublishProduct(businessId, product.id); }
+                                    else { await publishProduct(businessId, product.id); }
+                                  } catch (error) {
+                                    setProducts((current) => current.map((c) => c.id === product.id ? { ...c, is_published: wasPublished } : c));
+                                    throw error;
+                                  }
+                                  await refresh();
+                                  setNotice({ message: product.is_published ? `${product.name} is hidden from the shop.` : `${product.name} is now in your shop.`, tone: "good" });
+                                });
+                              }}
+                            />;
+                          })}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </>
             )}
@@ -1160,6 +1198,91 @@ function orderGroups(categories: Category[]): { category: Category; depth: numbe
         ? left.category.name.localeCompare(right.category.name)
         : left.depth - right.depth,
     );
+}
+
+// A single product row in the shelf - extracted so both the grouped view and the flat search
+// results view can render it without duplicating the full markup.
+function ShelfRow({
+  product,
+  level,
+  quantity,
+  out,
+  cover,
+  busy,
+  photosAvailable,
+  currency,
+  styles,
+  onPhoto,
+  onSell,
+  onTogglePublish,
+}: {
+  product: Product;
+  level: InventoryLevel | undefined;
+  quantity: number;
+  out: boolean;
+  cover: ProductImage | undefined;
+  busy: boolean;
+  photosAvailable: boolean | null;
+  currency: string;
+  styles: Record<string, string>;
+  onPhoto: () => void;
+  onSell: () => void;
+  onTogglePublish: () => void;
+}) {
+  return (
+    <li className={styles.shelfRow}>
+      {photosAvailable !== false ? (
+        <button
+          className={styles.shelfThumb}
+          onClick={onPhoto}
+          aria-label={cover ? `Photos of ${product.name}` : `Add a photo of ${product.name}`}
+        >
+          {cover?.delivery_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={cover.delivery_url} alt="" className={styles.shelfThumbImage} />
+          ) : (
+            <span className={styles.shelfThumbEmpty}>+</span>
+          )}
+        </button>
+      ) : null}
+
+      <span className={styles.shelfMain}>
+        <span className={styles.shelfName}>{product.name}</span>
+        <span className={styles.shelfFacts}>
+          <span className={`${styles.shelfPrice} tabular`}>
+            {formatMoneyOrOnRequest(product.selling_price, currency)}
+          </span>
+          {level ? (
+            out ? (
+              <span className={styles.shelfOut}>Out</span>
+            ) : (
+              <span className={quantity <= 3 ? styles.shelfLow : styles.shelfCount}>
+                {formatQuantity(level.available_quantity)} left
+              </span>
+            )
+          ) : null}
+          <span className={product.is_published ? styles.shelfLive : styles.shelfHidden}>
+            {product.is_published ? "In shop" : "Hidden"}
+          </span>
+        </span>
+      </span>
+
+      <span className={styles.shelfActions}>
+        <button className={styles.shelfSell} disabled={busy || out} onClick={onSell}>
+          Sell one
+        </button>
+        <button
+          className={styles.shelfToggle}
+          disabled={busy}
+          aria-pressed={product.is_published}
+          title={product.is_published ? "Hide this from the public shop" : "Show this in the public shop"}
+          onClick={onTogglePublish}
+        >
+          {product.is_published ? "Hide" : "Show"}
+        </button>
+      </span>
+    </li>
+  );
 }
 
 function ProductSheet({

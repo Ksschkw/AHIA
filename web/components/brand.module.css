@@ -24,22 +24,17 @@
   font-size: 17px;
   font-weight: 700;
   letter-spacing: 0.14em;
-  color: var(--shop-brand-text, var(--ink));
+  /* Always inherit from the nearest theme. On the dashboard this is --ink (dark on light, light on
+     dark). On the shop page the parent injects --shop-brand-text so it still does the right thing. */
+  color: var(--ink);
   transition: color 0.15s ease;
   display: inline-flex;
   align-items: center;
 }
 
-:global([data-theme="dark"]) .wordmark,
-:global([data-theme="dark"]) .wordmark span:not(.dotted) {
-  color: #f0ede6 !important;
-}
-
-@media (prefers-color-scheme: dark) {
-  :global(:not([data-theme="light"])) .wordmark,
-  :global(:not([data-theme="light"])) .wordmark span:not(.dotted) {
-    color: #f0ede6;
-  }
+/* Shop page overrides: when the merchant has a custom background the brand text adapts. */
+:global(.shopWordmark) .wordmark {
+  color: var(--shop-brand-text, var(--ink));
 }
 
 .wordmarkLarge {
@@ -47,16 +42,7 @@
   letter-spacing: 0.18em;
 }
 
+/* The dotted I carries the colour that marks the language. */
 .dotted {
   color: var(--clay);
-}
-
-:global([data-theme="dark"]) .dotted {
-  color: #e06d34;
-}
-
-@media (prefers-color-scheme: dark) {
-  :global(:not([data-theme="light"])) .dotted {
-    color: #e06d34;
-  }
 }
