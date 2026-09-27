@@ -90,6 +90,23 @@ function extractStorefrontTheme(description: string | null | undefined): {
   }
 }
 
+function isDarkColor(hex: string): boolean {
+  const clean = hex.replace("#", "");
+  if (clean.length === 3) {
+    const r = parseInt(clean[0] + clean[0], 16);
+    const g = parseInt(clean[1] + clean[1], 16);
+    const b = parseInt(clean[2] + clean[2], 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5;
+  }
+  if (clean.length === 6) {
+    const r = parseInt(clean.slice(0, 2), 16);
+    const g = parseInt(clean.slice(2, 4), 16);
+    const b = parseInt(clean.slice(4, 6), 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5;
+  }
+  return false;
+}
+
 export default async function ShopPage({ params }: Params) {
   const { slug } = await params;
   const shop = await fetchPublicShop(slug);
@@ -100,6 +117,7 @@ export default async function ShopPage({ params }: Params) {
   const { cleanDescription, themeColor, themeBg, themeBgImage } = extractStorefrontTheme(
     shop.description,
   );
+  const isBgDark = isDarkColor(themeBg);
 
   // The message arrives already written, because a customer with an empty text box often sends nothing.
   const message = `Hello ${shop.business_name}, I want to order:\n\n- \n\n(My name and delivery address:)`;
@@ -114,6 +132,7 @@ export default async function ShopPage({ params }: Params) {
           "--shop-theme-color": themeColor,
           "--shop-theme-bg": themeBg,
           "--shop-theme-bg-image": themeBgImage ? `url(${themeBgImage})` : "none",
+          "--shop-brand-text": isBgDark ? "#f0ede6" : "var(--ink)",
         } as React.CSSProperties
       }
     >

@@ -19,19 +19,23 @@ export function ShopCatalog({ products, groups, tenantSlug, businessName }: Shop
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
-  // Extract unique category names and counts from products
+  // Extract unique category names, counts, and primary thumbnails from products
   const categoryStats = useMemo(() => {
     const counts: Record<string, number> = {};
+    const thumbnails: Record<string, string | null> = {};
     for (const prod of products) {
       const group = prod.group_name || "General";
       counts[group] = (counts[group] || 0) + 1;
+      if (!thumbnails[group] && prod.primary_image_url) {
+        thumbnails[group] = prod.primary_image_url;
+      }
     }
     const categories = Object.keys(counts).sort((a, b) => {
       if (a === "General") return 1;
       if (b === "General") return -1;
       return a.localeCompare(b);
     });
-    return { counts, categories };
+    return { counts, categories, thumbnails };
   }, [products]);
 
   // Filter products based on search and selected category
@@ -115,6 +119,7 @@ export function ShopCatalog({ products, groups, tenantSlug, businessName }: Shop
             </button>
             {categoryStats.categories.map((cat) => {
               const count = categoryStats.counts[cat] ?? 0;
+              const thumb = categoryStats.thumbnails[cat];
               const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase();
               return (
                 <button
@@ -125,6 +130,10 @@ export function ShopCatalog({ products, groups, tenantSlug, businessName }: Shop
                   className={`${styles.pill} ${isSelected ? styles.pillActive : ""}`}
                   onClick={() => setSelectedCategory(cat)}
                 >
+                  {thumb ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={thumb} alt="" className={styles.pillThumb} />
+                  ) : null}
                   <span>{cat}</span>
                   <span className={styles.pillBadge}>{count}</span>
                 </button>
@@ -136,21 +145,30 @@ export function ShopCatalog({ products, groups, tenantSlug, businessName }: Shop
 
       {groupedSections ? (
         // Structured category sections
-        groupedSections.map((sec) => (
-          <div key={sec.category} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div className={styles.sectionHeader}>
-              <h2 className={styles.sectionHeading}>{sec.category}</h2>
-              <span className={styles.sectionCount}>
-                {sec.items.length} {sec.items.length === 1 ? "item" : "items"}
-              </span>
+        groupedSections.map((sec) => {
+          const secThumb = categoryStats.thumbnails[sec.category];
+          return (
+            <div key={sec.category} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div className={styles.sectionHeader}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  {secThumb ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={secThumb} alt="" className={styles.sectionThumb} />
+                  ) : null}
+                  <h2 className={styles.sectionHeading}>{sec.category}</h2>
+                </div>
+                <span className={styles.sectionCount}>
+                  {sec.items.length} {sec.items.length === 1 ? "item" : "items"}
+                </span>
+              </div>
+              <ul className={styles.grid}>
+                {sec.items.map((product) => (
+                  <ProductCard key={product.product_slug} product={product} tenantSlug={tenantSlug} />
+                ))}
+              </ul>
             </div>
-            <ul className={styles.grid}>
-              {sec.items.map((product) => (
-                <ProductCard key={product.product_slug} product={product} tenantSlug={tenantSlug} />
-              ))}
-            </ul>
-          </div>
-        ))
+          );
+        })
       ) : filteredProducts.length > 0 ? (
         // Flat filtered grid (filtered by search or single category)
         <div>

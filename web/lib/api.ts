@@ -531,6 +531,7 @@ export function createCategory(
   input: {
     name: string;
     parent_id?: string | null;
+    description?: string | null;
     default_normal_price?: string | null;
     default_wholesale_price?: string | null;
     default_pieces_per_pack?: number | null;

@@ -35,6 +35,7 @@ export interface AppShellProps {
   activeBusinessId: string | null;
   personName: string;
   onSwitchBusiness: (businessId: string) => void;
+  onSignOut?: () => void;
 }
 
 interface Destination {
@@ -94,6 +95,7 @@ export function AppShell({
   activeBusinessId,
   personName,
   onSwitchBusiness,
+  onSignOut,
 }: AppShellProps) {
   const pathname = usePathname() ?? "/app";
   const active = businesses.find((business) => business.id === activeBusinessId) ?? businesses[0];
@@ -148,7 +150,7 @@ export function AppShell({
       document.documentElement.setAttribute("data-theme", "dark");
     } else {
       setTheme("light");
-      document.documentElement.removeAttribute("data-theme");
+      document.documentElement.setAttribute("data-theme", "light");
     }
   }, []);
 
@@ -237,11 +239,23 @@ export function AppShell({
           <span>{theme === "dark" ? "Dark Mode" : "Light Mode"}</span>
         </button>
 
-        <p className={styles.railFoot}>
-          Signed in as
-          <br />
-          <strong>{personName}</strong>
-        </p>
+        <div className={styles.railFootWrap}>
+          <p className={styles.railFoot}>
+            Signed in as
+            <br />
+            <strong>{personName}</strong>
+          </p>
+          {onSignOut ? (
+            <button
+              type="button"
+              className={styles.railSignOutBtn}
+              onClick={onSignOut}
+              aria-label="Sign out of your account"
+            >
+              Sign out
+            </button>
+          ) : null}
+        </div>
       </nav>
 
       <div className={styles.body}>
@@ -359,6 +373,20 @@ export function AppShell({
           Three stay in the bar at the bottom of your screen, plus More and You. Choose the ones you
           use most - everything is always in here either way.
         </p>
+        {onSignOut ? (
+          <div className={styles.sheetSignOutWrap}>
+            <button
+              type="button"
+              className={styles.sheetSignOutBtn}
+              onClick={() => {
+                setMoreOpen(false);
+                onSignOut();
+              }}
+            >
+              Sign out of AHIA
+            </button>
+          </div>
+        ) : null}
       </Sheet>
     </div>
   );

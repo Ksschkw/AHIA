@@ -4235,11 +4235,18 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
    - Every theme color, background style, banner image, and accent must be properly wired through the database to CSS theme variables and the Three.js 3D shelf canvas so customizations actually reflect live on the public storefront.
 5. **Interactive Live Shop Preview**:
    - Overhaul the live shop preview so it accurately renders how the customer sees my shop in real time, with instant toggle between mobile phone frame and desktop views.
-6. **Category & Product Images (Crisp & Optional)**:
-   - Allow optional image uploads/URLs for categories and products.
-   - If provided, render tiny, crisp, beautiful thumbnails on category cards and public catalog items.
-   - If left empty, fall back gracefully to clean, stroke-matched icons with zero layout breakage.
-7. **Organized Public Shop (No Endless Flat Shelf Dump)**:
+6. **Category & Product Images (Crisp & Optional)** `[x]`:
+   - Added optional image uploads and URLs for categories and products.
+   - In trader items workspace (`/app/items`), traders can attach an item photo directly during item creation or update, with instant local preview, file selection, and image deletion.
+   - In category creation and editing, traders can provide an optional category image link.
+   - Renders tiny, crisp, beautiful thumbnails on category cards and product rows across Search results, Folder drilldown, and Family Tree views, falling back gracefully to clean SVG icons when no image is uploaded.
+   - On the public shop (`/shop/[slug]`), category filter pills and section headers render category thumbnails alongside counts.
+7. **Default Light Mode, Brand Contrast & Universal Sign Out** `[x]`:
+   - Set Light Mode as the explicit default across all pages via inline head script in `web/app/layout.tsx`, respecting dark mode only when user explicitly toggled it in `localStorage`.
+   - Fixed AHIA wordmark contrast in dark mode (`web/components/brand.module.css`) so `AH` and `A` dynamically adapt to `#f0ede6` instead of remaining black on dark backgrounds.
+   - Added `--shop-brand-text` contrast calculation on custom storefront themes (`web/app/shop/[slug]/page.tsx`).
+   - Added prominent, accessible Sign Out buttons in the side rail navigation footer and the mobile "More" menu sheet in `AppShell`.
+8. **Organized Public Shop (No Endless Flat Shelf Dump)**:
    - Instead of an endless flat list of items on generic shelves, organize the public storefront by categories and subcategories with clean tabs, filter pills, and structured category sections.
 
 ### 17.3 Hierarchical Alaba Waybill Lists & Trust Quotes `[x]`

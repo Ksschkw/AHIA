@@ -15,6 +15,7 @@ import { AppShell } from "@/components/app-shell";
 import {
   currentUser,
   listBusinesses,
+  signOut,
   type TenantSummary,
   type UserProfile,
 } from "@/lib/api";
@@ -64,12 +65,26 @@ export function AppFrame({ children }: { children: ReactNode }) {
     [router],
   );
 
+  const handleSignOut = useCallback(async () => {
+    try {
+      await signOut();
+    } catch {
+      // Continue cleanup on failure
+    }
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("ahia.session");
+      window.localStorage.removeItem(ACTIVE_BUSINESS_KEY);
+    }
+    router.replace("/start");
+  }, [router]);
+
   return (
     <AppShell
       businesses={businesses.map((business) => ({ id: business.id, name: business.name }))}
       activeBusinessId={activeBusinessId}
       personName={user ? `${user.first_name} ${user.last_name}` : ""}
       onSwitchBusiness={switchBusiness}
+      onSignOut={handleSignOut}
     >
       {children}
     </AppShell>

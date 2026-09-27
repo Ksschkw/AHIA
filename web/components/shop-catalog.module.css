@@ -280,3 +280,19 @@
   font-weight: 700;
   color: var(--ink);
 }
+
+.pillThumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  object-fit: cover;
+  flex: none;
+}
+
+.sectionThumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex: none;
+}
