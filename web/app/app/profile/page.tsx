@@ -77,6 +77,7 @@ export default function Profile() {
   const [themeBg, setThemeBg] = useState("#fbf7f0");
   const [themeBgImage, setThemeBgImage] = useState("");
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
+  const [isAppearanceExpanded, setIsAppearanceExpanded] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Baseline appearance for dirty check
@@ -511,310 +512,448 @@ export default function Profile() {
         ) : null}
 
         {/* Shop Appearance & Live Customization */}
+        {/* Shop Appearance & Live Customization */}
         {business ? (
-          <Card title="Shop Appearance & Customization">
-            <div className={styles.grid}>
-              <Field
-                label="Shop headline"
-                id="shop_headline"
-                value={storefrontHeadline}
-                onChange={setStorefrontHeadline}
-                placeholder="e.g. Phone accessories, wholesale & retail"
-                hint="Appears prominently at the top of your public shop."
-              />
-              <Field
-                label="Shop WhatsApp / Order phone"
-                id="shop_phone"
-                value={storefrontPhone}
-                onChange={setStorefrontPhone}
-                inputMode="tel"
-                placeholder="e.g. 08012345678"
-                hint="Where customers send completed lists and inquiries."
-              />
-              <Field
-                label="Shop description"
-                id="shop_description"
-                value={storefrontDescription}
-                onChange={setStorefrontDescription}
-                placeholder="e.g. We stock 21D screenguards, pouches, fast chargers and accessories in Alaba."
-                optional
-              />
-              <div>
-                <Field
-                  label="Background Image URL"
-                  id="shop_bg_image"
-                  value={themeBgImage.startsWith("data:") ? "(Uploaded image ready)" : themeBgImage}
-                  onChange={(val) => setThemeBgImage(val)}
-                  placeholder="https://... (direct image link)"
-                  optional
-                  hint="Enter a link or choose a photo below."
-                />
-                <div className={styles.uploadRow}>
-                  <label className={styles.fileInputLabel}>
-                    <span>Upload image</span>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      className={styles.hiddenFileInput}
-                      onChange={handleImageFileChange}
-                    />
-                  </label>
-                  {themeBgImage ? (
-                    <button
-                      type="button"
-                      className={styles.secondaryAction}
-                      onClick={() => {
-                        setThemeBgImage("");
-                        if (fileInputRef.current) fileInputRef.current.value = "";
-                      }}
-                    >
-                      Clear image
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-
-            {/* Accent Color picker */}
-            <div style={{ marginTop: "16px" }}>
-              <span style={{ fontSize: "13px", fontWeight: 700 }}>Shop Accent Color</span>
-              <div className={styles.colorSwatches}>
-                {[
-                  { name: "Forest Green", color: "#084a2f" },
-                  { name: "Royal Blue", color: "#1e40af" },
-                  { name: "Indigo", color: "#3730a3" },
-                  { name: "Maroon", color: "#831843" },
-                  { name: "Amber", color: "#b45309" },
-                  { name: "Slate", color: "#1e293b" },
-                ].map((item) => (
-                  <button
-                    key={item.color}
-                    type="button"
-                    title={item.name}
-                    className={`${styles.swatch} ${themeColor === item.color ? styles.swatchSelected : ""}`}
-                    style={{ background: item.color }}
-                    onClick={() => setThemeColor(item.color)}
-                  />
-                ))}
-              </div>
-              <div className={styles.colorPickerRow}>
-                <input
-                  type="color"
-                  value={themeColor}
-                  onChange={(e) => setThemeColor(e.target.value)}
-                  className={styles.colorInput}
-                  title="Pick any custom color"
-                />
-                <input
-                  type="text"
-                  value={themeColor}
-                  onChange={(e) => setThemeColor(e.target.value)}
-                  className={styles.hexInput}
-                  placeholder="#084a2f"
-                  maxLength={7}
-                />
-                <span style={{ fontSize: "12px", color: "var(--ink-3)" }}>
-                  Pick or enter any custom hex code
-                </span>
-              </div>
-            </div>
-
-            {/* Background Style picker */}
-            <div style={{ marginTop: "16px" }}>
-              <span style={{ fontSize: "13px", fontWeight: 700 }}>Shop Background Color</span>
-              <div className={styles.colorSwatches}>
-                {[
-                  { name: "Warm Sand", color: "#fbf7f0" },
-                  { name: "Clean White", color: "#ffffff" },
-                  { name: "Soft Cream", color: "#fefce8" },
-                  { name: "Cool Slate", color: "#f1f5f9" },
-                ].map((item) => (
-                  <button
-                    key={item.color}
-                    type="button"
-                    title={item.name}
-                    className={`${styles.swatch} ${themeBg === item.color ? styles.swatchSelected : ""}`}
-                    style={{ background: item.color, border: "1px solid var(--line-strong)" }}
-                    onClick={() => setThemeBg(item.color)}
-                  />
-                ))}
-              </div>
-              <div className={styles.colorPickerRow}>
-                <input
-                  type="color"
-                  value={themeBg}
-                  onChange={(e) => setThemeBg(e.target.value)}
-                  className={styles.colorInput}
-                  title="Pick any background color"
-                />
-                <input
-                  type="text"
-                  value={themeBg}
-                  onChange={(e) => setThemeBg(e.target.value)}
-                  className={styles.hexInput}
-                  placeholder="#fbf7f0"
-                  maxLength={7}
-                />
-                <span style={{ fontSize: "12px", color: "var(--ink-3)" }}>
-                  Enter any custom background hex
-                </span>
-              </div>
-            </div>
-
-            {/* Live Responsive Preview Card */}
-            <div className={styles.previewCard}>
-              <div className={styles.previewHeader}>
-                <span className={styles.previewTitle}>Live Shop Preview</span>
-                <div className={styles.previewToggleGroup}>
-                  <button
-                    type="button"
-                    className={`${styles.previewToggleBtn} ${previewMode === "desktop" ? styles.previewToggleBtnActive : ""}`}
-                    onClick={() => setPreviewMode("desktop")}
-                  >
-                    Desktop view
-                  </button>
-                  <button
-                    type="button"
-                    className={`${styles.previewToggleBtn} ${previewMode === "mobile" ? styles.previewToggleBtnActive : ""}`}
-                    onClick={() => setPreviewMode("mobile")}
-                  >
-                    Mobile view
-                  </button>
-                </div>
-              </div>
-
-              <div className={styles.previewWrapper}>
-                <div
-                  className={
-                    previewMode === "mobile"
-                      ? styles.previewFrameMobile
-                      : styles.previewFrameDesktop
-                  }
-                >
-                  <div
-                    className={styles.mockupBanner}
-                    style={{
-                      backgroundColor: themeBg,
-                      backgroundImage: themeBgImage ? `url(${themeBgImage})` : undefined,
-                      color: "#1e1b16",
-                    }}
-                  >
-                    <span className={styles.mockupTitle}>{business.name}</span>
-                    <span className={styles.mockupHeadline}>
+          <Card title="Shop Appearance & Storefront Branding">
+            {!isAppearanceExpanded ? (
+              <div className={styles.appearanceCollapsed}>
+                <div className={styles.appearanceSummaryRow}>
+                  <div className={styles.themeChipsGroup}>
+                    <div className={styles.chipWrap}>
+                      <span className={styles.chipLabel}>Accent</span>
+                      <span className={styles.chipSwatch} style={{ background: themeColor }} />
+                    </div>
+                    <div className={styles.chipWrap}>
+                      <span className={styles.chipLabel}>Surface</span>
+                      <span
+                        className={styles.chipSwatch}
+                        style={{ background: themeBg, border: "1px solid var(--line-strong)" }}
+                      />
+                    </div>
+                  </div>
+                  <div className={styles.appearanceTextSummary}>
+                    <span className={styles.summaryHeadline}>
                       {storefrontHeadline || "Wholesale & Retail Market Catalog"}
                     </span>
-                    {storefrontDescription ? (
-                      <p className={styles.mockupDesc}>{storefrontDescription}</p>
-                    ) : null}
-                    <span
-                      className={styles.mockupPhoneBadge}
-                      style={{ background: themeColor }}
-                    >
-                      Order on WhatsApp: {storefrontPhone || business.phone || "08012345678"}
+                    <span className={styles.summaryPath}>
+                      Public storefront: /shop/{business.public_path}
                     </span>
                   </div>
+                </div>
 
-                  <div className={styles.mockupContent}>
-                    <div style={{ display: "flex", gap: "8px", overflowX: "hidden" }}>
-                      <span
-                        style={{
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          padding: "4px 10px",
-                          borderRadius: "999px",
-                          background: themeColor,
-                          color: "#fff",
-                        }}
-                      >
-                        All Items
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "11px",
-                          fontWeight: 600,
-                          padding: "4px 10px",
-                          borderRadius: "999px",
-                          background: "#e7dfd2",
-                          color: "#1e1b16",
-                        }}
-                      >
-                        Screenguards
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "11px",
-                          fontWeight: 600,
-                          padding: "4px 10px",
-                          borderRadius: "999px",
-                          background: "#e7dfd2",
-                          color: "#1e1b16",
-                        }}
-                      >
-                        Accessories
-                      </span>
-                    </div>
+                <div style={{ marginTop: "14px", display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                  <Button onClick={() => setIsAppearanceExpanded(true)}>
+                    Customize Colors & Storefront
+                  </Button>
+                  <a
+                    className={styles.secondaryAction}
+                    href={`/shop/${business.public_path}`}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}
+                  >
+                    View Live Public Shop
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                  <p className={styles.note} style={{ margin: 0 }}>
+                    Customize the colors, banner and text your customers see when they open your link.
+                  </p>
+                  <button
+                    type="button"
+                    className={styles.secondaryAction}
+                    onClick={() => setIsAppearanceExpanded(false)}
+                  >
+                    Collapse Studio
+                  </button>
+                </div>
 
-                    <div className={styles.mockupProductGrid}>
-                      <div className={styles.mockupProductCard}>
-                        <span className={styles.mockupProductName}>21D Hot 8 / Hot 9</span>
-                        <span
-                          className={styles.mockupProductPrice}
-                          style={{ color: themeColor }}
+                {/* 1. Quick Market Presets */}
+                <div style={{ marginBottom: "20px" }}>
+                  <span style={{ fontSize: "13px", fontWeight: 700 }}>
+                    Market Presets (1-tap theme for both accent & background)
+                  </span>
+                  <div className={styles.presetThemesGrid}>
+                    {[
+                      { name: "Alaba Emerald", color: "#084a2f", bg: "#fbf7f0" },
+                      { name: "Balogun Navy", color: "#1e3a8a", bg: "#f8fafc" },
+                      { name: "Idumota Wine", color: "#831843", bg: "#fff1f2" },
+                      { name: "Trade Fair Amber", color: "#b45309", bg: "#fefce8" },
+                      { name: "Computer Village Cyan", color: "#0e7490", bg: "#f0fdfa" },
+                      { name: "Onitsha Violet", color: "#581c87", bg: "#faf5ff" },
+                      { name: "Lagos Slate", color: "#1e293b", bg: "#f1f5f9" },
+                      { name: "Midnight Onyx", color: "#0f172a", bg: "#18181b" },
+                    ].map((preset) => {
+                      const isSelected = themeColor === preset.color && themeBg === preset.bg;
+                      return (
+                        <button
+                          key={preset.name}
+                          type="button"
+                          className={`${styles.presetThemeBtn} ${isSelected ? styles.presetThemeBtnSelected : ""}`}
+                          onClick={() => {
+                            setThemeColor(preset.color);
+                            setThemeBg(preset.bg);
+                          }}
                         >
-                          NGN 350 / pack
+                          <span className={styles.presetDualDot}>
+                            <span className={styles.presetDotHalf} style={{ background: preset.color }} />
+                            <span className={styles.presetDotHalf} style={{ background: preset.bg }} />
+                          </span>
+                          <span className={styles.presetThemeName}>{preset.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2. Living Palette of Shades */}
+                <div style={{ marginBottom: "20px" }}>
+                  <span style={{ fontSize: "13px", fontWeight: 700 }}>
+                    Living Shade Spectrum (Tap any color)
+                  </span>
+                  {[
+                    {
+                      family: "Forest & Leaf Greens",
+                      shades: ["#10b981", "#16a34a", "#084a2f", "#064e3b"],
+                    },
+                    {
+                      family: "Royal & Ocean Blues",
+                      shades: ["#0284c7", "#2563eb", "#1e3a8a", "#172554"],
+                    },
+                    {
+                      family: "Amber & Terracotta",
+                      shades: ["#ea580c", "#d97706", "#b45309", "#7c2d12"],
+                    },
+                    {
+                      family: "Crimson & Wine",
+                      shades: ["#e11d48", "#dc2626", "#b91c1c", "#831843"],
+                    },
+                    {
+                      family: "Purples & Indigo",
+                      shades: ["#a855f7", "#7c3aed", "#4f46e5", "#4c1d95"],
+                    },
+                    {
+                      family: "Slate & Charcoal",
+                      shades: ["#64748b", "#334155", "#1e293b", "#0a0a0a"],
+                    },
+                  ].map((group) => (
+                    <div key={group.family} className={styles.shadesFamilyRow}>
+                      <span style={{ fontSize: "11px", color: "var(--ink-3)", fontWeight: 600 }}>
+                        {group.family}
+                      </span>
+                      <div className={styles.shadesRow}>
+                        {group.shades.map((shade) => (
+                          <button
+                            key={shade}
+                            type="button"
+                            className={`${styles.swatch} ${themeColor === shade ? styles.swatchSelected : ""}`}
+                            style={{ background: shade }}
+                            title={shade}
+                            onClick={() => setThemeColor(shade)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  <div className={styles.colorPickerRow}>
+                    <input
+                      type="color"
+                      value={themeColor}
+                      onChange={(e) => setThemeColor(e.target.value)}
+                      className={styles.colorInput}
+                      title="Pick any custom shade visually"
+                    />
+                    <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--ink)" }}>
+                      Visual Color Eyedropper (tap box to pick any exact shade)
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. Background Palette */}
+                <div style={{ marginBottom: "20px" }}>
+                  <span style={{ fontSize: "13px", fontWeight: 700 }}>Shop Background Surface</span>
+                  <div className={styles.shadesRow} style={{ marginTop: "8px" }}>
+                    {[
+                      { name: "Warm Sand", color: "#fbf7f0" },
+                      { name: "Clean White", color: "#ffffff" },
+                      { name: "Soft Cream", color: "#fefce8" },
+                      { name: "Cool Frost", color: "#f8fafc" },
+                      { name: "Pale Mint", color: "#f0fdf4" },
+                      { name: "Dark Charcoal", color: "#18181b" },
+                    ].map((item) => (
+                      <button
+                        key={item.color}
+                        type="button"
+                        title={item.name}
+                        className={`${styles.swatch} ${themeBg === item.color ? styles.swatchSelected : ""}`}
+                        style={{ background: item.color, border: "1px solid var(--line-strong)" }}
+                        onClick={() => setThemeBg(item.color)}
+                      />
+                    ))}
+                  </div>
+                  <div className={styles.colorPickerRow}>
+                    <input
+                      type="color"
+                      value={themeBg}
+                      onChange={(e) => setThemeBg(e.target.value)}
+                      className={styles.colorInput}
+                      title="Pick any background shade visually"
+                    />
+                    <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--ink)" }}>
+                      Custom Background Eyedropper
+                    </span>
+                  </div>
+                </div>
+
+                {/* 4. Text & Header Info */}
+                <div className={styles.grid}>
+                  <Field
+                    label="Shop headline"
+                    id="shop_headline"
+                    value={storefrontHeadline}
+                    onChange={setStorefrontHeadline}
+                    placeholder="e.g. Phone accessories, wholesale & retail"
+                    hint="Appears prominently at the top of your public shop."
+                  />
+                  <Field
+                    label="Shop WhatsApp / Order phone"
+                    id="shop_phone"
+                    value={storefrontPhone}
+                    onChange={setStorefrontPhone}
+                    inputMode="tel"
+                    placeholder="e.g. 08012345678"
+                    hint="Where customers send completed lists and inquiries."
+                  />
+                  <Field
+                    label="Shop description"
+                    id="shop_description"
+                    value={storefrontDescription}
+                    onChange={setStorefrontDescription}
+                    placeholder="e.g. We stock 21D screenguards, pouches, fast chargers and accessories in Alaba."
+                    optional
+                  />
+                  <div>
+                    <Field
+                      label="Background Image URL"
+                      id="shop_bg_image"
+                      value={themeBgImage.startsWith("data:") ? "(Uploaded image ready)" : themeBgImage}
+                      onChange={(val) => setThemeBgImage(val)}
+                      placeholder="https://... (direct image link)"
+                      optional
+                      hint="Enter a link or choose a photo below."
+                    />
+                    <div className={styles.uploadRow}>
+                      <label className={styles.fileInputLabel}>
+                        <span>Upload photo</span>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          className={styles.hiddenFileInput}
+                          onChange={handleImageFileChange}
+                        />
+                      </label>
+                      {themeBgImage ? (
+                        <button
+                          type="button"
+                          className={styles.secondaryAction}
+                          onClick={() => {
+                            setThemeBgImage("");
+                            if (fileInputRef.current) fileInputRef.current.value = "";
+                          }}
+                        >
+                          Clear photo
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5. Live Responsive Preview Card */}
+                <div className={styles.previewCard}>
+                  <div className={styles.previewHeader}>
+                    <span className={styles.previewTitle}>Live Shop Preview</span>
+                    <div className={styles.previewToggleGroup}>
+                      <button
+                        type="button"
+                        className={`${styles.previewToggleBtn} ${previewMode === "desktop" ? styles.previewToggleBtnActive : ""}`}
+                        onClick={() => setPreviewMode("desktop")}
+                      >
+                        Desktop view
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.previewToggleBtn} ${previewMode === "mobile" ? styles.previewToggleBtnActive : ""}`}
+                        onClick={() => setPreviewMode("mobile")}
+                      >
+                        Mobile phone view
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className={styles.previewWrapper}>
+                    <div
+                      className={
+                        previewMode === "mobile"
+                          ? styles.previewFrameMobile
+                          : styles.previewFrameDesktop
+                      }
+                    >
+                      <div
+                        className={styles.mockupBanner}
+                        style={{
+                          backgroundColor: themeBg,
+                          backgroundImage: themeBgImage ? `url(${themeBgImage})` : undefined,
+                          color: "#1e1b16",
+                        }}
+                      >
+                        <span className={styles.mockupTitle}>{business.name}</span>
+                        <span className={styles.mockupHeadline}>
+                          {storefrontHeadline || "Wholesale & Retail Market Catalog"}
+                        </span>
+                        {storefrontDescription ? (
+                          <p className={styles.mockupDesc}>{storefrontDescription}</p>
+                        ) : null}
+                        <span
+                          className={styles.mockupPhoneBadge}
+                          style={{ background: themeColor, color: "#ffffff" }}
+                        >
+                          Order on WhatsApp: {storefrontPhone || business.phone || "08012345678"}
                         </span>
                       </div>
-                      <div className={styles.mockupProductCard}>
-                        <span className={styles.mockupProductName}>Fast Type-C Cable</span>
-                        <span
-                          className={styles.mockupProductPrice}
-                          style={{ color: themeColor }}
-                        >
-                          NGN 1,200
-                        </span>
+
+                      <div className={styles.mockupContent}>
+                        <div style={{ display: "flex", gap: "8px", overflowX: "hidden" }}>
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              fontWeight: 700,
+                              padding: "4px 10px",
+                              borderRadius: "999px",
+                              background: themeColor,
+                              color: "#fff",
+                            }}
+                          >
+                            All Items
+                          </span>
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              fontWeight: 600,
+                              padding: "4px 10px",
+                              borderRadius: "999px",
+                              background: "#e7dfd2",
+                              color: "#1e1b16",
+                            }}
+                          >
+                            Screenguards
+                          </span>
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              fontWeight: 600,
+                              padding: "4px 10px",
+                              borderRadius: "999px",
+                              background: "#e7dfd2",
+                              color: "#1e1b16",
+                            }}
+                          >
+                            Fast Chargers
+                          </span>
+                        </div>
+
+                        <div className={styles.mockupProductGrid}>
+                          <div className={styles.mockupProductCard}>
+                            <span className={styles.mockupProductName}>21D Hot 8 / Hot 9</span>
+                            <span
+                              className={styles.mockupProductPrice}
+                              style={{ color: themeColor }}
+                            >
+                              NGN 350 / pack
+                            </span>
+                          </div>
+                          <div className={styles.mockupProductCard}>
+                            <span className={styles.mockupProductName}>Fast 65W Type-C Cable</span>
+                            <span
+                              className={styles.mockupProductPrice}
+                              style={{ color: themeColor }}
+                            >
+                              NGN 1,200
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            <div className={styles.formActions}>
-              <Button
-                busy={busyAction === "storefront"}
-                disabled={!isAppearanceDirty || busyAction === "storefront"}
-                onClick={() =>
-                  run("storefront", async () => {
-                    await updateStorefront(business.id, {
-                      headline: storefrontHeadline.trim() || null,
-                      description: storefrontDescription.trim() || null,
-                      contact_phone: storefrontPhone.trim() || null,
-                    });
-                    if (typeof window !== "undefined") {
-                      const themeData = JSON.stringify({
-                        color: themeColor,
-                        bg: themeBg,
-                        bgImage: themeBgImage.trim() || null,
-                      });
-                      window.localStorage.setItem(`ahia.theme.${business.id}`, themeData);
-                      window.localStorage.setItem(`ahia.theme.${business.public_path}`, themeData);
+                <div className={styles.formActions}>
+                  <button
+                    type="button"
+                    className={styles.secondaryAction}
+                    onClick={() => {
+                      setStorefrontHeadline(initialAppearance.headline);
+                      setStorefrontDescription(initialAppearance.description);
+                      setStorefrontPhone(initialAppearance.phone);
+                      setThemeColor(initialAppearance.color);
+                      setThemeBg(initialAppearance.bg);
+                      setThemeBgImage(initialAppearance.bgImage);
+                      setIsAppearanceExpanded(false);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <Button
+                    busy={busyAction === "storefront"}
+                    disabled={!isAppearanceDirty || busyAction === "storefront"}
+                    onClick={() =>
+                      run("storefront", async () => {
+                        const themeTrailer = `\n\n<!-- ahia-theme:${JSON.stringify({
+                          color: themeColor,
+                          bg: themeBg,
+                          bgImage: themeBgImage.startsWith("http") ? themeBgImage.trim() : "",
+                        })} -->`;
+                        const fullDescription = `${storefrontDescription.trim()}${themeTrailer}`;
+
+                        await updateStorefront(business.id, {
+                          headline: storefrontHeadline.trim() || null,
+                          description: fullDescription,
+                          contact_phone: storefrontPhone.trim() || null,
+                        });
+                        if (typeof window !== "undefined") {
+                          const themeData = JSON.stringify({
+                            color: themeColor,
+                            bg: themeBg,
+                            bgImage: themeBgImage.trim() || null,
+                          });
+                          window.localStorage.setItem(`ahia.theme.${business.id}`, themeData);
+                          window.localStorage.setItem(`ahia.theme.${business.public_path}`, themeData);
+                        }
+                        setInitialAppearance({
+                          headline: storefrontHeadline.trim(),
+                          description: storefrontDescription.trim(),
+                          phone: storefrontPhone.trim(),
+                          color: themeColor,
+                          bg: themeBg,
+                          bgImage: themeBgImage.trim(),
+                        });
+                        setNotice({
+                          message: "Shop appearance and branding saved.",
+                          hint: "Changes are live immediately on your public shop.",
+                          tone: "good",
+                        });
+                        setIsAppearanceExpanded(false);
+                      })
                     }
-                    setInitialAppearance({
-                      headline: storefrontHeadline.trim(),
-                      description: storefrontDescription.trim(),
-                      phone: storefrontPhone.trim(),
-                      color: themeColor,
-                      bg: themeBg,
-                      bgImage: themeBgImage.trim(),
-                    });
-                    setNotice({ message: "Shop appearance and branding saved.", tone: "good" });
-                  })
-                }
-              >
-                Save shop appearance
-              </Button>
-            </div>
+                  >
+                    Save shop appearance
+                  </Button>
+                </div>
+              </div>
+            )}
           </Card>
         ) : null}
 

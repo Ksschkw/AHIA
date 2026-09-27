@@ -34,6 +34,7 @@ export type PublicProduct = Schemas["PublicProductSchema"];
 export type PublicStorefront = Schemas["PublicStorefrontSchema"];
 export type PublicProductPage = Schemas["PublicProductPageSchema"];
 export type PublicList = Schemas["PublicListSchema"];
+export type PublicGroup = Schemas["PublicGroupSchema"];
 
 export async function fetchPublicShop(slug: string): Promise<PublicStorefront | null> {
   return getJson<PublicStorefront>(`/shop/${encodeURIComponent(slug)}`);

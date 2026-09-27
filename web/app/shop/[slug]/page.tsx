@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { BrandMark, Wordmark } from "@/components/brand";
+import { ShopCatalog } from "@/components/shop-catalog";
 import { fetchPublicShop, whatsAppLink } from "@/lib/server-api";
 import { formatMoneyOrOnRequest } from "@/lib/format";
 import styles from "./shop.module.css";
@@ -58,6 +59,37 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
  */
 export const revalidate = 60;
 
+function extractStorefrontTheme(description: string | null | undefined): {
+  cleanDescription: string;
+  themeColor: string;
+  themeBg: string;
+  themeBgImage: string;
+} {
+  const defaultTheme = {
+    cleanDescription: description ?? "",
+    themeColor: "#084a2f",
+    themeBg: "#fbf7f0",
+    themeBgImage: "",
+  };
+  if (!description) return defaultTheme;
+
+  const match = description.match(/<!--\s*ahia-theme:({[\s\S]*?})\s*-->/);
+  if (!match) return defaultTheme;
+
+  try {
+    const parsed = JSON.parse(match[1]);
+    const clean = description.replace(/<!--\s*ahia-theme:[\s\S]*?-->/, "").trim();
+    return {
+      cleanDescription: clean,
+      themeColor: parsed.color || defaultTheme.themeColor,
+      themeBg: parsed.bg || defaultTheme.themeBg,
+      themeBgImage: parsed.bgImage || "",
+    };
+  } catch {
+    return defaultTheme;
+  }
+}
+
 export default async function ShopPage({ params }: Params) {
   const { slug } = await params;
   const shop = await fetchPublicShop(slug);
@@ -65,13 +97,26 @@ export default async function ShopPage({ params }: Params) {
     notFound();
   }
 
+  const { cleanDescription, themeColor, themeBg, themeBgImage } = extractStorefrontTheme(
+    shop.description,
+  );
+
   // The message arrives already written, because a customer with an empty text box often sends nothing.
   const message = `Hello ${shop.business_name}, I want to order:\n\n- \n\n(My name and delivery address:)`;
   const whatsapp = whatsAppLink(shop.contact_phone, message);
   const call = shop.contact_phone ? `tel:${shop.contact_phone.replace(/\s/g, "")}` : null;
 
   return (
-    <main className={styles.page}>
+    <main
+      className={styles.page}
+      style={
+        {
+          "--shop-theme-color": themeColor,
+          "--shop-theme-bg": themeBg,
+          "--shop-theme-bg-image": themeBgImage ? `url(${themeBgImage})` : "none",
+        } as React.CSSProperties
+      }
+    >
       <header className={styles.header}>
         <div className={styles.headerInner}>
           <span className={styles.brand}>
@@ -90,7 +135,7 @@ export default async function ShopPage({ params }: Params) {
         <p className={styles.kicker}>You are looking at</p>
         <h1 className={styles.shopName}>{shop.business_name}</h1>
         {shop.headline ? <p className={styles.headline}>{shop.headline}</p> : null}
-        {shop.description ? <p className={styles.description}>{shop.description}</p> : null}
+        {cleanDescription ? <p className={styles.description}>{cleanDescription}</p> : null}
 
         <div className={styles.heroActions}>
           <Link className={styles.primary} href={`/list/${shop.tenant_slug}`}>
@@ -113,49 +158,12 @@ export default async function ShopPage({ params }: Params) {
         </p>
       </section>
 
-      <section className={styles.catalogue}>
-        <h2 className={styles.sectionTitle}>What we have</h2>
-        {shop.products.length === 0 ? (
-          <p className={styles.empty}>
-            The shelf is being photographed. Message us and we will tell you what we have today.
-          </p>
-        ) : (
-          <ul className={styles.grid}>
-            {shop.products.map((product) => (
-              <li key={product.product_slug} className={styles.card}>
-                <Link
-                  className={styles.cardLink}
-                  href={`/shop/${shop.tenant_slug}/product/${product.product_slug}`}
-                  // The page is fetched while the thumb is still deciding, so a tap opens a page that is
-                  // already there rather than a blank second.
-                  prefetch
-                >
-                  <span className={styles.imageWrap}>
-                    {product.primary_image_url ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img
-                        className={styles.image}
-                        src={product.primary_image_url}
-                        alt={product.name}
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    ) : (
-                      <span className={styles.imagePlaceholder} aria-hidden>
-                        <BrandMark size={22} />
-                      </span>
-                    )}
-                  </span>
-                  <span className={styles.productName}>{product.name}</span>
-                  <span className={styles.price}>
-                    {formatMoneyOrOnRequest(product.selling_price)}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <ShopCatalog
+        products={shop.products}
+        groups={shop.groups ?? []}
+        tenantSlug={shop.tenant_slug}
+        businessName={shop.business_name}
+      />
 
       <section className={styles.closing}>
         <h2 className={styles.closingTitle}>Want something not listed here?</h2>
@@ -179,7 +187,7 @@ export default async function ShopPage({ params }: Params) {
         <span className={styles.footerBrand}>
           <BrandMark size={16} /> {shop.business_name}
         </span>
-        <span className={styles.footerNote}>Powered by AHIA</span>
+        <span className={styles.footerNote}>Verified Merchant - Powered by AHIA</span>
       </footer>
     </main>
   );

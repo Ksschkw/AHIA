@@ -5,19 +5,25 @@
    set, or any word of the software's own vocabulary. */
 
 .page {
+  --shop-accent: var(--shop-theme-color, var(--leaf));
+  --shop-surface: var(--shop-theme-bg, var(--sand));
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
   padding-bottom: var(--space-6);
-  background: var(--sand);
+  background-color: var(--shop-surface);
+  background-image: var(--shop-theme-bg-image, none);
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
 }
 
 .header {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: var(--sand);
+  background: var(--shop-surface);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
 }
@@ -42,7 +48,7 @@
   flex: none;
   padding: 10px 14px;
   border-radius: var(--radius-pill);
-  background: var(--leaf);
+  background: var(--shop-accent);
   color: #fff;
   font-size: var(--text-sm);
   font-weight: 700;
@@ -107,13 +113,17 @@
 }
 
 .primary {
-  background: var(--leaf);
+  background: var(--shop-accent);
   color: #fff;
   flex: 1 1 260px;
 }
 
+.primary:hover {
+  filter: brightness(0.92);
+}
+
 .primary:active {
-  background: var(--leaf-dark);
+  filter: brightness(0.85);
 }
 
 .secondary {
@@ -127,8 +137,8 @@
   font-size: var(--text-sm);
   color: var(--ink-2);
   padding: var(--space-3);
-  border-left: 3px solid var(--leaf);
-  background: var(--leaf-soft);
+  border-left: 3px solid var(--shop-accent);
+  background: var(--card);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 
