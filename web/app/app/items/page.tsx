@@ -122,6 +122,17 @@ export default function Items() {
     });
   }, [currentCategoryId, categories]);
 
+  const [userRole, setUserRole] = useState<string>(() => {
+    if (typeof window === "undefined") return "OWNER";
+    return window.localStorage.getItem("ahia.business.role") ?? "OWNER";
+  });
+
+  const normalizedRole = userRole.toUpperCase();
+  const canManageCategories = normalizedRole === "OWNER" || normalizedRole === "MANAGER";
+  const canDeleteCategories = normalizedRole === "OWNER";
+  const canManageProducts = normalizedRole === "OWNER" || normalizedRole === "MANAGER";
+  const canDeleteProducts = normalizedRole === "OWNER";
+
   const [state, setState] = useState<"loading" | "ready">(() =>
     rememberedBusinessId() ? "ready" : "loading",
   );
@@ -206,6 +217,12 @@ export default function Items() {
           typeof window === "undefined" ? null : window.localStorage.getItem("ahia.business");
         const chosen = businesses.find((candidate) => candidate.id === remembered) ?? businesses[0];
         if (!chosen) return;
+        if (chosen.role_name) {
+          setUserRole(chosen.role_name);
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem("ahia.business.role", chosen.role_name);
+          }
+        }
         const detail = await getBusiness(chosen.id);
         setBusiness(detail);
         setCurrency(detail.currency);
@@ -796,22 +813,26 @@ export default function Items() {
 
           {currentCategory ? (
             <div className={styles.currentCategoryHeaderActions}>
-              <button
-                type="button"
-                className={styles.folderEditBtn}
-                title={`Edit "${currentCategory.name}" name and price defaults`}
-                onClick={() => openEditCategory(currentCategory)}
-              >
-                Edit Folder
-              </button>
-              <button
-                type="button"
-                className={styles.folderDeleteBtn}
-                title={`Delete "${currentCategory.name}"`}
-                onClick={() => setDeletingCategory(currentCategory)}
-              >
-                Delete Folder
-              </button>
+              {canManageCategories ? (
+                <button
+                  type="button"
+                  className={styles.folderEditBtn}
+                  title={`Edit "${currentCategory.name}" name and price defaults`}
+                  onClick={() => openEditCategory(currentCategory)}
+                >
+                  Edit Folder
+                </button>
+              ) : null}
+              {canDeleteCategories ? (
+                <button
+                  type="button"
+                  className={styles.folderDeleteBtn}
+                  title={`Delete "${currentCategory.name}"`}
+                  onClick={() => setDeletingCategory(currentCategory)}
+                >
+                  Delete Folder
+                </button>
+              ) : null}
             </div>
           ) : null}
         </nav>
@@ -832,33 +853,39 @@ export default function Items() {
         </div>
 
         <div className={styles.actionsRow}>
-          <div className={styles.btnGroup}>
-            <button
-              type="button"
-              className={styles.actionBtn}
-              onClick={() => {
-                setNewCatParentId(currentCategoryId);
-                setShowAddCategory((prev) => !prev);
-                setShowAddProduct(false);
-              }}
-            >
-              <PlusIcon size={15} />
-              <span>Add Category</span>
-            </button>
-            <button
-              type="button"
-              className={styles.actionBtnSecondary}
-              onClick={() => {
-                setShowAddProduct((prev) => !prev);
-                setShowAddCategory(false);
-              }}
-            >
-              <PlusIcon size={15} />
-              <span>Add Item</span>
-            </button>
-          </div>
+          {(canManageCategories || canManageProducts) ? (
+            <div className={styles.btnGroup}>
+              {canManageCategories ? (
+                <button
+                  type="button"
+                  className={styles.actionBtn}
+                  onClick={() => {
+                    setNewCatParentId(currentCategoryId);
+                    setShowAddCategory((prev) => !prev);
+                    setShowAddProduct(false);
+                  }}
+                >
+                  <PlusIcon size={15} />
+                  <span>Add Category</span>
+                </button>
+              ) : null}
+              {canManageProducts ? (
+                <button
+                  type="button"
+                  className={styles.actionBtnSecondary}
+                  onClick={() => {
+                    setShowAddProduct((prev) => !prev);
+                    setShowAddCategory(false);
+                  }}
+                >
+                  <PlusIcon size={15} />
+                  <span>Add Item</span>
+                </button>
+              ) : null}
+            </div>
+          ) : null}
 
-          {currentCategoryId && currentProducts.length > 0 ? (
+          {canManageProducts && currentCategoryId && currentProducts.length > 0 ? (
             <button
               type="button"
               className={styles.copyAllBtn}
@@ -1083,34 +1110,42 @@ export default function Items() {
                       ) : null}
                     </div>
 
-                    <div className={styles.folderCardFooter} onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        className={styles.folderEditBtn}
-                        title={`Edit "${cat.name}"`}
-                        onClick={() => openEditCategory(cat)}
-                      >
-                        <EditIcon size={12} />
-                        <span>Edit</span>
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.moveFolderBtn}
-                        title={`Move "${cat.name}" into another folder`}
-                        onClick={() => setMovingCategory(cat)}
-                      >
-                        <span>Move</span>
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.folderDeleteBtn}
-                        title={`Delete "${cat.name}"`}
-                        onClick={() => setDeletingCategory(cat)}
-                      >
-                        <TrashIcon size={12} />
-                        <span>Delete</span>
-                      </button>
-                    </div>
+                    {(canManageCategories || canDeleteCategories) ? (
+                      <div className={styles.folderCardFooter} onClick={(e) => e.stopPropagation()}>
+                        {canManageCategories ? (
+                          <button
+                            type="button"
+                            className={styles.folderEditBtn}
+                            title={`Edit "${cat.name}"`}
+                            onClick={() => openEditCategory(cat)}
+                          >
+                            <EditIcon size={12} />
+                            <span>Edit</span>
+                          </button>
+                        ) : null}
+                        {canManageCategories ? (
+                          <button
+                            type="button"
+                            className={styles.moveFolderBtn}
+                            title={`Move "${cat.name}" into another folder`}
+                            onClick={() => setMovingCategory(cat)}
+                          >
+                            <span>Move</span>
+                          </button>
+                        ) : null}
+                        {canDeleteCategories ? (
+                          <button
+                            type="button"
+                            className={styles.folderDeleteBtn}
+                            title={`Delete "${cat.name}"`}
+                            onClick={() => setDeletingCategory(cat)}
+                          >
+                            <TrashIcon size={12} />
+                            <span>Delete</span>
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}
@@ -1128,13 +1163,15 @@ export default function Items() {
                     key={prod.id}
                     className={`${styles.productRow} ${isSelected ? styles.productRowSelected : ""}`}
                   >
-                    <input
-                      type="checkbox"
-                      className={styles.itemCheckbox}
-                      checked={isSelected}
-                      onChange={() => toggleSelectProduct(prod.id)}
-                      aria-label={`Select ${prod.name}`}
-                    />
+                    {(canManageProducts || canDeleteProducts) ? (
+                      <input
+                        type="checkbox"
+                        className={styles.itemCheckbox}
+                        checked={isSelected}
+                        onChange={() => toggleSelectProduct(prod.id)}
+                        aria-label={`Select ${prod.name}`}
+                      />
+                    ) : null}
                     <div className={styles.productInfo}>
                       <span className={styles.productNameRow}>
                         <ItemBoxIcon size={16} className={styles.productIcon} />
@@ -1156,48 +1193,56 @@ export default function Items() {
                         </span>
                       </div>
                     </div>
-                    <div className={styles.productActions}>
-                      <button
-                        type="button"
-                        className={styles.itemEditBtn}
-                        title={`Edit "${prod.name}"`}
-                        onClick={() => openEditProduct(prod)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.copyItemBtn}
-                        title={`Copy ${prod.name} into another folder`}
-                        onClick={() => openBatchModal("copy", [prod.id], prod.name)}
-                      >
-                        Copy
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.moveItemBtn}
-                        title={`Move ${prod.name} into another folder or root`}
-                        onClick={() => openBatchModal("move", [prod.id], prod.name)}
-                      >
-                        Move
-                      </button>
-                      <button
-                        type="button"
-                        className={`${styles.publishToggleBtn} ${prod.is_published ? styles.published : ""}`}
-                        disabled={busyAction === `pub-${prod.id}`}
-                        onClick={() => void handleTogglePublish(prod)}
-                      >
-                        {prod.is_published ? "In shop" : "Hidden"}
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.itemDeleteBtn}
-                        title={`Delete "${prod.name}"`}
-                        onClick={() => setDeletingProduct(prod)}
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    {(canManageProducts || canDeleteProducts) ? (
+                      <div className={styles.productActions}>
+                        {canManageProducts ? (
+                          <>
+                            <button
+                              type="button"
+                              className={styles.itemEditBtn}
+                              title={`Edit "${prod.name}"`}
+                              onClick={() => openEditProduct(prod)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.copyItemBtn}
+                              title={`Copy ${prod.name} into another folder`}
+                              onClick={() => openBatchModal("copy", [prod.id], prod.name)}
+                            >
+                              Copy
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.moveItemBtn}
+                              title={`Move ${prod.name} into another folder or root`}
+                              onClick={() => openBatchModal("move", [prod.id], prod.name)}
+                            >
+                              Move
+                            </button>
+                            <button
+                              type="button"
+                              className={`${styles.publishToggleBtn} ${prod.is_published ? styles.published : ""}`}
+                              disabled={busyAction === `pub-${prod.id}`}
+                              onClick={() => void handleTogglePublish(prod)}
+                            >
+                              {prod.is_published ? "In shop" : "Hidden"}
+                            </button>
+                          </>
+                        ) : null}
+                        {canDeleteProducts ? (
+                          <button
+                            type="button"
+                            className={styles.itemDeleteBtn}
+                            title={`Delete "${prod.name}"`}
+                            onClick={() => setDeletingProduct(prod)}
+                          >
+                            Delete
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}
@@ -1263,13 +1308,13 @@ export default function Items() {
                   setCurrentCategoryId(id);
                   setViewMode("folder");
                 }}
-                onStartEditCategory={openEditCategory}
-                onStartDeleteCategory={setDeletingCategory}
-                onStartMoveCategory={setMovingCategory}
-                onStartEditProduct={openEditProduct}
-                onStartDeleteProduct={setDeletingProduct}
-                onStartBatchProduct={openBatchModal}
-                onTogglePublish={handleTogglePublish}
+                onStartEditCategory={canManageCategories ? openEditCategory : undefined}
+                onStartDeleteCategory={canDeleteCategories ? setDeletingCategory : undefined}
+                onStartMoveCategory={canManageCategories ? setMovingCategory : undefined}
+                onStartEditProduct={canManageProducts ? openEditProduct : undefined}
+                onStartDeleteProduct={canDeleteProducts ? setDeletingProduct : undefined}
+                onStartBatchProduct={canManageProducts ? openBatchModal : undefined}
+                onTogglePublish={canManageProducts ? handleTogglePublish : undefined}
                 busyAction={busyAction}
               />
             )}
@@ -1333,34 +1378,42 @@ export default function Items() {
                         ) : null}
                       </div>
 
-                      <div className={styles.folderCardFooter} onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          className={styles.folderEditBtn}
-                          title={`Edit "${cat.name}"`}
-                          onClick={() => openEditCategory(cat)}
-                        >
-                          <EditIcon size={12} />
-                          <span>Edit</span>
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.moveFolderBtn}
-                          title={`Move "${cat.name}" into another folder`}
-                          onClick={() => setMovingCategory(cat)}
-                        >
-                          <span>Move</span>
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.folderDeleteBtn}
-                          title={`Delete "${cat.name}"`}
-                          onClick={() => setDeletingCategory(cat)}
-                        >
-                          <TrashIcon size={12} />
-                          <span>Delete</span>
-                        </button>
-                      </div>
+                      {(canManageCategories || canDeleteCategories) ? (
+                        <div className={styles.folderCardFooter} onClick={(e) => e.stopPropagation()}>
+                          {canManageCategories ? (
+                            <button
+                              type="button"
+                              className={styles.folderEditBtn}
+                              title={`Edit "${cat.name}"`}
+                              onClick={() => openEditCategory(cat)}
+                            >
+                              <EditIcon size={12} />
+                              <span>Edit</span>
+                            </button>
+                          ) : null}
+                          {canManageCategories ? (
+                            <button
+                              type="button"
+                              className={styles.moveFolderBtn}
+                              title={`Move "${cat.name}" into another folder`}
+                              onClick={() => setMovingCategory(cat)}
+                            >
+                              <span>Move</span>
+                            </button>
+                          ) : null}
+                          {canDeleteCategories ? (
+                            <button
+                              type="button"
+                              className={styles.folderDeleteBtn}
+                              title={`Delete "${cat.name}"`}
+                              onClick={() => setDeletingCategory(cat)}
+                            >
+                              <TrashIcon size={12} />
+                              <span>Delete</span>
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -1375,7 +1428,7 @@ export default function Items() {
                 {currentCategoryId === null ? "Items at Root / Uncategorized" : "Items in this category"} (
                 {currentProducts.length})
               </h2>
-              {currentProducts.length > 0 ? (
+              {currentProducts.length > 0 && (canManageProducts || canDeleteProducts) ? (
                 <button
                   type="button"
                   style={{
@@ -1399,40 +1452,50 @@ export default function Items() {
               <Empty
                 illustration={<EmptyShelfIllustration size={110} />}
                 action={
-                  <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      className={styles.actionBtn}
-                      onClick={() => {
-                        setNewCatParentId(currentCategoryId);
-                        setShowAddCategory(true);
-                        setShowAddProduct(false);
-                      }}
-                    >
-                      <PlusIcon size={14} /> Add Category
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.actionBtnSecondary}
-                      onClick={() => {
-                        setShowAddProduct(true);
-                        setShowAddCategory(false);
-                      }}
-                    >
-                      <PlusIcon size={14} /> Add Item
-                    </button>
-                  </div>
+                  (canManageCategories || canManageProducts) ? (
+                    <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
+                      {canManageCategories ? (
+                        <button
+                          type="button"
+                          className={styles.actionBtn}
+                          onClick={() => {
+                            setNewCatParentId(currentCategoryId);
+                            setShowAddCategory(true);
+                            setShowAddProduct(false);
+                          }}
+                        >
+                          <PlusIcon size={14} /> Add Category
+                        </button>
+                      ) : null}
+                      {canManageProducts ? (
+                        <button
+                          type="button"
+                          className={styles.actionBtnSecondary}
+                          onClick={() => {
+                            setShowAddProduct(true);
+                            setShowAddCategory(false);
+                          }}
+                        >
+                          <PlusIcon size={14} /> Add Item
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : undefined
                 }
               >
                 {currentCategoryId
                   ? `"${breadcrumbs[breadcrumbs.length - 1]?.name ?? "This category"}" is empty.`
                   : "Your catalog is empty."}
                 <br />
-                Add categories with wholesale and retail prices, or add items directly.
+                {canManageCategories || canManageProducts
+                  ? "Add categories with wholesale and retail prices, or add items directly."
+                  : "No items or categories have been added to this section yet."}
               </Empty>
             ) : currentProducts.length === 0 ? (
               <p style={{ fontSize: "13px", color: "var(--ink-3)", padding: "8px 0" }}>
-                No direct items here. Open a subcategory folder above or tap &quot;+ Add Item&quot;.
+                {canManageProducts
+                  ? "No direct items here. Open a subcategory folder above or tap \"+ Add Item\"."
+                  : "No direct items in this folder."}
               </p>
             ) : (
               <div className={styles.productsList}>
@@ -1444,13 +1507,15 @@ export default function Items() {
                       key={prod.id}
                       className={`${styles.productRow} ${isSelected ? styles.productRowSelected : ""}`}
                     >
-                      <input
-                        type="checkbox"
-                        className={styles.itemCheckbox}
-                        checked={isSelected}
-                        onChange={() => toggleSelectProduct(prod.id)}
-                        aria-label={`Select ${prod.name}`}
-                      />
+                      {(canManageProducts || canDeleteProducts) ? (
+                        <input
+                          type="checkbox"
+                          className={styles.itemCheckbox}
+                          checked={isSelected}
+                          onChange={() => toggleSelectProduct(prod.id)}
+                          aria-label={`Select ${prod.name}`}
+                        />
+                      ) : null}
                       <div className={styles.productInfo}>
                         <span className={styles.productNameRow}>
                           <ItemBoxIcon size={16} className={styles.productIcon} />
@@ -1471,48 +1536,56 @@ export default function Items() {
                           </span>
                         </div>
                       </div>
-                      <div className={styles.productActions}>
-                        <button
-                          type="button"
-                          className={styles.itemEditBtn}
-                          title={`Edit "${prod.name}"`}
-                          onClick={() => openEditProduct(prod)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.copyItemBtn}
-                          title={`Copy ${prod.name} into another folder`}
-                          onClick={() => openBatchModal("copy", [prod.id], prod.name)}
-                        >
-                          Copy
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.moveItemBtn}
-                          title={`Move ${prod.name} into another folder or root`}
-                          onClick={() => openBatchModal("move", [prod.id], prod.name)}
-                        >
-                          Move
-                        </button>
-                        <button
-                          type="button"
-                          className={`${styles.publishToggleBtn} ${prod.is_published ? styles.published : ""}`}
-                          disabled={busyAction === `pub-${prod.id}`}
-                          onClick={() => void handleTogglePublish(prod)}
-                        >
-                          {prod.is_published ? "In shop" : "Hidden"}
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.itemDeleteBtn}
-                          title={`Delete "${prod.name}"`}
-                          onClick={() => setDeletingProduct(prod)}
-                        >
-                          Delete
-                        </button>
-                      </div>
+                      {(canManageProducts || canDeleteProducts) ? (
+                        <div className={styles.productActions}>
+                          {canManageProducts ? (
+                            <>
+                              <button
+                                type="button"
+                                className={styles.itemEditBtn}
+                                title={`Edit "${prod.name}"`}
+                                onClick={() => openEditProduct(prod)}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.copyItemBtn}
+                                title={`Copy ${prod.name} into another folder`}
+                                onClick={() => openBatchModal("copy", [prod.id], prod.name)}
+                              >
+                                Copy
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.moveItemBtn}
+                                title={`Move ${prod.name} into another folder or root`}
+                                onClick={() => openBatchModal("move", [prod.id], prod.name)}
+                              >
+                                Move
+                              </button>
+                              <button
+                                type="button"
+                                className={`${styles.publishToggleBtn} ${prod.is_published ? styles.published : ""}`}
+                                disabled={busyAction === `pub-${prod.id}`}
+                                onClick={() => void handleTogglePublish(prod)}
+                              >
+                                {prod.is_published ? "In shop" : "Hidden"}
+                              </button>
+                            </>
+                          ) : null}
+                          {canDeleteProducts ? (
+                            <button
+                              type="button"
+                              className={styles.itemDeleteBtn}
+                              title={`Delete "${prod.name}"`}
+                              onClick={() => setDeletingProduct(prod)}
+                            >
+                              Delete
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -1523,36 +1596,42 @@ export default function Items() {
       )}
 
       {/* Samsung File Manager Style Sticky Selection Toolbar */}
-      {selectedProductIds.size > 0 ? (
+      {selectedProductIds.size > 0 && (canManageProducts || canDeleteProducts) ? (
         <div className={styles.selectionToolbar}>
           <div className={styles.selectionCountBadge}>
             <CheckMarkIcon size={16} />
             <span>{selectedProductIds.size} selected</span>
           </div>
           <div className={styles.selectionActions}>
-            <button
-              type="button"
-              className={styles.selectionBtn}
-              onClick={() => openBatchModal("copy", Array.from(selectedProductIds))}
-            >
-              <CopyIcon size={13} />
-              <span>Copy to...</span>
-            </button>
-            <button
-              type="button"
-              className={styles.selectionBtn}
-              onClick={() => openBatchModal("move", Array.from(selectedProductIds))}
-            >
-              <span>Move to...</span>
-            </button>
-            <button
-              type="button"
-              className={styles.selectionBtnDanger}
-              onClick={() => setConfirmBatchDelete(true)}
-            >
-              <TrashIcon size={13} />
-              <span>Delete selected ({selectedProductIds.size})</span>
-            </button>
+            {canManageProducts ? (
+              <>
+                <button
+                  type="button"
+                  className={styles.selectionBtn}
+                  onClick={() => openBatchModal("copy", Array.from(selectedProductIds))}
+                >
+                  <CopyIcon size={13} />
+                  <span>Copy to...</span>
+                </button>
+                <button
+                  type="button"
+                  className={styles.selectionBtn}
+                  onClick={() => openBatchModal("move", Array.from(selectedProductIds))}
+                >
+                  <span>Move to...</span>
+                </button>
+              </>
+            ) : null}
+            {canDeleteProducts ? (
+              <button
+                type="button"
+                className={styles.selectionBtnDanger}
+                onClick={() => setConfirmBatchDelete(true)}
+              >
+                <TrashIcon size={13} />
+                <span>Delete selected ({selectedProductIds.size})</span>
+              </button>
+            ) : null}
             <button
               type="button"
               className={styles.selectionBtnSecondary}
@@ -2297,8 +2376,8 @@ function FamilyTreeRenderer({
   onStartMoveCategory?: (category: Category) => void;
   onStartEditProduct?: (product: Product) => void;
   onStartDeleteProduct?: (product: Product) => void;
-  onStartBatchProduct: (mode: "copy" | "move", productIds: string[], sourceName?: string) => void;
-  onTogglePublish: (prod: Product) => void;
+  onStartBatchProduct?: (mode: "copy" | "move", productIds: string[], sourceName?: string) => void;
+  onTogglePublish?: (prod: Product) => void;
   busyAction: string | null;
 }) {
   const childCategories = categories.filter((c) => (c.parent_id ?? null) === parentId);
@@ -2377,53 +2456,55 @@ function FamilyTreeRenderer({
                 </div>
               ) : null}
 
-              <div className={styles.treeCategoryFooter}>
-                {onStartEditCategory ? (
-                  <button
-                    type="button"
-                    className={styles.folderEditBtn}
-                    title={`Edit ${cat.name}`}
-                    onClick={() => onStartEditCategory(cat)}
-                  >
-                    <EditIcon size={12} />
-                    <span>Edit</span>
-                  </button>
-                ) : null}
-                {catDirectProducts.length > 0 ? (
-                  <button
-                    type="button"
-                    className={styles.copyItemBtn}
-                    title={`Copy all ${catDirectProducts.length} items in ${cat.name} to another folder`}
-                    onClick={() =>
-                      onStartBatchProduct("copy", catDirectProducts.map((p) => p.id), `${cat.name} items`)
-                    }
-                  >
-                    <CopyIcon size={12} />
-                    <span>Copy All ({catDirectProducts.length})</span>
-                  </button>
-                ) : null}
-                {onStartMoveCategory ? (
-                  <button
-                    type="button"
-                    className={styles.moveItemBtn}
-                    title={`Move ${cat.name} folder`}
-                    onClick={() => onStartMoveCategory(cat)}
-                  >
-                    <span>Move</span>
-                  </button>
-                ) : null}
-                {onStartDeleteCategory ? (
-                  <button
-                    type="button"
-                    className={styles.folderDeleteBtn}
-                    title={`Delete ${cat.name} folder`}
-                    onClick={() => onStartDeleteCategory(cat)}
-                  >
-                    <TrashIcon size={12} />
-                    <span>Delete</span>
-                  </button>
-                ) : null}
-              </div>
+              {(onStartEditCategory || (catDirectProducts.length > 0 && onStartBatchProduct) || onStartMoveCategory || onStartDeleteCategory) ? (
+                <div className={styles.treeCategoryFooter}>
+                  {onStartEditCategory ? (
+                    <button
+                      type="button"
+                      className={styles.folderEditBtn}
+                      title={`Edit ${cat.name}`}
+                      onClick={() => onStartEditCategory(cat)}
+                    >
+                      <EditIcon size={12} />
+                      <span>Edit</span>
+                    </button>
+                  ) : null}
+                  {catDirectProducts.length > 0 && onStartBatchProduct ? (
+                    <button
+                      type="button"
+                      className={styles.copyItemBtn}
+                      title={`Copy all ${catDirectProducts.length} items in ${cat.name} to another folder`}
+                      onClick={() =>
+                        onStartBatchProduct("copy", catDirectProducts.map((p) => p.id), `${cat.name} items`)
+                      }
+                    >
+                      <CopyIcon size={12} />
+                      <span>Copy All ({catDirectProducts.length})</span>
+                    </button>
+                  ) : null}
+                  {onStartMoveCategory ? (
+                    <button
+                      type="button"
+                      className={styles.moveItemBtn}
+                      title={`Move ${cat.name} folder`}
+                      onClick={() => onStartMoveCategory(cat)}
+                    >
+                      <span>Move</span>
+                    </button>
+                  ) : null}
+                  {onStartDeleteCategory ? (
+                    <button
+                      type="button"
+                      className={styles.folderDeleteBtn}
+                      title={`Delete ${cat.name} folder`}
+                      onClick={() => onStartDeleteCategory(cat)}
+                    >
+                      <TrashIcon size={12} />
+                      <span>Delete</span>
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
             {/* Connecting branch for children (only if expanded) */}
@@ -2466,14 +2547,23 @@ function FamilyTreeRenderer({
                     <ItemBoxIcon size={15} className={styles.treeProductIcon} />
                     <span className={styles.treeProductName}>{prod.name}</span>
                   </div>
-                  <button
-                    type="button"
-                    className={`${styles.publishToggleBtn} ${prod.is_published ? styles.published : ""}`}
-                    disabled={busyAction === `pub-${prod.id}`}
-                    onClick={() => onTogglePublish(prod)}
-                  >
-                    {prod.is_published ? "In shop" : "Hidden"}
-                  </button>
+                  {onTogglePublish ? (
+                    <button
+                      type="button"
+                      className={`${styles.publishToggleBtn} ${prod.is_published ? styles.published : ""}`}
+                      disabled={busyAction === `pub-${prod.id}`}
+                      onClick={() => onTogglePublish(prod)}
+                    >
+                      {prod.is_published ? "In shop" : "Hidden"}
+                    </button>
+                  ) : (
+                    <span
+                      className={`${styles.publishToggleBtn} ${prod.is_published ? styles.published : ""}`}
+                      style={{ cursor: "default", opacity: 0.85 }}
+                    >
+                      {prod.is_published ? "In shop" : "Hidden"}
+                    </span>
+                  )}
                 </div>
 
                 <div className={styles.treeProductPrices}>
@@ -2491,47 +2581,53 @@ function FamilyTreeRenderer({
                   </span>
                 </div>
 
-                <div className={styles.treeProductFooter}>
-                  {onStartEditProduct ? (
-                    <button
-                      type="button"
-                      className={styles.itemEditBtn}
-                      onClick={() => onStartEditProduct(prod)}
-                      title={`Edit ${prod.name}`}
-                    >
-                      <EditIcon size={12} />
-                      <span>Edit</span>
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className={styles.copyItemBtn}
-                    onClick={() => onStartBatchProduct("copy", [prod.id], prod.name)}
-                    title={`Copy ${prod.name} to another category`}
-                  >
-                    <CopyIcon size={12} />
-                    <span>Copy</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.moveItemBtn}
-                    onClick={() => onStartBatchProduct("move", [prod.id], prod.name)}
-                    title={`Move ${prod.name} to another category`}
-                  >
-                    <span>Move</span>
-                  </button>
-                  {onStartDeleteProduct ? (
-                    <button
-                      type="button"
-                      className={styles.itemDeleteBtn}
-                      onClick={() => onStartDeleteProduct(prod)}
-                      title={`Delete ${prod.name}`}
-                    >
-                      <TrashIcon size={12} />
-                      <span>Delete</span>
-                    </button>
-                  ) : null}
-                </div>
+                {(onStartEditProduct || onStartBatchProduct || onStartDeleteProduct) ? (
+                  <div className={styles.treeProductFooter}>
+                    {onStartEditProduct ? (
+                      <button
+                        type="button"
+                        className={styles.itemEditBtn}
+                        onClick={() => onStartEditProduct(prod)}
+                        title={`Edit ${prod.name}`}
+                      >
+                        <EditIcon size={12} />
+                        <span>Edit</span>
+                      </button>
+                    ) : null}
+                    {onStartBatchProduct ? (
+                      <>
+                        <button
+                          type="button"
+                          className={styles.copyItemBtn}
+                          onClick={() => onStartBatchProduct("copy", [prod.id], prod.name)}
+                          title={`Copy ${prod.name} to another category`}
+                        >
+                          <CopyIcon size={12} />
+                          <span>Copy</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.moveItemBtn}
+                          onClick={() => onStartBatchProduct("move", [prod.id], prod.name)}
+                          title={`Move ${prod.name} to another category`}
+                        >
+                          <span>Move</span>
+                        </button>
+                      </>
+                    ) : null}
+                    {onStartDeleteProduct ? (
+                      <button
+                        type="button"
+                        className={styles.itemDeleteBtn}
+                        onClick={() => onStartDeleteProduct(prod)}
+                        title={`Delete ${prod.name}`}
+                      >
+                        <TrashIcon size={12} />
+                        <span>Delete</span>
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </div>
           );
