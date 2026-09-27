@@ -4367,3 +4367,9 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
 2. **Adding Items Directly Under Custom Subcategories** `[x]`:
    - Custom subcategories display their current item counts, +/- quantity steppers, and a one-tap `+ Add item here` button that focuses the custom item input with the subcategory pre-selected.
    - Hierarchy resolution (`resolveHeadingHierarchy`) walks the full ancestor chain, prepending the parent group and rendering multi-level tables in the list review drawer, canvas waybill image, and PDF download.
+
+### 17.13 Customer List Category Hierarchy Replication on Native Mobile App `[x]`
+1. **Hierarchical Order Line Grouping in Native Expo App (`mobile/app/home.tsx`)** `[x]`:
+   - Replicated the web app's category and subcategory grouping across all incoming customer lists on the mobile client.
+   - Incoming orders now group items under clean category banners (`SCREEN GUARD`), indented subcategories (`> 21D`), and clear item lines with prices and cannot-get toggles.
+   - Eliminates ambiguity when customers submit orders with matching model names across different product categories.

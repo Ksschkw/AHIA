@@ -28,6 +28,7 @@ import {
   listCategories,
   type Category,
   type CustomerList,
+  type CustomerListLine,
   type Product,
   type TenantSummary,
 } from "@/lib/api";
@@ -39,6 +40,56 @@ import {
   getPendingSalesCount,
 } from "@/lib/db";
 import { forgetSession } from "@/lib/session";
+
+function groupCustomerListLines(lines: CustomerListLine[]) {
+  const rootMap = new Map<string, Map<string, CustomerListLine[]>>();
+
+  for (const line of lines) {
+    if (line.note === "heading") continue;
+
+    const rawGroup = line.group_name?.trim();
+    let root = "General Items";
+    let sub: string | null = null;
+
+    if (rawGroup) {
+      if (rawGroup.includes(" > ")) {
+        const parts = rawGroup.split(" > ").map((s: string) => s.trim()).filter(Boolean);
+        root = parts[0] || "General Items";
+        sub = parts.length > 1 ? parts.slice(1).join(" > ") : null;
+      } else {
+        root = rawGroup;
+      }
+    }
+
+    const subKey = sub ?? "__direct__";
+    if (!rootMap.has(root)) {
+      rootMap.set(root, new Map());
+    }
+    const subs = rootMap.get(root)!;
+    if (!subs.has(subKey)) {
+      subs.set(subKey, []);
+    }
+    subs.get(subKey)!.push(line);
+  }
+
+  const sections: Array<{
+    root: string;
+    subs: Array<{ sub: string | null; lines: CustomerListLine[] }>;
+  }> = [];
+
+  for (const [root, subsMap] of rootMap.entries()) {
+    const subList: Array<{ sub: string | null; lines: CustomerListLine[] }> = [];
+    for (const [subKey, subLines] of subsMap.entries()) {
+      subList.push({
+        sub: subKey === "__direct__" ? null : subKey,
+        lines: subLines,
+      });
+    }
+    sections.push({ root, subs: subList });
+  }
+
+  return sections;
+}
 
 function formatMoney(amount: string | null | undefined): string {
   if (!amount) return "Price on request";
@@ -554,44 +605,62 @@ export default function Home() {
                 </View>
               </View>
 
-              {/* Order Lines */}
+              {/* Hierarchical Order Lines */}
               <View style={styles.linesList}>
-                {list.lines.map((line) => {
-                  const isCannotGet = line.state === "cannot_get";
-                  return (
-                    <View
-                      key={line.id}
-                      style={[styles.lineItem, isCannotGet && styles.lineUnavailable]}
-                    >
-                      <View style={styles.lineMain}>
-                        {line.group_name ? (
-                          <Text style={styles.lineCategory}>{line.group_name}</Text>
-                        ) : null}
-                        <Text style={styles.lineName}>
-                          {line.product_name ?? line.free_text ?? "Item"}
-                        </Text>
-                        <Text style={styles.lineQty}>
-                          {Number(line.quantity)} pcs
-                          {line.shop_price ? ` - ${formatMoney(line.shop_price)}` : ""}
-                        </Text>
-                      </View>
-
-                      <Pressable
-                        style={[styles.cannotGetBtn, isCannotGet && styles.cannotGetActive]}
-                        onPress={() => void handleToggleCannotGet(list.id, line.id, line.state)}
-                      >
-                        <Text
-                          style={[
-                            styles.cannotGetBtnText,
-                            isCannotGet && styles.cannotGetActiveText,
-                          ]}
-                        >
-                          {isCannotGet ? "Cannot get" : "Cannot get?"}
-                        </Text>
-                      </Pressable>
+                {groupCustomerListLines(list.lines).map((sec) => (
+                  <View key={sec.root} style={styles.orderCategoryGroup}>
+                    <View style={styles.orderCategoryHeader}>
+                      <Text style={styles.orderCategoryTitle}>{sec.root.toUpperCase()}</Text>
                     </View>
-                  );
-                })}
+                    {sec.subs.map((subGroup) => (
+                      <View key={subGroup.sub || "__direct__"} style={styles.orderSubCategoryGroup}>
+                        {subGroup.sub ? (
+                          <View style={styles.orderSubCategoryHeader}>
+                            <Text style={styles.orderSubCategoryIcon}>&rsaquo;</Text>
+                            <Text style={styles.orderSubCategoryTitle}>{subGroup.sub}</Text>
+                          </View>
+                        ) : null}
+                        {subGroup.lines.map((line) => {
+                          const isCannotGet = line.state === "cannot_get";
+                          return (
+                            <View
+                              key={line.id}
+                              style={[
+                                styles.lineItem,
+                                subGroup.sub ? styles.lineItemIndented : null,
+                                isCannotGet && styles.lineUnavailable,
+                              ]}
+                            >
+                              <View style={styles.lineMain}>
+                                <Text style={styles.lineName}>
+                                  {line.product_name ?? line.free_text ?? "Item"}
+                                </Text>
+                                <Text style={styles.lineQty}>
+                                  {Number(line.quantity)} pcs
+                                  {line.shop_price ? ` - ${formatMoney(line.shop_price)}` : ""}
+                                </Text>
+                              </View>
+
+                              <Pressable
+                                style={[styles.cannotGetBtn, isCannotGet && styles.cannotGetActive]}
+                                onPress={() => void handleToggleCannotGet(list.id, line.id, line.state)}
+                              >
+                                <Text
+                                  style={[
+                                    styles.cannotGetBtnText,
+                                    isCannotGet && styles.cannotGetActiveText,
+                                  ]}
+                                >
+                                  {isCannotGet ? "Cannot get" : "Cannot get?"}
+                                </Text>
+                              </Pressable>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    ))}
+                  </View>
+                ))}
               </View>
 
               {list.priced_total ? (
@@ -997,6 +1066,49 @@ const styles = StyleSheet.create({
   linesList: {
     gap: 8,
   },
+  orderCategoryGroup: {
+    marginBottom: 8,
+    backgroundColor: "#fbf9f5",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#ede5d8",
+    overflow: "hidden",
+  },
+  orderCategoryHeader: {
+    backgroundColor: "#e8f4ed",
+    borderBottomWidth: 1,
+    borderBottomColor: "#d2e8db",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  orderCategoryTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#084a2f",
+    letterSpacing: 0.5,
+  },
+  orderSubCategoryGroup: {
+    paddingHorizontal: 8,
+  },
+  orderSubCategoryHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingTop: 6,
+    paddingBottom: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0eae0",
+  },
+  orderSubCategoryIcon: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#c2571f",
+  },
+  orderSubCategoryTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#4a4237",
+  },
   lineItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -1004,6 +1116,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderBottomWidth: 1,
     borderColor: "#f4f0e8",
+  },
+  lineItemIndented: {
+    paddingLeft: 8,
   },
   lineUnavailable: {
     opacity: 0.5,
