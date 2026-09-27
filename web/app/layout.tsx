@@ -1,6 +1,13 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { DOTTED_CAPITAL_I } from "@/components/brand";
 import "./globals.css";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: "#084a2f",
+};
 
 export const metadata: Metadata = {
   // Installable: the manifest is what puts the shop on a home screen, and these are what make it open without
