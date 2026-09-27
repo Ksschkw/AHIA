@@ -19,8 +19,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Brand, Wordmark } from "@/components/brand";
 import {
   ExpenseIcon,
+  Icon,
+  ItemBoxIcon,
   ProductIcon,
   SaleIcon,
+  SearchIcon,
   StockIcon,
 } from "@/components/icons";
 import { EmptySalesIllustration, EmptyShelfIllustration } from "@/components/illustrations";
@@ -53,6 +56,7 @@ import {
   dailySales,
   firstPaint,
   listBusinesses,
+  listCustomerLists,
   listExpenseCategories,
   listProductImages,
   cachedRead,
@@ -68,6 +72,7 @@ import {
   removeProductImage,
   uploadProductImage,
   signOut,
+  type CustomerList,
   type DailySalesSummary,
   type ExpenseCategory,
   type Category,
@@ -136,6 +141,12 @@ export default function Dashboard() {
   const [photosAvailable, setPhotosAvailable] = useState<boolean | null>(null);
   const [photoProduct, setPhotoProduct] = useState<Product | null>(null);
   const [storefront, setStorefront] = useState<Storefront | null>(null);
+  const [customerLists, setCustomerLists] = useState<CustomerList[]>(() => {
+    const id = rememberedBusinessId();
+    if (!id) return [];
+    return cachedRead<CustomerList[]>(`/api/v1/tenants/${id}/requests`) ?? [];
+  });
+  const [shelfQuery, setShelfQuery] = useState("");
 
   //: Which action is in flight, if any. A boolean would disable every control on the screen for
   //: the length of any request, which on a slow connection is a frozen interface.
@@ -169,6 +180,7 @@ export default function Dashboard() {
       `/api/v1/tenants/${tenantId}/products`,
     );
     const rememberedStock = cachedRead<InventoryLevel[]>(`/api/v1/tenants/${tenantId}/inventory`);
+    const rememberedLists = cachedRead<CustomerList[]>(`/api/v1/tenants/${tenantId}/requests`);
     if (rememberedProducts) {
       setProducts(rememberedProducts);
       setShelfState("ready");
@@ -176,14 +188,18 @@ export default function Dashboard() {
     if (rememberedStock) {
       setStock(rememberedStock);
     }
+    if (rememberedLists) {
+      setCustomerLists(rememberedLists);
+    }
 
-    const [foundProducts, foundStock, summary, sales, low, expenseCategories] = await Promise.all([
+    const [foundProducts, foundStock, summary, sales, low, expenseCategories, foundLists] = await Promise.all([
       listProducts(tenantId),
       listStock(tenantId),
       dailySales(tenantId),
       listSales(tenantId, "6"),
       lowStock(tenantId, "5"),
       listExpenseCategories(tenantId),
+      listCustomerLists(tenantId).catch(() => []),
     ]);
     setProducts(foundProducts);
     // Ready only now: everything above this line is a request in flight, and a shelf that says it is
@@ -198,6 +214,7 @@ export default function Dashboard() {
     setRecentSales(sales);
     setRunningOut(low);
     setCategories(expenseCategories);
+    setCustomerLists(foundLists);
   }, []);
 
   /**
@@ -351,6 +368,16 @@ export default function Dashboard() {
 
   const levelFor = (productId: string) => stock.find((entry) => entry.product_id === productId);
 
+  // Lists that have not been confirmed yet are the ones the trader still needs to work through.
+  const unansweredCount = customerLists.filter((l) => l.status !== "confirmed").length;
+
+  // Shelf search filtering - a single search beats 40 rows of scrolling on a phone.
+  const filteredShelf = shelfQuery.trim()
+    ? products.filter((p) =>
+        p.name.toLowerCase().includes(shelfQuery.trim().toLowerCase()),
+      )
+    : products;
+
   // No holding screen: a person sees the sign-in card at once, and the dashboard replaces it if the
   // session cookie turns out to be valid. A probe that is slow, or a backend that is unreachable,
   // delays nothing and blocks nothing.
@@ -384,6 +411,15 @@ export default function Dashboard() {
           all live there, so this page carries only what is particular to it - and the one action the
           frame cannot offer, which is starting another business. */}
       <div className={styles.pageActions}>
+        {businessId ? (
+          <Link href="/app/lists" className={styles.checkListsBtn}>
+            <Icon name="list" size={16} />
+            Customer Lists
+            {unansweredCount > 0 ? (
+              <span className={styles.hoveringBadge}>{unansweredCount}</span>
+            ) : null}
+          </Link>
+        ) : null}
         <button
           className={styles.addBusiness}
           aria-label="Add another business"
@@ -395,6 +431,28 @@ export default function Dashboard() {
       </div>
 
       <div className={styles.content}>
+        {/* Unanswered lists callout - only when there is something for the trader to action */}
+        {unansweredCount > 0 && businessId ? (
+          <div className={styles.unansweredCallout}>
+            <div className={styles.unansweredCalloutInfo}>
+              <span className={styles.unansweredCalloutBadge}>{unansweredCount}</span>
+              <div>
+                <span className={styles.unansweredCalloutTitle}>
+                  {unansweredCount === 1
+                    ? "1 customer list waiting"
+                    : `${unansweredCount} customer lists waiting`}
+                </span>
+                <p className={styles.unansweredCalloutSub}>
+                  Customers sent orders that have not been confirmed yet.
+                </p>
+              </div>
+            </div>
+            <Link href="/app/lists" className={styles.unansweredCalloutAction}>
+              Open lists
+            </Link>
+          </div>
+        ) : null}
+
         <section className={styles.heroRow}>
           <Stat
             label="Sold today"
@@ -403,21 +461,27 @@ export default function Dashboard() {
             tone="good"
           />
           <Stat
-            label="On the shelves"
+            label="On the shelf"
             value={formatCount(products.length)}
             hint={`${stock.filter((entry) => entry.is_out_of_stock).length} out of stock`}
           />
           <Stat
             label="Running out"
             value={formatCount(runningOut.length)}
-            hint={runningOut.length > 0 ? "Restock today" : "Nothing needs attention"}
+            hint={runningOut.length > 0 ? "Restock today" : "Nothing urgent"}
             tone={runningOut.length > 0 ? "warn" : "plain"}
+          />
+          <Stat
+            label="Unanswered lists"
+            value={formatCount(unansweredCount)}
+            hint={unansweredCount > 0 ? "Customer orders waiting" : "All caught up"}
+            tone={unansweredCount > 0 ? "warn" : "plain"}
           />
         </section>
 
         <div className={styles.columns}>
           <Card
-            title="The shelf"
+            title="Your stock"
             action={
               <button className={styles.linkButton} onClick={() => setSheet("product")}>
                 Add product
@@ -449,8 +513,37 @@ export default function Dashboard() {
                 No products yet. Add the first thing you sell.
               </Empty>
             ) : (
-              <ul className={styles.shelf}>
-                {products.map((product) => {
+              <>
+                {/* Shelf search - only shown once there are items to search through */}
+                {products.length > 5 ? (
+                  <div className={styles.shelfFilterWrap}>
+                    <SearchIcon size={16} className={styles.shelfFilterIcon} />
+                    <input
+                      className={styles.shelfFilterInput}
+                      type="search"
+                      value={shelfQuery}
+                      onChange={(e) => setShelfQuery(e.target.value)}
+                      placeholder="Search your stock..."
+                      aria-label="Filter shelf items"
+                    />
+                    {shelfQuery ? (
+                      <button
+                        className={styles.shelfFilterClear}
+                        onClick={() => setShelfQuery("")}
+                        aria-label="Clear filter"
+                      >
+                        Clear
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+                {filteredShelf.length === 0 ? (
+                  <p className={styles.shelfEmptySearch}>
+                    Nothing on your shelf matches &ldquo;{shelfQuery}&rdquo;.
+                  </p>
+                ) : (
+                  <ul className={styles.shelf}>
+                    {filteredShelf.map((product) => {
                   const level = levelFor(product.id);
                   const quantity = Number(level?.available_quantity ?? "0");
                   const out = level?.is_out_of_stock ?? true;
@@ -587,6 +680,8 @@ export default function Dashboard() {
                   );
                 })}
               </ul>
+                )}
+              </>
             )}
           </Card>
 

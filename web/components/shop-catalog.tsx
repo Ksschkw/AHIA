@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { BrandMark } from "@/components/brand";
 import { SearchIcon } from "@/components/icons";
 import { formatMoneyOrOnRequest } from "@/lib/format";
 import type { PublicGroup, PublicProduct } from "@/lib/server-api";
@@ -232,9 +231,9 @@ function ProductCard({
           href={`/shop/${tenantSlug}/product/${product.product_slug}`}
           prefetch
         >
-          <span className={styles.imageWrap}>
-            {product.primary_image_url ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
+          {product.primary_image_url ? (
+            <span className={styles.imageWrap}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 className={styles.image}
                 src={product.primary_image_url}
@@ -242,13 +241,11 @@ function ProductCard({
                 loading="lazy"
                 decoding="async"
               />
-            ) : (
-              <span className={styles.imagePlaceholder} aria-hidden>
-                <BrandMark size={24} />
-              </span>
-            )}
-            {product.is_special ? <span className={styles.specialBadge}>Special</span> : null}
-          </span>
+              {product.is_special ? <span className={styles.specialBadge}>Special</span> : null}
+            </span>
+          ) : product.is_special ? (
+            <span className={styles.specialTag}>Special</span>
+          ) : null}
           {product.group_name ? (
             <span className={styles.categoryTag}>{product.group_name}</span>
           ) : null}

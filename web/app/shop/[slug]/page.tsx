@@ -164,7 +164,7 @@ export default async function ShopPage({ params }: Params) {
 
       <section className={styles.hero}>
         <div className={styles.heroBadgeRow}>
-          <span className={styles.verifiedPill}>Official Market Storefront</span>
+          <span className={styles.verifiedPill}>Verified Market Store</span>
           <span className={styles.kicker}>Direct Wholesale & Retail</span>
         </div>
         <h1 className={styles.shopName}>{shop.business_name}</h1>
@@ -188,7 +188,7 @@ export default async function ShopPage({ params }: Params) {
         </div>
 
         <p className={styles.promise}>
-          Not everything is on this page - if you do not see it, ask for it in your list and we will get it directly from the market.
+          Not everything is on this page - if you do not see something, just add it to your list and it will get sorted.
         </p>
       </section>
 
@@ -200,10 +200,10 @@ export default async function ShopPage({ params }: Params) {
       />
 
       <section className={styles.closing}>
-        <h2 className={styles.closingTitle}>Want something not listed here?</h2>
+        <h2 className={styles.closingTitle}>Not seeing what you need?</h2>
         <p className={styles.closingText}>
-          Send us a list - a photograph of a written one works too - and we will find it, pack it and
-          send it to you. Wholesale prices are available for bulk orders.
+          Just add it to your order list - if it exists we will source it, pack it and
+          send it across. Bulk and wholesale orders welcome.
         </p>
         <div className={styles.heroActions}>
           <Link className={styles.primary} href={`/list/${shop.tenant_slug}`}>

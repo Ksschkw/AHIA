@@ -146,15 +146,13 @@
 
 .heroRow {
   display: grid;
-  /* A grid rather than a wrapping flex row: three cards in a flex row leave the third stretched
-     across the whole phone, which reads as a mistake. */
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
-@media (min-width: 720px) {
+@media (min-width: 800px) {
   .heroRow {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: var(--gap);
   }
 }
@@ -766,4 +764,174 @@
 .shelfToggle[aria-pressed="true"] {
   border-color: var(--leaf);
   color: var(--leaf-dark);
+}
+
+.pageActions {
+  max-width: 1080px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 16px 16px 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.checkListsBtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--leaf);
+  background: var(--card);
+  color: var(--leaf-dark);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.15s ease;
+}
+
+.checkListsBtn:hover {
+  background: var(--leaf);
+  color: #ffffff;
+}
+
+.hoveringBadge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--clay);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  border: 2px solid var(--card);
+}
+
+.statLink {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.unansweredCallout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  background: var(--card);
+  border: 1.5px solid var(--clay);
+  box-shadow: var(--shadow-sm);
+}
+
+.unansweredCalloutInfo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.unansweredCalloutBadge {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--clay-soft);
+  color: var(--clay);
+  font-size: 16px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.unansweredCalloutTitle {
+  display: block;
+  font-size: 15px;
+  font-weight: 750;
+  color: var(--ink);
+}
+
+.unansweredCalloutSub {
+  font-size: 13px;
+  color: var(--ink-2);
+  margin: 2px 0 0;
+}
+
+.unansweredCalloutAction {
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  background: var(--clay);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  flex: none;
+  transition: opacity 0.15s ease;
+}
+
+.unansweredCalloutAction:hover {
+  opacity: 0.9;
+}
+
+.shelfFilterWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.shelfFilterIcon {
+  position: absolute;
+  left: 12px;
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
+.shelfFilterInput {
+  width: 100%;
+  padding: 8px 36px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--sand);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.shelfFilterInput:focus {
+  border-color: var(--leaf);
+  background: var(--card);
+}
+
+.shelfFilterClear {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-3);
+  cursor: pointer;
+  padding: 2px;
+}
+
+.shelfEmptySearch {
+  font-size: 14px;
+  color: var(--ink-2);
+  text-align: center;
+  padding: 24px 0;
 }

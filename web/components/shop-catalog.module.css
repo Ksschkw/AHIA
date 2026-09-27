@@ -262,6 +262,19 @@
   border-radius: 4px;
 }
 
+.specialTag {
+  display: inline-block;
+  background: #dc2626;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-bottom: var(--space-1);
+}
+
 .categoryTag {
   font-size: 11px;
   color: var(--ink-3);

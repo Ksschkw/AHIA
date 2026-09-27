@@ -145,6 +145,7 @@
   font-size: clamp(28px, 8vw, 44px);
   line-height: var(--leading-tight);
   letter-spacing: -0.02em;
+  color: var(--shop-brand-text, var(--ink));
 }
 
 .headline {
