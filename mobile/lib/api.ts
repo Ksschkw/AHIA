@@ -248,8 +248,47 @@ export function workListLine(
   });
 }
 
+export function createProduct(
+  tenantId: string,
+  data: {
+    name: string;
+    selling_price?: string | null;
+    wholesale_price?: string | null;
+    category_id?: string | null;
+    description?: string | null;
+  },
+): Promise<Product> {
+  return request<Product>(`/api/v1/tenants/${tenantId}/products`, {
+    method: "POST",
+    body: data,
+  });
+}
+
+export function updateProduct(
+  tenantId: string,
+  productId: string,
+  data: {
+    name?: string;
+    selling_price?: string | null;
+    wholesale_price?: string | null;
+    category_id?: string | null;
+    is_published?: boolean;
+  },
+): Promise<Product> {
+  return request<Product>(`/api/v1/tenants/${tenantId}/products/${productId}`, {
+    method: "PATCH",
+    body: data,
+  });
+}
+
 export function deleteCustomerList(tenantId: string, listId: string): Promise<void> {
   return request<void>(`/api/v1/tenants/${tenantId}/requests/${listId}`, {
     method: "DELETE",
+  });
+}
+
+export function confirmCustomerList(tenantId: string, listId: string): Promise<CustomerList> {
+  return request<CustomerList>(`/api/v1/tenants/${tenantId}/requests/${listId}/confirm`, {
+    method: "POST",
   });
 }

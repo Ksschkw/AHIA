@@ -4373,3 +4373,14 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
    - Replicated the web app's category and subcategory grouping across all incoming customer lists on the mobile client.
    - Incoming orders now group items under clean category banners (`SCREEN GUARD`), indented subcategories (`> 21D`), and clear item lines with prices and cannot-get toggles.
    - Eliminates ambiguity when customers submit orders with matching model names across different product categories.
+
+### 17.14 Full Mobile Suite: Quick Product Add, Price Editing, WhatsApp Quote Dispatch & Shop Hub `[x]`
+1. **Quick Product Addition & Price Editing Modal on Mobile (`mobile/app/home.tsx`)** `[x]`:
+   - Added a prominent `+ Add Item` header action and modal on the Stock tab, letting traders input item name, retail price, wholesale price, and pick categories directly from their mobile device.
+   - Tapping any product card opens a quick edit sheet to adjust prices or toggle live/hidden storefront publication.
+2. **Customer List Pricing & WhatsApp Quote Dispatch (`mobile/app/home.tsx`)** `[x]`:
+   - Added an inline `Price` action per unpriced customer request line, saving unit prices directly to the backend.
+   - Added a one-tap `Send Quote on WhatsApp` button that opens `wa.me/[customer_phone]` with a prefilled, structured breakdown of category items, prices, and total.
+   - Added one-tap `Confirm Order` converting accepted lists into recorded sales.
+3. **Shop Switcher & Public Storefront Share Hub (`mobile/app/home.tsx`)** `[x]`:
+   - Added a shop selector dropdown for multi-shop traders and a storefront share modal linking to `https://ahia.app/shop/[slug]`.

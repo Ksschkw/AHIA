@@ -5,8 +5,11 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Linking,
+  Modal,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -19,6 +22,9 @@ import {
   listBusinesses,
   listCustomerLists,
   deleteCustomerList,
+  confirmCustomerList,
+  createProduct,
+  updateProduct,
   copyProducts,
   listProducts,
   publishProduct,
@@ -40,6 +46,25 @@ import {
   getPendingSalesCount,
 } from "@/lib/db";
 import { forgetSession } from "@/lib/session";
+
+function formatMoney(amount: string | null | undefined): string {
+  if (!amount) return "Price on request";
+  const num = Number(amount);
+  if (!Number.isFinite(num)) return `NGN ${amount}`;
+  return `NGN ${num.toLocaleString("en-NG", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+}
+
+function formatWaNumber(rawPhone: string | null | undefined): string | null {
+  if (!rawPhone) return null;
+  const digits = rawPhone.replace(/[^\d]/g, "");
+  if (!digits) return null;
+  if (digits.startsWith("234")) return digits;
+  if (digits.startsWith("0")) return "234" + digits.slice(1);
+  if (digits.length === 10 && (digits.startsWith("7") || digits.startsWith("8") || digits.startsWith("9"))) {
+    return "234" + digits;
+  }
+  return digits;
+}
 
 function groupCustomerListLines(lines: CustomerListLine[]) {
   const rootMap = new Map<string, Map<string, CustomerListLine[]>>();
@@ -91,13 +116,6 @@ function groupCustomerListLines(lines: CustomerListLine[]) {
   return sections;
 }
 
-function formatMoney(amount: string | null | undefined): string {
-  if (!amount) return "Price on request";
-  const num = Number(amount);
-  if (!Number.isFinite(num)) return `NGN ${amount}`;
-  return `NGN ${num.toLocaleString("en-NG", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-}
-
 export default function Home() {
   const router = useRouter();
 
@@ -116,13 +134,39 @@ export default function Home() {
   const [notice, setNotice] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
+  // Add Item Modal State
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newPrice, setNewPrice] = useState("");
+  const [newWholesale, setNewWholesale] = useState("");
+  const [newCategoryId, setNewCategoryId] = useState<string | null>(null);
+  const [savingProduct, setSavingProduct] = useState(false);
+
+  // Edit Product Modal State
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editPrice, setEditPrice] = useState("");
+  const [editWholesale, setEditWholesale] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // Price Line Modal State
+  const [pricingLine, setPricingLine] = useState<{
+    listId: string;
+    lineId: string;
+    itemName: string;
+    currentPrice: string;
+  } | null>(null);
+  const [priceInput, setPriceInput] = useState("");
+  const [savingPrice, setSavingPrice] = useState(false);
+
+  // Storefront & Shop Switcher Modal
+  const [showShopModal, setShowShopModal] = useState(false);
+
   const showToast = (msg: string) => {
     setNotice(msg);
-    setTimeout(() => setNotice(null), 3000);
+    setTimeout(() => setNotice(null), 3200);
   };
 
   const loadData = useCallback(async (tenantId: string) => {
-    // 1. First paint from local SQLite cache
     const cached = getCachedProducts(tenantId);
     if (cached.length > 0) {
       setProducts(cached);
@@ -132,7 +176,6 @@ export default function Home() {
     const pending = getPendingSalesCount(tenantId);
     setPendingSyncCount(pending);
 
-    // 2. Fetch fresh from API
     try {
       const [freshProducts, freshLists, freshCategories] = await Promise.all([
         listProducts(tenantId).catch(() => cached),
@@ -199,7 +242,6 @@ export default function Home() {
       await sellOneProduct(activeBusiness.id, product);
       showToast(`Sold 1 ${product.name}`);
     } catch {
-      // Offline fallback: save to durable SQLite outbox
       enqueueOfflineSale({
         tenantId: activeBusiness.id,
         productId: product.id,
@@ -224,9 +266,80 @@ export default function Home() {
       setProducts((current) =>
         current.map((p) => (p.id === updated.id ? { ...p, is_published: updated.is_published } : p)),
       );
+      if (editingProduct && editingProduct.id === updated.id) {
+        setEditingProduct((curr) => (curr ? { ...curr, is_published: updated.is_published } : null));
+      }
       showToast(updated.is_published ? `${product.name} is now Live` : `${product.name} is now Hidden`);
     } catch {
       showToast("Could not update item status.");
+    }
+  };
+
+  const handleCreateProduct = async () => {
+    if (!activeBusiness || !newName.trim()) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSavingProduct(true);
+    try {
+      const created = await createProduct(activeBusiness.id, {
+        name: newName.trim(),
+        selling_price: newPrice.trim() || null,
+        wholesale_price: newWholesale.trim() || null,
+        category_id: newCategoryId,
+      });
+      setProducts((curr) => [...curr, created]);
+      cacheProducts(activeBusiness.id, [...products, created]);
+      setNewName("");
+      setNewPrice("");
+      setNewWholesale("");
+      setNewCategoryId(null);
+      setShowAddModal(false);
+      showToast(`Added ${created.name} to stock!`);
+    } catch {
+      showToast("Could not save item. Check connection.");
+    } finally {
+      setSavingProduct(false);
+    }
+  };
+
+  const handleSaveProductEdit = async () => {
+    if (!activeBusiness || !editingProduct) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSavingEdit(true);
+    try {
+      const updated = await updateProduct(activeBusiness.id, editingProduct.id, {
+        selling_price: editPrice.trim() || null,
+        wholesale_price: editWholesale.trim() || null,
+      });
+      setProducts((curr) => curr.map((p) => (p.id === updated.id ? updated : p)));
+      cacheProducts(
+        activeBusiness.id,
+        products.map((p) => (p.id === updated.id ? updated : p)),
+      );
+      setEditingProduct(null);
+      showToast(`Updated ${updated.name}`);
+    } catch {
+      showToast("Could not update item prices.");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleSaveLinePrice = async () => {
+    if (!activeBusiness || !pricingLine) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSavingPrice(true);
+    try {
+      const updatedList = await workListLine(activeBusiness.id, pricingLine.listId, pricingLine.lineId, {
+        shop_price: priceInput.trim() || undefined,
+      });
+      setCustomerLists((curr) => curr.map((l) => (l.id === updatedList.id ? updatedList : l)));
+      setPricingLine(null);
+      setPriceInput("");
+      showToast("Line price updated!");
+    } catch {
+      showToast("Could not update price.");
+    } finally {
+      setSavingPrice(false);
     }
   };
 
@@ -243,6 +356,58 @@ export default function Home() {
     } catch {
       showToast("Could not update line status.");
     }
+  };
+
+  const handleConfirmList = async (list: CustomerList) => {
+    if (!activeBusiness) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    try {
+      const confirmed = await confirmCustomerList(activeBusiness.id, list.id);
+      setCustomerLists((curr) => curr.map((l) => (l.id === confirmed.id ? confirmed : l)));
+      showToast(`Order from ${list.customer_name || list.customer_phone} confirmed!`);
+    } catch {
+      showToast("Could not confirm order. Make sure all items have prices.");
+    }
+  };
+
+  const handleShareQuoteOnWhatsApp = (list: CustomerList) => {
+    const rawNumber = list.customer_phone;
+    const cleanNumber = formatWaNumber(rawNumber);
+    const shopName = activeBusiness?.name ?? "Our Shop";
+
+    const sections = groupCustomerListLines(list.lines);
+    let itemsSummary = "";
+    for (const sec of sections) {
+      itemsSummary += `\n*${sec.root.toUpperCase()}*\n`;
+      for (const sub of sec.subs) {
+        if (sub.sub) itemsSummary += ` _> ${sub.sub}_\n`;
+        for (const line of sub.lines) {
+          const priceStr = line.shop_price ? ` - ${formatMoney(line.shop_price)}` : " - to be confirmed";
+          const statusStr = line.state === "cannot_get" ? " (UNAVAILABLE)" : "";
+          itemsSummary += ` - ${line.quantity}x ${line.product_name ?? line.free_text}${priceStr}${statusStr}\n`;
+        }
+      }
+    }
+
+    const message =
+      `Hello ${list.customer_name || "Customer"}, here is your order update from ${shopName}:\n` +
+      itemsSummary +
+      (list.priced_total ? `\n*Total: ${formatMoney(list.priced_total)}*\n` : "\n") +
+      `Thank you for your business!`;
+
+    const waUrl = cleanNumber
+      ? `https://wa.me/${cleanNumber}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`;
+
+    void Linking.openURL(waUrl);
+  };
+
+  const handleShareStorefront = () => {
+    if (!activeBusiness) return;
+    const storefrontUrl = `https://ahia.app/shop/${activeBusiness.slug}`;
+    const msg = `Hello! Check out our catalog on AHIA: ${storefrontUrl}`;
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    void Linking.openURL(waUrl);
   };
 
   const handleCopyProduct = async (product: Product) => {
@@ -288,7 +453,6 @@ export default function Home() {
     p.name.toLowerCase().includes(searchQuery.trim().toLowerCase()),
   );
 
-  // Hierarchical category grouping for shelf
   const categoryById = new Map(categories.map((c) => [c.id, c]));
   type ShelfGroup = { categoryId: string | null; label: string; items: Product[] };
   const shelfGroups: ShelfGroup[] = [];
@@ -318,30 +482,48 @@ export default function Home() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Top Header */}
+      {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerTitleWrap}>
-          <Text style={styles.appName}>AHIA</Text>
-          <Text style={styles.shopName} numberOfLines={1}>
-            {activeBusiness?.name ?? "My Shop"}
-          </Text>
-        </View>
-
         <Pressable
-          accessibilityRole="button"
-          style={styles.signOutBtn}
+          style={styles.headerTitleWrap}
           onPress={() => {
-            void (async () => {
-              await forgetSession();
-              router.replace("/");
-            })();
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setShowShopModal(true);
           }}
         >
-          <Text style={styles.signOutText}>Sign out</Text>
+          <Text style={styles.appName}>AHIA</Text>
+          <View style={styles.shopSelectorPill}>
+            <Text style={styles.shopName} numberOfLines={1}>
+              {activeBusiness?.name ?? "My Shop"}
+            </Text>
+            <Text style={styles.shopSelectorChevron}>v</Text>
+          </View>
         </Pressable>
+
+        <View style={styles.headerRightActions}>
+          <Pressable
+            accessibilityRole="button"
+            style={styles.shareStorefrontBtn}
+            onPress={handleShareStorefront}
+          >
+            <Text style={styles.shareStorefrontText}>Share Shop</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            style={styles.signOutBtn}
+            onPress={() => {
+              void (async () => {
+                await forgetSession();
+                router.replace("/");
+              })();
+            }}
+          >
+            <Text style={styles.signOutText}>Sign out</Text>
+          </Pressable>
+        </View>
       </View>
 
-      {/* Offline sync banner if sales are waiting */}
+      {/* Offline sync banner */}
       {pendingSyncCount > 0 ? (
         <Pressable style={styles.syncBanner} onPress={() => void handleSyncOutbox()}>
           <Text style={styles.syncBannerText}>
@@ -425,16 +607,27 @@ export default function Home() {
             </Pressable>
           ) : null}
 
-          {/* Search Bar */}
-          <View style={styles.searchBar}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search your stock..."
-              placeholderTextColor="#8b8377"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              clearButtonMode="while-editing"
-            />
+          {/* Search Bar & Quick Add Button */}
+          <View style={styles.searchRow}>
+            <View style={styles.searchInputWrap}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search items, models, packs..."
+                placeholderTextColor="#8b8377"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                clearButtonMode="while-editing"
+              />
+            </View>
+            <Pressable
+              style={styles.addItemHeaderBtn}
+              onPress={() => {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setShowAddModal(true);
+              }}
+            >
+              <Text style={styles.addItemHeaderBtnText}>+ Add Item</Text>
+            </Pressable>
           </View>
 
           {searchQuery.trim() ? (
@@ -445,7 +638,15 @@ export default function Home() {
               contentContainerStyle={styles.listContainer}
               renderItem={({ item }) => (
                 <View style={styles.productCard}>
-                  <View style={styles.productInfo}>
+                  <Pressable
+                    style={styles.productInfo}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setEditingProduct(item);
+                      setEditPrice(item.selling_price ?? item.effective_normal_price ?? "");
+                      setEditWholesale(item.effective_wholesale_price ?? "");
+                    }}
+                  >
                     <Text style={styles.productName}>{item.name}</Text>
                     <Text style={styles.productPrice}>
                       Retail: {formatMoney(item.selling_price ?? item.effective_normal_price)}
@@ -469,8 +670,9 @@ export default function Home() {
                           {item.is_published ? "Live" : "Hidden"}
                         </Text>
                       </Pressable>
+                      <Text style={styles.tapToEditHint}>Tap to edit price</Text>
                     </View>
-                  </View>
+                  </Pressable>
 
                   <View style={styles.cardActions}>
                     <Pressable style={styles.copyBtn} onPress={() => void handleCopyProduct(item)}>
@@ -485,6 +687,15 @@ export default function Home() {
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
                   <Text style={styles.emptyTitle}>Nothing matches &ldquo;{searchQuery}&rdquo;</Text>
+                  <Pressable
+                    style={styles.emptyAddBtn}
+                    onPress={() => {
+                      setNewName(searchQuery);
+                      setShowAddModal(true);
+                    }}
+                  >
+                    <Text style={styles.emptyAddBtnText}>+ Add &ldquo;{searchQuery}&rdquo; as new item</Text>
+                  </Pressable>
                 </View>
               }
             />
@@ -516,7 +727,15 @@ export default function Home() {
                   </View>
                   {group.items.map((item) => (
                     <View key={item.id} style={styles.productCard}>
-                      <View style={styles.productInfo}>
+                      <Pressable
+                        style={styles.productInfo}
+                        onPress={() => {
+                          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setEditingProduct(item);
+                          setEditPrice(item.selling_price ?? item.effective_normal_price ?? "");
+                          setEditWholesale(item.effective_wholesale_price ?? "");
+                        }}
+                      >
                         <Text style={styles.productName}>{item.name}</Text>
                         <Text style={styles.productPrice}>
                           Retail: {formatMoney(item.selling_price ?? item.effective_normal_price)}
@@ -541,7 +760,7 @@ export default function Home() {
                             </Text>
                           </Pressable>
                         </View>
-                      </View>
+                      </Pressable>
 
                       <View style={styles.cardActions}>
                         <Pressable style={styles.copyBtn} onPress={() => void handleCopyProduct(item)}>
@@ -558,7 +777,7 @@ export default function Home() {
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
                   <Text style={styles.emptyTitle}>No items on the shelf</Text>
-                  <Text style={styles.emptyDesc}>Items created in your shop will appear here.</Text>
+                  <Text style={styles.emptyDesc}>Add your first item using the button above.</Text>
                 </View>
               }
             />
@@ -591,8 +810,20 @@ export default function Home() {
                   <Text style={styles.customerPhone}>{list.customer_phone}</Text>
                 </View>
                 <View style={styles.orderBadgeRow}>
-                  <View style={styles.orderBadge}>
-                    <Text style={styles.orderBadgeText}>{list.lines.length} lines</Text>
+                  <View
+                    style={[
+                      styles.orderBadge,
+                      list.status === "confirmed" ? styles.orderConfirmedBadge : null,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.orderBadgeText,
+                        list.status === "confirmed" ? styles.orderConfirmedBadgeText : null,
+                      ]}
+                    >
+                      {list.status === "confirmed" ? "Confirmed" : `${list.lines.length} lines`}
+                    </Text>
                   </View>
                   {list.status !== "confirmed" ? (
                     <Pressable
@@ -637,23 +868,42 @@ export default function Home() {
                                 </Text>
                                 <Text style={styles.lineQty}>
                                   {Number(line.quantity)} pcs
-                                  {line.shop_price ? ` - ${formatMoney(line.shop_price)}` : ""}
+                                  {line.shop_price ? ` - ${formatMoney(line.shop_price)}` : " (Unpriced)"}
                                 </Text>
                               </View>
 
-                              <Pressable
-                                style={[styles.cannotGetBtn, isCannotGet && styles.cannotGetActive]}
-                                onPress={() => void handleToggleCannotGet(list.id, line.id, line.state)}
-                              >
-                                <Text
-                                  style={[
-                                    styles.cannotGetBtnText,
-                                    isCannotGet && styles.cannotGetActiveText,
-                                  ]}
+                              <View style={styles.lineActionCol}>
+                                <Pressable
+                                  style={styles.priceLineBtn}
+                                  onPress={() => {
+                                    setPricingLine({
+                                      listId: list.id,
+                                      lineId: line.id,
+                                      itemName: line.product_name ?? line.free_text ?? "Item",
+                                      currentPrice: line.shop_price ?? "",
+                                    });
+                                    setPriceInput(line.shop_price ?? "");
+                                  }}
                                 >
-                                  {isCannotGet ? "Cannot get" : "Cannot get?"}
-                                </Text>
-                              </Pressable>
+                                  <Text style={styles.priceLineBtnText}>
+                                    {line.shop_price ? "Price" : "+ Price"}
+                                  </Text>
+                                </Pressable>
+
+                                <Pressable
+                                  style={[styles.cannotGetBtn, isCannotGet && styles.cannotGetActive]}
+                                  onPress={() => void handleToggleCannotGet(list.id, line.id, line.state)}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.cannotGetBtnText,
+                                      isCannotGet && styles.cannotGetActiveText,
+                                    ]}
+                                  >
+                                    {isCannotGet ? "Cannot get" : "Cannot get?"}
+                                  </Text>
+                                </Pressable>
+                              </View>
                             </View>
                           );
                         })}
@@ -663,12 +913,33 @@ export default function Home() {
                 ))}
               </View>
 
-              {list.priced_total ? (
-                <View style={styles.orderTotalRow}>
-                  <Text style={styles.orderTotalLabel}>Total:</Text>
-                  <Text style={styles.orderTotalValue}>{formatMoney(list.priced_total)}</Text>
+              {/* Order Footer & Actions */}
+              <View style={styles.orderFooter}>
+                {list.priced_total ? (
+                  <View style={styles.orderTotalRow}>
+                    <Text style={styles.orderTotalLabel}>Total:</Text>
+                    <Text style={styles.orderTotalValue}>{formatMoney(list.priced_total)}</Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.orderActionButtons}>
+                  <Pressable
+                    style={styles.orderWhatsAppBtn}
+                    onPress={() => handleShareQuoteOnWhatsApp(list)}
+                  >
+                    <Text style={styles.orderWhatsAppBtnText}>Send Quote on WhatsApp</Text>
+                  </Pressable>
+
+                  {list.status !== "confirmed" ? (
+                    <Pressable
+                      style={styles.orderConfirmBtn}
+                      onPress={() => void handleConfirmList(list)}
+                    >
+                      <Text style={styles.orderConfirmBtnText}>Confirm Order</Text>
+                    </Pressable>
+                  ) : null}
                 </View>
-              ) : null}
+              </View>
             </View>
           )}
           ListEmptyComponent={
@@ -681,143 +952,306 @@ export default function Home() {
           }
         />
       )}
+
+      {/* Add Product Modal */}
+      <Modal visible={showAddModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Add Item to Stock</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Item name (e.g. iPhone 15 Privacy Screen)"
+              placeholderTextColor="#8b8377"
+              value={newName}
+              onChangeText={setNewName}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Retail Selling Price in NGN (e.g. 2500)"
+              placeholderTextColor="#8b8377"
+              value={newPrice}
+              onChangeText={setNewPrice}
+              keyboardType="numeric"
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Wholesale Price in NGN (optional)"
+              placeholderTextColor="#8b8377"
+              value={newWholesale}
+              onChangeText={setNewWholesale}
+              keyboardType="numeric"
+            />
+
+            {categories.length > 0 ? (
+              <View style={styles.modalCategoryWrap}>
+                <Text style={styles.modalCategoryLabel}>Category:</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.modalCategoryScroll}>
+                  <Pressable
+                    style={[styles.catChip, newCategoryId === null && styles.catChipActive]}
+                    onPress={() => setNewCategoryId(null)}
+                  >
+                    <Text style={[styles.catChipText, newCategoryId === null && styles.catChipActiveText]}>
+                      None
+                    </Text>
+                  </Pressable>
+                  {categories.map((c) => (
+                    <Pressable
+                      key={c.id}
+                      style={[styles.catChip, newCategoryId === c.id && styles.catChipActive]}
+                      onPress={() => setNewCategoryId(c.id)}
+                    >
+                      <Text style={[styles.catChipText, newCategoryId === c.id && styles.catChipActiveText]}>
+                        {c.name}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
+
+            <View style={styles.modalActions}>
+              <Pressable
+                style={styles.modalCancelBtn}
+                onPress={() => {
+                  setShowAddModal(false);
+                  setNewName("");
+                  setNewPrice("");
+                  setNewWholesale("");
+                }}
+              >
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalSubmitBtn, (!newName.trim() || savingProduct) && styles.btnDisabled]}
+                disabled={!newName.trim() || savingProduct}
+                onPress={() => void handleCreateProduct()}
+              >
+                <Text style={styles.modalSubmitBtnText}>
+                  {savingProduct ? "Saving..." : "Save Item"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Product Modal */}
+      <Modal visible={editingProduct !== null} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Edit Item Price</Text>
+            <Text style={styles.modalSubTitle}>{editingProduct?.name}</Text>
+
+            <Text style={styles.modalFieldLabel}>Retail Selling Price (NGN):</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="e.g. 3500"
+              placeholderTextColor="#8b8377"
+              value={editPrice}
+              onChangeText={setEditPrice}
+              keyboardType="numeric"
+            />
+
+            <Text style={styles.modalFieldLabel}>Wholesale Price (NGN):</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="e.g. 2800"
+              placeholderTextColor="#8b8377"
+              value={editWholesale}
+              onChangeText={setEditWholesale}
+              keyboardType="numeric"
+            />
+
+            <View style={styles.modalActions}>
+              <Pressable
+                style={styles.modalCancelBtn}
+                onPress={() => setEditingProduct(null)}
+              >
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalSubmitBtn, savingEdit && styles.btnDisabled]}
+                disabled={savingEdit}
+                onPress={() => void handleSaveProductEdit()}
+              >
+                <Text style={styles.modalSubmitBtnText}>
+                  {savingEdit ? "Updating..." : "Update Price"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Price Line Modal */}
+      <Modal visible={pricingLine !== null} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Set Item Price</Text>
+            <Text style={styles.modalSubTitle}>{pricingLine?.itemName}</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Unit price in NGN (e.g. 2000)"
+              placeholderTextColor="#8b8377"
+              value={priceInput}
+              onChangeText={setPriceInput}
+              keyboardType="numeric"
+              autoFocus
+            />
+            <View style={styles.modalActions}>
+              <Pressable
+                style={styles.modalCancelBtn}
+                onPress={() => setPricingLine(null)}
+              >
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalSubmitBtn, savingPrice && styles.btnDisabled]}
+                disabled={savingPrice}
+                onPress={() => void handleSaveLinePrice()}
+              >
+                <Text style={styles.modalSubmitBtnText}>
+                  {savingPrice ? "Saving..." : "Save Price"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Shop Selector & Share Modal */}
+      <Modal visible={showShopModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Your Shops & Storefront</Text>
+
+            {businesses && businesses.length > 1 ? (
+              <View style={{ marginBottom: 16 }}>
+                <Text style={styles.modalFieldLabel}>Switch Active Shop:</Text>
+                {businesses.map((b) => (
+                  <Pressable
+                    key={b.id}
+                    style={[
+                      styles.businessOption,
+                      activeBusiness?.id === b.id && styles.businessOptionActive,
+                    ]}
+                    onPress={() => {
+                      setActiveBusiness(b);
+                      setShowShopModal(false);
+                      void loadData(b.id);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.businessOptionText,
+                        activeBusiness?.id === b.id && styles.businessOptionActiveText,
+                      ]}
+                    >
+                      {b.name}
+                    </Text>
+                    {activeBusiness?.id === b.id ? (
+                      <Text style={styles.businessActiveCheck}>Active</Text>
+                    ) : null}
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+
+            <View style={styles.storefrontShareCard}>
+              <Text style={styles.storefrontLabel}>Your Public Catalog Link:</Text>
+              <Text style={styles.storefrontUrl}>
+                https://ahia.app/shop/{activeBusiness?.slug}
+              </Text>
+              <Pressable
+                style={styles.shareStorefrontActionBtn}
+                onPress={() => {
+                  setShowShopModal(false);
+                  handleShareStorefront();
+                }}
+              >
+                <Text style={styles.shareStorefrontActionBtnText}>
+                  Share on WhatsApp
+                </Text>
+              </Pressable>
+            </View>
+
+            <Pressable
+              style={styles.modalCloseFullBtn}
+              onPress={() => setShowShopModal(false)}
+            >
+              <Text style={styles.modalCloseFullBtnText}>Close</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  tabWithBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  tabHoverBadge: {
-    backgroundColor: "#c2571f",
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 999,
-  },
-  tabHoverBadgeText: {
-    color: "#ffffff",
-    fontSize: 10,
-    fontWeight: "800",
-  },
-  unansweredCallout: {
-    backgroundColor: "#ffffff",
-    marginHorizontal: 16,
-    marginBottom: 12,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: "#c2571f",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  unansweredBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#fbe9dd",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  unansweredBadgeText: {
-    color: "#c2571f",
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  unansweredTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#1e1b16",
-  },
-  unansweredSub: {
-    fontSize: 11,
-    color: "#5c5549",
-    marginTop: 1,
-  },
-  unansweredAction: {
-    backgroundColor: "#c2571f",
-    color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "700",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  groupSection: {
-    marginBottom: 16,
-  },
-  groupHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#f3ece1",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  groupTitle: {
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    color: "#5c5549",
-  },
-  groupCountBadge: {
-    backgroundColor: "#ffffff",
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#e7dfd2",
-  },
-  groupCountText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#5c5549",
-  },
-
   safeArea: {
     flex: 1,
     backgroundColor: "#f7f3ec",
   },
   header: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 8,
+    paddingBottom: 10,
+    backgroundColor: "#ffffff",
     borderBottomWidth: 1,
     borderColor: "#e5ded3",
-    backgroundColor: "#ffffff",
   },
   headerTitleWrap: {
     flex: 1,
+    marginRight: 8,
   },
   appName: {
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "900",
+    letterSpacing: 1.5,
     color: "#0b5d3b",
-    letterSpacing: 0.5,
+  },
+  shopSelectorPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 1,
   },
   shopName: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "800",
     color: "#1e1b16",
+    maxWidth: 160,
+  },
+  shopSelectorChevron: {
+    fontSize: 10,
+    color: "#8b8377",
+  },
+  headerRightActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  shareStorefrontBtn: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    backgroundColor: "#e8f4ed",
+  },
+  shareStorefrontText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0b5d3b",
   },
   signOutBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
   },
   signOutText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
     color: "#a3372b",
   },
@@ -893,12 +1327,74 @@ const styles = StyleSheet.create({
   activeTabText: {
     color: "#0b5d3b",
   },
+  tabWithBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  tabHoverBadge: {
+    backgroundColor: "#c2571f",
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 999,
+  },
+  tabHoverBadgeText: {
+    color: "#ffffff",
+    fontSize: 10,
+    fontWeight: "800",
+  },
   contentWrap: {
     flex: 1,
   },
-  searchBar: {
+  unansweredCallout: {
+    backgroundColor: "#ffffff",
+    marginHorizontal: 16,
+    marginBottom: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#c2571f",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  unansweredBadge: {
+    backgroundColor: "#c2571f",
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  unansweredBadgeText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  unansweredTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#1e1b16",
+  },
+  unansweredSub: {
+    fontSize: 11,
+    color: "#5c5549",
+  },
+  unansweredAction: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#c2571f",
+    textTransform: "uppercase",
+  },
+  searchRow: {
+    flexDirection: "row",
     paddingHorizontal: 16,
     marginBottom: 8,
+    gap: 8,
+    alignItems: "center",
+  },
+  searchInputWrap: {
+    flex: 1,
   },
   searchInput: {
     backgroundColor: "#ffffff",
@@ -910,10 +1406,52 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#1e1b16",
   },
+  addItemHeaderBtn: {
+    backgroundColor: "#0b5d3b",
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+  },
+  addItemHeaderBtnText: {
+    color: "#ffffff",
+    fontWeight: "800",
+    fontSize: 13,
+  },
   listContainer: {
     paddingHorizontal: 16,
     paddingBottom: 24,
     gap: 10,
+  },
+  groupSection: {
+    marginBottom: 12,
+    gap: 8,
+  },
+  groupHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5ded3",
+    marginBottom: 2,
+  },
+  groupTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#5c5549",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  groupCountBadge: {
+    backgroundColor: "#ece6db",
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 999,
+  },
+  groupCountText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#5c5549",
   },
   productCard: {
     backgroundColor: "#ffffff",
@@ -950,6 +1488,7 @@ const styles = StyleSheet.create({
   pillRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
   },
   statusPill: {
     paddingHorizontal: 8,
@@ -975,6 +1514,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     color: "#a3372b",
+  },
+  tapToEditHint: {
+    fontSize: 11,
+    color: "#8b8377",
+    fontStyle: "italic",
   },
   cardActions: {
     flexDirection: "column",
@@ -1049,6 +1593,15 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     color: "#0b5d3b",
+  },
+  orderConfirmedBadge: {
+    backgroundColor: "#edf7ed",
+    borderWidth: 1,
+    borderColor: "#a3d9a5",
+  },
+  orderConfirmedBadgeText: {
+    color: "#1b5e20",
+    fontWeight: "800",
   },
   deleteListBtn: {
     backgroundColor: "#fdf2f2",
@@ -1127,12 +1680,6 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
-  lineCategory: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#0b5d3b",
-    marginBottom: 1,
-  },
   lineName: {
     fontSize: 14,
     fontWeight: "700",
@@ -1142,6 +1689,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#5c5549",
     marginTop: 1,
+  },
+  lineActionCol: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  priceLineBtn: {
+    borderWidth: 1,
+    borderColor: "#0b5d3b",
+    backgroundColor: "#e8f4ed",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  priceLineBtnText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#0b5d3b",
   },
   cannotGetBtn: {
     borderWidth: 1,
@@ -1162,15 +1727,18 @@ const styles = StyleSheet.create({
   cannotGetActiveText: {
     color: "#a3372b",
   },
+  orderFooter: {
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderColor: "#f0eae0",
+  },
   orderTotalRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
     alignItems: "center",
     gap: 6,
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderColor: "#f0eae0",
+    marginBottom: 8,
   },
   orderTotalLabel: {
     fontSize: 13,
@@ -1178,9 +1746,37 @@ const styles = StyleSheet.create({
     color: "#5c5549",
   },
   orderTotalValue: {
-    fontSize: 15,
-    fontWeight: "800",
+    fontSize: 16,
+    fontWeight: "900",
     color: "#0b5d3b",
+  },
+  orderActionButtons: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  orderWhatsAppBtn: {
+    flex: 1,
+    backgroundColor: "#25D366",
+    paddingVertical: 9,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  orderWhatsAppBtnText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  orderConfirmBtn: {
+    flex: 1,
+    backgroundColor: "#0b5d3b",
+    paddingVertical: 9,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  orderConfirmBtnText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "800",
   },
   centerContainer: {
     flex: 1,
@@ -1203,6 +1799,18 @@ const styles = StyleSheet.create({
     color: "#5c5549",
     textAlign: "center",
   },
+  emptyAddBtn: {
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: "#0b5d3b",
+    borderRadius: 8,
+  },
+  emptyAddBtnText: {
+    color: "#ffffff",
+    fontWeight: "700",
+    fontSize: 13,
+  },
   errorBox: {
     backgroundColor: "#fdf2f2",
     marginHorizontal: 16,
@@ -1215,5 +1823,185 @@ const styles = StyleSheet.create({
   errorText: {
     color: "#a3372b",
     fontSize: 13,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    padding: 20,
+  },
+  modalCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#1e1b16",
+    marginBottom: 4,
+  },
+  modalSubTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0b5d3b",
+    marginBottom: 12,
+  },
+  modalFieldLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#5c5549",
+    marginBottom: 4,
+    marginTop: 6,
+  },
+  modalInput: {
+    backgroundColor: "#f9f7f4",
+    borderWidth: 1,
+    borderColor: "#d8d0c2",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: "#1e1b16",
+    marginBottom: 10,
+  },
+  modalCategoryWrap: {
+    marginBottom: 12,
+  },
+  modalCategoryLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#5c5549",
+    marginBottom: 6,
+  },
+  modalCategoryScroll: {
+    flexDirection: "row",
+  },
+  catChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#f4f0e8",
+    borderWidth: 1,
+    borderColor: "#d8d0c2",
+    marginRight: 6,
+  },
+  catChipActive: {
+    backgroundColor: "#0b5d3b",
+    borderColor: "#0b5d3b",
+  },
+  catChipText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#5c5549",
+  },
+  catChipActiveText: {
+    color: "#ffffff",
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 8,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: "#f4f0e8",
+    alignItems: "center",
+  },
+  modalCancelBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#5c5549",
+  },
+  modalSubmitBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: "#0b5d3b",
+    alignItems: "center",
+  },
+  modalSubmitBtnText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#ffffff",
+  },
+  btnDisabled: {
+    opacity: 0.5,
+  },
+  businessOption: {
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e5ded3",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  businessOptionActive: {
+    backgroundColor: "#e8f4ed",
+    borderColor: "#0b5d3b",
+  },
+  businessOptionText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1e1b16",
+  },
+  businessOptionActiveText: {
+    color: "#0b5d3b",
+    fontWeight: "800",
+  },
+  businessActiveCheck: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#0b5d3b",
+  },
+  storefrontShareCard: {
+    backgroundColor: "#f9f7f4",
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#d8d0c2",
+    marginBottom: 14,
+  },
+  storefrontLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#5c5549",
+    marginBottom: 2,
+  },
+  storefrontUrl: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0b5d3b",
+    marginBottom: 10,
+  },
+  shareStorefrontActionBtn: {
+    backgroundColor: "#25D366",
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  shareStorefrontActionBtnText: {
+    color: "#ffffff",
+    fontWeight: "800",
+    fontSize: 13,
+  },
+  modalCloseFullBtn: {
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: "#f4f0e8",
+    alignItems: "center",
+  },
+  modalCloseFullBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#5c5549",
   },
 });
