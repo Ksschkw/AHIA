@@ -292,3 +292,77 @@ export function confirmCustomerList(tenantId: string, listId: string): Promise<C
     method: "POST",
   });
 }
+
+export function createCategory(
+  tenantId: string,
+  data: {
+    name: string;
+    parent_id?: string | null;
+  },
+): Promise<Category> {
+  return request<Category>(`/api/v1/tenants/${tenantId}/categories`, {
+    method: "POST",
+    body: data,
+  });
+}
+
+export interface SaleSummary {
+  id: string;
+  receipt_number: string;
+  total_amount: string;
+  payment_method: string;
+  payment_status: string;
+  created_at: string;
+}
+
+export function listSales(tenantId: string, limit: string = "50"): Promise<SaleSummary[]> {
+  return request<SaleSummary[]>(`/api/v1/tenants/${tenantId}/sales?limit=${limit}`);
+}
+
+export interface DailySalesSummary {
+  date: string;
+  total_revenue: string;
+  total_sales: number;
+}
+
+export function dailySales(tenantId: string): Promise<DailySalesSummary> {
+  return request<DailySalesSummary>(`/api/v1/tenants/${tenantId}/reports/daily-sales`);
+}
+
+export interface ExpenseCategory {
+  id: string;
+  name: string;
+}
+
+export function listExpenseCategories(tenantId: string): Promise<{ categories: ExpenseCategory[] }> {
+  return request<{ categories: ExpenseCategory[] }>(`/api/v1/tenants/${tenantId}/expenses/categories`);
+}
+
+export function recordExpense(
+  tenantId: string,
+  data: {
+    category_id: string;
+    amount: string;
+    description?: string | null;
+    payment_method: string;
+  },
+): Promise<{ id: string; amount: string }> {
+  return request<{ id: string; amount: string }>(`/api/v1/tenants/${tenantId}/expenses`, {
+    method: "POST",
+    body: data,
+  });
+}
+
+export function receiveStock(
+  tenantId: string,
+  productId: string,
+  quantity: string,
+): Promise<{ id: string; product_id: string; quantity_on_hand: string }> {
+  return request<{ id: string; product_id: string; quantity_on_hand: string }>(
+    `/api/v1/tenants/${tenantId}/inventory/${productId}/receive`,
+    {
+      method: "POST",
+      body: { quantity },
+    },
+  );
+}
