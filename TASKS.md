@@ -1603,7 +1603,7 @@ Goal: a business exists as a tenant with a globally unique public slug.
 - [x] M19.1.5 Public shopfront from the public API with metadata for sharing:
       `/shop/{slug}` and `/shop/{slug}/product/{productSlug}`, rendered on the
       server so a WhatsApp link unfurls with the shop and the product.
-- [ ] M19.1.6 Client-side permission awareness that hides unavailable actions
+- [x] M19.1.6 Client-side permission awareness that hides unavailable actions
       while never being the authority.
 - [x] M19.1.7 End-to-end run in a real browser: create a product, record a
       sale, watch the inventory move, and open the public shop. Driven by
@@ -1827,50 +1827,50 @@ Each line is one commit, and the note under it is what you will be able to see a
 
 #### M21.3 The trader's side
 
-- [ ] **M21.3.1 The request arrives.**
+- [x] **M21.3.1 The request arrives.**
       `/app/requests`: what came in, from whom, when, with the counts. Notification and unread state.
       *You will see:* the list, waiting, instead of a paper slip.
-- [ ] **M21.3.2 Market-run mode.**
+- [x] **M21.3.2 Market-run mode.**
       Each line: have it / buy it / cannot get it, and what it cost him when he buys it. Real margin per
       waybill, which is the thing paper cannot do.
       *You will see:* what he made on a mixed order, for the first time.
-- [ ] **M21.3.3 Packing and ticking.**
+- [x] **M21.3.3 Packing and ticking.**
       Lines tick as they go in the carton, with an optional photo of the packed goods.
       *You will see:* a packed order, and a customer who can see it is being packed.
-- [ ] **M21.3.4 The quote, with his free hand.**
+- [x] **M21.3.4 The quote, with his free hand.**
       He prices what he sourced, adjusts the total by any amount or percentage, and confirms. The
       adjustment is a line with a reason. No ceiling, no floor, no approval. Confirmation is the moment
       a list becomes a sale: stock, ledger and receipt all follow from it, never before.
       *You will see:* "comot one thousand" recorded as what it was.
-- [ ] **M21.3.5 Counter mode: he builds the list while they talk.**
+- [x] **M21.3.5 Counter mode: he builds the list while they talk.**
       Fast entry from his side during a dictated order, marked as entered by him, read back for
       confirmation. This is the other half of the twenty minutes.
       *You will see:* a counter order taken without breaking the conversation.
 
 #### M21.4 Dispatch, paper and repetition
 
-- [ ] **M21.4.1 Dispatch: pickup or sent.**
+- [x] **M21.4.1 Dispatch: pickup or sent.**
       Picked up at the shop needs nothing. Sent records transporter, phone, waybill number and cost, and
       gives the customer a tracking link.
       *You will see:* a waybill recorded in three fields, and a link for the customer.
-- [ ] **M21.4.2 Printing.**
+- [x] **M21.4.2 Printing.**
       A print view of a list and of a waybill, because paper is a bridge and not the enemy.
       *You will see:* a sheet he can tick with a pen while the app learns his trade.
-- [ ] **M21.4.3 Free text becomes a product in one tap.**
+- [x] **M21.4.3 Free text becomes a product in one tap.**
       Reading "screenguard for iPhone 15, matte one" and knowing what it is, he turns the line into a
       catalogue entry, with its price, while packing.
       *You will see:* his catalogue grow to match what customers actually ask for.
-- [ ] **M21.4.4 A voice note as a list.**
+- [-] **M21.4.4 A voice note as a list.**
       The customer talks the list faster than they type; the trader plays it while he packs, as a
       checklist. Reading it automatically is a later promise, deliberately not made here.
       *You will see:* a waybill packed against a voice, not a keyboard.
 
 #### M21.5 What stock counts are for
 
-- [ ] **M21.5.1 The owner's view, and never a demand.** Availability, thresholds and counts are his to
+- [x] **M21.5.1 The owner's view, and never a demand.** Availability, thresholds and counts are his to
       look at. Most traders do not count stock and the product must not require it.
       *You will see:* numbers he can consult, never a form he must fill.
-- [ ] **M21.5.2 Never ask for a count; offer one.** On-hand is derived from recorded movements, shown as
+- [x] **M21.5.2 Never ask for a count; offer one.** On-hand is derived from recorded movements, shown as
       "last known", with a one-screen "count now" that never stands between him and a sale.
       *You will see:* approximate stock, honestly labelled.
 
@@ -1951,7 +1951,7 @@ consistent elevation or radius, which is exactly what "cut and join" describes.
       thumb and the eye expect them: a bottom bar with icons and labels on mobile, a side bar with room
       for longer labels on desktop.
       *You will see:* your profile and everything else reachable with one tap, on either device.
-- [ ] **M22.1.4 Where you are, and how you got there.** The current destination marked, a page title that
+- [x] **M22.1.4 Where you are, and how you got there.** The current destination marked, a page title that
       matches, and a back route that does not lose the business.
       *You will see:* you always know which screen you are on.
 
@@ -1968,32 +1968,32 @@ consistent elevation or radius, which is exactly what "cut and join" describes.
 
 ### M22.2 The dashboard, once it has a frame
 
-- [ ] **M22.2.1 What is happening now, first.** Today's money, what is waiting to be packed, and what is
+- [x] **M22.2.1 What is happening now, first.** Today's money, what is waiting to be packed, and what is
       running out - in that order, because that is the order a trader asks.
       *You will see:* the answer to "how is today going" in one look.
-- [ ] **M22.2.2 One primary action, the rest secondary.** "Record" is the thing he does twenty times a
+- [x] **M22.2.2 One primary action, the rest secondary.** "Record" is the thing he does twenty times a
       day; everything else is behind it.
       *You will see:* less on screen, less to read, less to get wrong under time pressure.
-- [ ] **M22.2.3 The shelf, as a list that reads like a shelf.** Denser, with the photograph, the price
+- [x] **M22.2.3 The shelf, as a list that reads like a shelf.** Denser, with the photograph, the price
       and the stock in one line, and the row actions where the thumb reaches.
       *You will see:* more of the shop on one screen, and no hunting for the toggle.
 
 ### M22.3 Every other screen, to the same standard
 
-- [ ] **M22.3.1 The forms**: sale, product, stock, expense, photo, shop, business - one sheet pattern,
+- [x] **M22.3.1 The forms**: sale, product, stock, expense, photo, shop, business - one sheet pattern,
       one field pattern, one error position.
-- [ ] **M22.3.2 The public shopfront and product page**: the shop a customer sees first, which is the
+- [x] **M22.3.2 The public shopfront and product page**: the shop a customer sees first, which is the
       only screen that has to sell without anybody explaining it.
-- [ ] **M22.3.3 The team, prices, profile and join screens**: fitted to the shell rather than each
+- [x] **M22.3.3 The team, prices, profile and join screens**: fitted to the shell rather than each
       carrying its own header.
-- [ ] **M22.3.4 Empty and loading states**: every screen says what to do when it has nothing to show,
+- [x] **M22.3.4 Empty and loading states**: every screen says what to do when it has nothing to show,
       and says it without a spinner over the whole page.
 
 ### M22.4 Verified the way the product owner will use it
 
-- [ ] **M22.4.1 Mobile at 390x844 and desktop at 1440x900**, screenshotted, with the mobile check failing
+- [x] **M22.4.1 Mobile at 390x844 and desktop at 1440x900**, screenshotted, with the mobile check failing
       on any viewport overflow - the existing standard, applied to the new frame.
-- [ ] **M22.4.2 Contrast, focus states and keyboard reach**, because a professional interface is one a
+- [x] **M22.4.2 Contrast, focus states and keyboard reach**, because a professional interface is one a
       person can operate without a mouse, and the product owner's own phone is the least forgiving
       device it runs on.
 
