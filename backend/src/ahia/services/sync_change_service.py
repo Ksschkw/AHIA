@@ -125,6 +125,7 @@ CHANGE_TYPE_FOR_ACTION: Final[dict[str, ChangeType]] = {
     # device already knows about, which is what UPDATED means here.
     "request_dispatched": ChangeType.UPDATED,
     "request_confirmed": ChangeType.CREATED,
+    "request_deleted": ChangeType.DELETED,
 }
 
 #: What a caller must hold to be told about a kind of record. Declared once, so the feed's
