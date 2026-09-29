@@ -248,6 +248,10 @@ export default function Profile() {
     );
   }, [user, firstName, lastName, phone, email]);
 
+  const activeSummary = businesses.find((c) => c.id === business?.id);
+  const userRole = (activeSummary?.role_name ?? "OWNER").toUpperCase();
+  const isOwnerOrManager = userRole === "OWNER" || userRole === "MANAGER";
+
   const isBusinessDirty = useMemo(() => {
     if (!business) return false;
     return (
@@ -442,7 +446,7 @@ export default function Profile() {
           <Card
             title={`About ${business.name}`}
             action={
-              !editingBusiness ? (
+              !editingBusiness && isOwnerOrManager ? (
                 <button
                   type="button"
                   className={styles.secondaryAction}
@@ -557,8 +561,7 @@ export default function Profile() {
         ) : null}
 
         {/* Shop Appearance & Live Customization */}
-        {/* Shop Appearance & Live Customization */}
-        {business ? (
+        {business && isOwnerOrManager ? (
           <Card title="Shop Appearance & Storefront Branding">
             {!isAppearanceExpanded ? (
               <div className={styles.appearanceCollapsed}>
@@ -1102,7 +1105,11 @@ export default function Profile() {
               <li key={candidate.id} className={styles.businessRow}>
                 <div>
                   <span className={styles.businessName}>{candidate.name}</span>
-                  <span className={styles.businessSlug}>/shop/{candidate.public_path}</span>
+                  <span className={styles.businessSlug}>
+                    {candidate.public_path.startsWith("/")
+                      ? candidate.public_path
+                      : `/${candidate.public_path}`}
+                  </span>
                 </div>
                 <Pill tone={candidate.is_active ? "good" : "bad"}>
                   {candidate.role_name || "member"}

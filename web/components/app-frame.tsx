@@ -80,7 +80,11 @@ export function AppFrame({ children }: { children: ReactNode }) {
 
   return (
     <AppShell
-      businesses={businesses.map((business) => ({ id: business.id, name: business.name }))}
+      businesses={businesses.map((business) => ({
+        id: business.id,
+        name: business.name,
+        role_name: business.role_name,
+      }))}
       activeBusinessId={activeBusinessId}
       personName={user ? `${user.first_name} ${user.last_name}` : ""}
       onSwitchBusiness={switchBusiness}

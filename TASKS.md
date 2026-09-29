@@ -4384,3 +4384,17 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
    - Added one-tap `Confirm Order` converting accepted lists into recorded sales.
 3. **Shop Switcher & Public Storefront Share Hub (`mobile/app/home.tsx`)** `[x]`:
    - Added a shop selector dropdown for multi-shop traders and a storefront share modal linking to `https://ahia.app/shop/[slug]`.
+
+### 17.15 Role-Based UI Gating, Graceful 403 Permission Handling & Path Canonicalization `[x]`
+1. **Isolated Error Boundaries for Reports and Expenses in Dashboard (`web/app/app/page.tsx`)** `[x]`:
+   - When a sales rep or inventory clerk logs in, dashboard bootstrapping previously executed `Promise.all` across `dailySales` (`REPORTS_READ`) and `listExpenseCategories` (`EXPENSES_READ`). Non-owner roles rejected with 403 Forbidden (`FORBIDDEN: You do not have permission to perform this action`), crashing the initial screen.
+   - Wrapped `dailySales` and `listExpenseCategories` in safe `.catch(() => null)` fallbacks so non-admin roles load their stock and products seamlessly without 403 interruptions.
+2. **Role-Gated Dashboard & Profile Controls (`web/app/app/page.tsx`, `web/app/app/profile/page.tsx`)** `[x]`:
+   - Restricted admin operations ("+ New Business", "Edit Business", "Record Spending", and "Shop Appearance Studio") to `OWNER` and `MANAGER` roles.
+   - For `SALES` and `INVENTORY` staff, the dashboard replaces revenue stats with recent sales counters and hides financial expense actions, while the profile screen renders a clean, read-only business info summary without edit buttons.
+3. **Graceful Team Permission Denial (`web/app/app/team/page.tsx`)** `[x]`:
+   - Navigating to `/app/team` as a sales representative previously caused an unhandled 403 in the catch block that blindly redirected to `/start`, unintentionally logging the user out.
+   - Replaced redirect behavior with a dedicated, informative in-app access warning explaining that team management is restricted to owners and managers, complete with a direct "Back to Dashboard" button.
+   - Filtered out the "Team" destination from the side navigation and bottom navigation bar for non-managerial staff.
+4. **Canonical Shop URL Path Resolution (`web/app/app/profile/page.tsx`)** `[x]`:
+   - Fixed redundant `/shop/` prefix on the profile business list where `candidate.public_path` (already containing `/shop/[slug]`) was producing `/shop//shop/[slug]`.

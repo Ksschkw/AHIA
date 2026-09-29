@@ -160,6 +160,10 @@ export default function Dashboard() {
   const needsBusiness = Boolean(user) && businessesLoaded && businesses.length === 0 && !businessId;
   const currency = business?.currency ?? "NGN";
 
+  const activeBusinessSummary = businesses.find((candidate) => candidate.id === businessId);
+  const userRole = (activeBusinessSummary?.role_name ?? "OWNER").toUpperCase();
+  const isOwnerOrManager = userRole === "OWNER" || userRole === "MANAGER";
+
   const report = useCallback((error: unknown) => {
     if (error instanceof ApiError) {
       setNotice({ message: `${error.code}: ${error.describe()}`, tone: "bad" });
@@ -193,12 +197,12 @@ export default function Dashboard() {
     }
 
     const [foundProducts, foundStock, summary, sales, low, expenseCategories, foundLists] = await Promise.all([
-      listProducts(tenantId),
-      listStock(tenantId),
-      dailySales(tenantId),
-      listSales(tenantId, "6"),
-      lowStock(tenantId, "5"),
-      listExpenseCategories(tenantId),
+      listProducts(tenantId).catch(() => []),
+      listStock(tenantId).catch(() => []),
+      dailySales(tenantId).catch(() => null),
+      listSales(tenantId, "6").catch(() => []),
+      lowStock(tenantId, "5").catch(() => []),
+      listExpenseCategories(tenantId).catch(() => null),
       listCustomerLists(tenantId).catch(() => []),
     ]);
     setProducts(foundProducts);
@@ -275,8 +279,8 @@ export default function Dashboard() {
       setStorefront(null);
       // The detail first: it carries the currency, so every amount on the page is rendered in the
       // business's own money rather than in a default that happens to be right for most shops.
-      setBusinessDetail(await getBusiness(tenantId));
-      setStorefront(await getStorefront(tenantId));
+      setBusinessDetail(await getBusiness(tenantId).catch(() => null));
+      setStorefront(await getStorefront(tenantId).catch(() => null));
       // A failure here leaves the form without a group picker rather than blocking the shelf: a trader
       // who cannot pick a group can still add the thing and group it later.
       setProductGroups(await listCategories(tenantId).catch(() => []));
@@ -482,14 +486,16 @@ export default function Dashboard() {
             ) : null}
           </Link>
         ) : null}
-        <button
-          className={styles.addBusiness}
-          aria-label="Add another business"
-          title="Add another business"
-          onClick={() => setSheet("business")}
-        >
-          + New business
-        </button>
+        {isOwnerOrManager || businesses.length === 0 ? (
+          <button
+            className={styles.addBusiness}
+            aria-label="Add another business"
+            title="Add another business"
+            onClick={() => setSheet("business")}
+          >
+            + New business
+          </button>
+        ) : null}
       </div>
 
       <div className={styles.content}>
@@ -516,12 +522,21 @@ export default function Dashboard() {
         ) : null}
 
         <section className={styles.heroRow}>
-          <Stat
-            label="Sold today"
-            value={formatMoney(today?.total_revenue ?? "0.00", currency)}
-            hint={`${formatCount(today?.total_sales ?? 0)} sales`}
-            tone="good"
-          />
+          {isOwnerOrManager ? (
+            <Stat
+              label="Sold today"
+              value={formatMoney(today?.total_revenue ?? "0.00", currency)}
+              hint={`${formatCount(today?.total_sales ?? 0)} sales`}
+              tone="good"
+            />
+          ) : (
+            <Stat
+              label="Recent sales"
+              value={formatCount(recentSales.length)}
+              hint="Recorded recently"
+              tone="good"
+            />
+          )}
           <Stat
             label="On the shelf"
             value={formatCount(products.length)}
@@ -762,7 +777,7 @@ export default function Dashboard() {
             <Card
               title="Your shop online"
               action={
-                storefront?.is_published ? (
+                storefront?.is_published && isOwnerOrManager ? (
                   <button className={styles.linkButton} onClick={() => setSheet("shop")}>
                     Edit
                   </button>
@@ -797,18 +812,20 @@ export default function Dashboard() {
                     >
                       Share on WhatsApp
                     </a>
-                    <button
-                      className={styles.linkButton}
-                      onClick={() =>
-                        runShop(async () => {
-                          if (!businessId) return;
-                          setStorefront(await unpublishStorefront(businessId));
-                          setNotice({ message: "Your shop is closed. The link is kept.", tone: "good" });
-                        })
-                      }
-                    >
-                      Close it for now
-                    </button>
+                    {isOwnerOrManager ? (
+                      <button
+                        className={styles.linkButton}
+                        onClick={() =>
+                          runShop(async () => {
+                            if (!businessId) return;
+                            setStorefront(await unpublishStorefront(businessId));
+                            setNotice({ message: "Your shop is closed. The link is kept.", tone: "good" });
+                          })
+                        }
+                      >
+                        Close it for now
+                      </button>
+                    ) : null}
                   </div>
                 </>
               ) : (
@@ -817,18 +834,20 @@ export default function Dashboard() {
                     A page with your products, photos and prices that you can send to a customer.
                     They open it, see what you have, and message you on WhatsApp.
                   </p>
-                  <Button
-                    busy={busyAction === "shop"}
-                    onClick={() =>
-                      runShop(async () => {
-                        if (!businessId) return;
-                        setStorefront(await publishStorefront(businessId, {}));
-                        setNotice({ message: "Your shop is open.", tone: "good" });
-                      })
-                    }
-                  >
-                    Open my shop
-                  </Button>
+                  {isOwnerOrManager ? (
+                    <Button
+                      busy={busyAction === "shop"}
+                      onClick={() =>
+                        runShop(async () => {
+                          if (!businessId) return;
+                          setStorefront(await publishStorefront(businessId, {}));
+                          setNotice({ message: "Your shop is open.", tone: "good" });
+                        })
+                      }
+                    >
+                      Open my shop
+                    </Button>
+                  ) : null}
                 </>
               )}
             </Card>
@@ -873,13 +892,15 @@ export default function Dashboard() {
             onClick={() => setSheet("stock")}
             disabled={!businessId || products.length === 0}
           />
-          <ActionTile
-            label="Record spending"
-            hint="Money out"
-            glyph="expense"
-            onClick={() => setSheet("expense")}
-            disabled={!businessId}
-          />
+          {isOwnerOrManager ? (
+            <ActionTile
+              label="Record spending"
+              hint="Money out"
+              glyph="expense"
+              onClick={() => setSheet("expense")}
+              disabled={!businessId}
+            />
+          ) : null}
         </section>
       </div>
 

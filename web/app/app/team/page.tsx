@@ -78,6 +78,7 @@ export default function Team() {
     return cachedRead<PendingInvitation[]>("/api/v1/invitations/mine") ?? [];
   });
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [permissionDenied, setPermissionDenied] = useState(false);
   //: The action waiting on the question, if the person holding the phone has not answered yet.
   const [gated, setGated] = useState<{ run: () => void } | null>(null);
   //: True from the instant a handler starts to the instant it finishes, which state cannot be.
@@ -171,12 +172,23 @@ export default function Team() {
     void (async () => {
       try {
         await currentUser();
+      } catch {
+        router.replace("/start");
+        return;
+      }
+      try {
         const businesses = await listBusinesses();
         const remembered =
           typeof window === "undefined" ? null : window.localStorage.getItem("ahia.business");
         const chosen = businesses.find((candidate) => candidate.id === remembered) ?? businesses[0];
         if (!chosen) {
           router.replace("/app");
+          return;
+        }
+        const role = (chosen.role_name ?? "OWNER").toUpperCase();
+        if (role !== "OWNER" && role !== "MANAGER") {
+          setPermissionDenied(true);
+          setBusiness(await getBusiness(chosen.id).catch(() => null));
           return;
         }
         const rememberedMembers = cachedRead<Member[]>(`/api/v1/tenants/${chosen.id}/members`);
@@ -188,12 +200,43 @@ export default function Team() {
 
         setBusiness(await getBusiness(chosen.id));
         await refresh(chosen.id);
-        setMine(await listMyInvitations());
-      } catch {
-        router.replace("/start");
+        setMine(await listMyInvitations().catch(() => []));
+      } catch (error) {
+        if (error instanceof ApiError && (error.status === 403 || error.code === "FORBIDDEN")) {
+          setPermissionDenied(true);
+        } else {
+          const explained = explainFailure(error);
+          setNotice({ message: explained.message, hint: explained.hint, tone: "bad" });
+        }
       }
     })();
   }, [refresh, router]);
+
+  if (permissionDenied) {
+    return (
+      <main className={styles.page}>
+        <div className={styles.content}>
+          <Link className={styles.backLink} href="/app">
+            <ArrowLeftIcon size={16} />
+            <span>Back to shop</span>
+          </Link>
+          <Card title="Team Access Restricted">
+            <p className={styles.lede} style={{ marginBottom: "16px" }}>
+              You do not have permission to view or manage team members for {business?.name || "this business"}.
+            </p>
+            <p className={styles.note}>
+              Only the business owner or a manager can manage staff and send invitations. If you need access, ask the owner of the business.
+            </p>
+            <div style={{ marginTop: "20px" }}>
+              <Link href="/app" style={{ textDecoration: "none" }}>
+                <Button>Back to Dashboard</Button>
+              </Link>
+            </div>
+          </Card>
+        </div>
+      </main>
+    );
+  }
 
   if (!business) {
     return <main className={styles.page} />;

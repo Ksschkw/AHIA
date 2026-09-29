@@ -27,6 +27,7 @@ import styles from "./app-shell.module.css";
 export interface ShellBusiness {
   id: string;
   name: string;
+  role_name?: string;
 }
 
 export interface AppShellProps {
@@ -169,7 +170,16 @@ export function AppShell({
     });
   }, []);
 
-  const phoneDestinations = pinnedDestinations(pinned);
+  const isOwnerOrManager =
+    !active?.role_name ||
+    active.role_name.toUpperCase() === "OWNER" ||
+    active.role_name.toUpperCase() === "MANAGER";
+  const visibleDestinations = DESTINATIONS.filter(
+    (destination) => destination.href !== "/app/team" || isOwnerOrManager,
+  );
+  const phoneDestinations = pinnedDestinations(pinned).filter(
+    (destination) => destination.href !== "/app/team" || isOwnerOrManager,
+  );
 
   return (
     <div className={styles.shell}>
@@ -211,7 +221,7 @@ export function AppShell({
         ) : null}
 
         <ul className={styles.railList}>
-          {DESTINATIONS.map((destination) => (
+          {visibleDestinations.map((destination) => (
             <li key={destination.href}>
               <Link
                 className={
@@ -341,7 +351,7 @@ export function AppShell({
           day - and the pinning is remembered, so he only decides once. */}
       <Sheet open={moreOpen} title="Everything" onClose={() => setMoreOpen(false)}>
         <ul className={styles.moreList}>
-          {DESTINATIONS.map((destination) => {
+          {visibleDestinations.map((destination) => {
             const isPinned = phoneDestinations.some((one) => one.href === destination.href);
             return (
               <li className={styles.moreRow} key={destination.href}>
