@@ -32,11 +32,32 @@ import {
   unpublishProduct,
   workListLine,
   listCategories,
+  createCategory,
+  listSales,
+  dailySales,
+  recordExpense,
+  listExpenseCategories,
+  receiveStock,
+  listMembers,
+  listInvitations,
+  inviteMember,
+  removeMember,
+  currentUser,
+  getBusiness,
+  updateBusiness,
   type Category,
   type CustomerList,
   type CustomerListLine,
   type Product,
   type TenantSummary,
+  type TenantDetails,
+  type SaleSummary,
+  type DailySalesSummary,
+  type ExpenseCategory,
+  type Member,
+  type MembershipInvitation,
+  type MemberRole,
+  type UserProfile,
 } from "@/lib/api";
 import {
   cacheProducts,
@@ -46,6 +67,8 @@ import {
   getPendingSalesCount,
 } from "@/lib/db";
 import { forgetSession } from "@/lib/session";
+
+type TabKey = "dashboard" | "shelf" | "lists" | "trading" | "more";
 
 function formatMoney(amount: string | null | undefined): string {
   if (!amount) return "Price on request";
@@ -119,36 +142,56 @@ function groupCustomerListLines(lines: CustomerListLine[]) {
 export default function Home() {
   const router = useRouter();
 
+  const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [businesses, setBusinesses] = useState<TenantSummary[] | null>(null);
   const [activeBusiness, setActiveBusiness] = useState<TenantSummary | null>(null);
+  const [businessDetails, setBusinessDetails] = useState<TenantDetails | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
 
-  const [tab, setTab] = useState<"shelf" | "lists">("shelf");
+  // Data states
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [customerLists, setCustomerLists] = useState<CustomerList[]>([]);
+  const [sales, setSales] = useState<SaleSummary[]>([]);
+  const [dailyStats, setDailyStats] = useState<DailySalesSummary | null>(null);
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [invitations, setInvitations] = useState<MembershipInvitation[]>([]);
+
+  // Search & Filters
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Loading & Sync States
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
-  // Add Item Modal State
-  const [showAddModal, setShowAddModal] = useState(false);
+  // Modals
+  const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPrice, setNewPrice] = useState("");
   const [newWholesale, setNewWholesale] = useState("");
   const [newCategoryId, setNewCategoryId] = useState<string | null>(null);
   const [savingProduct, setSavingProduct] = useState(false);
 
-  // Edit Product Modal State
+  const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryParentId, setNewCategoryParentId] = useState<string | null>(null);
+  const [savingCategory, setSavingCategory] = useState(false);
+
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editPrice, setEditPrice] = useState("");
   const [editWholesale, setEditWholesale] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
 
-  // Price Line Modal State
+  const [restockProduct, setRestockProduct] = useState<Product | null>(null);
+  const [restockQty, setRestockQty] = useState("");
+  const [savingRestock, setSavingRestock] = useState(false);
+
   const [pricingLine, setPricingLine] = useState<{
     listId: string;
     lineId: string;
@@ -158,7 +201,18 @@ export default function Home() {
   const [priceInput, setPriceInput] = useState("");
   const [savingPrice, setSavingPrice] = useState(false);
 
-  // Storefront & Shop Switcher Modal
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [expenseAmount, setExpenseAmount] = useState("");
+  const [expenseDescription, setExpenseDescription] = useState("");
+  const [expenseCategoryId, setExpenseCategoryId] = useState<string>("");
+  const [expensePaymentMethod, setExpensePaymentMethod] = useState("cash");
+  const [savingExpense, setSavingExpense] = useState(false);
+
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [invitePhone, setInvitePhone] = useState("");
+  const [inviteRole, setInviteRole] = useState<MemberRole>("SALES");
+  const [savingInvite, setSavingInvite] = useState(false);
+
   const [showShopModal, setShowShopModal] = useState(false);
 
   const showToast = (msg: string) => {
@@ -177,16 +231,44 @@ export default function Home() {
     setPendingSyncCount(pending);
 
     try {
-      const [freshProducts, freshLists, freshCategories] = await Promise.all([
+      const [
+        freshProducts,
+        freshLists,
+        freshCategories,
+        freshSales,
+        freshDaily,
+        freshExpCats,
+        freshMembers,
+        freshInvs,
+        bDetails,
+        uProfile,
+      ] = await Promise.all([
         listProducts(tenantId).catch(() => cached),
         listCustomerLists(tenantId).catch(() => []),
         listCategories(tenantId).catch(() => []),
+        listSales(tenantId).catch(() => []),
+        dailySales(tenantId).catch(() => null),
+        listExpenseCategories(tenantId).catch(() => ({ categories: [] })),
+        listMembers(tenantId).catch(() => []),
+        listInvitations(tenantId).catch(() => []),
+        getBusiness(tenantId).catch(() => null),
+        currentUser().catch(() => null),
       ]);
 
       setProducts(freshProducts);
       cacheProducts(tenantId, freshProducts);
       setCustomerLists(freshLists);
       setCategories(freshCategories);
+      setSales(freshSales);
+      setDailyStats(freshDaily);
+      setExpenseCategories(freshExpCats.categories);
+      if (freshExpCats.categories.length > 0 && !expenseCategoryId) {
+        setExpenseCategoryId(freshExpCats.categories[0].id);
+      }
+      setMembers(freshMembers);
+      setInvitations(freshInvs);
+      setBusinessDetails(bDetails);
+      setProfile(uProfile);
       setProblem(null);
     } catch {
       if (cached.length === 0) {
@@ -196,7 +278,7 @@ export default function Home() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [expenseCategoryId]);
 
   useEffect(() => {
     void (async () => {
@@ -218,17 +300,23 @@ export default function Home() {
   }, [loadData]);
 
   const handleSyncOutbox = async () => {
-    if (!activeBusiness) return;
+    if (!activeBusiness || isSyncing) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsSyncing(true);
     try {
       const synced = await flushOutbox(activeBusiness.id);
       const remaining = getPendingSalesCount(activeBusiness.id);
       setPendingSyncCount(remaining);
+      await loadData(activeBusiness.id);
       if (synced > 0) {
         showToast(`Synced ${synced} offline sale(s).`);
+      } else {
+        showToast("Everything is up to date.");
       }
     } catch {
       showToast("Sync failed. Will retry automatically.");
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -241,6 +329,7 @@ export default function Home() {
     try {
       await sellOneProduct(activeBusiness.id, product);
       showToast(`Sold 1 ${product.name}`);
+      void loadData(activeBusiness.id);
     } catch {
       enqueueOfflineSale({
         tenantId: activeBusiness.id,
@@ -266,9 +355,6 @@ export default function Home() {
       setProducts((current) =>
         current.map((p) => (p.id === updated.id ? { ...p, is_published: updated.is_published } : p)),
       );
-      if (editingProduct && editingProduct.id === updated.id) {
-        setEditingProduct((curr) => (curr ? { ...curr, is_published: updated.is_published } : null));
-      }
       showToast(updated.is_published ? `${product.name} is now Live` : `${product.name} is now Hidden`);
     } catch {
       showToast("Could not update item status.");
@@ -284,7 +370,7 @@ export default function Home() {
         name: newName.trim(),
         selling_price: newPrice.trim() || null,
         wholesale_price: newWholesale.trim() || null,
-        category_id: newCategoryId,
+        category_id: newCategoryId || selectedCategory,
       });
       setProducts((curr) => [...curr, created]);
       cacheProducts(activeBusiness.id, [...products, created]);
@@ -292,12 +378,33 @@ export default function Home() {
       setNewPrice("");
       setNewWholesale("");
       setNewCategoryId(null);
-      setShowAddModal(false);
-      showToast(`Added ${created.name} to stock!`);
+      setShowAddProductModal(false);
+      showToast(`Added ${created.name} to shelf!`);
     } catch {
       showToast("Could not save item. Check connection.");
     } finally {
       setSavingProduct(false);
+    }
+  };
+
+  const handleCreateCategory = async () => {
+    if (!activeBusiness || !newCategoryName.trim()) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSavingCategory(true);
+    try {
+      const created = await createCategory(activeBusiness.id, {
+        name: newCategoryName.trim(),
+        parent_id: newCategoryParentId,
+      });
+      setCategories((curr) => [...curr, created]);
+      setNewCategoryName("");
+      setNewCategoryParentId(null);
+      setShowAddCategoryModal(false);
+      showToast(`Created category: ${created.name}`);
+    } catch {
+      showToast("Could not create category.");
+    } finally {
+      setSavingCategory(false);
     }
   };
 
@@ -321,6 +428,74 @@ export default function Home() {
       showToast("Could not update item prices.");
     } finally {
       setSavingEdit(false);
+    }
+  };
+
+  const handleReceiveStock = async () => {
+    if (!activeBusiness || !restockProduct || !restockQty.trim()) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSavingRestock(true);
+    try {
+      await receiveStock(activeBusiness.id, restockProduct.id, restockQty.trim());
+      setRestockProduct(null);
+      setRestockQty("");
+      showToast(`Received +${restockQty} of ${restockProduct.name}`);
+      void loadData(activeBusiness.id);
+    } catch {
+      showToast("Could not receive stock.");
+    } finally {
+      setSavingRestock(false);
+    }
+  };
+
+  const handleRecordExpense = async () => {
+    if (!activeBusiness || !expenseAmount.trim() || !expenseCategoryId) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSavingExpense(true);
+    try {
+      await recordExpense(activeBusiness.id, {
+        amount: expenseAmount.trim(),
+        category_id: expenseCategoryId,
+        description: expenseDescription.trim() || null,
+        payment_method: expensePaymentMethod,
+      });
+      setExpenseAmount("");
+      setExpenseDescription("");
+      setShowExpenseModal(false);
+      showToast("Expense logged successfully!");
+      void loadData(activeBusiness.id);
+    } catch {
+      showToast("Could not record expense.");
+    } finally {
+      setSavingExpense(false);
+    }
+  };
+
+  const handleInviteStaff = async () => {
+    if (!activeBusiness || !invitePhone.trim()) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSavingInvite(true);
+    try {
+      const inv = await inviteMember(activeBusiness.id, {
+        phone: invitePhone.trim(),
+        role: inviteRole,
+      });
+      setInvitations((curr) => [...curr, inv]);
+      setShowInviteModal(false);
+      setInvitePhone("");
+
+      const cleanNum = formatWaNumber(inv.phone);
+      const msg = `Hello, you have been invited to join ${activeBusiness.name} on AHIA as ${inviteRole}. Open https://ahia.app to accept.`;
+      const waUrl = cleanNum
+        ? `https://wa.me/${cleanNum}?text=${encodeURIComponent(msg)}`
+        : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+      void Linking.openURL(waUrl);
+
+      showToast("Invitation created & sent via WhatsApp!");
+    } catch {
+      showToast("Could not create invitation.");
+    } finally {
+      setSavingInvite(false);
     }
   };
 
@@ -447,437 +622,337 @@ export default function Home() {
     );
   };
 
-  const unansweredCount = customerLists.filter((l) => l.status !== "confirmed").length;
+  const filteredProducts = products.filter((p) => {
+    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = selectedCategory ? p.category_id === selectedCategory : true;
+    return matchesSearch && matchesCategory;
+  });
 
-  const filteredProducts = products.filter((p) =>
-    p.name.toLowerCase().includes(searchQuery.trim().toLowerCase()),
-  );
-
-  const categoryById = new Map(categories.map((c) => [c.id, c]));
-  type ShelfGroup = { categoryId: string | null; label: string; items: Product[] };
-  const shelfGroups: ShelfGroup[] = [];
-
-  if (!searchQuery.trim()) {
-    const grouped = new Map<string | null, Product[]>();
-    for (const p of products) {
-      const key = p.category_id ?? null;
-      const list = grouped.get(key);
-      if (list) list.push(p);
-      else grouped.set(key, [p]);
-    }
-    const sortedKeys = [...grouped.keys()].sort((a, b) => {
-      const nameA = a ? (categoryById.get(a)?.name ?? "Unknown") : "zzz";
-      const nameB = b ? (categoryById.get(b)?.name ?? "Unknown") : "zzz";
-      return nameA.localeCompare(nameB);
-    });
-    for (const key of sortedKeys) {
-      const label = key ? (categoryById.get(key)?.name ?? "Unknown") : "Uncategorised";
-      shelfGroups.push({
-        categoryId: key,
-        label,
-        items: (grouped.get(key) ?? []).sort((a, b) => a.name.localeCompare(b.name)),
-      });
-    }
-  }
+  const pendingListsCount = customerLists.filter((l) => l.status !== "confirmed").length;
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header */}
+      {/* Top Header */}
       <View style={styles.header}>
         <Pressable
-          style={styles.headerTitleWrap}
+          style={styles.businessSelector}
           onPress={() => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setShowShopModal(true);
           }}
         >
-          <Text style={styles.appName}>AHIA</Text>
-          <View style={styles.shopSelectorPill}>
-            <Text style={styles.shopName} numberOfLines={1}>
-              {activeBusiness?.name ?? "My Shop"}
+          <View style={styles.businessBadge}>
+            <Text style={styles.businessBadgeText}>
+              {activeBusiness?.name ? activeBusiness.name.slice(0, 2).toUpperCase() : "AH"}
             </Text>
-            <Text style={styles.shopSelectorChevron}>v</Text>
+          </View>
+          <View>
+            <Text style={styles.businessName} numberOfLines={1}>
+              {activeBusiness?.name ?? "AHIA Shop"}
+            </Text>
+            <Text style={styles.businessSub}>Switch Stall or Business</Text>
           </View>
         </Pressable>
 
-        <View style={styles.headerRightActions}>
-          <Pressable
-            accessibilityRole="button"
-            style={styles.shareStorefrontBtn}
-            onPress={handleShareStorefront}
-          >
-            <Text style={styles.shareStorefrontText}>Share Shop</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            style={styles.signOutBtn}
-            onPress={() => {
-              void (async () => {
-                await forgetSession();
-                router.replace("/");
-              })();
-            }}
-          >
-            <Text style={styles.signOutText}>Sign out</Text>
-          </Pressable>
-        </View>
+        <Pressable
+          style={[styles.syncButton, pendingSyncCount > 0 && styles.syncButtonPending]}
+          onPress={handleSyncOutbox}
+          disabled={isSyncing}
+        >
+          {isSyncing ? (
+            <ActivityIndicator size="small" color="#084a2f" />
+          ) : (
+            <Text style={styles.syncButtonText}>
+              {pendingSyncCount > 0 ? `${pendingSyncCount} Sync` : "Online"}
+            </Text>
+          )}
+        </Pressable>
       </View>
 
-      {/* Offline sync banner */}
-      {pendingSyncCount > 0 ? (
-        <Pressable style={styles.syncBanner} onPress={() => void handleSyncOutbox()}>
-          <Text style={styles.syncBannerText}>
-            {pendingSyncCount} offline {pendingSyncCount === 1 ? "sale" : "sales"} waiting to sync
-          </Text>
-          <Text style={styles.syncActionText}>Sync Now</Text>
-        </Pressable>
-      ) : null}
-
       {/* Toast Notice */}
-      {notice ? (
+      {notice && (
         <View style={styles.toast}>
           <Text style={styles.toastText}>{notice}</Text>
         </View>
-      ) : null}
+      )}
 
-      {/* Tabs */}
-      <View style={styles.tabBar}>
-        <Pressable
-          style={[styles.tab, tab === "shelf" && styles.activeTab]}
-          onPress={() => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setTab("shelf");
-          }}
-        >
-          <Text style={[styles.tabText, tab === "shelf" && styles.activeTabText]}>
-            Stock ({products.length})
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[styles.tab, tab === "lists" && styles.activeTab]}
-          onPress={() => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setTab("lists");
-          }}
-        >
-          <View style={styles.tabWithBadge}>
-            <Text style={[styles.tabText, tab === "lists" && styles.activeTabText]}>
-              Customer Lists ({customerLists.length})
-            </Text>
-            {unansweredCount > 0 ? (
-              <View style={styles.tabHoverBadge}>
-                <Text style={styles.tabHoverBadgeText}>{unansweredCount}</Text>
-              </View>
-            ) : null}
-          </View>
-        </Pressable>
-      </View>
-
-      {problem ? (
-        <View style={styles.errorBox}>
-          <Text style={styles.errorText}>{problem}</Text>
-        </View>
-      ) : null}
-
-      {loading ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#0b5d3b" />
-        </View>
-      ) : tab === "shelf" ? (
-        <View style={styles.contentWrap}>
-          {/* Unanswered lists callout banner */}
-          {unansweredCount > 0 ? (
-            <Pressable
-              style={styles.unansweredCallout}
-              onPress={() => {
-                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setTab("lists");
-              }}
-            >
-              <View style={styles.unansweredBadge}>
-                <Text style={styles.unansweredBadgeText}>{unansweredCount}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.unansweredTitle}>
-                  {unansweredCount === 1 ? "1 customer list waiting" : `${unansweredCount} customer lists waiting`}
+      {/* Main Content Area based on Active Tab */}
+      <View style={styles.mainContainer}>
+        {activeTab === "dashboard" && (
+          <ScrollView
+            style={styles.scrollContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => {
+                  if (activeBusiness) {
+                    setRefreshing(true);
+                    void loadData(activeBusiness.id);
+                  }
+                }}
+              />
+            }
+          >
+            {/* KPI Cards */}
+            <View style={styles.kpiRow}>
+              <View style={[styles.kpiCard, styles.kpiCardHighlight]}>
+                <Text style={styles.kpiLabel}>Today's Sales</Text>
+                <Text style={styles.kpiValue}>
+                  {formatMoney(dailyStats?.total_revenue ?? "0")}
                 </Text>
-                <Text style={styles.unansweredSub}>Orders waiting for your review</Text>
+                <Text style={styles.kpiMeta}>{dailyStats?.total_sales ?? 0} transaction(s)</Text>
               </View>
-              <Text style={styles.unansweredAction}>Open</Text>
-            </Pressable>
-          ) : null}
 
-          {/* Search Bar & Quick Add Button */}
-          <View style={styles.searchRow}>
-            <View style={styles.searchInputWrap}>
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Pending Orders</Text>
+                <Text style={styles.kpiValue}>{pendingListsCount}</Text>
+                <Text style={styles.kpiMeta}>Customer Lists</Text>
+              </View>
+            </View>
+
+            {/* Quick Actions Grid */}
+            <Text style={styles.sectionHeading}>Quick Actions</Text>
+            <View style={styles.actionGrid}>
+              <Pressable
+                style={styles.actionTile}
+                onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowAddProductModal(true);
+                }}
+              >
+                <Text style={styles.actionTileIcon}>[+ Item]</Text>
+                <Text style={styles.actionTileTitle}>Add Product</Text>
+                <Text style={styles.actionTileDesc}>New catalog item</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.actionTile}
+                onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowExpenseModal(true);
+                }}
+              >
+                <Text style={styles.actionTileIcon}>[- Exp]</Text>
+                <Text style={styles.actionTileTitle}>Log Expense</Text>
+                <Text style={styles.actionTileDesc}>Record market cost</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.actionTile}
+                onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowAddCategoryModal(true);
+                }}
+              >
+                <Text style={styles.actionTileIcon}>[Cat]</Text>
+                <Text style={styles.actionTileTitle}>New Category</Text>
+                <Text style={styles.actionTileDesc}>Organize shelf</Text>
+              </Pressable>
+
+              <Pressable style={styles.actionTile} onPress={handleShareStorefront}>
+                <Text style={styles.actionTileIcon}>[Share]</Text>
+                <Text style={styles.actionTileTitle}>Share Shop</Text>
+                <Text style={styles.actionTileDesc}>WhatsApp Catalog</Text>
+              </Pressable>
+            </View>
+
+            {/* Recent Sales Overview */}
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionHeading}>Recent Sales</Text>
+              <Pressable onPress={() => setActiveTab("trading")}>
+                <Text style={styles.seeAllLink}>See All</Text>
+              </Pressable>
+            </View>
+
+            {sales.length === 0 ? (
+              <View style={styles.emptyBox}>
+                <Text style={styles.emptyTitle}>No sales recorded yet</Text>
+                <Text style={styles.emptySubtitle}>Tap Sell One on any shelf item to start.</Text>
+              </View>
+            ) : (
+              sales.slice(0, 5).map((sale) => (
+                <View key={sale.id} style={styles.saleRow}>
+                  <View>
+                    <Text style={styles.saleReceipt}>{sale.receipt_number}</Text>
+                    <Text style={styles.saleDate}>{sale.payment_method.toUpperCase()}</Text>
+                  </View>
+                  <Text style={styles.saleAmount}>{formatMoney(sale.total_amount)}</Text>
+                </View>
+              ))
+            )}
+          </ScrollView>
+        )}
+
+        {activeTab === "shelf" && (
+          <View style={styles.tabContainer}>
+            {/* Search & Action Bar */}
+            <View style={styles.shelfTopBar}>
               <TextInput
                 style={styles.searchInput}
-                placeholder="Search items, models, packs..."
-                placeholderTextColor="#8b8377"
+                placeholder="Search products..."
+                placeholderTextColor="#8a928e"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                clearButtonMode="while-editing"
               />
+              <Pressable
+                style={styles.iconAddBtn}
+                onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowAddProductModal(true);
+                }}
+              >
+                <Text style={styles.iconAddBtnText}>+ Item</Text>
+              </Pressable>
             </View>
-            <Pressable
-              style={styles.addItemHeaderBtn}
-              onPress={() => {
-                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                setShowAddModal(true);
-              }}
-            >
-              <Text style={styles.addItemHeaderBtnText}>+ Add Item</Text>
-            </Pressable>
-          </View>
 
-          {searchQuery.trim() ? (
-            /* Flat search results */
-            <FlatList
-              data={filteredProducts}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.listContainer}
-              renderItem={({ item }) => (
-                <View style={styles.productCard}>
+            {/* Category Filter Pills */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
+              <Pressable
+                style={[styles.categoryPill, selectedCategory === null && styles.categoryPillActive]}
+                onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setSelectedCategory(null);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.categoryPillText,
+                    selectedCategory === null && styles.categoryPillTextActive,
+                  ]}
+                >
+                  All ({products.length})
+                </Text>
+              </Pressable>
+              {categories.map((cat) => {
+                const count = products.filter((p) => p.category_id === cat.id).length;
+                return (
                   <Pressable
-                    style={styles.productInfo}
+                    key={cat.id}
+                    style={[styles.categoryPill, selectedCategory === cat.id && styles.categoryPillActive]}
                     onPress={() => {
                       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setEditingProduct(item);
-                      setEditPrice(item.selling_price ?? item.effective_normal_price ?? "");
-                      setEditWholesale(item.effective_wholesale_price ?? "");
+                      setSelectedCategory(cat.id);
                     }}
-                  >
-                    <Text style={styles.productName}>{item.name}</Text>
-                    <Text style={styles.productPrice}>
-                      Retail: {formatMoney(item.selling_price ?? item.effective_normal_price)}
-                    </Text>
-                    {item.effective_wholesale_price ? (
-                      <Text style={styles.productWholesalePrice}>
-                        Wholesale: {formatMoney(item.effective_wholesale_price)}
-                      </Text>
-                    ) : null}
-                    <View style={styles.pillRow}>
-                      <Pressable
-                        style={[styles.statusPill, item.is_published ? styles.livePill : styles.hiddenPill]}
-                        onPress={() => void handleTogglePublish(item)}
-                      >
-                        <Text
-                          style={[
-                            styles.statusPillText,
-                            item.is_published ? styles.livePillText : styles.hiddenPillText,
-                          ]}
-                        >
-                          {item.is_published ? "Live" : "Hidden"}
-                        </Text>
-                      </Pressable>
-                      <Text style={styles.tapToEditHint}>Tap to edit price</Text>
-                    </View>
-                  </Pressable>
-
-                  <View style={styles.cardActions}>
-                    <Pressable style={styles.copyBtn} onPress={() => void handleCopyProduct(item)}>
-                      <Text style={styles.copyBtnText}>Copy</Text>
-                    </Pressable>
-                    <Pressable style={styles.sellBtn} onPress={() => void handleSellOne(item)}>
-                      <Text style={styles.sellBtnText}>Sell 1</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              )}
-              ListEmptyComponent={
-                <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyTitle}>Nothing matches &ldquo;{searchQuery}&rdquo;</Text>
-                  <Pressable
-                    style={styles.emptyAddBtn}
-                    onPress={() => {
-                      setNewName(searchQuery);
-                      setShowAddModal(true);
-                    }}
-                  >
-                    <Text style={styles.emptyAddBtnText}>+ Add &ldquo;{searchQuery}&rdquo; as new item</Text>
-                  </Pressable>
-                </View>
-              }
-            />
-          ) : (
-            /* Category Grouped Shelf */
-            <FlatList
-              data={shelfGroups}
-              keyExtractor={(group) => group.categoryId ?? "__none__"}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={() => {
-                    if (activeBusiness) {
-                      setRefreshing(true);
-                      void loadData(activeBusiness.id);
-                    }
-                  }}
-                  colors={["#0b5d3b"]}
-                />
-              }
-              contentContainerStyle={styles.listContainer}
-              renderItem={({ item: group }) => (
-                <View style={styles.groupSection}>
-                  <View style={styles.groupHeader}>
-                    <Text style={styles.groupTitle}>{group.label}</Text>
-                    <View style={styles.groupCountBadge}>
-                      <Text style={styles.groupCountText}>{group.items.length}</Text>
-                    </View>
-                  </View>
-                  {group.items.map((item) => (
-                    <View key={item.id} style={styles.productCard}>
-                      <Pressable
-                        style={styles.productInfo}
-                        onPress={() => {
-                          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          setEditingProduct(item);
-                          setEditPrice(item.selling_price ?? item.effective_normal_price ?? "");
-                          setEditWholesale(item.effective_wholesale_price ?? "");
-                        }}
-                      >
-                        <Text style={styles.productName}>{item.name}</Text>
-                        <Text style={styles.productPrice}>
-                          Retail: {formatMoney(item.selling_price ?? item.effective_normal_price)}
-                        </Text>
-                        {item.effective_wholesale_price ? (
-                          <Text style={styles.productWholesalePrice}>
-                            Wholesale: {formatMoney(item.effective_wholesale_price)}
-                          </Text>
-                        ) : null}
-                        <View style={styles.pillRow}>
-                          <Pressable
-                            style={[styles.statusPill, item.is_published ? styles.livePill : styles.hiddenPill]}
-                            onPress={() => void handleTogglePublish(item)}
-                          >
-                            <Text
-                              style={[
-                                styles.statusPillText,
-                                item.is_published ? styles.livePillText : styles.hiddenPillText,
-                              ]}
-                            >
-                              {item.is_published ? "Live" : "Hidden"}
-                            </Text>
-                          </Pressable>
-                        </View>
-                      </Pressable>
-
-                      <View style={styles.cardActions}>
-                        <Pressable style={styles.copyBtn} onPress={() => void handleCopyProduct(item)}>
-                          <Text style={styles.copyBtnText}>Copy</Text>
-                        </Pressable>
-                        <Pressable style={styles.sellBtn} onPress={() => void handleSellOne(item)}>
-                          <Text style={styles.sellBtnText}>Sell 1</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              )}
-              ListEmptyComponent={
-                <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyTitle}>No items on the shelf</Text>
-                  <Text style={styles.emptyDesc}>Add your first item using the button above.</Text>
-                </View>
-              }
-            />
-          )}
-        </View>
-      ) : (
-        <FlatList
-          data={customerLists}
-          keyExtractor={(item) => item.id}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => {
-                if (activeBusiness) {
-                  setRefreshing(true);
-                  void loadData(activeBusiness.id);
-                }
-              }}
-              colors={["#0b5d3b"]}
-            />
-          }
-          contentContainerStyle={styles.listContainer}
-          renderItem={({ item: list }) => (
-            <View style={styles.orderCard}>
-              <View style={styles.orderHeader}>
-                <View>
-                  <Text style={styles.customerName}>
-                    {list.customer_name ? list.customer_name : list.customer_phone}
-                  </Text>
-                  <Text style={styles.customerPhone}>{list.customer_phone}</Text>
-                </View>
-                <View style={styles.orderBadgeRow}>
-                  <View
-                    style={[
-                      styles.orderBadge,
-                      list.status === "confirmed" ? styles.orderConfirmedBadge : null,
-                    ]}
                   >
                     <Text
                       style={[
-                        styles.orderBadgeText,
-                        list.status === "confirmed" ? styles.orderConfirmedBadgeText : null,
+                        styles.categoryPillText,
+                        selectedCategory === cat.id && styles.categoryPillTextActive,
                       ]}
                     >
-                      {list.status === "confirmed" ? "Confirmed" : `${list.lines.length} lines`}
+                      {cat.name} ({count})
                     </Text>
-                  </View>
-                  {list.status !== "confirmed" ? (
-                    <Pressable
-                      style={styles.deleteListBtn}
-                      onPress={() => handleDeleteList(list)}
-                    >
-                      <Text style={styles.deleteListBtnText}>Delete</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
 
-              {/* Hierarchical Order Lines */}
-              <View style={styles.linesList}>
-                {groupCustomerListLines(list.lines).map((sec) => (
-                  <View key={sec.root} style={styles.orderCategoryGroup}>
-                    <View style={styles.orderCategoryHeader}>
-                      <Text style={styles.orderCategoryTitle}>{sec.root.toUpperCase()}</Text>
+            {/* Products List */}
+            <FlatList
+              data={filteredProducts}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.listPadding}
+              renderItem={({ item }) => (
+                <View style={styles.productCard}>
+                  <View style={styles.productInfo}>
+                    <Text style={styles.productName}>{item.name}</Text>
+                    <View style={styles.priceRow}>
+                      <Text style={styles.normalPrice}>
+                        {formatMoney(item.effective_normal_price ?? item.selling_price)}
+                      </Text>
+                      {item.effective_wholesale_price && (
+                        <Text style={styles.wholesalePrice}>
+                          Wholesale: {formatMoney(item.effective_wholesale_price)}
+                        </Text>
+                      )}
                     </View>
-                    {sec.subs.map((subGroup) => (
-                      <View key={subGroup.sub || "__direct__"} style={styles.orderSubCategoryGroup}>
-                        {subGroup.sub ? (
-                          <View style={styles.orderSubCategoryHeader}>
-                            <Text style={styles.orderSubCategoryIcon}>&rsaquo;</Text>
-                            <Text style={styles.orderSubCategoryTitle}>{subGroup.sub}</Text>
-                          </View>
-                        ) : null}
-                        {subGroup.lines.map((line) => {
-                          const isCannotGet = line.state === "cannot_get";
-                          return (
-                            <View
-                              key={line.id}
-                              style={[
-                                styles.lineItem,
-                                subGroup.sub ? styles.lineItemIndented : null,
-                                isCannotGet && styles.lineUnavailable,
-                              ]}
-                            >
+                  </View>
+
+                  <View style={styles.productActions}>
+                    <Pressable style={styles.sellOneBtn} onPress={() => handleSellOne(item)}>
+                      <Text style={styles.sellOneBtnText}>Sell 1</Text>
+                    </Pressable>
+
+                    <Pressable
+                      style={styles.stockBtn}
+                      onPress={() => {
+                        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setRestockProduct(item);
+                      }}
+                    >
+                      <Text style={styles.stockBtnText}>Restock</Text>
+                    </Pressable>
+
+                    <Pressable
+                      style={styles.editBtn}
+                      onPress={() => {
+                        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setEditingProduct(item);
+                        setEditPrice(item.selling_price ?? "");
+                        setEditWholesale(item.effective_wholesale_price ?? "");
+                      }}
+                    >
+                      <Text style={styles.editBtnText}>Edit</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+            />
+          </View>
+        )}
+
+        {activeTab === "lists" && (
+          <FlatList
+            data={customerLists}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listPadding}
+            renderItem={({ item }) => {
+              const sections = groupCustomerListLines(item.lines);
+              const isConfirmed = item.status === "confirmed";
+              return (
+                <View style={styles.listCard}>
+                  <View style={styles.listCardHeader}>
+                    <View>
+                      <Text style={styles.listCustomerName}>
+                        {item.customer_name || item.customer_phone}
+                      </Text>
+                      <Text style={styles.listDate}>{item.lines.length} items requested</Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        isConfirmed ? styles.statusConfirmed : styles.statusPending,
+                      ]}
+                    >
+                      <Text style={styles.statusBadgeText}>{item.status.toUpperCase()}</Text>
+                    </View>
+                  </View>
+
+                  {/* Hierarchical Groupings */}
+                  {sections.map((sec, idx) => (
+                    <View key={idx} style={styles.sectionBox}>
+                      <Text style={styles.sectionRootTitle}>{sec.root}</Text>
+                      {sec.subs.map((sub, sIdx) => (
+                        <View key={sIdx} style={styles.subSectionBox}>
+                          {sub.sub && <Text style={styles.subTitle}>&gt; {sub.sub}</Text>}
+                          {sub.lines.map((line) => (
+                            <View key={line.id} style={styles.lineItem}>
                               <View style={styles.lineMain}>
                                 <Text style={styles.lineName}>
-                                  {line.product_name ?? line.free_text ?? "Item"}
+                                  {line.quantity}x {line.product_name ?? line.free_text}
                                 </Text>
-                                <Text style={styles.lineQty}>
-                                  {Number(line.quantity)} pcs
-                                  {line.shop_price ? ` - ${formatMoney(line.shop_price)}` : " (Unpriced)"}
+                                <Text style={styles.linePrice}>
+                                  {line.shop_price ? formatMoney(line.shop_price) : "Price not set"}
                                 </Text>
                               </View>
 
-                              <View style={styles.lineActionCol}>
+                              <View style={styles.lineButtons}>
                                 <Pressable
-                                  style={styles.priceLineBtn}
+                                  style={styles.setPriceBtn}
                                   onPress={() => {
+                                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                                     setPricingLine({
-                                      listId: list.id,
+                                      listId: item.id,
                                       lineId: line.id,
                                       itemName: line.product_name ?? line.free_text ?? "Item",
                                       currentPrice: line.shop_price ?? "",
@@ -885,301 +960,495 @@ export default function Home() {
                                     setPriceInput(line.shop_price ?? "");
                                   }}
                                 >
-                                  <Text style={styles.priceLineBtnText}>
-                                    {line.shop_price ? "Price" : "+ Price"}
-                                  </Text>
+                                  <Text style={styles.setPriceBtnText}>Set Price</Text>
                                 </Pressable>
 
                                 <Pressable
-                                  style={[styles.cannotGetBtn, isCannotGet && styles.cannotGetActive]}
-                                  onPress={() => void handleToggleCannotGet(list.id, line.id, line.state)}
+                                  style={[
+                                    styles.cannotGetBtn,
+                                    line.state === "cannot_get" && styles.cannotGetActive,
+                                  ]}
+                                  onPress={() => handleToggleCannotGet(item.id, line.id, line.state)}
                                 >
-                                  <Text
-                                    style={[
-                                      styles.cannotGetBtnText,
-                                      isCannotGet && styles.cannotGetActiveText,
-                                    ]}
-                                  >
-                                    {isCannotGet ? "Cannot get" : "Cannot get?"}
+                                  <Text style={styles.cannotGetText}>
+                                    {line.state === "cannot_get" ? "Unavailable" : "Have It"}
                                   </Text>
                                 </Pressable>
                               </View>
                             </View>
-                          );
-                        })}
-                      </View>
-                    ))}
+                          ))}
+                        </View>
+                      ))}
+                    </View>
+                  ))}
+
+                  {/* Order Footer & Actions */}
+                  <View style={styles.listFooter}>
+                    <Text style={styles.totalPrice}>
+                      Total: {formatMoney(item.priced_total ?? "0")}
+                    </Text>
+                    <View style={styles.listActionRow}>
+                      <Pressable
+                        style={styles.waQuoteBtn}
+                        onPress={() => handleShareQuoteOnWhatsApp(item)}
+                      >
+                        <Text style={styles.waQuoteBtnText}>Share Quote</Text>
+                      </Pressable>
+
+                      {!isConfirmed && (
+                        <Pressable
+                          style={styles.confirmBtn}
+                          onPress={() => handleConfirmList(item)}
+                        >
+                          <Text style={styles.confirmBtnText}>Confirm Order</Text>
+                        </Pressable>
+                      )}
+                    </View>
                   </View>
-                ))}
-              </View>
-
-              {/* Order Footer & Actions */}
-              <View style={styles.orderFooter}>
-                {list.priced_total ? (
-                  <View style={styles.orderTotalRow}>
-                    <Text style={styles.orderTotalLabel}>Total:</Text>
-                    <Text style={styles.orderTotalValue}>{formatMoney(list.priced_total)}</Text>
-                  </View>
-                ) : null}
-
-                <View style={styles.orderActionButtons}>
-                  <Pressable
-                    style={styles.orderWhatsAppBtn}
-                    onPress={() => handleShareQuoteOnWhatsApp(list)}
-                  >
-                    <Text style={styles.orderWhatsAppBtnText}>Send Quote on WhatsApp</Text>
-                  </Pressable>
-
-                  {list.status !== "confirmed" ? (
-                    <Pressable
-                      style={styles.orderConfirmBtn}
-                      onPress={() => void handleConfirmList(list)}
-                    >
-                      <Text style={styles.orderConfirmBtnText}>Confirm Order</Text>
-                    </Pressable>
-                  ) : null}
                 </View>
+              );
+            }}
+          />
+        )}
+
+        {activeTab === "trading" && (
+          <ScrollView style={styles.scrollContent}>
+            {/* Today's Summary Card */}
+            <View style={styles.tradingSummaryCard}>
+              <Text style={styles.tradingLabel}>Trading Summary</Text>
+              <Text style={styles.tradingTotal}>
+                {formatMoney(dailyStats?.total_revenue ?? "0")}
+              </Text>
+              <Text style={styles.tradingCount}>{dailyStats?.total_sales ?? 0} completed sales</Text>
+            </View>
+
+            <View style={styles.tradingButtonRow}>
+              <Pressable
+                style={styles.primaryTradingBtn}
+                onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowExpenseModal(true);
+                }}
+              >
+                <Text style={styles.primaryTradingBtnText}>+ Log Expense</Text>
+              </Pressable>
+            </View>
+
+            {/* Sales Ledger */}
+            <Text style={styles.sectionHeading}>Sales Ledger</Text>
+            {sales.map((s) => (
+              <View key={s.id} style={styles.ledgerRow}>
+                <View>
+                  <Text style={styles.ledgerReceipt}>{s.receipt_number}</Text>
+                  <Text style={styles.ledgerDate}>
+                    {new Date(s.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} - {s.payment_method.toUpperCase()}
+                  </Text>
+                </View>
+                <Text style={styles.ledgerAmount}>{formatMoney(s.total_amount)}</Text>
               </View>
+            ))}
+          </ScrollView>
+        )}
+
+        {activeTab === "more" && (
+          <ScrollView style={styles.scrollContent}>
+            {/* Storefront Studio Card */}
+            <View style={styles.moreCard}>
+              <Text style={styles.moreCardTitle}>Storefront Studio</Text>
+              <Text style={styles.moreCardDesc}>
+                Your public shop catalog is live on AHIA. Customers can build lists and send orders directly to your WhatsApp.
+              </Text>
+              <Text style={styles.storefrontUrl}>
+                https://ahia.app/shop/{activeBusiness?.slug ?? "stall"}
+              </Text>
+              <Pressable style={styles.storefrontShareBtn} onPress={handleShareStorefront}>
+                <Text style={styles.storefrontShareBtnText}>Share on WhatsApp</Text>
+              </Pressable>
+            </View>
+
+            {/* Team Management */}
+            <View style={styles.moreCard}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.moreCardTitle}>Team & Staff ({members.length})</Text>
+                <Pressable
+                  style={styles.addStaffBtn}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowInviteModal(true);
+                  }}
+                >
+                  <Text style={styles.addStaffBtnText}>+ Invite</Text>
+                </Pressable>
+              </View>
+              {members.map((m) => (
+                <View key={m.id} style={styles.memberRow}>
+                  <View>
+                    <Text style={styles.memberName}>{m.first_name} {m.last_name ?? ""}</Text>
+                    <Text style={styles.memberRole}>{m.role} - {m.status.toUpperCase()}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            {/* Business Info */}
+            <View style={styles.moreCard}>
+              <Text style={styles.moreCardTitle}>Business Profile</Text>
+              <Text style={styles.profileDetail}>Name: {businessDetails?.name ?? activeBusiness?.name}</Text>
+              <Text style={styles.profileDetail}>Address: {businessDetails?.address ?? "Alaba International Market"}</Text>
+              <Text style={styles.profileDetail}>Phone: {businessDetails?.phone ?? "Not set"}</Text>
+            </View>
+
+            {/* Sign Out Action */}
+            <Pressable
+              style={styles.signOutBtn}
+              onPress={async () => {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                await forgetSession();
+                router.replace("/sign-in");
+              }}
+            >
+              <Text style={styles.signOutBtnText}>Sign Out</Text>
+            </Pressable>
+          </ScrollView>
+        )}
+      </View>
+
+      {/* Bottom Navigation Bar */}
+      <View style={styles.bottomNav}>
+        <Pressable
+          style={[styles.navItem, activeTab === "dashboard" && styles.navItemActive]}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setActiveTab("dashboard");
+          }}
+        >
+          <Text style={[styles.navIcon, activeTab === "dashboard" && styles.navIconActive]}>[H]</Text>
+          <Text style={[styles.navText, activeTab === "dashboard" && styles.navTextActive]}>Home</Text>
+        </Pressable>
+
+        <Pressable
+          style={[styles.navItem, activeTab === "shelf" && styles.navItemActive]}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setActiveTab("shelf");
+          }}
+        >
+          <Text style={[styles.navIcon, activeTab === "shelf" && styles.navIconActive]}>[S]</Text>
+          <Text style={[styles.navText, activeTab === "shelf" && styles.navTextActive]}>Shelf</Text>
+        </Pressable>
+
+        <Pressable
+          style={[styles.navItem, activeTab === "lists" && styles.navItemActive]}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setActiveTab("lists");
+          }}
+        >
+          <Text style={[styles.navIcon, activeTab === "lists" && styles.navIconActive]}>[L]</Text>
+          <Text style={[styles.navText, activeTab === "lists" && styles.navTextActive]}>Lists</Text>
+          {pendingListsCount > 0 && (
+            <View style={styles.navBadge}>
+              <Text style={styles.navBadgeText}>{pendingListsCount}</Text>
             </View>
           )}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyTitle}>No customer lists yet</Text>
-              <Text style={styles.emptyDesc}>
-                Lists sent by customers through your shop link will appear here.
-              </Text>
-            </View>
-          }
-        />
-      )}
+        </Pressable>
+
+        <Pressable
+          style={[styles.navItem, activeTab === "trading" && styles.navItemActive]}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setActiveTab("trading");
+          }}
+        >
+          <Text style={[styles.navIcon, activeTab === "trading" && styles.navIconActive]}>[T]</Text>
+          <Text style={[styles.navText, activeTab === "trading" && styles.navTextActive]}>Trading</Text>
+        </Pressable>
+
+        <Pressable
+          style={[styles.navItem, activeTab === "more" && styles.navItemActive]}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setActiveTab("more");
+          }}
+        >
+          <Text style={[styles.navIcon, activeTab === "more" && styles.navIconActive]}>[M]</Text>
+          <Text style={[styles.navText, activeTab === "more" && styles.navTextActive]}>More</Text>
+        </Pressable>
+      </View>
 
       {/* Add Product Modal */}
-      <Modal visible={showAddModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+      <Modal visible={showAddProductModal} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Add Item to Stock</Text>
+            <Text style={styles.modalTitle}>Add Product to Shelf</Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="Item name (e.g. iPhone 15 Privacy Screen)"
-              placeholderTextColor="#8b8377"
+              placeholder="Product Name"
+              placeholderTextColor="#8a928e"
               value={newName}
               onChangeText={setNewName}
             />
             <TextInput
               style={styles.modalInput}
-              placeholder="Retail Selling Price in NGN (e.g. 2500)"
-              placeholderTextColor="#8b8377"
+              placeholder="Retail Price (e.g. 15000)"
+              placeholderTextColor="#8a928e"
+              keyboardType="numeric"
               value={newPrice}
               onChangeText={setNewPrice}
-              keyboardType="numeric"
             />
             <TextInput
               style={styles.modalInput}
-              placeholder="Wholesale Price in NGN (optional)"
-              placeholderTextColor="#8b8377"
+              placeholder="Wholesale Price (e.g. 13500)"
+              placeholderTextColor="#8a928e"
+              keyboardType="numeric"
               value={newWholesale}
               onChangeText={setNewWholesale}
-              keyboardType="numeric"
             />
 
-            {categories.length > 0 ? (
-              <View style={styles.modalCategoryWrap}>
-                <Text style={styles.modalCategoryLabel}>Category:</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.modalCategoryScroll}>
-                  <Pressable
-                    style={[styles.catChip, newCategoryId === null && styles.catChipActive]}
-                    onPress={() => setNewCategoryId(null)}
-                  >
-                    <Text style={[styles.catChipText, newCategoryId === null && styles.catChipActiveText]}>
-                      None
-                    </Text>
-                  </Pressable>
-                  {categories.map((c) => (
-                    <Pressable
-                      key={c.id}
-                      style={[styles.catChip, newCategoryId === c.id && styles.catChipActive]}
-                      onPress={() => setNewCategoryId(c.id)}
-                    >
-                      <Text style={[styles.catChipText, newCategoryId === c.id && styles.catChipActiveText]}>
-                        {c.name}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              </View>
-            ) : null}
-
-            <View style={styles.modalActions}>
+            <View style={styles.modalButtons}>
               <Pressable
                 style={styles.modalCancelBtn}
-                onPress={() => {
-                  setShowAddModal(false);
-                  setNewName("");
-                  setNewPrice("");
-                  setNewWholesale("");
-                }}
+                onPress={() => setShowAddProductModal(false)}
               >
-                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                <Text style={styles.modalCancelText}>Cancel</Text>
               </Pressable>
               <Pressable
-                style={[styles.modalSubmitBtn, (!newName.trim() || savingProduct) && styles.btnDisabled]}
-                disabled={!newName.trim() || savingProduct}
-                onPress={() => void handleCreateProduct()}
+                style={styles.modalSaveBtn}
+                onPress={handleCreateProduct}
+                disabled={savingProduct}
               >
-                <Text style={styles.modalSubmitBtnText}>
-                  {savingProduct ? "Saving..." : "Save Item"}
-                </Text>
+                {savingProduct ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Save Item</Text>
+                )}
               </Pressable>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Edit Product Modal */}
-      <Modal visible={editingProduct !== null} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
+      {/* Add Category Modal */}
+      <Modal visible={showAddCategoryModal} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Edit Item Price</Text>
-            <Text style={styles.modalSubTitle}>{editingProduct?.name}</Text>
-
-            <Text style={styles.modalFieldLabel}>Retail Selling Price (NGN):</Text>
+            <Text style={styles.modalTitle}>Create New Category</Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="e.g. 3500"
-              placeholderTextColor="#8b8377"
-              value={editPrice}
-              onChangeText={setEditPrice}
-              keyboardType="numeric"
+              placeholder="Category Name (e.g. Generators, Lighting)"
+              placeholderTextColor="#8a928e"
+              value={newCategoryName}
+              onChangeText={setNewCategoryName}
             />
-
-            <Text style={styles.modalFieldLabel}>Wholesale Price (NGN):</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="e.g. 2800"
-              placeholderTextColor="#8b8377"
-              value={editWholesale}
-              onChangeText={setEditWholesale}
-              keyboardType="numeric"
-            />
-
-            <View style={styles.modalActions}>
+            <View style={styles.modalButtons}>
               <Pressable
                 style={styles.modalCancelBtn}
-                onPress={() => setEditingProduct(null)}
+                onPress={() => setShowAddCategoryModal(false)}
               >
-                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                <Text style={styles.modalCancelText}>Cancel</Text>
               </Pressable>
               <Pressable
-                style={[styles.modalSubmitBtn, savingEdit && styles.btnDisabled]}
-                disabled={savingEdit}
-                onPress={() => void handleSaveProductEdit()}
+                style={styles.modalSaveBtn}
+                onPress={handleCreateCategory}
+                disabled={savingCategory}
               >
-                <Text style={styles.modalSubmitBtnText}>
-                  {savingEdit ? "Updating..." : "Update Price"}
-                </Text>
+                {savingCategory ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Create</Text>
+                )}
               </Pressable>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Price Line Modal */}
-      <Modal visible={pricingLine !== null} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
+      {/* Restock Modal */}
+      <Modal visible={restockProduct !== null} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Set Item Price</Text>
-            <Text style={styles.modalSubTitle}>{pricingLine?.itemName}</Text>
+            <Text style={styles.modalTitle}>Receive Stock: {restockProduct?.name}</Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="Unit price in NGN (e.g. 2000)"
-              placeholderTextColor="#8b8377"
+              placeholder="Quantity Received (e.g. 50)"
+              placeholderTextColor="#8a928e"
+              keyboardType="numeric"
+              value={restockQty}
+              onChangeText={setRestockQty}
+            />
+            <View style={styles.modalButtons}>
+              <Pressable style={styles.modalCancelBtn} onPress={() => setRestockProduct(null)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={styles.modalSaveBtn}
+                onPress={handleReceiveStock}
+                disabled={savingRestock}
+              >
+                {savingRestock ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Receive</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Record Expense Modal */}
+      <Modal visible={showExpenseModal} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Record Expense</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Amount (e.g. 3500)"
+              placeholderTextColor="#8a928e"
+              keyboardType="numeric"
+              value={expenseAmount}
+              onChangeText={setExpenseAmount}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Description / Note (e.g. Generator Fuel)"
+              placeholderTextColor="#8a928e"
+              value={expenseDescription}
+              onChangeText={setExpenseDescription}
+            />
+
+            <View style={styles.modalButtons}>
+              <Pressable style={styles.modalCancelBtn} onPress={() => setShowExpenseModal(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={styles.modalSaveBtn}
+                onPress={handleRecordExpense}
+                disabled={savingExpense}
+              >
+                {savingExpense ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Record</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Set Line Price Modal */}
+      <Modal visible={pricingLine !== null} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Set Price: {pricingLine?.itemName}</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Unit Price in NGN"
+              placeholderTextColor="#8a928e"
+              keyboardType="numeric"
               value={priceInput}
               onChangeText={setPriceInput}
-              keyboardType="numeric"
-              autoFocus
             />
-            <View style={styles.modalActions}>
-              <Pressable
-                style={styles.modalCancelBtn}
-                onPress={() => setPricingLine(null)}
-              >
-                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+            <View style={styles.modalButtons}>
+              <Pressable style={styles.modalCancelBtn} onPress={() => setPricingLine(null)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
               </Pressable>
               <Pressable
-                style={[styles.modalSubmitBtn, savingPrice && styles.btnDisabled]}
+                style={styles.modalSaveBtn}
+                onPress={handleSaveLinePrice}
                 disabled={savingPrice}
-                onPress={() => void handleSaveLinePrice()}
               >
-                <Text style={styles.modalSubmitBtnText}>
-                  {savingPrice ? "Saving..." : "Save Price"}
-                </Text>
+                {savingPrice ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Save Price</Text>
+                )}
               </Pressable>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Shop Selector & Share Modal */}
-      <Modal visible={showShopModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+      {/* Invite Staff Modal */}
+      <Modal visible={showInviteModal} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Your Shops & Storefront</Text>
+            <Text style={styles.modalTitle}>Invite Staff Member</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Phone Number (e.g. 08012345678)"
+              placeholderTextColor="#8a928e"
+              keyboardType="phone-pad"
+              value={invitePhone}
+              onChangeText={setInvitePhone}
+            />
 
-            {businesses && businesses.length > 1 ? (
-              <View style={{ marginBottom: 16 }}>
-                <Text style={styles.modalFieldLabel}>Switch Active Shop:</Text>
-                {businesses.map((b) => (
-                  <Pressable
-                    key={b.id}
-                    style={[
-                      styles.businessOption,
-                      activeBusiness?.id === b.id && styles.businessOptionActive,
-                    ]}
-                    onPress={() => {
-                      setActiveBusiness(b);
-                      setShowShopModal(false);
-                      void loadData(b.id);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.businessOptionText,
-                        activeBusiness?.id === b.id && styles.businessOptionActiveText,
-                      ]}
-                    >
-                      {b.name}
-                    </Text>
-                    {activeBusiness?.id === b.id ? (
-                      <Text style={styles.businessActiveCheck}>Active</Text>
-                    ) : null}
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-
-            <View style={styles.storefrontShareCard}>
-              <Text style={styles.storefrontLabel}>Your Public Catalog Link:</Text>
-              <Text style={styles.storefrontUrl}>
-                https://ahia.app/shop/{activeBusiness?.slug}
-              </Text>
-              <Pressable
-                style={styles.shareStorefrontActionBtn}
-                onPress={() => {
-                  setShowShopModal(false);
-                  handleShareStorefront();
-                }}
-              >
-                <Text style={styles.shareStorefrontActionBtnText}>
-                  Share on WhatsApp
-                </Text>
-              </Pressable>
+            <View style={styles.rolePickerRow}>
+              {(["SALES", "INVENTORY", "ADMIN"] as MemberRole[]).map((r) => (
+                <Pressable
+                  key={r}
+                  style={[styles.rolePill, inviteRole === r && styles.rolePillActive]}
+                  onPress={() => setInviteRole(r)}
+                >
+                  <Text style={[styles.rolePillText, inviteRole === r && styles.rolePillTextActive]}>
+                    {r}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
 
-            <Pressable
-              style={styles.modalCloseFullBtn}
-              onPress={() => setShowShopModal(false)}
-            >
-              <Text style={styles.modalCloseFullBtnText}>Close</Text>
+            <View style={styles.modalButtons}>
+              <Pressable style={styles.modalCancelBtn} onPress={() => setShowInviteModal(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={styles.modalSaveBtn}
+                onPress={handleInviteStaff}
+                disabled={savingInvite}
+              >
+                {savingInvite ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Send Invite</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Switch Business Modal */}
+      <Modal visible={showShopModal} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Your Stalls & Businesses</Text>
+            {businesses?.map((b) => (
+              <Pressable
+                key={b.id}
+                style={[
+                  styles.shopOption,
+                  activeBusiness?.id === b.id && styles.shopOptionActive,
+                ]}
+                onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setActiveBusiness(b);
+                  setShowShopModal(false);
+                  void loadData(b.id);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.shopOptionName,
+                    activeBusiness?.id === b.id && styles.shopOptionNameActive,
+                  ]}
+                >
+                  {b.name}
+                </Text>
+              </Pressable>
+            ))}
+            <Pressable style={styles.modalCancelBtn} onPress={() => setShowShopModal(false)}>
+              <Text style={styles.modalCancelText}>Close</Text>
             </Pressable>
           </View>
         </View>
@@ -1191,817 +1460,741 @@ export default function Home() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#f7f3ec",
+    backgroundColor: "#0d1117",
   },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 10,
-    backgroundColor: "#ffffff",
-    borderBottomWidth: 1,
-    borderColor: "#e5ded3",
-  },
-  headerTitleWrap: {
-    flex: 1,
-    marginRight: 8,
-  },
-  appName: {
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 1.5,
-    color: "#0b5d3b",
-  },
-  shopSelectorPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 1,
-  },
-  shopName: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#1e1b16",
-    maxWidth: 160,
-  },
-  shopSelectorChevron: {
-    fontSize: 10,
-    color: "#8b8377",
-  },
-  headerRightActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  shareStorefrontBtn: {
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 6,
-    backgroundColor: "#e8f4ed",
-  },
-  shareStorefrontText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#0b5d3b",
-  },
-  signOutBtn: {
-    paddingVertical: 5,
-    paddingHorizontal: 8,
-  },
-  signOutText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#a3372b",
-  },
-  syncBanner: {
-    backgroundColor: "#e8f4ed",
-    borderBottomWidth: 1,
-    borderColor: "#b6ddc7",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-  },
-  syncBannerText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#0b5d3b",
-  },
-  syncActionText: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#0b5d3b",
-    textDecorationLine: "underline",
-  },
-  toast: {
-    position: "absolute",
-    top: 60,
-    left: 20,
-    right: 20,
-    backgroundColor: "#0b5d3b",
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    zIndex: 999,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: "#21262d",
+    backgroundColor: "#161b22",
   },
-  toastText: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  tabBar: {
-    flexDirection: "row",
-    backgroundColor: "#ece6db",
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 8,
-    borderRadius: 10,
-    padding: 3,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: "center",
-    borderRadius: 8,
-  },
-  activeTab: {
-    backgroundColor: "#ffffff",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  tabText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#5c5549",
-  },
-  activeTabText: {
-    color: "#0b5d3b",
-  },
-  tabWithBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  tabHoverBadge: {
-    backgroundColor: "#c2571f",
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 999,
-  },
-  tabHoverBadgeText: {
-    color: "#ffffff",
-    fontSize: 10,
-    fontWeight: "800",
-  },
-  contentWrap: {
-    flex: 1,
-  },
-  unansweredCallout: {
-    backgroundColor: "#ffffff",
-    marginHorizontal: 16,
-    marginBottom: 10,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: "#c2571f",
+  businessSelector: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+    flex: 1,
   },
-  unansweredBadge: {
-    backgroundColor: "#c2571f",
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  businessBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    backgroundColor: "#084a2f",
     alignItems: "center",
     justifyContent: "center",
   },
-  unansweredBadgeText: {
-    color: "#ffffff",
+  businessBadgeText: {
+    color: "#4ade80",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  businessName: {
+    color: "#f0f6fc",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  businessSub: {
+    color: "#8b949e",
     fontSize: 12,
-    fontWeight: "900",
   },
-  unansweredTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#1e1b16",
-  },
-  unansweredSub: {
-    fontSize: 11,
-    color: "#5c5549",
-  },
-  unansweredAction: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#c2571f",
-    textTransform: "uppercase",
-  },
-  searchRow: {
-    flexDirection: "row",
-    paddingHorizontal: 16,
-    marginBottom: 8,
-    gap: 8,
-    alignItems: "center",
-  },
-  searchInputWrap: {
-    flex: 1,
-  },
-  searchInput: {
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#d8d0c2",
-    borderRadius: 10,
+  syncButton: {
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 14,
-    color: "#1e1b16",
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: "#21262d",
   },
-  addItemHeaderBtn: {
-    backgroundColor: "#0b5d3b",
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: 10,
+  syncButtonPending: {
+    backgroundColor: "#d97706",
   },
-  addItemHeaderBtnText: {
-    color: "#ffffff",
-    fontWeight: "800",
-    fontSize: 13,
-  },
-  listContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-    gap: 10,
-  },
-  groupSection: {
-    marginBottom: 12,
-    gap: 8,
-  },
-  groupHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5ded3",
-    marginBottom: 2,
-  },
-  groupTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#5c5549",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  groupCountBadge: {
-    backgroundColor: "#ece6db",
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 999,
-  },
-  groupCountText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#5c5549",
-  },
-  productCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#e5ded3",
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  productInfo: {
-    flex: 1,
-    marginRight: 12,
-  },
-  productName: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#1e1b16",
-    marginBottom: 2,
-  },
-  productPrice: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#0b5d3b",
-    marginBottom: 2,
-  },
-  productWholesalePrice: {
+  syncButtonText: {
+    color: "#4ade80",
     fontSize: 12,
+    fontWeight: "600",
+  },
+  toast: {
+    backgroundColor: "#084a2f",
+    padding: 10,
+    alignItems: "center",
+  },
+  toastText: {
+    color: "#f0f6fc",
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  mainContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    flex: 1,
+    padding: 16,
+  },
+  tabContainer: {
+    flex: 1,
+  },
+  kpiRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 16,
+  },
+  kpiCard: {
+    flex: 1,
+    backgroundColor: "#161b22",
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#30363d",
+  },
+  kpiCardHighlight: {
+    borderColor: "#084a2f",
+    backgroundColor: "#0d281e",
+  },
+  kpiLabel: {
+    color: "#8b949e",
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  kpiValue: {
+    color: "#f0f6fc",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  kpiMeta: {
+    color: "#4ade80",
+    fontSize: 11,
+    marginTop: 4,
+  },
+  sectionHeading: {
+    color: "#f0f6fc",
+    fontSize: 16,
     fontWeight: "700",
-    color: "#2563eb",
+    marginVertical: 12,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  seeAllLink: {
+    color: "#4ade80",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  actionGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 16,
+  },
+  actionTile: {
+    width: "48%",
+    backgroundColor: "#161b22",
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#30363d",
+  },
+  actionTileIcon: {
+    fontSize: 22,
     marginBottom: 6,
   },
-  pillRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  statusPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
-  },
-  statusPillText: {
-    fontSize: 11,
+  actionTileTitle: {
+    color: "#f0f6fc",
+    fontSize: 14,
     fontWeight: "700",
   },
-  livePill: {
-    backgroundColor: "#e8f4ed",
-  },
-  livePillText: {
+  actionTileDesc: {
+    color: "#8b949e",
     fontSize: 11,
-    fontWeight: "700",
-    color: "#0b5d3b",
+    marginTop: 2,
   },
-  hiddenPill: {
-    backgroundColor: "#f5e8e8",
-  },
-  hiddenPillText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#a3372b",
-  },
-  tapToEditHint: {
-    fontSize: 11,
-    color: "#8b8377",
-    fontStyle: "italic",
-  },
-  cardActions: {
-    flexDirection: "column",
-    gap: 6,
-    alignItems: "stretch",
-  },
-  copyBtn: {
-    backgroundColor: "#f4f0e8",
-    borderWidth: 1,
-    borderColor: "#d8d0c2",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  copyBtnText: {
-    color: "#5c5549",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  sellBtn: {
-    backgroundColor: "#0b5d3b",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    minWidth: 76,
-    alignItems: "center",
-  },
-  sellBtnText: {
-    color: "#ffffff",
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  orderCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#e5ded3",
-    padding: 14,
-  },
-  orderHeader: {
+  saleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 10,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderColor: "#f0eae0",
-  },
-  customerName: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#1e1b16",
-  },
-  customerPhone: {
-    fontSize: 13,
-    color: "#5c5549",
-    marginTop: 1,
-  },
-  orderBadgeRow: {
-    flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-  },
-  orderBadge: {
-    backgroundColor: "#e8f4ed",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-  },
-  orderBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#0b5d3b",
-  },
-  orderConfirmedBadge: {
-    backgroundColor: "#edf7ed",
-    borderWidth: 1,
-    borderColor: "#a3d9a5",
-  },
-  orderConfirmedBadgeText: {
-    color: "#1b5e20",
-    fontWeight: "800",
-  },
-  deleteListBtn: {
-    backgroundColor: "#fdf2f2",
-    borderWidth: 1,
-    borderColor: "#f8b4b4",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-  },
-  deleteListBtnText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#a3372b",
-  },
-  linesList: {
-    gap: 8,
-  },
-  orderCategoryGroup: {
-    marginBottom: 8,
-    backgroundColor: "#fbf9f5",
+    backgroundColor: "#161b22",
+    padding: 12,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#ede5d8",
-    overflow: "hidden",
+    marginBottom: 8,
   },
-  orderCategoryHeader: {
-    backgroundColor: "#e8f4ed",
-    borderBottomWidth: 1,
-    borderBottomColor: "#d2e8db",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  orderCategoryTitle: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#084a2f",
-    letterSpacing: 0.5,
-  },
-  orderSubCategoryGroup: {
-    paddingHorizontal: 8,
-  },
-  orderSubCategoryHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingTop: 6,
-    paddingBottom: 2,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0eae0",
-  },
-  orderSubCategoryIcon: {
+  saleReceipt: {
+    color: "#f0f6fc",
     fontSize: 14,
-    fontWeight: "800",
-    color: "#c2571f",
+    fontWeight: "600",
   },
-  orderSubCategoryTitle: {
-    fontSize: 12,
+  saleDate: {
+    color: "#8b949e",
+    fontSize: 11,
+  },
+  saleAmount: {
+    color: "#4ade80",
+    fontSize: 15,
     fontWeight: "700",
-    color: "#4a4237",
+  },
+  emptyBox: {
+    padding: 24,
+    alignItems: "center",
+    backgroundColor: "#161b22",
+    borderRadius: 12,
+  },
+  emptyTitle: {
+    color: "#f0f6fc",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  emptySubtitle: {
+    color: "#8b949e",
+    fontSize: 13,
+    marginTop: 4,
+  },
+  shelfTopBar: {
+    flexDirection: "row",
+    padding: 12,
+    gap: 8,
+    backgroundColor: "#161b22",
+  },
+  searchInput: {
+    flex: 1,
+    backgroundColor: "#0d1117",
+    color: "#f0f6fc",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    fontSize: 14,
+  },
+  iconAddBtn: {
+    backgroundColor: "#084a2f",
+    paddingHorizontal: 14,
+    justifyContent: "center",
+    borderRadius: 8,
+  },
+  iconAddBtnText: {
+    color: "#ffffff",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  categoryScroll: {
+    maxHeight: 44,
+    paddingHorizontal: 12,
+    backgroundColor: "#161b22",
+    borderBottomWidth: 1,
+    borderBottomColor: "#21262d",
+  },
+  categoryPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: "#21262d",
+    marginRight: 8,
+    alignSelf: "center",
+  },
+  categoryPillActive: {
+    backgroundColor: "#084a2f",
+  },
+  categoryPillText: {
+    color: "#8b949e",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  categoryPillTextActive: {
+    color: "#ffffff",
+  },
+  listPadding: {
+    padding: 12,
+    paddingBottom: 80,
+  },
+  productCard: {
+    backgroundColor: "#161b22",
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#30363d",
+  },
+  productInfo: {
+    marginBottom: 10,
+  },
+  productName: {
+    color: "#f0f6fc",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  priceRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 4,
+  },
+  normalPrice: {
+    color: "#4ade80",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  wholesalePrice: {
+    color: "#f59e0b",
+    fontSize: 12,
+  },
+  productActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  sellOneBtn: {
+    flex: 1,
+    backgroundColor: "#084a2f",
+    paddingVertical: 8,
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  sellOneBtnText: {
+    color: "#ffffff",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  stockBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#21262d",
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  stockBtnText: {
+    color: "#8b949e",
+    fontWeight: "600",
+    fontSize: 12,
+  },
+  editBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#21262d",
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  editBtnText: {
+    color: "#8b949e",
+    fontWeight: "600",
+    fontSize: 12,
+  },
+  listCard: {
+    backgroundColor: "#161b22",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#30363d",
+  },
+  listCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  listCustomerName: {
+    color: "#f0f6fc",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  listDate: {
+    color: "#8b949e",
+    fontSize: 12,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  statusConfirmed: {
+    backgroundColor: "#084a2f",
+  },
+  statusPending: {
+    backgroundColor: "#d97706",
+  },
+  statusBadgeText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  sectionBox: {
+    backgroundColor: "#0d1117",
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  sectionRootTitle: {
+    color: "#4ade80",
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 6,
+  },
+  subSectionBox: {
+    paddingLeft: 6,
+  },
+  subTitle: {
+    color: "#8b949e",
+    fontSize: 11,
+    marginBottom: 4,
   },
   lineItem: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: 6,
     borderBottomWidth: 1,
-    borderColor: "#f4f0e8",
-  },
-  lineItemIndented: {
-    paddingLeft: 8,
-  },
-  lineUnavailable: {
-    opacity: 0.5,
+    borderBottomColor: "#21262d",
   },
   lineMain: {
     flex: 1,
-    marginRight: 8,
   },
   lineName: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#1e1b16",
+    color: "#f0f6fc",
+    fontSize: 13,
   },
-  lineQty: {
+  linePrice: {
+    color: "#4ade80",
     fontSize: 12,
-    color: "#5c5549",
-    marginTop: 1,
+    fontWeight: "600",
   },
-  lineActionCol: {
+  lineButtons: {
     flexDirection: "row",
-    alignItems: "center",
     gap: 6,
   },
-  priceLineBtn: {
-    borderWidth: 1,
-    borderColor: "#0b5d3b",
-    backgroundColor: "#e8f4ed",
-    borderRadius: 8,
+  setPriceBtn: {
+    backgroundColor: "#21262d",
     paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingVertical: 4,
+    borderRadius: 4,
   },
-  priceLineBtnText: {
+  setPriceBtnText: {
+    color: "#f0f6fc",
     fontSize: 11,
-    fontWeight: "800",
-    color: "#0b5d3b",
   },
   cannotGetBtn: {
-    borderWidth: 1,
-    borderColor: "#d8d0c2",
-    borderRadius: 8,
+    backgroundColor: "#21262d",
     paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingVertical: 4,
+    borderRadius: 4,
   },
   cannotGetActive: {
-    backgroundColor: "#f5e8e8",
-    borderColor: "#a3372b",
+    backgroundColor: "#dc2626",
   },
-  cannotGetBtnText: {
+  cannotGetText: {
+    color: "#ffffff",
     fontSize: 11,
-    fontWeight: "700",
-    color: "#5c5549",
   },
-  cannotGetActiveText: {
-    color: "#a3372b",
-  },
-  orderFooter: {
+  listFooter: {
     marginTop: 10,
-    paddingTop: 8,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderColor: "#f0eae0",
+    borderTopColor: "#21262d",
   },
-  orderTotalRow: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 8,
-  },
-  orderTotalLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#5c5549",
-  },
-  orderTotalValue: {
+  totalPrice: {
+    color: "#4ade80",
     fontSize: 16,
-    fontWeight: "900",
-    color: "#0b5d3b",
+    fontWeight: "800",
+    marginBottom: 10,
   },
-  orderActionButtons: {
+  listActionRow: {
     flexDirection: "row",
     gap: 8,
   },
-  orderWhatsAppBtn: {
+  waQuoteBtn: {
     flex: 1,
-    backgroundColor: "#25D366",
-    paddingVertical: 9,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  orderWhatsAppBtnText: {
-    color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  orderConfirmBtn: {
-    flex: 1,
-    backgroundColor: "#0b5d3b",
-    paddingVertical: 9,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  orderConfirmBtnText: {
-    color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  emptyContainer: {
-    alignItems: "center",
-    paddingVertical: 40,
-    paddingHorizontal: 20,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#1e1b16",
-    marginBottom: 4,
-  },
-  emptyDesc: {
-    fontSize: 13,
-    color: "#5c5549",
-    textAlign: "center",
-  },
-  emptyAddBtn: {
-    marginTop: 12,
+    backgroundColor: "#25d366",
     paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: "#0b5d3b",
-    borderRadius: 8,
+    borderRadius: 6,
+    alignItems: "center",
   },
-  emptyAddBtnText: {
+  waQuoteBtnText: {
     color: "#ffffff",
     fontWeight: "700",
     fontSize: 13,
   },
-  errorBox: {
-    backgroundColor: "#fdf2f2",
-    marginHorizontal: 16,
-    marginBottom: 8,
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#f8b4b4",
+  confirmBtn: {
+    flex: 1,
+    backgroundColor: "#084a2f",
+    paddingVertical: 8,
+    borderRadius: 6,
+    alignItems: "center",
   },
-  errorText: {
-    color: "#a3372b",
+  confirmBtnText: {
+    color: "#ffffff",
+    fontWeight: "700",
     fontSize: 13,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "center",
-    padding: 20,
+  tradingSummaryCard: {
+    backgroundColor: "#084a2f",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 14,
   },
-  modalCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 8,
+  tradingLabel: {
+    color: "#86efac",
+    fontSize: 13,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#1e1b16",
-    marginBottom: 4,
-  },
-  modalSubTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#0b5d3b",
-    marginBottom: 12,
-  },
-  modalFieldLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#5c5549",
-    marginBottom: 4,
-    marginTop: 6,
-  },
-  modalInput: {
-    backgroundColor: "#f9f7f4",
-    borderWidth: 1,
-    borderColor: "#d8d0c2",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: "#1e1b16",
-    marginBottom: 10,
-  },
-  modalCategoryWrap: {
-    marginBottom: 12,
-  },
-  modalCategoryLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#5c5549",
-    marginBottom: 6,
-  },
-  modalCategoryScroll: {
-    flexDirection: "row",
-  },
-  catChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "#f4f0e8",
-    borderWidth: 1,
-    borderColor: "#d8d0c2",
-    marginRight: 6,
-  },
-  catChipActive: {
-    backgroundColor: "#0b5d3b",
-    borderColor: "#0b5d3b",
-  },
-  catChipText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#5c5549",
-  },
-  catChipActiveText: {
+  tradingTotal: {
     color: "#ffffff",
-  },
-  modalActions: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 8,
-  },
-  modalCancelBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: "#f4f0e8",
-    alignItems: "center",
-  },
-  modalCancelBtnText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#5c5549",
-  },
-  modalSubmitBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: "#0b5d3b",
-    alignItems: "center",
-  },
-  modalSubmitBtnText: {
-    fontSize: 14,
+    fontSize: 24,
     fontWeight: "800",
-    color: "#ffffff",
+    marginVertical: 4,
   },
-  btnDisabled: {
-    opacity: 0.5,
+  tradingCount: {
+    color: "#bbf7d0",
+    fontSize: 12,
   },
-  businessOption: {
+  tradingButtonRow: {
+    marginBottom: 14,
+  },
+  primaryTradingBtn: {
+    backgroundColor: "#161b22",
     padding: 12,
-    borderRadius: 10,
+    borderRadius: 8,
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: "#e5ded3",
+    borderColor: "#30363d",
+  },
+  primaryTradingBtnText: {
+    color: "#4ade80",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  ledgerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    backgroundColor: "#161b22",
+    padding: 12,
+    borderRadius: 8,
     marginBottom: 8,
   },
-  businessOptionActive: {
-    backgroundColor: "#e8f4ed",
-    borderColor: "#0b5d3b",
-  },
-  businessOptionText: {
+  ledgerReceipt: {
+    color: "#f0f6fc",
     fontSize: 14,
+    fontWeight: "600",
+  },
+  ledgerDate: {
+    color: "#8b949e",
+    fontSize: 11,
+  },
+  ledgerAmount: {
+    color: "#4ade80",
+    fontSize: 15,
     fontWeight: "700",
-    color: "#1e1b16",
   },
-  businessOptionActiveText: {
-    color: "#0b5d3b",
-    fontWeight: "800",
-  },
-  businessActiveCheck: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#0b5d3b",
-  },
-  storefrontShareCard: {
-    backgroundColor: "#f9f7f4",
-    padding: 14,
+  moreCard: {
+    backgroundColor: "#161b22",
+    padding: 16,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#d8d0c2",
     marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#30363d",
   },
-  storefrontLabel: {
-    fontSize: 12,
+  moreCardTitle: {
+    color: "#f0f6fc",
+    fontSize: 16,
     fontWeight: "700",
-    color: "#5c5549",
-    marginBottom: 2,
+    marginBottom: 6,
+  },
+  moreCardDesc: {
+    color: "#8b949e",
+    fontSize: 13,
+    marginBottom: 10,
+    lineHeight: 18,
   },
   storefrontUrl: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#0b5d3b",
+    color: "#4ade80",
+    fontSize: 12,
     marginBottom: 10,
   },
-  shareStorefrontActionBtn: {
-    backgroundColor: "#25D366",
-    paddingVertical: 10,
+  storefrontShareBtn: {
+    backgroundColor: "#25d366",
+    padding: 10,
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  storefrontShareBtnText: {
+    color: "#ffffff",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  addStaffBtn: {
+    backgroundColor: "#084a2f",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  addStaffBtnText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  memberRow: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#21262d",
+  },
+  memberName: {
+    color: "#f0f6fc",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  memberRole: {
+    color: "#8b949e",
+    fontSize: 12,
+  },
+  profileDetail: {
+    color: "#8b949e",
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  signOutBtn: {
+    backgroundColor: "#dc2626",
+    padding: 14,
+    borderRadius: 8,
+    alignItems: "center",
+    marginBottom: 40,
+  },
+  signOutBtnText: {
+    color: "#ffffff",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  bottomNav: {
+    flexDirection: "row",
+    backgroundColor: "#161b22",
+    borderTopWidth: 1,
+    borderTopColor: "#21262d",
+    paddingBottom: 6,
+    paddingTop: 8,
+  },
+  navItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  navItemActive: {},
+  navIcon: {
+    fontSize: 18,
+    color: "#8b949e",
+  },
+  navIconActive: {
+    color: "#4ade80",
+  },
+  navText: {
+    fontSize: 10,
+    color: "#8b949e",
+    marginTop: 2,
+    fontWeight: "500",
+  },
+  navTextActive: {
+    color: "#4ade80",
+    fontWeight: "700",
+  },
+  navBadge: {
+    position: "absolute",
+    top: -2,
+    right: 18,
+    backgroundColor: "#dc2626",
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  navBadgeText: {
+    color: "#ffffff",
+    fontSize: 9,
+    fontWeight: "800",
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.75)",
+    justifyContent: "flex-end",
+  },
+  modalCard: {
+    backgroundColor: "#161b22",
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 20,
+  },
+  modalTitle: {
+    color: "#f0f6fc",
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 14,
+  },
+  modalInput: {
+    backgroundColor: "#0d1117",
+    color: "#f0f6fc",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 10,
+    fontSize: 14,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 10,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    backgroundColor: "#21262d",
+    padding: 12,
     borderRadius: 8,
     alignItems: "center",
   },
-  shareStorefrontActionBtnText: {
-    color: "#ffffff",
-    fontWeight: "800",
-    fontSize: 13,
+  modalCancelText: {
+    color: "#8b949e",
+    fontWeight: "600",
   },
-  modalCloseFullBtn: {
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: "#f4f0e8",
+  modalSaveBtn: {
+    flex: 1,
+    backgroundColor: "#084a2f",
+    padding: 12,
+    borderRadius: 8,
     alignItems: "center",
   },
-  modalCloseFullBtnText: {
-    fontSize: 13,
+  modalSaveText: {
+    color: "#ffffff",
     fontWeight: "700",
-    color: "#5c5549",
+  },
+  rolePickerRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
+  rolePill: {
+    flex: 1,
+    backgroundColor: "#21262d",
+    paddingVertical: 8,
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  rolePillActive: {
+    backgroundColor: "#084a2f",
+  },
+  rolePillText: {
+    color: "#8b949e",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  rolePillTextActive: {
+    color: "#ffffff",
+  },
+  shopOption: {
+    padding: 14,
+    backgroundColor: "#0d1117",
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  shopOptionActive: {
+    borderColor: "#084a2f",
+    borderWidth: 1,
+  },
+  shopOptionName: {
+    color: "#f0f6fc",
+    fontSize: 14,
+  },
+  shopOptionNameActive: {
+    color: "#4ade80",
+    fontWeight: "700",
   },
 });

@@ -366,3 +366,110 @@ export function receiveStock(
     },
   );
 }
+
+export type MemberRole = "ADMIN" | "SALES" | "INVENTORY";
+
+export interface Member {
+  id: string;
+  user_id: string;
+  role: MemberRole;
+  status: "active" | "invited" | "suspended" | "removed";
+  first_name: string;
+  last_name: string | null;
+  phone: string | null;
+  email: string | null;
+  joined_at: string;
+}
+
+export interface MembershipInvitation {
+  id: string;
+  tenant_id: string;
+  role: MemberRole;
+  phone: string | null;
+  email: string | null;
+  token?: string;
+  status: "pending" | "accepted" | "expired" | "revoked";
+  created_at: string;
+}
+
+export function listMembers(tenantId: string): Promise<Member[]> {
+  return request<Member[]>(`/api/v1/tenants/${tenantId}/members`);
+}
+
+export function listInvitations(tenantId: string): Promise<MembershipInvitation[]> {
+  return request<MembershipInvitation[]>(`/api/v1/tenants/${tenantId}/invitations`);
+}
+
+export function inviteMember(
+  tenantId: string,
+  data: {
+    role: MemberRole;
+    phone?: string;
+    email?: string;
+  },
+): Promise<MembershipInvitation> {
+  return request<MembershipInvitation>(`/api/v1/tenants/${tenantId}/invitations`, {
+    method: "POST",
+    body: data,
+  });
+}
+
+export function removeMember(tenantId: string, memberId: string): Promise<void> {
+  return request<void>(`/api/v1/tenants/${tenantId}/members/${memberId}`, {
+    method: "DELETE",
+  });
+}
+
+export interface UserProfile {
+  id: string;
+  first_name: string;
+  last_name: string | null;
+  phone: string | null;
+  email: string | null;
+}
+
+export function currentUser(): Promise<UserProfile> {
+  return request<UserProfile>("/api/v1/users/me");
+}
+
+export function updateProfile(data: {
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+  email?: string;
+}): Promise<UserProfile> {
+  return request<UserProfile>("/api/v1/users/me", {
+    method: "PATCH",
+    body: data,
+  });
+}
+
+export interface TenantDetails {
+  id: string;
+  name: string;
+  slug: string;
+  phone?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+}
+
+export function getBusiness(tenantId: string): Promise<TenantDetails> {
+  return request<TenantDetails>(`/api/v1/tenants/${tenantId}`);
+}
+
+export function updateBusiness(
+  tenantId: string,
+  data: {
+    name?: string;
+    phone?: string | null;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+  },
+): Promise<TenantDetails> {
+  return request<TenantDetails>(`/api/v1/tenants/${tenantId}`, {
+    method: "PATCH",
+    body: data,
+  });
+}
