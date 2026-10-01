@@ -50,6 +50,7 @@ import {
 } from "@/components/icons";
 import {
   ApiError,
+  cancelSale,
   changePassword,
   confirmCustomerList,
   copyProducts,
@@ -74,6 +75,7 @@ import {
   listSales,
   receiveStock,
   recordExpense,
+  recordSale,
   removeMember,
   sellOneProduct,
   updateBusiness,
@@ -264,6 +266,16 @@ export default function Home() {
   // Security PIN Confirmation Modal for Customer Lists
   const [pinConfirmList, setPinConfirmList] = useState<CustomerList | null>(null);
   const [pinValue, setPinValue] = useState("");
+
+  // Trading Ledger states
+  const [tradingSubTab, setTradingSubTab] = useState<"sales" | "expenses">("sales");
+  const [showRecordSaleModal, setShowRecordSaleModal] = useState(false);
+  const [saleProductId, setSaleProductId] = useState<string | null>(null);
+  const [saleQuantity, setSaleQuantity] = useState("1");
+  const [salePrice, setSalePrice] = useState("");
+  const [salePaymentMethod, setSalePaymentMethod] = useState("cash");
+  const [savingSale, setSavingSale] = useState(false);
+  const [saleSearchQuery, setSaleSearchQuery] = useState("");
 
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [expenseAmount, setExpenseAmount] = useState("");
@@ -922,6 +934,61 @@ export default function Home() {
     } catch {
       showToast("Could not confirm order. Make sure all items have prices.");
     }
+  };
+
+  const handleRecordCustomSale = async () => {
+    if (!activeBusiness || !saleProductId || !saleQuantity.trim()) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSavingSale(true);
+    try {
+      const prod = products.find((p) => p.id === saleProductId);
+      const unitPrice = salePrice.trim() || prod?.effective_normal_price || prod?.selling_price || "0";
+      await recordSale(activeBusiness.id, {
+        lines: [
+          {
+            product_id: saleProductId,
+            quantity: saleQuantity.trim(),
+            unit_price: unitPrice,
+          },
+        ],
+        payment_method: salePaymentMethod,
+      });
+      setShowRecordSaleModal(false);
+      setSaleProductId(null);
+      setSaleQuantity("1");
+      setSalePrice("");
+      showToast("Sale recorded successfully!");
+      await loadData(activeBusiness.id);
+    } catch {
+      showToast("Could not record sale. Check connection.");
+    } finally {
+      setSavingSale(false);
+    }
+  };
+
+  const handleCancelSale = (sale: SaleSummary) => {
+    if (!activeBusiness) return;
+    Alert.alert(
+      "Cancel / Void Sale?",
+      `Are you sure you want to cancel receipt ${sale.receipt_number} (${formatMoney(sale.total_amount)})? This will restore inventory.`,
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Cancel Sale",
+          style: "destructive",
+          onPress: async () => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            try {
+              await cancelSale(activeBusiness.id, sale.id, "Customer return / void");
+              showToast(`Sale ${sale.receipt_number} voided.`);
+              await loadData(activeBusiness.id);
+            } catch {
+              showToast("Could not cancel sale.");
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleShareQuoteOnWhatsApp = (list: CustomerList) => {
@@ -1748,9 +1815,10 @@ export default function Home() {
           />
         )}
 
-        {/* Trading Ledger Tab */}
+        {/* Trading Ledger & Sales Feed */}
         {activeTab === "trading" && (
           <ScrollView style={styles.scrollContent}>
+            {/* Today's Gross Trading Banner */}
             <View style={styles.tradingSummaryCard}>
               <Text style={styles.tradingSummaryLabel}>Today's Gross Sales</Text>
               <Text style={styles.tradingSummaryAmount}>
@@ -1761,31 +1829,159 @@ export default function Home() {
               </Text>
             </View>
 
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHeading}>Sales Transactions</Text>
-              <Pressable
-                style={styles.logExpenseBtn}
-                onPress={() => setShowExpenseModal(true)}
-              >
-                <PlusIcon size={12} color="#ffffff" />
-                <Text style={styles.logExpenseBtnText}>Expense</Text>
-              </Pressable>
+            {/* Sub-tab Pills & Header Actions */}
+            <View style={styles.tradingSubTabRow}>
+              <View style={styles.tradingPillsWrap}>
+                <Pressable
+                  style={[
+                    styles.tradingPill,
+                    tradingSubTab === "sales" && styles.tradingPillActive,
+                  ]}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setTradingSubTab("sales");
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.tradingPillText,
+                      tradingSubTab === "sales" && styles.tradingPillTextActive,
+                    ]}
+                  >
+                    Sales ({sales.length})
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={[
+                    styles.tradingPill,
+                    tradingSubTab === "expenses" && styles.tradingPillActive,
+                  ]}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setTradingSubTab("expenses");
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.tradingPillText,
+                      tradingSubTab === "expenses" && styles.tradingPillTextActive,
+                    ]}
+                  >
+                    Expenses
+                  </Text>
+                </Pressable>
+              </View>
+
+              <View style={{ flexDirection: "row", gap: 6 }}>
+                <Pressable
+                  style={styles.recordSaleBtn}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowRecordSaleModal(true);
+                  }}
+                >
+                  <PlusIcon size={12} color="#ffffff" />
+                  <Text style={styles.recordSaleBtnText}>Sale</Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.logExpenseBtn}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowExpenseModal(true);
+                  }}
+                >
+                  <PlusIcon size={12} color="#ffffff" />
+                  <Text style={styles.logExpenseBtnText}>Expense</Text>
+                </Pressable>
+              </View>
             </View>
 
-            {sales.map((s) => (
-              <View key={s.id} style={styles.saleRow}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <ReceiptIcon size={18} color="#4ade80" />
-                  <View>
-                    <Text style={styles.saleReceipt}>{s.receipt_number}</Text>
-                    <Text style={styles.saleDate}>
-                      {new Date(s.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} - {s.payment_method.toUpperCase()}
+            {/* Sales Sub-tab */}
+            {tradingSubTab === "sales" ? (
+              <View>
+                {sales.length === 0 ? (
+                  <View style={styles.emptyBox}>
+                    <ReceiptIcon size={32} color="#6e7681" />
+                    <Text style={styles.emptyTitle}>No sales recorded yet</Text>
+                    <Text style={styles.emptySubtitle}>
+                      Tap "+ Sale" above or "Sell 1" on any catalog item to record your first transaction.
                     </Text>
                   </View>
-                </View>
-                <Text style={styles.saleAmount}>{formatMoney(s.total_amount)}</Text>
+                ) : (
+                  sales.map((s) => {
+                    const isCancelled = Boolean(s.cancelled_at);
+                    return (
+                      <View key={s.id} style={styles.saleRow}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+                          <ReceiptIcon
+                            size={20}
+                            color={isCancelled ? "#f87171" : "#4ade80"}
+                          />
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                              <Text style={styles.saleReceipt}>{s.receipt_number}</Text>
+                              <View
+                                style={[
+                                  styles.saleStatusPill,
+                                  isCancelled ? styles.salePillCancelled : styles.salePillSuccess,
+                                ]}
+                              >
+                                <Text style={styles.saleStatusText}>
+                                  {isCancelled ? "VOID" : s.payment_status.toUpperCase()}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={styles.saleDate}>
+                              {new Date(s.created_at).toLocaleString([], {
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}{" "}
+                              via {s.payment_method.toUpperCase()}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={{ alignItems: "flex-end", gap: 4 }}>
+                          <Text
+                            style={[
+                              styles.saleAmount,
+                              isCancelled && styles.saleAmountCancelled,
+                            ]}
+                          >
+                            {formatMoney(s.total_amount)}
+                          </Text>
+                          {!isCancelled && (
+                            <Pressable
+                              style={styles.voidBtn}
+                              onPress={() => handleCancelSale(s)}
+                            >
+                              <Text style={styles.voidBtnText}>Void</Text>
+                            </Pressable>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
               </View>
-            ))}
+            ) : (
+              /* Expenses Sub-tab */
+              <View>
+                <Text style={styles.subHeading}>Market Expenses Categories</Text>
+                <View style={styles.actionGrid}>
+                  {expenseCategories.map((c) => (
+                    <View key={c.id} style={styles.actionTile}>
+                      <Text style={styles.actionTileTitle}>{c.name}</Text>
+                      <Text style={styles.actionTileDesc}>{c.description || "General stall expense"}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
           </ScrollView>
         )}
 
@@ -2458,6 +2654,155 @@ export default function Home() {
                 onPress={handleExecutePinConfirm}
               >
                 <Text style={styles.modalSaveText}>Authorize & Confirm</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Record Custom Sale Modal */}
+      <Modal visible={showRecordSaleModal} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Record Custom Sale</Text>
+            <Text style={styles.modalSubtitle}>
+              Select an inventory product and record a walk-in sale.
+            </Text>
+
+            {/* Product Search / Filter */}
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Search product..."
+              placeholderTextColor="#8a928e"
+              value={saleSearchQuery}
+              onChangeText={setSaleSearchQuery}
+            />
+
+            {/* Product selection list */}
+            <ScrollView style={{ maxHeight: 140, marginBottom: 10 }}>
+              {products
+                .filter((p) =>
+                  p.name.toLowerCase().includes(saleSearchQuery.toLowerCase())
+                )
+                .slice(0, 15)
+                .map((p) => {
+                  const isSelected = saleProductId === p.id;
+                  const price = p.effective_normal_price || p.selling_price || "0";
+                  return (
+                    <Pressable
+                      key={p.id}
+                      style={[
+                        styles.productPickRow,
+                        isSelected && styles.productPickRowActive,
+                      ]}
+                      onPress={() => {
+                        setSaleProductId(p.id);
+                        if (!salePrice) {
+                          setSalePrice(price);
+                        }
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={[
+                            styles.productPickName,
+                            isSelected && styles.productPickNameActive,
+                          ]}
+                        >
+                          {p.name}
+                        </Text>
+                        <Text style={styles.productPickMeta}>
+                          Price: {formatMoney(price)}
+                          {p.effective_wholesale_price
+                            ? ` | Wholesale: ${formatMoney(p.effective_wholesale_price)}`
+                            : ""}
+                        </Text>
+                      </View>
+                      {isSelected && (
+                        <CheckMarkIcon size={16} color="#4ade80" />
+                      )}
+                    </Pressable>
+                  );
+                })}
+            </ScrollView>
+
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalFieldLabel}>Quantity</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="1"
+                  placeholderTextColor="#8a928e"
+                  keyboardType="numeric"
+                  value={saleQuantity}
+                  onChangeText={setSaleQuantity}
+                />
+              </View>
+              <View style={{ flex: 2 }}>
+                <Text style={styles.modalFieldLabel}>Unit Price (NGN)</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="e.g. 5000"
+                  placeholderTextColor="#8a928e"
+                  keyboardType="numeric"
+                  value={salePrice}
+                  onChangeText={setSalePrice}
+                />
+              </View>
+            </View>
+
+            {/* Payment Method Pills */}
+            <Text style={styles.modalFieldLabel}>Payment Method</Text>
+            <View style={styles.rolePickerRow}>
+              {(["cash", "bank_transfer", "pos"] as const).map((method) => (
+                <Pressable
+                  key={method}
+                  style={[
+                    styles.rolePill,
+                    salePaymentMethod === method && styles.rolePillActive,
+                  ]}
+                  onPress={() => setSalePaymentMethod(method)}
+                >
+                  <Text
+                    style={[
+                      styles.rolePillText,
+                      salePaymentMethod === method && styles.rolePillTextActive,
+                    ]}
+                  >
+                    {method === "bank_transfer"
+                      ? "Transfer"
+                      : method.toUpperCase()}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={styles.modalCancelBtn}
+                onPress={() => {
+                  setShowRecordSaleModal(false);
+                  setSaleProductId(null);
+                  setSaleQuantity("1");
+                  setSalePrice("");
+                  setSaleSearchQuery("");
+                }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.modalSaveBtn,
+                  (!saleProductId || !saleQuantity.trim()) && { opacity: 0.5 },
+                ]}
+                onPress={handleRecordCustomSale}
+                disabled={savingSale || !saleProductId || !saleQuantity.trim()}
+              >
+                {savingSale ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Record Sale</Text>
+                )}
               </Pressable>
             </View>
           </View>
@@ -3646,6 +3991,106 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 11,
     fontWeight: "700",
+  },
+  tradingSubTabRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  tradingPillsWrap: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  tradingPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: "#21262d",
+  },
+  tradingPillActive: {
+    backgroundColor: "#084a2f",
+  },
+  tradingPillText: {
+    color: "#8b949e",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  tradingPillTextActive: {
+    color: "#ffffff",
+    fontWeight: "700",
+  },
+  recordSaleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#084a2f",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  recordSaleBtnText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  saleStatusPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  salePillSuccess: {
+    backgroundColor: "#064e3b",
+  },
+  salePillCancelled: {
+    backgroundColor: "#7f1d1d",
+  },
+  saleStatusText: {
+    color: "#ffffff",
+    fontSize: 9,
+    fontWeight: "800",
+  },
+  saleAmountCancelled: {
+    textDecorationLine: "line-through",
+    color: "#6e7681",
+  },
+  voidBtn: {
+    backgroundColor: "#21262d",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  voidBtnText: {
+    color: "#f87171",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  productPickRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    backgroundColor: "#0d1117",
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: "#21262d",
+  },
+  productPickRowActive: {
+    borderColor: "#4ade80",
+    backgroundColor: "#0d281e",
+  },
+  productPickName: {
+    color: "#f0f6fc",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  productPickNameActive: {
+    color: "#4ade80",
+  },
+  productPickMeta: {
+    color: "#8b949e",
+    fontSize: 11,
   },
   userProfileCard: {
     flexDirection: "row",

@@ -346,10 +346,18 @@ export interface SaleSummary {
   payment_method: string;
   payment_status: string;
   created_at: string;
+  cancelled_at?: string | null;
 }
 
 export function listSales(tenantId: string, limit: string = "50"): Promise<SaleSummary[]> {
   return request<SaleSummary[]>(`/api/v1/tenants/${tenantId}/sales?limit=${limit}`);
+}
+
+export function cancelSale(tenantId: string, saleId: string, reason: string): Promise<void> {
+  return request<void>(`/api/v1/tenants/${tenantId}/sales/${saleId}/cancel`, {
+    method: "POST",
+    body: { reason },
+  });
 }
 
 export interface DailySalesSummary {
@@ -365,6 +373,7 @@ export function dailySales(tenantId: string): Promise<DailySalesSummary> {
 export interface ExpenseCategory {
   id: string;
   name: string;
+  description?: string | null;
 }
 
 export function listExpenseCategories(tenantId: string): Promise<{ categories: ExpenseCategory[] }> {
