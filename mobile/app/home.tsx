@@ -21,9 +21,11 @@ import {
   ArrowLeftIcon,
   BoxIcon,
   CannotGetIcon,
+  CartIcon,
   CheckMarkIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  ClockIcon,
   CloseIcon,
   CopyIcon,
   EditIcon,
@@ -44,6 +46,7 @@ import {
   TagIcon,
   TrashIcon,
   TreeIcon,
+  TruckIcon,
 } from "@/components/icons";
 import {
   ApiError,
@@ -57,6 +60,7 @@ import {
   deleteCategory,
   deleteCustomerList,
   deleteProduct,
+  dispatchCustomerList,
   getBusiness,
   getStorefront,
   inviteMember,
@@ -241,10 +245,25 @@ export default function Home() {
     listId: string;
     lineId: string;
     itemName: string;
-    currentPrice: string;
+    currentShopPrice: string;
+    currentCostPrice: string;
   } | null>(null);
   const [priceInput, setPriceInput] = useState("");
+  const [costInput, setCostInput] = useState("");
   const [savingPrice, setSavingPrice] = useState(false);
+
+  // Dispatch Waybill modal state
+  const [dispatchModalList, setDispatchModalList] = useState<CustomerList | null>(null);
+  const [transporterName, setTransporterName] = useState("");
+  const [transporterPhone, setTransporterPhone] = useState("");
+  const [waybillNumber, setWaybillNumber] = useState("");
+  const [dispatchCost, setDispatchCost] = useState("");
+  const [trackingUrl, setTrackingUrl] = useState("");
+  const [savingDispatch, setSavingDispatch] = useState(false);
+
+  // Security PIN Confirmation Modal for Customer Lists
+  const [pinConfirmList, setPinConfirmList] = useState<CustomerList | null>(null);
+  const [pinValue, setPinValue] = useState("");
 
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [expenseAmount, setExpenseAmount] = useState("");
@@ -813,12 +832,14 @@ export default function Home() {
     setSavingPrice(true);
     try {
       const updatedList = await workListLine(activeBusiness.id, pricingLine.listId, pricingLine.lineId, {
-        shop_price: priceInput.trim() || undefined,
+        shop_price: priceInput.trim() || null,
+        cost_price: costInput.trim() || null,
       });
       setCustomerLists((curr) => curr.map((l) => (l.id === updatedList.id ? updatedList : l)));
       setPricingLine(null);
       setPriceInput("");
-      showToast("Line price updated!");
+      setCostInput("");
+      showToast("Line prices & cost updated!");
     } catch {
       showToast("Could not update price.");
     } finally {
@@ -826,28 +847,78 @@ export default function Home() {
     }
   };
 
-  const handleToggleCannotGet = async (listId: string, lineId: string, currentState: string) => {
+  const CYCLE_LINE_STATES: Array<"somewhere" | "have_it" | "buy_it" | "cannot_get"> = [
+    "somewhere",
+    "have_it",
+    "buy_it",
+    "cannot_get",
+  ];
+
+  const handleCycleLineState = async (listId: string, lineId: string, currentState: string) => {
     if (!activeBusiness) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const nextState = currentState === "cannot_get" ? "have_it" : "cannot_get";
+    const curIdx = CYCLE_LINE_STATES.indexOf(currentState as any);
+    const nextIdx = (curIdx + 1) % CYCLE_LINE_STATES.length;
+    const nextState = CYCLE_LINE_STATES[nextIdx];
     try {
       const updatedList = await workListLine(activeBusiness.id, listId, lineId, { state: nextState });
       setCustomerLists((current) =>
         current.map((l) => (l.id === updatedList.id ? updatedList : l)),
       );
-      showToast(nextState === "cannot_get" ? "Marked as cannot get" : "Marked as available");
+      const label =
+        nextState === "have_it"
+          ? "On the shelf"
+          : nextState === "buy_it"
+          ? "Buy in market"
+          : nextState === "cannot_get"
+          ? "Cannot get"
+          : "Not checked";
+      showToast(`Status: ${label}`);
     } catch {
       showToast("Could not update line status.");
     }
   };
 
-  const handleConfirmList = async (list: CustomerList) => {
-    if (!activeBusiness) return;
+  const handleDispatchWaybill = async () => {
+    if (!activeBusiness || !dispatchModalList) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSavingDispatch(true);
+    try {
+      const updated = await dispatchCustomerList(activeBusiness.id, dispatchModalList.id, {
+        transporter_name: transporterName.trim() || null,
+        transporter_phone: transporterPhone.trim() || null,
+        waybill_number: waybillNumber.trim() || null,
+        dispatch_cost: dispatchCost.trim() || null,
+        tracking_url: trackingUrl.trim() || null,
+      });
+      setCustomerLists((curr) => curr.map((l) => (l.id === updated.id ? updated : l)));
+      setDispatchModalList(null);
+      setTransporterName("");
+      setTransporterPhone("");
+      setWaybillNumber("");
+      setDispatchCost("");
+      setTrackingUrl("");
+      showToast("Waybill recorded and dispatched!");
+    } catch {
+      showToast("Could not record waybill dispatch.");
+    } finally {
+      setSavingDispatch(false);
+    }
+  };
+
+  const handleExecutePinConfirm = async () => {
+    if (!activeBusiness || !pinConfirmList) return;
+    if (pinValue.trim().length < 4) {
+      showToast("Enter a 4-digit security PIN");
+      return;
+    }
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     try {
-      const confirmed = await confirmCustomerList(activeBusiness.id, list.id);
+      const confirmed = await confirmCustomerList(activeBusiness.id, pinConfirmList.id);
       setCustomerLists((curr) => curr.map((l) => (l.id === confirmed.id ? confirmed : l)));
-      showToast(`Order from ${list.customer_name || list.customer_phone} confirmed!`);
+      setPinConfirmList(null);
+      setPinValue("");
+      showToast(`Order from ${confirmed.customer_name || confirmed.customer_phone} confirmed!`);
     } catch {
       showToast("Could not confirm order. Make sure all items have prices.");
     }
@@ -1498,55 +1569,122 @@ export default function Home() {
                       {sec.subs.map((sub, sIdx) => (
                         <View key={sIdx} style={styles.subSectionBox}>
                           {sub.sub && <Text style={styles.subTitle}>&gt; {sub.sub}</Text>}
-                          {sub.lines.map((line) => (
-                            <View key={line.id} style={styles.lineItem}>
-                              <View style={styles.lineMain}>
-                                <Text style={styles.lineName}>
-                                  {line.quantity}x {line.product_name ?? line.free_text}
-                                </Text>
-                                <Text style={styles.linePrice}>
-                                  {line.shop_price ? formatMoney(line.shop_price) : "Set Price"}
-                                </Text>
-                              </View>
+                          {sub.lines.map((line) => {
+                            const costNum = Number(line.cost_price ?? "0");
+                            const shopNum = Number(line.shop_price ?? "0");
+                            const hasBoth = Boolean(line.cost_price && line.shop_price && Number.isFinite(costNum) && Number.isFinite(shopNum));
+                            const marginVal = shopNum - costNum;
+                            const isPositive = marginVal >= 0;
 
-                              <View style={styles.lineActions}>
-                                <Pressable
-                                  style={[
-                                    styles.lineStatusBtn,
-                                    line.state === "cannot_get" && styles.lineStatusBtnUnavailable,
-                                  ]}
-                                  onPress={() =>
-                                    handleToggleCannotGet(item.id, line.id, line.state)
-                                  }
-                                >
-                                  {line.state === "cannot_get" ? (
-                                    <CannotGetIcon size={14} color="#fca5a5" />
-                                  ) : (
-                                    <CheckMarkIcon size={14} color="#86efac" />
-                                  )}
-                                </Pressable>
+                            return (
+                              <View key={line.id} style={styles.lineItem}>
+                                <View style={styles.lineMain}>
+                                  <View style={styles.lineTitleRow}>
+                                    <Text style={styles.lineName}>
+                                      {line.quantity}x {line.product_name ?? line.free_text}
+                                    </Text>
+                                    <View
+                                      style={[
+                                        styles.lineStateBadge,
+                                        line.state === "have_it" && styles.lineStateHaveIt,
+                                        line.state === "buy_it" && styles.lineStateBuyIt,
+                                        line.state === "cannot_get" && styles.lineStateCannotGet,
+                                        line.state === "somewhere" && styles.lineStateSomewhere,
+                                      ]}
+                                    >
+                                      <Text style={styles.lineStateBadgeText}>
+                                        {line.state === "have_it"
+                                          ? "On Shelf"
+                                          : line.state === "buy_it"
+                                          ? "In Market"
+                                          : line.state === "cannot_get"
+                                          ? "Cannot Get"
+                                          : "Unchecked"}
+                                      </Text>
+                                    </View>
+                                  </View>
 
-                                <Pressable
-                                  style={styles.linePriceBtn}
-                                  onPress={() => {
-                                    setPricingLine({
-                                      listId: item.id,
-                                      lineId: line.id,
-                                      itemName: line.product_name ?? line.free_text ?? "Item",
-                                      currentPrice: line.shop_price ?? "",
-                                    });
-                                    setPriceInput(line.shop_price ?? "");
-                                  }}
-                                >
-                                  <EditIcon size={14} color="#8a928e" />
-                                </Pressable>
+                                  <View style={styles.linePriceDetailRow}>
+                                    <Text style={styles.linePrice}>
+                                      Charge: {line.shop_price ? formatMoney(line.shop_price) : "Set Price"}
+                                    </Text>
+                                    {line.cost_price && (
+                                      <Text style={styles.lineCost}>
+                                        Cost: {formatMoney(line.cost_price)}
+                                      </Text>
+                                    )}
+                                    {hasBoth && (
+                                      <Text
+                                        style={[
+                                          styles.lineMargin,
+                                          isPositive ? styles.marginPositive : styles.marginNegative,
+                                        ]}
+                                      >
+                                        Margin: {isPositive ? "+" : ""}{formatMoney(marginVal.toString())}
+                                      </Text>
+                                    )}
+                                  </View>
+                                </View>
+
+                                <View style={styles.lineActions}>
+                                  <Pressable
+                                    style={[
+                                      styles.lineStatusCycleBtn,
+                                      line.state === "have_it" && styles.lineStatusBtnHaveIt,
+                                      line.state === "buy_it" && styles.lineStatusBtnBuyIt,
+                                      line.state === "cannot_get" && styles.lineStatusBtnUnavailable,
+                                      line.state === "somewhere" && styles.lineStatusBtnSomewhere,
+                                    ]}
+                                    onPress={() =>
+                                      handleCycleLineState(item.id, line.id, line.state)
+                                    }
+                                  >
+                                    {line.state === "have_it" ? (
+                                      <CheckMarkIcon size={14} color="#86efac" />
+                                    ) : line.state === "buy_it" ? (
+                                      <CartIcon size={14} color="#fde047" />
+                                    ) : line.state === "cannot_get" ? (
+                                      <CannotGetIcon size={14} color="#fca5a5" />
+                                    ) : (
+                                      <ClockIcon size={14} color="#94a3b8" />
+                                    )}
+                                  </Pressable>
+
+                                  <Pressable
+                                    style={styles.linePriceBtn}
+                                    onPress={() => {
+                                      setPricingLine({
+                                        listId: item.id,
+                                        lineId: line.id,
+                                        itemName: line.product_name ?? line.free_text ?? "Item",
+                                        currentShopPrice: line.shop_price ?? "",
+                                        currentCostPrice: line.cost_price ?? "",
+                                      });
+                                      setPriceInput(line.shop_price ?? "");
+                                      setCostInput(line.cost_price ?? "");
+                                    }}
+                                  >
+                                    <EditIcon size={14} color="#8a928e" />
+                                  </Pressable>
+                                </View>
                               </View>
-                            </View>
-                          ))}
+                            );
+                          })}
                         </View>
                       ))}
                     </View>
                   ))}
+
+                  {/* Waybill Tracking Banner */}
+                  {item.waybill_number && (
+                    <View style={styles.waybillBanner}>
+                      <TruckIcon size={16} color="#4ade80" />
+                      <Text style={styles.waybillBannerText}>
+                        Dispatched: #{item.waybill_number} via {item.transporter_name ?? "Courier"}
+                        {item.dispatch_cost ? ` (Cost: ${formatMoney(item.dispatch_cost)})` : ""}
+                      </Text>
+                    </View>
+                  )}
 
                   {/* List Total & Actions */}
                   <View style={styles.listFooter}>
@@ -1563,13 +1701,33 @@ export default function Home() {
                         onPress={() => handleShareQuoteOnWhatsApp(item)}
                       >
                         <ShareIcon size={14} color="#ffffff" />
-                        <Text style={styles.waBtnText}>WhatsApp Quote</Text>
+                        <Text style={styles.waBtnText}>WhatsApp</Text>
                       </Pressable>
+
+                      {isConfirmed && !item.waybill_number && (
+                        <Pressable
+                          style={styles.dispatchBtn}
+                          onPress={() => {
+                            setDispatchModalList(item);
+                            setTransporterName(item.transporter_name ?? "");
+                            setTransporterPhone(item.transporter_phone ?? "");
+                            setWaybillNumber(item.waybill_number ?? "");
+                            setDispatchCost(item.dispatch_cost ?? "");
+                            setTrackingUrl(item.tracking_url ?? "");
+                          }}
+                        >
+                          <TruckIcon size={14} color="#ffffff" />
+                          <Text style={styles.dispatchBtnText}>Waybill</Text>
+                        </Pressable>
+                      )}
 
                       {!isConfirmed && (
                         <Pressable
                           style={styles.confirmBtn}
-                          onPress={() => handleConfirmList(item)}
+                          onPress={() => {
+                            setPinConfirmList(item);
+                            setPinValue("");
+                          }}
                         >
                           <CheckMarkIcon size={14} color="#ffffff" />
                           <Text style={styles.confirmBtnText}>Confirm</Text>
@@ -2134,20 +2292,51 @@ export default function Home() {
         </View>
       </Modal>
 
-      {/* Price Input Modal for Line Item */}
+      {/* Price & Cost Input Modal for Customer List Line Item */}
       <Modal visible={pricingLine !== null} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Set Price for {pricingLine?.itemName}</Text>
+            <Text style={styles.modalTitle}>Price & Cost for {pricingLine?.itemName}</Text>
+            <Text style={styles.modalSubtitle}>
+              Write what it costs you in the market and what you charge the customer.
+            </Text>
+
+            <Text style={styles.modalFieldLabel}>Customer Selling Price (NGN)</Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="Price (NGN)"
+              placeholder="Selling Price (e.g. 15000)"
               placeholderTextColor="#8a928e"
               keyboardType="numeric"
               value={priceInput}
               onChangeText={setPriceInput}
               autoFocus
             />
+
+            <Text style={styles.modalFieldLabel}>Market Cost Price (NGN)</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Cost Price (e.g. 12000)"
+              placeholderTextColor="#8a928e"
+              keyboardType="numeric"
+              value={costInput}
+              onChangeText={setCostInput}
+            />
+
+            {priceInput.trim() && costInput.trim() && (
+              <View style={styles.marginPreviewBox}>
+                <Text style={styles.marginPreviewLabel}>Expected Profit Margin:</Text>
+                <Text
+                  style={[
+                    styles.marginPreviewValue,
+                    Number(priceInput) >= Number(costInput) ? styles.marginPositive : styles.marginNegative,
+                  ]}
+                >
+                  {Number(priceInput) >= Number(costInput) ? "+" : ""}
+                  {formatMoney((Number(priceInput) - Number(costInput)).toString())}
+                </Text>
+              </View>
+            )}
+
             <View style={styles.modalButtons}>
               <Pressable style={styles.modalCancelBtn} onPress={() => setPricingLine(null)}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
@@ -2160,8 +2349,115 @@ export default function Home() {
                 {savingPrice ? (
                   <ActivityIndicator color="#ffffff" size="small" />
                 ) : (
-                  <Text style={styles.modalSaveText}>Save Price</Text>
+                  <Text style={styles.modalSaveText}>Save Pricing</Text>
                 )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Dispatch Waybill Modal */}
+      <Modal visible={dispatchModalList !== null} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Dispatch Waybill</Text>
+            <Text style={styles.modalSubtitle}>
+              Record transportation details for {dispatchModalList?.customer_name || dispatchModalList?.customer_phone}
+            </Text>
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Transporter Name (e.g. GIG Logistics, Young Shall Grow)"
+              placeholderTextColor="#8a928e"
+              value={transporterName}
+              onChangeText={setTransporterName}
+            />
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Transporter Phone (e.g. 08012345678)"
+              placeholderTextColor="#8a928e"
+              keyboardType="phone-pad"
+              value={transporterPhone}
+              onChangeText={setTransporterPhone}
+            />
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Waybill / Receipt Number (e.g. WYB-98432)"
+              placeholderTextColor="#8a928e"
+              value={waybillNumber}
+              onChangeText={setWaybillNumber}
+            />
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Dispatch Cost (NGN, optional)"
+              placeholderTextColor="#8a928e"
+              keyboardType="numeric"
+              value={dispatchCost}
+              onChangeText={setDispatchCost}
+            />
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Tracking Link (optional)"
+              placeholderTextColor="#8a928e"
+              value={trackingUrl}
+              onChangeText={setTrackingUrl}
+            />
+
+            <View style={styles.modalButtons}>
+              <Pressable style={styles.modalCancelBtn} onPress={() => setDispatchModalList(null)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={styles.modalSaveBtn}
+                onPress={handleDispatchWaybill}
+                disabled={savingDispatch}
+              >
+                {savingDispatch ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Record Dispatch</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Security PIN Gate Confirmation Modal */}
+      <Modal visible={pinConfirmList !== null} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Confirm Customer Order</Text>
+            <Text style={styles.modalSubtitle}>
+              Confirming turns this quotation into an active sale and accounts for payout. Enter your 4-digit security PIN to proceed.
+            </Text>
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Enter 4-digit PIN"
+              placeholderTextColor="#8a928e"
+              keyboardType="numeric"
+              secureTextEntry
+              maxLength={6}
+              value={pinValue}
+              onChangeText={setPinValue}
+              autoFocus
+            />
+
+            <View style={styles.modalButtons}>
+              <Pressable style={styles.modalCancelBtn} onPress={() => setPinConfirmList(null)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={styles.modalSaveBtn}
+                onPress={handleExecutePinConfirm}
+              >
+                <Text style={styles.modalSaveText}>Authorize & Confirm</Text>
               </Pressable>
             </View>
           </View>
@@ -3098,43 +3394,128 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 4,
+    paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#161b22",
+    borderBottomColor: "#21262d",
   },
   lineMain: {
     flex: 1,
+    paddingRight: 8,
+  },
+  lineTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+    marginBottom: 4,
   },
   lineName: {
     color: "#f0f6fc",
-    fontSize: 13,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  lineStateBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  lineStateHaveIt: {
+    backgroundColor: "#064e3b",
+  },
+  lineStateBuyIt: {
+    backgroundColor: "#78350f",
+  },
+  lineStateCannotGet: {
+    backgroundColor: "#7f1d1d",
+  },
+  lineStateSomewhere: {
+    backgroundColor: "#21262d",
+  },
+  lineStateBadgeText: {
+    color: "#ffffff",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  linePriceDetailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
   },
   linePrice: {
+    color: "#4ade80",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  lineCost: {
     color: "#8b949e",
+    fontSize: 12,
+  },
+  lineMargin: {
     fontSize: 11,
+    fontWeight: "700",
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  marginPositive: {
+    color: "#4ade80",
+    backgroundColor: "#064e3b",
+  },
+  marginNegative: {
+    color: "#f87171",
+    backgroundColor: "#7f1d1d",
   },
   lineActions: {
     flexDirection: "row",
     gap: 6,
+    alignItems: "center",
   },
-  lineStatusBtn: {
-    width: 28,
-    height: 28,
+  lineStatusCycleBtn: {
+    width: 32,
+    height: 32,
     borderRadius: 6,
-    backgroundColor: "#064e3b",
     alignItems: "center",
     justifyContent: "center",
+  },
+  lineStatusBtnHaveIt: {
+    backgroundColor: "#064e3b",
+  },
+  lineStatusBtnBuyIt: {
+    backgroundColor: "#78350f",
   },
   lineStatusBtnUnavailable: {
     backgroundColor: "#7f1d1d",
   },
+  lineStatusBtnSomewhere: {
+    backgroundColor: "#21262d",
+  },
   linePriceBtn: {
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
     borderRadius: 6,
     backgroundColor: "#21262d",
     alignItems: "center",
     justifyContent: "center",
+  },
+  waybillBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#0d281e",
+    borderWidth: 1,
+    borderColor: "#084a2f",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  waybillBannerText: {
+    color: "#4ade80",
+    fontSize: 12,
+    fontWeight: "600",
+    flex: 1,
   },
   listFooter: {
     flexDirection: "row",
@@ -3173,6 +3554,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
   },
+  dispatchBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#2563eb",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  dispatchBtnText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
   confirmBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -3185,6 +3580,26 @@ const styles = StyleSheet.create({
   confirmBtnText: {
     color: "#ffffff",
     fontSize: 11,
+    fontWeight: "700",
+  },
+  marginPreviewBox: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#0d1117",
+    padding: 10,
+    borderRadius: 6,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#30363d",
+  },
+  marginPreviewLabel: {
+    color: "#8b949e",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  marginPreviewValue: {
+    fontSize: 14,
     fontWeight: "700",
   },
   deleteListBtn: {

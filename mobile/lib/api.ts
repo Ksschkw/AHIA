@@ -169,8 +169,16 @@ export interface CustomerList {
   customer_phone: string;
   customer_name: string | null;
   status: "received" | "quoted" | "confirmed" | "cancelled";
+  note?: string | null;
   created_at: string;
   priced_total: string | null;
+  unpriced_line_count?: number;
+  transporter_name?: string | null;
+  transporter_phone?: string | null;
+  waybill_number?: string | null;
+  dispatch_cost?: string | null;
+  tracking_url?: string | null;
+  dispatched_at?: string | null;
   lines: CustomerListLine[];
 }
 
@@ -242,13 +250,31 @@ export function workListLine(
   listId: string,
   lineId: string,
   updates: {
-    shop_price?: string;
-    state?: string;
+    shop_price?: string | null;
+    cost_price?: string | null;
+    state?: "somewhere" | "have_it" | "buy_it" | "cannot_get" | string;
   },
 ): Promise<CustomerList> {
   return request<CustomerList>(`/api/v1/tenants/${tenantId}/requests/${listId}/lines/${lineId}`, {
     method: "PATCH",
     body: updates,
+  });
+}
+
+export function dispatchCustomerList(
+  tenantId: string,
+  requestId: string,
+  details: {
+    transporter_name?: string | null;
+    transporter_phone?: string | null;
+    waybill_number?: string | null;
+    dispatch_cost?: string | null;
+    tracking_url?: string | null;
+  },
+): Promise<CustomerList> {
+  return request<CustomerList>(`/api/v1/tenants/${tenantId}/requests/${requestId}/dispatch`, {
+    method: "POST",
+    body: details,
   });
 }
 
