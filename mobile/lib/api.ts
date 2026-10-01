@@ -739,3 +739,28 @@ export function moveCategory(
     body: { new_parent_id: newParentId },
   });
 }
+
+export interface ProductShareSheet {
+  product_name: string;
+  public_url: string;
+  qr_payload: string;
+  whatsapp_url: string | null;
+  whatsapp_unavailable_reason: string | null;
+}
+
+export function productShareSheet(tenantId: string, productId: string): Promise<ProductShareSheet> {
+  return request<ProductShareSheet>(
+    `/api/v1/tenants/${tenantId}/products/${productId}/share-sheet`,
+  );
+}
+
+export interface LowStockProduct {
+  product_id: string;
+  product_name: string;
+  quantity_on_hand: string;
+  low_stock_threshold?: string | null;
+}
+
+export function lowStock(tenantId: string, limit = "5"): Promise<LowStockProduct[]> {
+  return request<LowStockProduct[]>(`/api/v1/tenants/${tenantId}/reports/low-stock?limit=${limit}`);
+}

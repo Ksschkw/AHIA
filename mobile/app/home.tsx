@@ -81,7 +81,10 @@ import {
   listProductImages,
   listProducts,
   listSales,
+  lowStock,
   makeProductImagePrimary,
+  productShareSheet,
+  publishProduct,
   publishStorefront,
   receiveStock,
   recordExpense,
@@ -90,10 +93,12 @@ import {
   removeProductImage,
   sellOneProduct,
   submitCustomerList,
+  unpublishProduct,
   unpublishStorefront,
   updateBusiness,
   updateCategory,
   updateProduct,
+  updateProfile,
   updateStorefront,
   workListLine,
   type Category,
@@ -101,12 +106,14 @@ import {
   type CustomerListLine,
   type DailySalesSummary,
   type ExpenseCategory,
+  type LowStockProduct,
   type Member,
   type MemberRole,
   type MembershipInvitation,
   type PendingInvitation,
   type Product,
   type ProductImage,
+  type ProductShareSheet,
   type SaleSummary,
   type StorefrontDetails,
   type TenantDetails,
@@ -239,6 +246,7 @@ export default function Home() {
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<MembershipInvitation[]>([]);
+  const [runningOut, setRunningOut] = useState<LowStockProduct[]>([]);
 
   // Catalog / Shelf Hierarchy states
   const [currentCategoryId, setCurrentCategoryId] = useState<string | null>(null);
@@ -368,6 +376,12 @@ export default function Home() {
   const [savingPassword, setSavingPassword] = useState(false);
 
   const [showShopModal, setShowShopModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [editFirstName, setEditFirstName] = useState("");
+  const [editLastName, setEditLastName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const showToast = (msg: string) => {
     setNotice(msg);
@@ -406,6 +420,7 @@ export default function Home() {
         bDetails,
         uProfile,
         sDetails,
+        freshLowStock,
       ] = await Promise.all([
         listProducts(tenantId).catch(() => cached),
         listCustomerLists(tenantId).catch(() => cachedLists),
@@ -419,6 +434,7 @@ export default function Home() {
         getBusiness(tenantId).catch(() => null),
         currentUser().catch(() => null),
         getStorefront(tenantId).catch(() => null),
+        lowStock(tenantId).catch(() => []),
       ]);
 
       setProducts(freshProducts);
@@ -429,6 +445,7 @@ export default function Home() {
       cacheCategories(tenantId, freshCategories);
       setSales(freshSales);
       setDailyStats(freshDaily);
+      setRunningOut(freshLowStock);
       setExpenseCategories(freshExpCats.categories);
       if (freshExpCats.categories.length > 0 && !expenseCategoryId) {
         setExpenseCategoryId(freshExpCats.categories[0].id);
@@ -763,6 +780,72 @@ export default function Home() {
     );
   };
 
+  const handleBatchPublish = async (shouldPublish: boolean) => {
+    if (!activeBusiness || selectedProductIds.size === 0) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSavingBatch(true);
+    try {
+      const ids = Array.from(selectedProductIds);
+      for (const id of ids) {
+        if (shouldPublish) {
+          await publishProduct(activeBusiness.id, id);
+        } else {
+          await unpublishProduct(activeBusiness.id, id);
+        }
+      }
+      const refreshed = await listProducts(activeBusiness.id);
+      setProducts(refreshed);
+      cacheProducts(activeBusiness.id, refreshed);
+      setSelectedProductIds(new Set());
+      showToast(`${shouldPublish ? "Published" : "Unpublished"} ${ids.length} item(s).`);
+    } catch {
+      showToast("Could not update batch visibility.");
+    } finally {
+      setSavingBatch(false);
+    }
+  };
+
+  const handleToggleProductPublish = async (product: Product) => {
+    if (!activeBusiness) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      const updated = product.is_published
+        ? await unpublishProduct(activeBusiness.id, product.id)
+        : await publishProduct(activeBusiness.id, product.id);
+      setProducts((current) => current.map((p) => (p.id === updated.id ? updated : p)));
+      cacheProducts(
+        activeBusiness.id,
+        products.map((p) => (p.id === updated.id ? updated : p)),
+      );
+      showToast(
+        updated.is_published
+          ? `"${product.name}" is now live in your shop.`
+          : `"${product.name}" is now hidden from shop.`,
+      );
+    } catch {
+      showToast("Could not update item visibility.");
+    }
+  };
+
+  const handleShareProduct = async (product: Product) => {
+    if (!activeBusiness) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const priceStr = formatMoney(product.effective_normal_price ?? product.selling_price);
+    try {
+      const sheet = await productShareSheet(activeBusiness.id, product.id);
+      const shareUrl = sheet.public_url || sheet.whatsapp_url;
+      const message = `Check out ${product.name} at ${activeBusiness.name}: ${priceStr}${shareUrl ? `\n${shareUrl}` : ""}`;
+      await Share.share({
+        title: product.name,
+        message,
+        url: sheet.public_url || undefined,
+      });
+    } catch {
+      const message = `${product.name} at ${activeBusiness.name}: ${priceStr}`;
+      await Share.share({ message });
+    }
+  };
+
   const handleSaveProductEdit = async () => {
     if (!activeBusiness || !editingProduct) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1039,6 +1122,26 @@ export default function Home() {
       showToast("Could not update business details.");
     } finally {
       setSavingBusiness(false);
+    }
+  };
+
+  const handleUpdateProfile = async () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSavingProfile(true);
+    try {
+      const updated = await updateProfile({
+        first_name: editFirstName.trim(),
+        last_name: editLastName.trim() || undefined,
+        phone: editPhone.trim() || undefined,
+        email: editEmail.trim() || undefined,
+      });
+      setProfile(updated);
+      setShowProfileModal(false);
+      showToast("Profile updated successfully!");
+    } catch {
+      showToast("Could not update profile.");
+    } finally {
+      setSavingProfile(false);
     }
   };
 
@@ -1427,6 +1530,24 @@ export default function Home() {
               </View>
 
               <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>On the Shelf</Text>
+                <Text style={styles.kpiValue}>{products.length}</Text>
+                <Text style={styles.kpiMeta}>Catalog Items</Text>
+              </View>
+            </View>
+
+            <View style={styles.kpiRow}>
+              <View style={[styles.kpiCard, runningOut.length > 0 && styles.kpiCardWarn]}>
+                <Text style={styles.kpiLabel}>Running Out</Text>
+                <Text style={[styles.kpiValue, runningOut.length > 0 && styles.kpiValueWarn]}>
+                  {runningOut.length}
+                </Text>
+                <Text style={styles.kpiMeta}>
+                  {runningOut.length > 0 ? "Restock needed" : "Fully stocked"}
+                </Text>
+              </View>
+
+              <View style={styles.kpiCard}>
                 <Text style={styles.kpiLabel}>Pending Orders</Text>
                 <Text style={styles.kpiValue}>{pendingListsCount}</Text>
                 <Text style={styles.kpiMeta}>Customer Lists</Text>
@@ -1486,6 +1607,42 @@ export default function Home() {
                 <Text style={styles.actionTileDesc}>WhatsApp Catalog</Text>
               </Pressable>
             </View>
+
+            {/* Running Out / Low Stock Alert Section */}
+            {runningOut.length > 0 && (
+              <View style={styles.lowStockSection}>
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={styles.lowStockSectionTitle}>Running Out of Stock</Text>
+                  <View style={styles.lowStockBadge}>
+                    <Text style={styles.lowStockBadgeText}>{runningOut.length} urgent</Text>
+                  </View>
+                </View>
+                {runningOut.map((ro) => {
+                  const matchProduct = products.find((p) => p.id === ro.product_id);
+                  return (
+                    <View key={ro.product_id} style={styles.lowStockRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.lowStockName}>{ro.product_name}</Text>
+                        <Text style={styles.lowStockQty}>
+                          Only {ro.quantity_on_hand} left on shelf
+                        </Text>
+                      </View>
+                      {matchProduct && (
+                        <Pressable
+                          style={styles.lowStockRestockBtn}
+                          onPress={() => {
+                            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setRestockProduct(matchProduct);
+                          }}
+                        >
+                          <Text style={styles.lowStockRestockBtnText}>Restock</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            )}
 
             {/* Recent Sales Overview */}
             <View style={styles.sectionHeaderRow}>
@@ -1799,7 +1956,27 @@ export default function Home() {
                             </Pressable>
 
                             <View style={styles.productInfo}>
-                              <Text style={styles.productName}>{item.name}</Text>
+                              <View style={styles.productNameRow}>
+                                <Text style={styles.productName}>{item.name}</Text>
+                                <Pressable
+                                  style={[
+                                    styles.itemPublishBadge,
+                                    item.is_published ? styles.itemPublishLive : styles.itemPublishDraft,
+                                  ]}
+                                  onPress={() => handleToggleProductPublish(item)}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.itemPublishBadgeText,
+                                      item.is_published
+                                        ? styles.itemPublishBadgeTextLive
+                                        : styles.itemPublishBadgeTextDraft,
+                                    ]}
+                                  >
+                                    {item.is_published ? "LIVE" : "DRAFT"}
+                                  </Text>
+                                </Pressable>
+                              </View>
                               <View style={styles.priceRow}>
                                 <Text style={styles.normalPrice}>
                                   {formatMoney(item.effective_normal_price ?? item.selling_price)}
@@ -1826,6 +2003,13 @@ export default function Home() {
                               }}
                             >
                               <Text style={styles.stockBtnText}>Restock</Text>
+                            </Pressable>
+
+                            <Pressable
+                              style={styles.shareBtn}
+                              onPress={() => handleShareProduct(item)}
+                            >
+                              <ShareIcon size={14} color="#38bdf8" />
                             </Pressable>
 
                             <Pressable
@@ -1867,6 +2051,20 @@ export default function Home() {
               <View style={styles.batchActionBar}>
                 <Text style={styles.batchCountText}>{selectedProductIds.size} selected</Text>
                 <View style={styles.batchBtnRow}>
+                  <Pressable
+                    style={styles.batchBtn}
+                    onPress={() => handleBatchPublish(true)}
+                  >
+                    <Text style={styles.batchBtnText}>Publish</Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.batchBtn}
+                    onPress={() => handleBatchPublish(false)}
+                  >
+                    <Text style={styles.batchBtnText}>Hide</Text>
+                  </Pressable>
+
                   <Pressable
                     style={styles.batchBtn}
                     onPress={() =>
@@ -2336,12 +2534,28 @@ export default function Home() {
                   {profile?.first_name} {profile?.last_name ?? ""}
                 </Text>
                 <Text style={styles.userProfilePhone}>{profile?.phone ?? "No phone set"}</Text>
+                {profile?.email && (
+                  <Text style={styles.userProfileEmail}>{profile.email}</Text>
+                )}
                 <View style={styles.roleBadgeWrap}>
                   <Text style={styles.roleBadgeText}>
                     {activeBusiness?.name} - {businessDetails?.phone ? "Online Stall" : "Active Shop"}
                   </Text>
                 </View>
               </View>
+              <Pressable
+                style={styles.editProfileBtn}
+                onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setEditFirstName(profile?.first_name ?? "");
+                  setEditLastName(profile?.last_name ?? "");
+                  setEditPhone(profile?.phone ?? "");
+                  setEditEmail(profile?.email ?? "");
+                  setShowProfileModal(true);
+                }}
+              >
+                <Text style={styles.editProfileBtnText}>Edit</Text>
+              </Pressable>
             </View>
 
             {/* Everything in AHIA Grid */}
@@ -3755,6 +3969,68 @@ export default function Home() {
                   <ActivityIndicator color="#ffffff" size="small" />
                 ) : (
                   <Text style={styles.modalSaveText}>Change Password</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit User Profile Modal */}
+      <Modal visible={showProfileModal} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Edit Your Profile</Text>
+            <Text style={styles.modalSubtitle}>Update your personal account details</Text>
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder="First Name"
+              placeholderTextColor="#8a928e"
+              value={editFirstName}
+              onChangeText={setEditFirstName}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Last Name"
+              placeholderTextColor="#8a928e"
+              value={editLastName}
+              onChangeText={setEditLastName}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Phone Number"
+              placeholderTextColor="#8a928e"
+              value={editPhone}
+              onChangeText={setEditPhone}
+              keyboardType="phone-pad"
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Email Address"
+              placeholderTextColor="#8a928e"
+              value={editEmail}
+              onChangeText={setEditEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={styles.modalCancelBtn}
+                onPress={() => setShowProfileModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={styles.modalSaveBtn}
+                onPress={handleUpdateProfile}
+                disabled={savingProfile || !editFirstName.trim()}
+              >
+                {savingProfile ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Save Profile</Text>
                 )}
               </Pressable>
             </View>
@@ -5395,5 +5671,116 @@ const styles = StyleSheet.create({
   shopOptionNameActive: {
     color: "#4ade80",
     fontWeight: "700",
+  },
+  kpiCardWarn: {
+    borderColor: "#78350f",
+  },
+  kpiValueWarn: {
+    color: "#f59e0b",
+  },
+  lowStockSection: {
+    backgroundColor: "#161b22",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#78350f",
+    padding: 14,
+    marginBottom: 16,
+  },
+  lowStockSectionTitle: {
+    color: "#f59e0b",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  lowStockBadge: {
+    backgroundColor: "#78350f",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  lowStockBadgeText: {
+    color: "#fde047",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  lowStockRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#21262d",
+  },
+  lowStockName: {
+    color: "#f0f6fc",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  lowStockQty: {
+    color: "#8b949e",
+    fontSize: 11,
+    marginTop: 2,
+  },
+  lowStockRestockBtn: {
+    backgroundColor: "#064e3b",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  lowStockRestockBtnText: {
+    color: "#4ade80",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  productNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  itemPublishBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  itemPublishLive: {
+    backgroundColor: "#064e3b",
+  },
+  itemPublishDraft: {
+    backgroundColor: "#21262d",
+  },
+  itemPublishBadgeText: {
+    fontSize: 9,
+    fontWeight: "700",
+  },
+  itemPublishBadgeTextLive: {
+    color: "#4ade80",
+  },
+  itemPublishBadgeTextDraft: {
+    color: "#8b949e",
+  },
+  shareBtn: {
+    padding: 6,
+    backgroundColor: "#075985",
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  userProfileEmail: {
+    color: "#8b949e",
+    fontSize: 12,
+    marginTop: 1,
+  },
+  editProfileBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#21262d",
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#30363d",
+    alignSelf: "flex-start",
+  },
+  editProfileBtnText: {
+    color: "#f0f6fc",
+    fontSize: 12,
+    fontWeight: "600",
   },
 });
