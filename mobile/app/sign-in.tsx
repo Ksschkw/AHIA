@@ -43,8 +43,17 @@ export default function SignIn() {
         onChange={setIdentifier}
         placeholder="0803 123 4567"
         keyboardType="phone-pad"
+        autoComplete="username"
+        textContentType="username"
       />
-      <CredentialField label="Password" value={password} onChange={setPassword} secret />
+      <CredentialField
+        label="Password"
+        value={password}
+        onChange={setPassword}
+        secret
+        autoComplete="current-password"
+        textContentType="password"
+      />
       {problem ? <Text style={styles.problem}>{problem}</Text> : null}
       <Pressable
         style={[styles.button, busy ? styles.buttonBusy : null]}

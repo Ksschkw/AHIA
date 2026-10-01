@@ -1683,6 +1683,9 @@ export default function Home() {
               secureTextEntry
               value={oldPassword}
               onChangeText={setOldPassword}
+              autoComplete="current-password"
+              textContentType="password"
+              importantForAutofill="yes"
             />
             <TextInput
               style={styles.modalInput}
@@ -1691,6 +1694,9 @@ export default function Home() {
               secureTextEntry
               value={newPassword}
               onChangeText={setNewPassword}
+              autoComplete="new-password"
+              textContentType="newPassword"
+              importantForAutofill="yes"
             />
             <View style={styles.modalButtons}>
               <Pressable style={styles.modalCancelBtn} onPress={() => setShowPasswordModal(false)}>

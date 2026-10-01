@@ -47,12 +47,21 @@ export default function Register() {
       <Text style={styles.hint}>
         One account, however many businesses you run. You will give each business its own name next.
       </Text>
-      <CredentialField label="First name" value={firstName} onChange={setFirstName} placeholder="Ada" />
+      <CredentialField
+        label="First name"
+        value={firstName}
+        onChange={setFirstName}
+        placeholder="Ada"
+        autoComplete="name-given"
+        textContentType="givenName"
+      />
       <CredentialField
         label="Last name (optional)"
         value={lastName}
         onChange={setLastName}
         placeholder="Obi"
+        autoComplete="name-family"
+        textContentType="familyName"
       />
       <CredentialField
         label="Phone number"
@@ -60,9 +69,25 @@ export default function Register() {
         onChange={setPhone}
         placeholder="0803 123 4567"
         keyboardType="phone-pad"
+        autoComplete="tel"
+        textContentType="telephoneNumber"
       />
-      <CredentialField label="Password" value={password} onChange={setPassword} secret />
-      <CredentialField label="Password again" value={again} onChange={setAgain} secret />
+      <CredentialField
+        label="Password"
+        value={password}
+        onChange={setPassword}
+        secret
+        autoComplete="new-password"
+        textContentType="newPassword"
+      />
+      <CredentialField
+        label="Password again"
+        value={again}
+        onChange={setAgain}
+        secret
+        autoComplete="new-password"
+        textContentType="newPassword"
+      />
       {mismatch ? <Text style={styles.problem}>The two passwords do not match.</Text> : null}
       {problem ? <Text style={styles.problem}>{problem}</Text> : null}
       <Pressable

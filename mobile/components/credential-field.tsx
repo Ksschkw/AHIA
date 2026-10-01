@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  type TextInputProps,
+  View,
+} from "react-native";
 
 /**
  * A field, with a way to look at what was typed.
@@ -15,6 +22,9 @@ export function CredentialField({
   secret = false,
   keyboardType = "default",
   placeholder,
+  autoComplete,
+  textContentType,
+  importantForAutofill = "yes",
 }: {
   label: string;
   value: string;
@@ -22,8 +32,20 @@ export function CredentialField({
   secret?: boolean;
   keyboardType?: "default" | "phone-pad" | "email-address";
   placeholder?: string;
+  autoComplete?: TextInputProps["autoComplete"];
+  textContentType?: TextInputProps["textContentType"];
+  importantForAutofill?: TextInputProps["importantForAutofill"];
 }) {
   const [revealed, setRevealed] = useState(false);
+
+  // Derive sensible defaults for native password managers (Google Password Manager, Samsung Pass, etc.)
+  const derivedAutoComplete =
+    autoComplete ??
+    (secret ? "current-password" : keyboardType === "phone-pad" ? "tel" : "username");
+  const derivedTextContentType =
+    textContentType ??
+    (secret ? "password" : keyboardType === "phone-pad" ? "telephoneNumber" : "username");
+
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>{label}</Text>
@@ -38,13 +60,15 @@ export function CredentialField({
           autoCorrect={false}
           placeholder={placeholder}
           accessibilityLabel={label}
+          autoComplete={derivedAutoComplete}
+          textContentType={derivedTextContentType}
+          importantForAutofill={importantForAutofill}
         />
         {secret ? (
           <Pressable
             style={styles.reveal}
             onPress={() => setRevealed((current) => !current)}
             accessibilityRole="button"
-            // Named for a screen reader, and for whoever is debugging the screen at midnight.
             accessibilityLabel={revealed ? `Hide ${label}` : `Show ${label}`}
           >
             <Text style={styles.revealText}>{revealed ? "Hide" : "Show"}</Text>
