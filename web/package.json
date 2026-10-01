@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "typecheck": "tsc --noEmit",
     "api:types": "openapi-typescript openapi.json -o lib/api-schema.d.ts",
     "start": "next start"
   },

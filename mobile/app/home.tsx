@@ -45,12 +45,16 @@ import {
   currentUser,
   getBusiness,
   updateBusiness,
+  getStorefront,
+  updateStorefront,
+  changePassword,
   type Category,
   type CustomerList,
   type CustomerListLine,
   type Product,
   type TenantSummary,
   type TenantDetails,
+  type StorefrontDetails,
   type SaleSummary,
   type DailySalesSummary,
   type ExpenseCategory,
@@ -213,6 +217,24 @@ export default function Home() {
   const [inviteRole, setInviteRole] = useState<MemberRole>("SALES");
   const [savingInvite, setSavingInvite] = useState(false);
 
+  const [storefrontDetails, setStorefrontDetails] = useState<StorefrontDetails | null>(null);
+  const [showStorefrontModal, setShowStorefrontModal] = useState(false);
+  const [storefrontHeadline, setStorefrontHeadline] = useState("");
+  const [storefrontDesc, setStorefrontDesc] = useState("");
+  const [storefrontPhone, setStorefrontPhone] = useState("");
+  const [savingStorefront, setSavingStorefront] = useState(false);
+
+  const [showBusinessModal, setShowBusinessModal] = useState(false);
+  const [editBizName, setEditBizName] = useState("");
+  const [editBizAddress, setEditBizAddress] = useState("");
+  const [editBizPhone, setEditBizPhone] = useState("");
+  const [savingBusiness, setSavingBusiness] = useState(false);
+
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+
   const [showShopModal, setShowShopModal] = useState(false);
 
   const showToast = (msg: string) => {
@@ -242,6 +264,7 @@ export default function Home() {
         freshInvs,
         bDetails,
         uProfile,
+        sDetails,
       ] = await Promise.all([
         listProducts(tenantId).catch(() => cached),
         listCustomerLists(tenantId).catch(() => []),
@@ -253,6 +276,7 @@ export default function Home() {
         listInvitations(tenantId).catch(() => []),
         getBusiness(tenantId).catch(() => null),
         currentUser().catch(() => null),
+        getStorefront(tenantId).catch(() => null),
       ]);
 
       setProducts(freshProducts);
@@ -269,6 +293,7 @@ export default function Home() {
       setInvitations(freshInvs);
       setBusinessDetails(bDetails);
       setProfile(uProfile);
+      setStorefrontDetails(sDetails);
       setProblem(null);
     } catch {
       if (cached.length === 0) {
@@ -497,6 +522,88 @@ export default function Home() {
     } finally {
       setSavingInvite(false);
     }
+  };
+
+  const handleUpdateStorefront = async () => {
+    if (!activeBusiness) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSavingStorefront(true);
+    try {
+      const updated = await updateStorefront(activeBusiness.id, {
+        headline: storefrontHeadline.trim() || null,
+        description: storefrontDesc.trim() || null,
+        contact_phone: storefrontPhone.trim() || null,
+      });
+      setStorefrontDetails(updated);
+      setShowStorefrontModal(false);
+      showToast("Storefront appearance updated!");
+    } catch {
+      showToast("Could not update storefront.");
+    } finally {
+      setSavingStorefront(false);
+    }
+  };
+
+  const handleUpdateBusiness = async () => {
+    if (!activeBusiness) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSavingBusiness(true);
+    try {
+      const updated = await updateBusiness(activeBusiness.id, {
+        name: editBizName.trim() || undefined,
+        address: editBizAddress.trim() || undefined,
+        phone: editBizPhone.trim() || undefined,
+      });
+      setBusinessDetails(updated);
+      setShowBusinessModal(false);
+      showToast("Business profile updated!");
+    } catch {
+      showToast("Could not update business details.");
+    } finally {
+      setSavingBusiness(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!oldPassword.trim() || !newPassword.trim()) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSavingPassword(true);
+    try {
+      await changePassword(oldPassword, newPassword);
+      setShowPasswordModal(false);
+      setOldPassword("");
+      setNewPassword("");
+      showToast("Password updated successfully!");
+    } catch {
+      showToast("Could not change password. Check old password.");
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const handleRemoveMember = (member: Member) => {
+    if (!activeBusiness) return;
+    Alert.alert(
+      "Remove Staff Member?",
+      `Are you sure you want to remove ${member.first_name} from the business?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            try {
+              await removeMember(activeBusiness.id, member.id);
+              setMembers((curr) => curr.filter((m) => m.id !== member.id));
+              showToast(`Removed ${member.first_name}`);
+            } catch {
+              showToast("Could not remove staff member.");
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleSaveLinePrice = async () => {
@@ -1054,9 +1161,23 @@ export default function Home() {
           <ScrollView style={styles.scrollContent}>
             {/* Storefront Studio Card */}
             <View style={styles.moreCard}>
-              <Text style={styles.moreCardTitle}>Storefront Studio</Text>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.moreCardTitle}>Storefront Studio</Text>
+                <Pressable
+                  style={styles.addStaffBtn}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setStorefrontHeadline(storefrontDetails?.headline ?? "");
+                    setStorefrontDesc(storefrontDetails?.description ?? "");
+                    setStorefrontPhone(storefrontDetails?.contact_phone ?? "");
+                    setShowStorefrontModal(true);
+                  }}
+                >
+                  <Text style={styles.addStaffBtnText}>Edit</Text>
+                </Pressable>
+              </View>
               <Text style={styles.moreCardDesc}>
-                Your public shop catalog is live on AHIA. Customers can build lists and send orders directly to your WhatsApp.
+                {storefrontDetails?.headline || "Your public shop catalog is live on AHIA."}
               </Text>
               <Text style={styles.storefrontUrl}>
                 https://ahia.app/shop/{activeBusiness?.slug ?? "stall"}
@@ -1082,20 +1203,58 @@ export default function Home() {
               </View>
               {members.map((m) => (
                 <View key={m.id} style={styles.memberRow}>
-                  <View>
+                  <View style={{ flex: 1 }}>
                     <Text style={styles.memberName}>{m.first_name} {m.last_name ?? ""}</Text>
                     <Text style={styles.memberRole}>{m.role} - {m.status.toUpperCase()}</Text>
                   </View>
+                  <Pressable
+                    style={styles.removeStaffBtn}
+                    onPress={() => handleRemoveMember(m)}
+                  >
+                    <Text style={styles.removeStaffBtnText}>Remove</Text>
+                  </Pressable>
                 </View>
               ))}
             </View>
 
             {/* Business Info */}
             <View style={styles.moreCard}>
-              <Text style={styles.moreCardTitle}>Business Profile</Text>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.moreCardTitle}>Business Profile</Text>
+                <Pressable
+                  style={styles.addStaffBtn}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setEditBizName(businessDetails?.name ?? activeBusiness?.name ?? "");
+                    setEditBizAddress(businessDetails?.address ?? "");
+                    setEditBizPhone(businessDetails?.phone ?? "");
+                    setShowBusinessModal(true);
+                  }}
+                >
+                  <Text style={styles.addStaffBtnText}>Edit</Text>
+                </Pressable>
+              </View>
               <Text style={styles.profileDetail}>Name: {businessDetails?.name ?? activeBusiness?.name}</Text>
               <Text style={styles.profileDetail}>Address: {businessDetails?.address ?? "Alaba International Market"}</Text>
               <Text style={styles.profileDetail}>Phone: {businessDetails?.phone ?? "Not set"}</Text>
+            </View>
+
+            {/* User Account & Security */}
+            <View style={styles.moreCard}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.moreCardTitle}>Account & Security</Text>
+                <Pressable
+                  style={styles.addStaffBtn}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowPasswordModal(true);
+                  }}
+                >
+                  <Text style={styles.addStaffBtnText}>Change PIN</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.profileDetail}>User: {profile?.first_name} {profile?.last_name ?? ""}</Text>
+              <Text style={styles.profileDetail}>Phone: {profile?.phone ?? "Not set"}</Text>
             </View>
 
             {/* Sign Out Action */}
@@ -1418,6 +1577,141 @@ export default function Home() {
         </View>
       </Modal>
 
+      {/* Storefront Customization Modal */}
+      <Modal visible={showStorefrontModal} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Customize Storefront</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Headline (e.g. Best Electricals in Alaba)"
+              placeholderTextColor="#8a928e"
+              value={storefrontHeadline}
+              onChangeText={setStorefrontHeadline}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Description (e.g. Wholesale generators, cables & fittings)"
+              placeholderTextColor="#8a928e"
+              value={storefrontDesc}
+              onChangeText={setStorefrontDesc}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="WhatsApp / Contact Phone"
+              placeholderTextColor="#8a928e"
+              keyboardType="phone-pad"
+              value={storefrontPhone}
+              onChangeText={setStorefrontPhone}
+            />
+            <View style={styles.modalButtons}>
+              <Pressable style={styles.modalCancelBtn} onPress={() => setShowStorefrontModal(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={styles.modalSaveBtn}
+                onPress={handleUpdateStorefront}
+                disabled={savingStorefront}
+              >
+                {savingStorefront ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Save Storefront</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Business Profile Modal */}
+      <Modal visible={showBusinessModal} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Edit Business / Stall</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Shop Name"
+              placeholderTextColor="#8a928e"
+              value={editBizName}
+              onChangeText={setEditBizName}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Market Stall / Address"
+              placeholderTextColor="#8a928e"
+              value={editBizAddress}
+              onChangeText={setEditBizAddress}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Official Phone Number"
+              placeholderTextColor="#8a928e"
+              keyboardType="phone-pad"
+              value={editBizPhone}
+              onChangeText={setEditBizPhone}
+            />
+            <View style={styles.modalButtons}>
+              <Pressable style={styles.modalCancelBtn} onPress={() => setShowBusinessModal(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={styles.modalSaveBtn}
+                onPress={handleUpdateBusiness}
+                disabled={savingBusiness}
+              >
+                {savingBusiness ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Update Stall</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Change Password Modal */}
+      <Modal visible={showPasswordModal} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Update Security PIN / Password</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Current Password"
+              placeholderTextColor="#8a928e"
+              secureTextEntry
+              value={oldPassword}
+              onChangeText={setOldPassword}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="New Password (min 8 chars)"
+              placeholderTextColor="#8a928e"
+              secureTextEntry
+              value={newPassword}
+              onChangeText={setNewPassword}
+            />
+            <View style={styles.modalButtons}>
+              <Pressable style={styles.modalCancelBtn} onPress={() => setShowPasswordModal(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={styles.modalSaveBtn}
+                onPress={handleChangePassword}
+                disabled={savingPassword}
+              >
+                {savingPassword ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Change Password</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Switch Business Modal */}
       <Modal visible={showShopModal} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
@@ -1447,6 +1741,15 @@ export default function Home() {
                 </Text>
               </Pressable>
             ))}
+            <Pressable
+              style={[styles.modalSaveBtn, { marginTop: 12, marginBottom: 8 }]}
+              onPress={() => {
+                setShowShopModal(false);
+                router.push("/join" as any);
+              }}
+            >
+              <Text style={styles.modalSaveText}>+ Join with Invite Code</Text>
+            </Pressable>
             <Pressable style={styles.modalCancelBtn} onPress={() => setShowShopModal(false)}>
               <Text style={styles.modalCancelText}>Close</Text>
             </Pressable>
@@ -2028,6 +2331,9 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   memberRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: "#21262d",
@@ -2040,6 +2346,17 @@ const styles = StyleSheet.create({
   memberRole: {
     color: "#8b949e",
     fontSize: 12,
+  },
+  removeStaffBtn: {
+    backgroundColor: "#7f1d1d",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  removeStaffBtnText: {
+    color: "#fca5a5",
+    fontSize: 11,
+    fontWeight: "700",
   },
   profileDetail: {
     color: "#8b949e",

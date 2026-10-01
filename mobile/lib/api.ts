@@ -473,3 +473,96 @@ export function updateBusiness(
     body: data,
   });
 }
+
+export function updateCategory(
+  tenantId: string,
+  categoryId: string,
+  data: {
+    name?: string;
+    description?: string | null;
+    parent_id?: string | null;
+    default_normal_price?: string | null;
+    default_wholesale_price?: string | null;
+    default_pieces_per_pack?: number | null;
+  },
+): Promise<Category> {
+  return request<Category>(`/api/v1/tenants/${tenantId}/categories/${categoryId}`, {
+    method: "PATCH",
+    body: data,
+  });
+}
+
+export interface StorefrontDetails {
+  id: string;
+  tenant_id: string;
+  headline: string | null;
+  description: string | null;
+  contact_phone: string | null;
+  theme_color: string | null;
+  theme_bg_color: string | null;
+  theme_bg_image: string | null;
+  closing_statement: string | null;
+  is_published: boolean;
+}
+
+export function getStorefront(tenantId: string): Promise<StorefrontDetails> {
+  return request<StorefrontDetails>(`/api/v1/tenants/${tenantId}/storefront`);
+}
+
+export function updateStorefront(
+  tenantId: string,
+  data: {
+    headline?: string | null;
+    description?: string | null;
+    contact_phone?: string | null;
+    theme_color?: string | null;
+    theme_bg_color?: string | null;
+    theme_bg_image?: string | null;
+    closing_statement?: string | null;
+  },
+): Promise<StorefrontDetails> {
+  return request<StorefrontDetails>(`/api/v1/tenants/${tenantId}/storefront`, {
+    method: "PATCH",
+    body: data,
+  });
+}
+
+export function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  return request<void>("/api/v1/auth/password", {
+    method: "POST",
+    body: {
+      current_password: currentPassword,
+      new_password: newPassword,
+    },
+  });
+}
+
+export interface PendingInvitation {
+  id: string;
+  tenant_id: string;
+  tenant_name: string;
+  role: MemberRole;
+  role_name: string;
+  invited_phone: string | null;
+  invited_email: string | null;
+  created_at: string;
+}
+
+export interface AcceptedInvitation {
+  membership_id: string;
+  tenant_id: string;
+  tenant_name: string;
+  role: MemberRole;
+  role_name: string;
+}
+
+export function listMyInvitations(): Promise<PendingInvitation[]> {
+  return request<PendingInvitation[]>("/api/v1/invitations");
+}
+
+export function acceptInvitation(token: string): Promise<AcceptedInvitation> {
+  return request<AcceptedInvitation>("/api/v1/invitations/accept", {
+    method: "POST",
+    body: { token },
+  });
+}
