@@ -1,8 +1,8 @@
 import * as SQLite from "expo-sqlite";
-import { type Product, recordSale } from "./api";
+import { type Product, type Category, type CustomerList, recordSale } from "./api";
 
 /**
- * Local SQLite storage for offline shelf reading and durable sale outbox.
+ * Local SQLite storage for offline shelf reading, categories, customer lists, and durable sale outbox.
  *
  * Designed for market connectivity: a trader can view cached shelf products and record
  * a "sell one" transaction even when mobile network stalls. Pending transactions are
@@ -26,6 +26,25 @@ function getDb(): SQLite.SQLiteDatabase {
         effective_wholesale_price TEXT,
         is_published INTEGER NOT NULL,
         is_active INTEGER NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS cached_categories (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        slug TEXT NOT NULL,
+        parent_id TEXT,
+        position INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS cached_customer_lists (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        customer_name TEXT,
+        customer_phone TEXT,
+        status TEXT NOT NULL,
+        priced_total TEXT,
+        data_json TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
       CREATE TABLE IF NOT EXISTS sale_outbox (
@@ -134,6 +153,91 @@ export function getCachedProducts(tenantId: string): Product[] {
       is_active: r.is_active === 1,
       is_published: r.is_published === 1,
     }));
+  } catch {
+    return [];
+  }
+}
+
+export function cacheCategories(tenantId: string, categories: Category[]): void {
+  try {
+    const db = getDb();
+    const now = new Date().toISOString();
+    db.withTransactionSync(() => {
+      for (const c of categories) {
+        db.runSync(
+          `INSERT OR REPLACE INTO cached_categories (id, tenant_id, name, slug, parent_id, position, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [c.id, tenantId, c.name, c.slug, c.parent_id ?? null, c.position ?? 0, now],
+        );
+      }
+    });
+  } catch {
+    // Non-fatal if local cache write fails
+  }
+}
+
+export function getCachedCategories(tenantId: string): Category[] {
+  try {
+    const db = getDb();
+    const rows = db.getAllSync<{
+      id: string;
+      tenant_id: string;
+      name: string;
+      slug: string;
+      parent_id: string | null;
+      position: number;
+    }>(
+      "SELECT id, tenant_id, name, slug, parent_id, position FROM cached_categories WHERE tenant_id = ? ORDER BY position ASC, name ASC",
+      [tenantId],
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      tenant_id: r.tenant_id,
+      name: r.name,
+      slug: r.slug,
+      parent_id: r.parent_id,
+      position: r.position,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export function cacheCustomerLists(tenantId: string, lists: CustomerList[]): void {
+  try {
+    const db = getDb();
+    const now = new Date().toISOString();
+    db.withTransactionSync(() => {
+      for (const l of lists) {
+        db.runSync(
+          `INSERT OR REPLACE INTO cached_customer_lists (id, tenant_id, customer_name, customer_phone, status, priced_total, data_json, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            l.id,
+            tenantId,
+            l.customer_name ?? null,
+            l.customer_phone ?? null,
+            l.status,
+            l.priced_total ?? null,
+            JSON.stringify(l),
+            now,
+          ],
+        );
+      }
+    });
+  } catch {
+    // Non-fatal if local cache write fails
+  }
+}
+
+export function getCachedCustomerLists(tenantId: string): CustomerList[] {
+  try {
+    const db = getDb();
+    const rows = db.getAllSync<{ data_json: string }>(
+      "SELECT data_json FROM cached_customer_lists WHERE tenant_id = ? ORDER BY updated_at DESC",
+      [tenantId],
+    );
+    return rows.map((r) => JSON.parse(r.data_json) as CustomerList);
   } catch {
     return [];
   }

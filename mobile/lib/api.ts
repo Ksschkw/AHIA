@@ -323,6 +323,34 @@ export function confirmCustomerList(tenantId: string, listId: string): Promise<C
   });
 }
 
+export interface PublicRequestLine {
+  product_slug?: string | null;
+  free_text?: string | null;
+  quantity: string;
+  unit?: string;
+  note?: string | null;
+  parent_position?: number | null;
+}
+
+export interface PublicRequestPayload {
+  customer_phone: string;
+  customer_name?: string | null;
+  lines: PublicRequestLine[];
+}
+
+export function submitCustomerList(
+  tenantSlug: string,
+  payload: PublicRequestPayload,
+): Promise<{ request_id: string; line_count: number; message: string; list_path: string }> {
+  return request<{ request_id: string; line_count: number; message: string; list_path: string }>(
+    `/shop/${encodeURIComponent(tenantSlug)}/requests`,
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+}
+
 export function createCategory(
   tenantId: string,
   data: {

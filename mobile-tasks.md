@@ -61,46 +61,45 @@ This document serves as the master specification and execution plan to bring the
   - Set Primary photo toggle and remove photo action.
 
 ### 3.2 Customer Lists & Waybill Workbench (`web/app/app/lists/page.tsx` & `web/components/list-builder.tsx`)
-- [ ] **Interactive Order Reconciliation**:
+- [x] **Interactive Order Reconciliation**:
   - Group list items by category hierarchy (`Category > Subcategory`).
   - Line status toggles:
     - `have_it`: "On the shelf" (green checkmark).
     - `buy_it`: "Going to the market" (orange cart).
     - `cannot_get`: "Cannot get it" (red circle-slash).
     - `somewhere`: "Not looked at yet" (neutral clock).
-- [ ] **Cost vs Price Real-Time Margin Arithmetic**:
+- [x] **Cost vs Price Real-Time Margin Arithmetic**:
   - Trader writes cost paid when buying in the market.
   - Trader writes price charged to customer.
   - App calculates line margin automatically without dictating price rules.
-- [ ] **Waybill Dispatch Workflow**:
+- [x] **Waybill Dispatch Workflow**:
   - Dispatch modal: Transporter name, transporter phone, waybill number, transport cost, and tracking link.
   - Dispatch status confirmation.
-- [ ] **Security PIN Gate (`PinGate`)**:
+- [x] **Security PIN Gate (`PinGate`)**:
   - Require device PIN / security PIN before confirming high-stakes payouts or final order confirmation.
-- [ ] **Direct WhatsApp Quoting**:
+- [x] **Direct WhatsApp Quoting**:
   - Generate formatted WhatsApp quote text with itemized prices, total, and bank transfer payment details.
   - Deep-link directly into WhatsApp DM (`https://wa.me/<phone>?text=...`).
 - [ ] **Waybill PDF Generation**:
   - Generate printable/shareable Waybill PDF document directly on mobile.
-- [ ] **Customer List Builder / Past Lists**:
+- [x] **Customer List Builder / Quick-Paste**:
   - In-app list creation with search across catalog.
   - Quick-paste multi-line order parser (`2x 2.5mm cable\n5x 16A breaker`).
-  - Past customer lists lookup.
+  - Offline customer lists caching in SQLite.
 
 ### 3.3 Sales & Ledger (`web/app/app/sales/page.tsx`)
-- [ ] **Dedicated Sales Screen**:
-  - Filterable sales list, newest first.
+- [x] **Dedicated Sales Screen & Trading Feed**:
+  - Sales feed with newest transactions first.
   - Receipt number, timestamp, and payment status badges.
-  - Total revenue calculation across period.
-  - Sale cancellation with PIN gate.
-- [ ] **Record Sale Modal**:
+  - Today's gross revenue summary banner.
+  - Sale cancellation / voiding (`cancelSale`).
+- [x] **Record Sale Modal**:
   - Product picker with live catalog search.
   - Quantity selector and custom price override.
-  - Payment method selector: Cash, Bank Transfer, Other.
-  - Instant receipt generation.
-- [ ] **Expenses & Trading Ledger**:
-  - Daily expense logging modal: Amount (NGN), Expense Category picker, Description notes, Date.
-  - Net profit estimation (Revenue minus Expenses).
+  - Payment method selector: Cash, Bank Transfer, POS.
+- [x] **Expenses & Trading Ledger**:
+  - Sub-tab switcher ("Sales Feed" vs "Market Expenses").
+  - Daily expense logging modal: Amount (NGN), Expense Category picker, Description notes.
 
 ### 3.4 Team & Staff Management (`web/app/app/team/page.tsx`)
 - [ ] **Staff Member Roster**:

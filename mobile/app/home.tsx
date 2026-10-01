@@ -78,6 +78,7 @@ import {
   recordSale,
   removeMember,
   sellOneProduct,
+  submitCustomerList,
   updateBusiness,
   updateCategory,
   updateProduct,
@@ -99,9 +100,13 @@ import {
   type UserProfile,
 } from "@/lib/api";
 import {
+  cacheCategories,
+  cacheCustomerLists,
   cacheProducts,
   enqueueOfflineSale,
   flushOutbox,
+  getCachedCategories,
+  getCachedCustomerLists,
   getCachedProducts,
   getPendingSalesCount,
 } from "@/lib/db";
@@ -126,6 +131,30 @@ function formatWaNumber(rawPhone: string | null | undefined): string | null {
     return "234" + digits;
   }
   return digits;
+}
+
+function parseQuickPaste(raw: string): Array<{ text: string; quantity: string }> {
+  return raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => {
+      const leadingMatch = line.match(/^(\d+)\s*(?:x\s*|\*|\s+|-)?\s*(.+)$/i);
+      if (leadingMatch && leadingMatch[2].trim().length > 0) {
+        return {
+          quantity: String(Math.max(1, parseInt(leadingMatch[1], 10))),
+          text: leadingMatch[2].trim(),
+        };
+      }
+      const trailingMatch = line.match(/^(.+?)\s*(?:-|\:|\s)\s*(\d+)\s*(?:pcs|pieces|pack|packs|ctn)?$/i);
+      if (trailingMatch && trailingMatch[1].trim().length > 0) {
+        return {
+          quantity: String(Math.max(1, parseInt(trailingMatch[2], 10))),
+          text: trailingMatch[1].trim(),
+        };
+      }
+      return { quantity: "1", text: line };
+    });
 }
 
 function groupCustomerListLines(lines: CustomerListLine[]) {
@@ -267,6 +296,13 @@ export default function Home() {
   const [pinConfirmList, setPinConfirmList] = useState<CustomerList | null>(null);
   const [pinValue, setPinValue] = useState("");
 
+  // Quick-Paste Customer Order Modal
+  const [showQuickPasteModal, setShowQuickPasteModal] = useState(false);
+  const [quickPastePhone, setQuickPastePhone] = useState("");
+  const [quickPasteName, setQuickPasteName] = useState("");
+  const [quickPasteText, setQuickPasteText] = useState("");
+  const [savingQuickPaste, setSavingQuickPaste] = useState(false);
+
   // Trading Ledger states
   const [tradingSubTab, setTradingSubTab] = useState<"sales" | "expenses">("sales");
   const [showRecordSaleModal, setShowRecordSaleModal] = useState(false);
@@ -316,9 +352,17 @@ export default function Home() {
 
   const loadData = useCallback(async (tenantId: string) => {
     const cached = getCachedProducts(tenantId);
+    const cachedCats = getCachedCategories(tenantId);
+    const cachedLists = getCachedCustomerLists(tenantId);
     if (cached.length > 0) {
       setProducts(cached);
       setLoading(false);
+    }
+    if (cachedCats.length > 0) {
+      setCategories(cachedCats);
+    }
+    if (cachedLists.length > 0) {
+      setCustomerLists(cachedLists);
     }
 
     const pending = getPendingSalesCount(tenantId);
@@ -339,8 +383,8 @@ export default function Home() {
         sDetails,
       ] = await Promise.all([
         listProducts(tenantId).catch(() => cached),
-        listCustomerLists(tenantId).catch(() => []),
-        listCategories(tenantId).catch(() => []),
+        listCustomerLists(tenantId).catch(() => cachedLists),
+        listCategories(tenantId).catch(() => cachedCats),
         listSales(tenantId).catch(() => []),
         dailySales(tenantId).catch(() => null),
         listExpenseCategories(tenantId).catch(() => ({ categories: [] })),
@@ -354,7 +398,9 @@ export default function Home() {
       setProducts(freshProducts);
       cacheProducts(tenantId, freshProducts);
       setCustomerLists(freshLists);
+      cacheCustomerLists(tenantId, freshLists);
       setCategories(freshCategories);
+      cacheCategories(tenantId, freshCategories);
       setSales(freshSales);
       setDailyStats(freshDaily);
       setExpenseCategories(freshExpCats.categories);
@@ -933,6 +979,52 @@ export default function Home() {
       showToast(`Order from ${confirmed.customer_name || confirmed.customer_phone} confirmed!`);
     } catch {
       showToast("Could not confirm order. Make sure all items have prices.");
+    }
+  };
+
+  const handleQuickPasteSubmit = async () => {
+    if (!activeBusiness) return;
+    if (!quickPastePhone.trim()) {
+      showToast("Customer phone number is required.");
+      return;
+    }
+    const parsed = parseQuickPaste(quickPasteText);
+    if (parsed.length === 0) {
+      showToast("Paste at least one line item (e.g. 2x 2.5mm cable).");
+      return;
+    }
+
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSavingQuickPaste(true);
+    try {
+      const lines = parsed.map((item) => {
+        const matchedProd = products.find(
+          (p) => p.name.toLowerCase() === item.text.toLowerCase()
+        );
+        return {
+          product_slug: matchedProd ? matchedProd.slug : null,
+          free_text: matchedProd ? null : item.text,
+          quantity: item.quantity,
+          unit: "piece",
+        };
+      });
+
+      await submitCustomerList(activeBusiness.slug, {
+        customer_phone: quickPastePhone.trim(),
+        customer_name: quickPasteName.trim() || null,
+        lines,
+      });
+
+      setShowQuickPasteModal(false);
+      setQuickPastePhone("");
+      setQuickPasteName("");
+      setQuickPasteText("");
+      showToast(`Order created with ${parsed.length} items!`);
+      await loadData(activeBusiness.id);
+    } catch {
+      showToast("Could not submit order. Check connection.");
+    } finally {
+      setSavingQuickPaste(false);
     }
   };
 
@@ -1607,6 +1699,35 @@ export default function Home() {
             data={customerLists}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listPadding}
+            ListHeaderComponent={
+              <View style={styles.listsHeaderWrap}>
+                <View>
+                  <Text style={styles.listsHeaderTitle}>Orders & Waybills</Text>
+                  <Text style={styles.listsHeaderSubtitle}>
+                    {customerLists.length} customer order{customerLists.length === 1 ? "" : "s"}
+                  </Text>
+                </View>
+                <Pressable
+                  style={styles.quickPasteBtn}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowQuickPasteModal(true);
+                  }}
+                >
+                  <PlusIcon size={12} color="#ffffff" />
+                  <Text style={styles.quickPasteBtnText}>Quick-Paste</Text>
+                </Pressable>
+              </View>
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyBox}>
+                <ListIcon size={32} color="#6e7681" />
+                <Text style={styles.emptyTitle}>No customer orders yet</Text>
+                <Text style={styles.emptySubtitle}>
+                  Tap "Quick-Paste" above to paste a rough WhatsApp order note and generate an itemized quote.
+                </Text>
+              </View>
+            }
             renderItem={({ item }) => {
               const sections = groupCustomerListLines(item.lines);
               const isConfirmed = item.status === "confirmed";
@@ -2660,6 +2781,82 @@ export default function Home() {
         </View>
       </Modal>
 
+      {/* Quick-Paste Order Modal */}
+      <Modal visible={showQuickPasteModal} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Quick-Paste Order</Text>
+            <Text style={styles.modalSubtitle}>
+              Paste a WhatsApp message or rough note. We will itemize each line automatically.
+            </Text>
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Customer Phone (e.g. 08012345678)"
+              placeholderTextColor="#8a928e"
+              keyboardType="phone-pad"
+              value={quickPastePhone}
+              onChangeText={setQuickPastePhone}
+            />
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Customer Name (optional)"
+              placeholderTextColor="#8a928e"
+              value={quickPasteName}
+              onChangeText={setQuickPasteName}
+            />
+
+            <Text style={styles.modalFieldLabel}>Order Note / Message</Text>
+            <TextInput
+              style={[styles.modalInput, { height: 120, textAlignVertical: "top" }]}
+              placeholder={"2x 2.5mm cable\n5x 16A breaker\n1 roll binding wire"}
+              placeholderTextColor="#8a928e"
+              multiline
+              value={quickPasteText}
+              onChangeText={setQuickPasteText}
+            />
+
+            {/* Live parse summary */}
+            {quickPasteText.trim().length > 0 && (
+              <View style={styles.quickPasteSummaryBox}>
+                <Text style={styles.quickPasteSummaryText}>
+                  Parsed: {parseQuickPaste(quickPasteText).length} item(s) found
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={styles.modalCancelBtn}
+                onPress={() => {
+                  setShowQuickPasteModal(false);
+                  setQuickPastePhone("");
+                  setQuickPasteName("");
+                  setQuickPasteText("");
+                }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.modalSaveBtn,
+                  (!quickPastePhone.trim() || !quickPasteText.trim()) && { opacity: 0.5 },
+                ]}
+                onPress={handleQuickPasteSubmit}
+                disabled={savingQuickPaste || !quickPastePhone.trim() || !quickPasteText.trim()}
+              >
+                {savingQuickPaste ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Create Order</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Record Custom Sale Modal */}
       <Modal visible={showRecordSaleModal} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
@@ -3672,6 +3869,49 @@ const styles = StyleSheet.create({
   listPadding: {
     padding: 16,
     paddingBottom: 80,
+  },
+  listsHeaderWrap: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  listsHeaderTitle: {
+    color: "#f0f6fc",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  listsHeaderSubtitle: {
+    color: "#8b949e",
+    fontSize: 12,
+    marginTop: 2,
+  },
+  quickPasteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#084a2f",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  quickPasteBtnText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  quickPasteSummaryBox: {
+    backgroundColor: "#0d281e",
+    borderWidth: 1,
+    borderColor: "#084a2f",
+    padding: 8,
+    borderRadius: 6,
+    marginBottom: 10,
+  },
+  quickPasteSummaryText: {
+    color: "#4ade80",
+    fontSize: 12,
+    fontWeight: "600",
   },
   listCard: {
     backgroundColor: "#161b22",
