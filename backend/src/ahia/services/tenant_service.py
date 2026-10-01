@@ -36,6 +36,7 @@ from ahia.core.tenant_context import TenantContext, build_tenant_context
 from ahia.core.tenant_scope import set_tenant_scope
 from ahia.crud import tenant_crud, tenant_membership_crud
 from ahia.models.entities.negative_stock_policy import NegativeStockPolicy
+from ahia.models.entities.phone_number import canonical_phone_number
 from ahia.models.entities.tenant_membership_model import TenantMembershipModel
 from ahia.models.entities.tenant_model import TenantModel
 from ahia.services.audit_event_service import AuditEventService
@@ -139,7 +140,7 @@ class TenantService:
                 name=name,
                 slug=slug,
                 business_type=business_type,
-                phone=phone,
+                phone=canonical_phone_number(phone, default_country_code="+234") if phone else None,
                 email=email,
                 address=address,
                 city=city,
@@ -318,7 +319,11 @@ class TenantService:
             updated = tenant.with_profile(
                 name=changes.get("name"),
                 business_type=changes.get("business_type"),
-                phone=changes.get("phone"),
+                phone=(
+                    canonical_phone_number(changes["phone"], default_country_code="+234")
+                    if changes.get("phone")
+                    else changes.get("phone")
+                ),
                 email=changes.get("email"),
                 address=changes.get("address"),
                 city=changes.get("city"),

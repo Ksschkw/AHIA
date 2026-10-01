@@ -91,13 +91,21 @@ export function publicShopPath(slug: string): string {
   return `/shop/${slug}`;
 }
 
-export function whatsAppLink(phone: string | null, message: string): string | null {
-  if (!phone) {
-    return null;
-  }
+export function normalizeWaPhone(phone: string | null | undefined): string | null {
+  if (!phone) return null;
   const digits = phone.replace(/[^\d]/g, "");
-  if (digits.length < 10) {
+  if (!digits || digits.length < 7) return null;
+  if (digits.startsWith("00234")) return digits.slice(2);
+  if (digits.startsWith("234")) return digits;
+  if (digits.startsWith("0")) return "234" + digits.slice(1);
+  if (digits.length === 10) return "234" + digits;
+  return digits;
+}
+
+export function whatsAppLink(phone: string | null, message: string): string | null {
+  const normalized = normalizeWaPhone(phone);
+  if (!normalized || normalized.length < 10) {
     return null;
   }
-  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+  return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
 }

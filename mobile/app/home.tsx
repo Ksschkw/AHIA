@@ -36,6 +36,7 @@ import {
   ImageIcon,
   ItemBoxIcon,
   ListIcon,
+  LockIcon,
   MoreIcon,
   PeopleIcon,
   PersonIcon,
@@ -124,6 +125,7 @@ import {
   cacheCategories,
   cacheCustomerLists,
   cacheProducts,
+  clearLocalDatabase,
   enqueueOfflineSale,
   flushOutbox,
   getCachedCategories,
@@ -145,12 +147,11 @@ function formatMoney(amount: string | null | undefined): string {
 function formatWaNumber(rawPhone: string | null | undefined): string | null {
   if (!rawPhone) return null;
   const digits = rawPhone.replace(/[^\d]/g, "");
-  if (!digits) return null;
+  if (!digits || digits.length < 7) return null;
+  if (digits.startsWith("00234")) return digits.slice(2);
   if (digits.startsWith("234")) return digits;
   if (digits.startsWith("0")) return "234" + digits.slice(1);
-  if (digits.length === 10 && (digits.startsWith("7") || digits.startsWith("8") || digits.startsWith("9"))) {
-    return "234" + digits;
-  }
+  if (digits.length === 10) return "234" + digits;
   return digits;
 }
 
@@ -377,6 +378,13 @@ export default function Home() {
 
   const [showShopModal, setShowShopModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
+
+  const userRole = (activeBusiness?.role_name ?? "OWNER").toUpperCase();
+  const isOwnerOrManager = userRole === "OWNER" || userRole === "MANAGER";
+  const isInventoryStaff = userRole === "INVENTORY";
+
   const [editFirstName, setEditFirstName] = useState("");
   const [editLastName, setEditLastName] = useState("");
   const [editPhone, setEditPhone] = useState("");
@@ -964,7 +972,7 @@ export default function Home() {
       setInvitePhone("");
 
       const cleanNum = formatWaNumber(inv.phone);
-      const msg = `Hello, you have been invited to join ${activeBusiness.name} on AHIA as ${inviteRole}. Open https://ahia.app to accept.`;
+      const msg = `Hello, you have been invited to join ${activeBusiness.name} on AHIA as ${inviteRole}. Open https://useahia-hazel.vercel.app to accept.`;
       const waUrl = cleanNum
         ? `https://wa.me/${cleanNum}?text=${encodeURIComponent(msg)}`
         : `https://wa.me/?text=${encodeURIComponent(msg)}`;
@@ -1420,7 +1428,7 @@ export default function Home() {
 
   const handleShareStorefront = () => {
     if (!activeBusiness) return;
-    const storefrontUrl = `https://ahia.app/shop/${activeBusiness.slug}`;
+    const storefrontUrl = `https://useahia-hazel.vercel.app/shop/${activeBusiness.slug}`;
     const msg = `Hello! Check out our catalog on AHIA: ${storefrontUrl}`;
     const waUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
     void Linking.openURL(waUrl);
@@ -1521,13 +1529,21 @@ export default function Home() {
           >
             {/* KPI Cards */}
             <View style={styles.kpiRow}>
-              <View style={[styles.kpiCard, styles.kpiCardHighlight]}>
-                <Text style={styles.kpiLabel}>Today's Sales</Text>
-                <Text style={styles.kpiValue}>
-                  {formatMoney(dailyStats?.total_revenue ?? "0")}
-                </Text>
-                <Text style={styles.kpiMeta}>{dailyStats?.total_sales ?? 0} transaction(s)</Text>
-              </View>
+              {isOwnerOrManager ? (
+                <View style={[styles.kpiCard, styles.kpiCardHighlight]}>
+                  <Text style={styles.kpiLabel}>Today's Sales</Text>
+                  <Text style={styles.kpiValue}>
+                    {formatMoney(dailyStats?.total_revenue ?? "0")}
+                  </Text>
+                  <Text style={styles.kpiMeta}>{dailyStats?.total_sales ?? 0} transaction(s)</Text>
+                </View>
+              ) : (
+                <View style={[styles.kpiCard, styles.kpiCardHighlight]}>
+                  <Text style={styles.kpiLabel}>Recent Sales</Text>
+                  <Text style={styles.kpiValue}>{sales.length}</Text>
+                  <Text style={styles.kpiMeta}>Recorded by staff</Text>
+                </View>
+              )}
 
               <View style={styles.kpiCard}>
                 <Text style={styles.kpiLabel}>On the Shelf</Text>
@@ -1537,39 +1553,37 @@ export default function Home() {
             </View>
 
             <View style={styles.kpiRow}>
-              <View style={[styles.kpiCard, runningOut.length > 0 && styles.kpiCardWarn]}>
-                <Text style={styles.kpiLabel}>Running Out</Text>
-                <Text style={[styles.kpiValue, runningOut.length > 0 && styles.kpiValueWarn]}>
-                  {runningOut.length}
-                </Text>
-                <Text style={styles.kpiMeta}>
-                  {runningOut.length > 0 ? "Restock needed" : "Fully stocked"}
-                </Text>
-              </View>
-
               <View style={styles.kpiCard}>
                 <Text style={styles.kpiLabel}>Pending Orders</Text>
                 <Text style={styles.kpiValue}>{pendingListsCount}</Text>
                 <Text style={styles.kpiMeta}>Customer Lists</Text>
+              </View>
+
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Shelf Folders</Text>
+                <Text style={styles.kpiValue}>{categories.length}</Text>
+                <Text style={styles.kpiMeta}>Categories</Text>
               </View>
             </View>
 
             {/* Quick Actions Grid with Native SVG Icons */}
             <Text style={styles.sectionHeading}>Quick Actions</Text>
             <View style={styles.actionGrid}>
-              <Pressable
-                style={styles.actionTile}
-                onPress={() => {
-                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setShowAddProductModal(true);
-                }}
-              >
-                <View style={[styles.actionIconWrap, { backgroundColor: "#064e3b" }]}>
-                  <PlusIcon size={20} color="#4ade80" />
-                </View>
-                <Text style={styles.actionTileTitle}>Add Product</Text>
-                <Text style={styles.actionTileDesc}>New catalog item</Text>
-              </Pressable>
+              {(isOwnerOrManager || isInventoryStaff) && (
+                <Pressable
+                  style={styles.actionTile}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowAddProductModal(true);
+                  }}
+                >
+                  <View style={[styles.actionIconWrap, { backgroundColor: "#064e3b" }]}>
+                    <PlusIcon size={20} color="#4ade80" />
+                  </View>
+                  <Text style={styles.actionTileTitle}>Add Product</Text>
+                  <Text style={styles.actionTileDesc}>New catalog item</Text>
+                </Pressable>
+              )}
 
               <Pressable
                 style={styles.actionTile}
@@ -1585,64 +1599,32 @@ export default function Home() {
                 <Text style={styles.actionTileDesc}>Record market cost</Text>
               </Pressable>
 
-              <Pressable
-                style={styles.actionTile}
-                onPress={() => {
-                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setShowAddCategoryModal(true);
-                }}
-              >
-                <View style={[styles.actionIconWrap, { backgroundColor: "#1e3a8a" }]}>
-                  <FolderIcon size={20} color="#60a5fa" />
-                </View>
-                <Text style={styles.actionTileTitle}>New Folder</Text>
-                <Text style={styles.actionTileDesc}>Organize shelf</Text>
-              </Pressable>
-
-              <Pressable style={styles.actionTile} onPress={handleShareStorefront}>
-                <View style={[styles.actionIconWrap, { backgroundColor: "#065f46" }]}>
-                  <ShareIcon size={20} color="#34d399" />
-                </View>
-                <Text style={styles.actionTileTitle}>Share Shop</Text>
-                <Text style={styles.actionTileDesc}>WhatsApp Catalog</Text>
-              </Pressable>
-            </View>
-
-            {/* Running Out / Low Stock Alert Section */}
-            {runningOut.length > 0 && (
-              <View style={styles.lowStockSection}>
-                <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.lowStockSectionTitle}>Running Out of Stock</Text>
-                  <View style={styles.lowStockBadge}>
-                    <Text style={styles.lowStockBadgeText}>{runningOut.length} urgent</Text>
+              {isOwnerOrManager && (
+                <Pressable
+                  style={styles.actionTile}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowAddCategoryModal(true);
+                  }}
+                >
+                  <View style={[styles.actionIconWrap, { backgroundColor: "#1e3a8a" }]}>
+                    <FolderIcon size={20} color="#60a5fa" />
                   </View>
-                </View>
-                {runningOut.map((ro) => {
-                  const matchProduct = products.find((p) => p.id === ro.product_id);
-                  return (
-                    <View key={ro.product_id} style={styles.lowStockRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.lowStockName}>{ro.product_name}</Text>
-                        <Text style={styles.lowStockQty}>
-                          Only {ro.quantity_on_hand} left on shelf
-                        </Text>
-                      </View>
-                      {matchProduct && (
-                        <Pressable
-                          style={styles.lowStockRestockBtn}
-                          onPress={() => {
-                            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                            setRestockProduct(matchProduct);
-                          }}
-                        >
-                          <Text style={styles.lowStockRestockBtnText}>Restock</Text>
-                        </Pressable>
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
-            )}
+                  <Text style={styles.actionTileTitle}>New Folder</Text>
+                  <Text style={styles.actionTileDesc}>Organize shelf</Text>
+                </Pressable>
+              )}
+
+              {isOwnerOrManager && (
+                <Pressable style={styles.actionTile} onPress={handleShareStorefront}>
+                  <View style={[styles.actionIconWrap, { backgroundColor: "#065f46" }]}>
+                    <ShareIcon size={20} color="#34d399" />
+                  </View>
+                  <Text style={styles.actionTileTitle}>Share Shop</Text>
+                  <Text style={styles.actionTileDesc}>WhatsApp Catalog</Text>
+                </Pressable>
+              )}
+            </View>
 
             {/* Recent Sales Overview */}
             <View style={styles.sectionHeaderRow}>
@@ -1765,29 +1747,33 @@ export default function Home() {
 
             {/* Folder Header Actions */}
             <View style={styles.folderActionBar}>
-              <Pressable
-                style={styles.folderActionBtn}
-                onPress={() => {
-                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setShowAddCategoryModal(true);
-                }}
-              >
-                <PlusIcon size={14} color="#60a5fa" />
-                <Text style={[styles.folderActionText, { color: "#60a5fa" }]}>New Folder</Text>
-              </Pressable>
+              {isOwnerOrManager && (
+                <Pressable
+                  style={styles.folderActionBtn}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowAddCategoryModal(true);
+                  }}
+                >
+                  <PlusIcon size={14} color="#60a5fa" />
+                  <Text style={[styles.folderActionText, { color: "#60a5fa" }]}>New Folder</Text>
+                </Pressable>
+              )}
 
-              <Pressable
-                style={styles.folderActionBtn}
-                onPress={() => {
-                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setShowAddProductModal(true);
-                }}
-              >
-                <PlusIcon size={14} color="#4ade80" />
-                <Text style={[styles.folderActionText, { color: "#4ade80" }]}>Add Item</Text>
-              </Pressable>
+              {(isOwnerOrManager || isInventoryStaff) && (
+                <Pressable
+                  style={styles.folderActionBtn}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowAddProductModal(true);
+                  }}
+                >
+                  <PlusIcon size={14} color="#4ade80" />
+                  <Text style={[styles.folderActionText, { color: "#4ade80" }]}>Add Item</Text>
+                </Pressable>
+              )}
 
-              {currentCategory && (
+              {currentCategory && isOwnerOrManager && (
                 <>
                   <Pressable
                     style={styles.folderActionBtn}
@@ -2019,24 +2005,28 @@ export default function Home() {
                               <ImageIcon size={14} color="#60a5fa" />
                             </Pressable>
 
-                            <Pressable
-                              style={styles.editBtn}
-                              onPress={() => {
-                                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                setEditingProduct(item);
-                                setEditPrice(item.selling_price ?? "");
-                                setEditWholesale(item.effective_wholesale_price ?? "");
-                              }}
-                            >
-                              <EditIcon size={14} color="#8b949e" />
-                            </Pressable>
+                            {isOwnerOrManager && (
+                              <Pressable
+                                style={styles.editBtn}
+                                onPress={() => {
+                                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                  setEditingProduct(item);
+                                  setEditPrice(item.selling_price ?? "");
+                                  setEditWholesale(item.effective_wholesale_price ?? "");
+                                }}
+                              >
+                                <EditIcon size={14} color="#8b949e" />
+                              </Pressable>
+                            )}
 
-                            <Pressable
-                              style={styles.deleteBtn}
-                              onPress={() => handleDeleteProduct(item)}
-                            >
-                              <TrashIcon size={14} color="#f87171" />
-                            </Pressable>
+                            {isOwnerOrManager && (
+                              <Pressable
+                                style={styles.deleteBtn}
+                                onPress={() => handleDeleteProduct(item)}
+                              >
+                                <TrashIcon size={14} color="#f87171" />
+                              </Pressable>
+                            )}
                           </View>
                         </View>
                       );
@@ -2047,7 +2037,7 @@ export default function Home() {
             )}
 
             {/* Sticky Multi-Select Batch Action Bar */}
-            {selectedProductIds.size > 0 && (
+            {selectedProductIds.size > 0 && isOwnerOrManager && (
               <View style={styles.batchActionBar}>
                 <Text style={styles.batchCountText}>{selectedProductIds.size} selected</Text>
                 <View style={styles.batchBtnRow}>
@@ -2539,7 +2529,7 @@ export default function Home() {
                 )}
                 <View style={styles.roleBadgeWrap}>
                   <Text style={styles.roleBadgeText}>
-                    {activeBusiness?.name} - {businessDetails?.phone ? "Online Stall" : "Active Shop"}
+                    {activeBusiness?.name} - Role: {userRole}
                   </Text>
                 </View>
               </View>
@@ -2585,23 +2575,29 @@ export default function Home() {
                 <Text style={styles.everythingTileDesc}>Daily ledger</Text>
               </Pressable>
 
-              <Pressable style={styles.everythingTile} onPress={() => setShowStorefrontModal(true)}>
-                <ShareIcon size={24} color="#34d399" />
-                <Text style={styles.everythingTileTitle}>Storefront</Text>
-                <Text style={styles.everythingTileDesc}>WhatsApp link</Text>
-              </Pressable>
+              {isOwnerOrManager && (
+                <Pressable style={styles.everythingTile} onPress={() => setShowStorefrontModal(true)}>
+                  <ShareIcon size={24} color="#34d399" />
+                  <Text style={styles.everythingTileTitle}>Storefront</Text>
+                  <Text style={styles.everythingTileDesc}>WhatsApp link</Text>
+                </Pressable>
+              )}
 
-              <Pressable style={styles.everythingTile} onPress={() => setShowInviteModal(true)}>
-                <PeopleIcon size={24} color="#38bdf8" />
-                <Text style={styles.everythingTileTitle}>Team</Text>
-                <Text style={styles.everythingTileDesc}>Staff invites</Text>
-              </Pressable>
+              {isOwnerOrManager && (
+                <Pressable style={styles.everythingTile} onPress={() => setShowInviteModal(true)}>
+                  <PeopleIcon size={24} color="#38bdf8" />
+                  <Text style={styles.everythingTileTitle}>Team</Text>
+                  <Text style={styles.everythingTileDesc}>Staff invites</Text>
+                </Pressable>
+              )}
 
-              <Pressable style={styles.everythingTile} onPress={() => setShowBusinessModal(true)}>
-                <TagIcon size={24} color="#fbbf24" />
-                <Text style={styles.everythingTileTitle}>Stall Profile</Text>
-                <Text style={styles.everythingTileDesc}>Address & name</Text>
-              </Pressable>
+              {isOwnerOrManager && (
+                <Pressable style={styles.everythingTile} onPress={() => setShowBusinessModal(true)}>
+                  <TagIcon size={24} color="#fbbf24" />
+                  <Text style={styles.everythingTileTitle}>Stall Profile</Text>
+                  <Text style={styles.everythingTileDesc}>Address & name</Text>
+                </Pressable>
+              )}
 
               <Pressable style={styles.everythingTile} onPress={() => setShowPasswordModal(true)}>
                 <PersonIcon size={24} color="#f472b6" />
@@ -2611,196 +2607,240 @@ export default function Home() {
             </View>
 
             {/* Storefront Studio Card */}
-            <View style={styles.moreCard}>
-              <View style={styles.sectionHeaderRow}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Text style={styles.moreCardTitle}>Storefront Studio</Text>
-                  <View
-                    style={[
-                      styles.storefrontStatusPill,
-                      storefrontDetails?.is_published
-                        ? styles.storefrontStatusPublished
-                        : styles.storefrontStatusDraft,
-                    ]}
-                  >
-                    <Text style={styles.storefrontStatusText}>
-                      {storefrontDetails?.is_published ? "PUBLISHED" : "DRAFT"}
-                    </Text>
+            {isOwnerOrManager && (
+              <View style={styles.moreCard}>
+                <View style={styles.sectionHeaderRow}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Text style={styles.moreCardTitle}>Storefront Studio</Text>
+                    <View
+                      style={[
+                        styles.storefrontStatusPill,
+                        storefrontDetails?.is_published
+                          ? styles.storefrontStatusPublished
+                          : styles.storefrontStatusDraft,
+                      ]}
+                    >
+                      <Text style={styles.storefrontStatusText}>
+                        {storefrontDetails?.is_published ? "PUBLISHED" : "DRAFT"}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: "row", gap: 6 }}>
+                    <Pressable
+                      style={styles.publishToggleBtn}
+                      onPress={handleToggleStorefrontPublish}
+                    >
+                      <Text style={styles.publishToggleBtnText}>
+                        {storefrontDetails?.is_published ? "Unpublish" : "Go Live"}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.addStaffBtn}
+                      onPress={() => {
+                        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setStorefrontHeadline(storefrontDetails?.headline ?? "");
+                        setStorefrontDesc(storefrontDetails?.description ?? "");
+                        setStorefrontPhone(storefrontDetails?.contact_phone ?? "");
+                        setStorefrontThemeColor(storefrontDetails?.theme_color ?? "#084a2f");
+                        setStorefrontThemeBg(storefrontDetails?.theme_bg_color ?? "#fbf7f0");
+                        setStorefrontClosing(storefrontDetails?.closing_statement ?? "");
+                        setShowStorefrontModal(true);
+                      }}
+                    >
+                      <Text style={styles.addStaffBtnText}>Edit</Text>
+                    </Pressable>
                   </View>
                 </View>
 
-                <View style={{ flexDirection: "row", gap: 6 }}>
-                  <Pressable
-                    style={styles.publishToggleBtn}
-                    onPress={handleToggleStorefrontPublish}
-                  >
-                    <Text style={styles.publishToggleBtnText}>
-                      {storefrontDetails?.is_published ? "Unpublish" : "Go Live"}
-                    </Text>
-                  </Pressable>
+                <Text style={styles.moreCardDesc}>
+                  {storefrontDetails?.headline || "Your public shop catalog is live on AHIA."}
+                </Text>
+                <Text style={styles.storefrontUrl}>
+                  https://useahia-hazel.vercel.app/shop/{activeBusiness?.slug ?? "stall"}
+                </Text>
+                <Pressable style={styles.storefrontShareBtn} onPress={handleShareStorefront}>
+                  <ShareIcon size={16} color="#ffffff" />
+                  <Text style={styles.storefrontShareBtnText}>Share Storefront Link</Text>
+                </Pressable>
+              </View>
+            )}
+
+            {/* Team Management */}
+            {isOwnerOrManager && (
+              <View style={styles.moreCard}>
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={styles.moreCardTitle}>Team & Staff ({members.length})</Text>
                   <Pressable
                     style={styles.addStaffBtn}
                     onPress={() => {
                       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setStorefrontHeadline(storefrontDetails?.headline ?? "");
-                      setStorefrontDesc(storefrontDetails?.description ?? "");
-                      setStorefrontPhone(storefrontDetails?.contact_phone ?? "");
-                      setStorefrontThemeColor(storefrontDetails?.theme_color ?? "#084a2f");
-                      setStorefrontThemeBg(storefrontDetails?.theme_bg_color ?? "#fbf7f0");
-                      setStorefrontClosing(storefrontDetails?.closing_statement ?? "");
-                      setShowStorefrontModal(true);
+                      setShowInviteModal(true);
                     }}
                   >
-                    <Text style={styles.addStaffBtnText}>Edit</Text>
+                    <Text style={styles.addStaffBtnText}>+ Invite</Text>
                   </Pressable>
                 </View>
-              </View>
 
-              <Text style={styles.moreCardDesc}>
-                {storefrontDetails?.headline || "Your public shop catalog is live on AHIA."}
-              </Text>
-              <Text style={styles.storefrontUrl}>
-                https://ahia.app/shop/{activeBusiness?.slug ?? "stall"}
-              </Text>
-              <Pressable style={styles.storefrontShareBtn} onPress={handleShareStorefront}>
-                <ShareIcon size={16} color="#ffffff" />
-                <Text style={styles.storefrontShareBtnText}>Share Storefront Link</Text>
-              </Pressable>
-            </View>
-
-            {/* Team Management */}
-            <View style={styles.moreCard}>
-              <View style={styles.sectionHeaderRow}>
-                <Text style={styles.moreCardTitle}>Team & Staff ({members.length})</Text>
-                <Pressable
-                  style={styles.addStaffBtn}
-                  onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setShowInviteModal(true);
-                  }}
-                >
-                  <Text style={styles.addStaffBtnText}>+ Invite</Text>
-                </Pressable>
-              </View>
-
-              {/* Members List */}
-              {members.map((m) => (
-                <View key={m.id} style={styles.memberRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.memberName}>
-                      {m.first_name} {m.last_name ?? ""}
-                    </Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
-                      <Pressable
-                        style={styles.memberRoleBadge}
-                        onPress={() => handleChangeMemberRole(m)}
-                      >
-                        <Text style={styles.memberRoleBadgeText}>{m.role}</Text>
-                      </Pressable>
-                      <Pressable
-                        style={[
-                          styles.memberStatusBadge,
-                          m.status === "active" ? styles.memberStatusActive : styles.memberStatusSuspended,
-                        ]}
-                        onPress={() => handleToggleMemberStatus(m)}
-                      >
-                        <Text style={styles.memberStatusBadgeText}>
-                          {m.status.toUpperCase()}
-                        </Text>
-                      </Pressable>
+                {/* Members List */}
+                {members.map((m) => (
+                  <View key={m.id} style={styles.memberRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.memberName}>
+                        {m.first_name} {m.last_name ?? ""}
+                      </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
+                        <Pressable
+                          style={styles.memberRoleBadge}
+                          onPress={() => handleChangeMemberRole(m)}
+                        >
+                          <Text style={styles.memberRoleBadgeText}>{m.role}</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[
+                            styles.memberStatusBadge,
+                            m.status === "active" ? styles.memberStatusActive : styles.memberStatusSuspended,
+                          ]}
+                          onPress={() => handleToggleMemberStatus(m)}
+                        >
+                          <Text style={styles.memberStatusBadgeText}>
+                            {m.status.toUpperCase()}
+                          </Text>
+                        </Pressable>
+                      </View>
                     </View>
+
+                    <Pressable
+                      style={styles.removeStaffBtn}
+                      onPress={() => handleRemoveMember(m)}
+                    >
+                      <Text style={styles.removeStaffBtnText}>Remove</Text>
+                    </Pressable>
                   </View>
+                ))}
 
-                  <Pressable
-                    style={styles.removeStaffBtn}
-                    onPress={() => handleRemoveMember(m)}
-                  >
-                    <Text style={styles.removeStaffBtnText}>Remove</Text>
-                  </Pressable>
-                </View>
-              ))}
-
-              {/* Sent Invitations */}
-              {invitations.length > 0 && (
-                <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: "#21262d", paddingTop: 10 }}>
-                  <Text style={styles.invitationSubHeading}>Sent Invitations ({invitations.length})</Text>
-                  {invitations.map((inv) => (
-                    <View key={inv.id} style={styles.invitationRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.invitationPhone}>{inv.phone || inv.email || "Invited"}</Text>
-                        <Text style={styles.invitationMeta}>Role: {inv.role} - {inv.status.toUpperCase()}</Text>
+                {/* Sent Invitations */}
+                {invitations.length > 0 && (
+                  <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: "#21262d", paddingTop: 10 }}>
+                    <Text style={styles.invitationSubHeading}>Sent Invitations ({invitations.length})</Text>
+                    {invitations.map((inv) => (
+                      <View key={inv.id} style={styles.invitationRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.invitationPhone}>{inv.phone || inv.email || "Invited"}</Text>
+                          <Text style={styles.invitationMeta}>Role: {inv.role} - {inv.status.toUpperCase()}</Text>
+                        </View>
                       </View>
-                    </View>
-                  ))}
-                </View>
-              )}
+                    ))}
+                  </View>
+                )}
 
-              {/* Pending Invitations Received by User */}
-              {myInvitations.length > 0 && (
-                <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: "#084a2f", paddingTop: 10 }}>
-                  <Text style={[styles.invitationSubHeading, { color: "#4ade80" }]}>
-                    Invitations Waiting for You ({myInvitations.length})
-                  </Text>
-                  {myInvitations.map((inv) => (
-                    <View key={inv.id} style={styles.invitationRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.invitationPhone}>{inv.tenant_name}</Text>
-                        <Text style={styles.invitationMeta}>Role: {inv.role_name}</Text>
+                {/* Pending Invitations Received by User */}
+                {myInvitations.length > 0 && (
+                  <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: "#084a2f", paddingTop: 10 }}>
+                    <Text style={[styles.invitationSubHeading, { color: "#4ade80" }]}>
+                      Invitations Waiting for You ({myInvitations.length})
+                    </Text>
+                    {myInvitations.map((inv) => (
+                      <View key={inv.id} style={styles.invitationRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.invitationPhone}>{inv.tenant_name}</Text>
+                          <Text style={styles.invitationMeta}>Role: {inv.role_name}</Text>
+                        </View>
+                        <Pressable
+                          style={styles.acceptInviteBtn}
+                          onPress={() => handleAcceptMyInvitation(inv)}
+                        >
+                          <Text style={styles.acceptInviteBtnText}>Accept</Text>
+                        </Pressable>
                       </View>
-                      <Pressable
-                        style={styles.acceptInviteBtn}
-                        onPress={() => handleAcceptMyInvitation(inv)}
-                      >
-                        <Text style={styles.acceptInviteBtnText}>Accept</Text>
-                      </Pressable>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
 
             {/* Business Info */}
             <View style={styles.moreCard}>
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.moreCardTitle}>Business Profile</Text>
-                <Pressable
-                  style={styles.addStaffBtn}
-                  onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setEditBizName(businessDetails?.name ?? activeBusiness?.name ?? "");
-                    setEditBizAddress(businessDetails?.address ?? "");
-                    setEditBizPhone(businessDetails?.phone ?? "");
-                    setShowBusinessModal(true);
-                  }}
-                >
-                  <Text style={styles.addStaffBtnText}>Edit</Text>
-                </Pressable>
+                {isOwnerOrManager && (
+                  <Pressable
+                    style={styles.addStaffBtn}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setEditBizName(businessDetails?.name ?? activeBusiness?.name ?? "");
+                      setEditBizAddress(businessDetails?.address ?? "");
+                      setEditBizPhone(businessDetails?.phone ?? "");
+                      setShowBusinessModal(true);
+                    }}
+                  >
+                    <Text style={styles.addStaffBtnText}>Edit</Text>
+                  </Pressable>
+                )}
               </View>
               <Text style={styles.profileDetail}>Name: {businessDetails?.name ?? activeBusiness?.name}</Text>
               <Text style={styles.profileDetail}>Address: {businessDetails?.address ?? "Alaba International Market"}</Text>
               <Text style={styles.profileDetail}>Phone: {businessDetails?.phone ?? "Not set"}</Text>
             </View>
 
+            {/* App Appearance / Theme Selector */}
+            <View style={styles.moreCard}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.moreCardTitle}>App Appearance</Text>
+              </View>
+              <Text style={styles.moreCardDesc}>
+                Choose your preferred visual theme for the market floor.
+              </Text>
+              <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+                <Pressable
+                  style={[
+                    styles.themeToggleBtn,
+                    themeMode === "light" && styles.themeToggleBtnActive,
+                  ]}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setThemeMode("light");
+                    showToast("Switched to Light Ivory Theme");
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.themeToggleBtnText,
+                      themeMode === "light" && styles.themeToggleBtnTextActive,
+                    ]}
+                  >
+                    Light Ivory (Default)
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.themeToggleBtn,
+                    themeMode === "dark" && styles.themeToggleBtnActive,
+                  ]}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setThemeMode("dark");
+                    showToast("Switched to Dark Theme");
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.themeToggleBtnText,
+                      themeMode === "dark" && styles.themeToggleBtnTextActive,
+                    ]}
+                  >
+                    Dark Theme
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
             {/* Sign Out Action */}
             <Pressable
               style={styles.signOutBtn}
               onPress={() => {
-                Alert.alert(
-                  "Sign Out of AHIA?",
-                  "You can sign back in at any time with your phone number and password.",
-                  [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                      text: "Sign Out",
-                      style: "destructive",
-                      onPress: async () => {
-                        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        await forgetSession();
-                        router.replace("/sign-in");
-                      },
-                    },
-                  ],
-                );
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowSignOutModal(true);
               }}
             >
               <Text style={styles.signOutBtnText}>Sign Out of AHIA</Text>
@@ -4079,6 +4119,46 @@ export default function Home() {
             <Pressable style={styles.modalCancelBtn} onPress={() => setShowShopModal(false)}>
               <Text style={styles.modalCancelText}>Close</Text>
             </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Custom Styled Sign Out Modal */}
+      <Modal
+        visible={showSignOutModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSignOutModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.signOutModalCard}>
+            <View style={styles.signOutIconWrap}>
+              <LockIcon size={28} color="#dc2626" />
+            </View>
+            <Text style={styles.signOutModalTitle}>Sign Out of AHIA?</Text>
+            <Text style={styles.signOutModalDesc}>
+              You can sign back in at any time with your phone number and password.
+            </Text>
+            <View style={styles.signOutModalButtons}>
+              <Pressable
+                style={styles.signOutCancelBtn}
+                onPress={() => setShowSignOutModal(false)}
+              >
+                <Text style={styles.signOutCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={styles.signOutConfirmBtn}
+                onPress={async () => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setShowSignOutModal(false);
+                  clearLocalDatabase();
+                  await forgetSession();
+                  router.replace("/sign-in");
+                }}
+              >
+                <Text style={styles.signOutConfirmText}>Sign Out</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>
@@ -5782,5 +5862,94 @@ const styles = StyleSheet.create({
     color: "#f0f6fc",
     fontSize: 12,
     fontWeight: "600",
+  },
+  signOutModalCard: {
+    backgroundColor: "#161b22",
+    borderRadius: 16,
+    padding: 24,
+    alignItems: "center",
+    width: "100%",
+    maxWidth: 340,
+    borderWidth: 1,
+    borderColor: "#30363d",
+  },
+  signOutIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#450a0a",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  signOutModalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#f0f6fc",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  signOutModalDesc: {
+    fontSize: 14,
+    color: "#8b949e",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  signOutModalButtons: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+  },
+  signOutCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: "#21262d",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  signOutCancelText: {
+    color: "#c9d1d9",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  signOutConfirmBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: "#dc2626",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  signOutConfirmText: {
+    color: "#ffffff",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  themeToggleBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#30363d",
+    backgroundColor: "#21262d",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  themeToggleBtnActive: {
+    borderColor: "#4ade80",
+    backgroundColor: "#064e3b",
+  },
+  themeToggleBtnText: {
+    color: "#8b949e",
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  themeToggleBtnTextActive: {
+    color: "#ffffff",
+    fontWeight: "700",
   },
 });

@@ -1,16 +1,16 @@
-import { currentAccessToken, forgetSession, readRefreshToken, rememberSession } from "./session";
+import {
+  currentAccessToken,
+  forgetSession,
+  readRefreshToken,
+  readStoredAccessToken,
+  rememberSession,
+} from "./session";
 
 /**
  * The same API the web app calls, from a phone.
  *
- * **Nothing about the backend changes for mobile.** It already accepts an `Authorization` header before it
- * looks for a session cookie - its own docstring says so, and names a mobile client as the reason - and its
- * sign-in and refresh endpoints already return both tokens in the body. What follows is the client side of
- * that: hold the access token in memory, keep the refresh token in the keychain, and refresh in exactly one
- * place when a call comes back 401.
- *
- * The base address comes from the environment so a build points at whichever API it was built for, rather than
- * carrying a hostname that happens to be right today.
+ * Persists session credentials securely on device and automatically restores
+ * sessions on app startup.
  */
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://p01--ahia-api--qw5xhkblp8hy.code.run";
@@ -28,33 +28,46 @@ export class ApiError extends Error {
 async function refreshOnce(): Promise<boolean> {
   const refreshToken = await readRefreshToken();
   if (!refreshToken) return false;
-  const response = await fetch(`${BASE_URL}/api/v1/auth/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  });
-  if (!response.ok) {
-    // The refresh token is gone, expired or revoked: there is no session left to rescue, and pretending
-    // otherwise would leave a screen that looks signed in and cannot do anything.
-    await forgetSession();
+  try {
+    const response = await fetch(`${BASE_URL}/api/v1/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!response.ok) {
+      await forgetSession();
+      return false;
+    }
+    await rememberSession(await response.json());
+    return true;
+  } catch {
     return false;
   }
-  await rememberSession(await response.json());
-  return true;
+}
+
+/** Check if there is an active session on device and restore it. */
+export async function restoreSession(): Promise<boolean> {
+  const refreshToken = await readRefreshToken();
+  if (!refreshToken) return false;
+  await readStoredAccessToken();
+  if (currentAccessToken()) {
+    return true;
+  }
+  return await refreshOnce();
 }
 
 /**
  * Call the API, refreshing once if the access token has expired.
- *
- * One retry, never a loop: an endpoint that answers 401 twice in a row is not a stale token, it is a refusal,
- * and retrying would turn a clear answer into a delay.
  */
 export async function request<T>(
   path: string,
   options: { method?: string; body?: unknown } = {},
 ): Promise<T> {
   const send = async (): Promise<Response> => {
-    const token = currentAccessToken();
+    let token = currentAccessToken();
+    if (!token) {
+      token = await readStoredAccessToken();
+    }
     return fetch(`${BASE_URL}${path}`, {
       method: options.method ?? "GET",
       headers: {
@@ -117,6 +130,9 @@ export interface TenantSummary {
   id: string;
   name: string;
   slug: string;
+  role_name?: string;
+  public_path?: string;
+  is_active?: boolean;
 }
 
 export interface Category {

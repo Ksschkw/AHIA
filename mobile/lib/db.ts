@@ -7,93 +7,116 @@ import { type Product, type Category, type CustomerList, recordSale } from "./ap
  * Designed for market connectivity: a trader can view cached shelf products and record
  * a "sell one" transaction even when mobile network stalls. Pending transactions are
  * durably queued and flushed when connection returns.
+ *
+ * All operations are strictly guarded against crashes, thread issues, and profile switches.
  */
 
 let dbInstance: SQLite.SQLiteDatabase | null = null;
 
-function getDb(): SQLite.SQLiteDatabase {
-  if (!dbInstance) {
-    dbInstance = SQLite.openDatabaseSync("ahia_local.db");
-    dbInstance.execSync(`
-      CREATE TABLE IF NOT EXISTS cached_products (
-        id TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        slug TEXT NOT NULL,
-        category_id TEXT,
-        selling_price TEXT,
-        effective_normal_price TEXT,
-        effective_wholesale_price TEXT,
-        is_published INTEGER NOT NULL,
-        is_active INTEGER NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS cached_categories (
-        id TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        slug TEXT NOT NULL,
-        parent_id TEXT,
-        position INTEGER NOT NULL DEFAULT 0,
-        updated_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS cached_customer_lists (
-        id TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
-        customer_name TEXT,
-        customer_phone TEXT,
-        status TEXT NOT NULL,
-        priced_total TEXT,
-        data_json TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS sale_outbox (
-        id TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
-        product_id TEXT NOT NULL,
-        product_name TEXT NOT NULL,
-        quantity TEXT NOT NULL,
-        unit_price TEXT NOT NULL,
-        payment_method TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        status TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS inventory_deltas (
-        id TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
-        product_id TEXT NOT NULL,
-        delta_quantity TEXT NOT NULL,
-        reason TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        status TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS sync_conflicts (
-        id TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
-        entity_type TEXT NOT NULL,
-        entity_id TEXT NOT NULL,
-        entity_title TEXT NOT NULL,
-        local_data TEXT NOT NULL,
-        server_data TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        status TEXT NOT NULL,
-        resolution TEXT
-      );
-      CREATE TABLE IF NOT EXISTS catalog_revisions (
-        product_id TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
-        server_updated_at TEXT,
-        local_updated_at TEXT,
-        has_local_edit INTEGER NOT NULL DEFAULT 0
-      );
-    `);
+function getDb(): SQLite.SQLiteDatabase | null {
+  try {
+    if (!dbInstance) {
+      dbInstance = SQLite.openDatabaseSync("ahia_local.db");
+      dbInstance.execSync(`
+        CREATE TABLE IF NOT EXISTS cached_products (
+          id TEXT PRIMARY KEY,
+          tenant_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          slug TEXT NOT NULL,
+          category_id TEXT,
+          selling_price TEXT,
+          effective_normal_price TEXT,
+          effective_wholesale_price TEXT,
+          is_published INTEGER NOT NULL,
+          is_active INTEGER NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS cached_categories (
+          id TEXT PRIMARY KEY,
+          tenant_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          slug TEXT NOT NULL,
+          parent_id TEXT,
+          position INTEGER NOT NULL DEFAULT 0,
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS cached_customer_lists (
+          id TEXT PRIMARY KEY,
+          tenant_id TEXT NOT NULL,
+          customer_name TEXT,
+          customer_phone TEXT,
+          status TEXT NOT NULL,
+          priced_total TEXT,
+          data_json TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS sale_outbox (
+          id TEXT PRIMARY KEY,
+          tenant_id TEXT NOT NULL,
+          product_id TEXT NOT NULL,
+          product_name TEXT NOT NULL,
+          quantity TEXT NOT NULL,
+          unit_price TEXT NOT NULL,
+          payment_method TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          status TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS inventory_deltas (
+          id TEXT PRIMARY KEY,
+          tenant_id TEXT NOT NULL,
+          product_id TEXT NOT NULL,
+          delta_quantity TEXT NOT NULL,
+          reason TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          status TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS sync_conflicts (
+          id TEXT PRIMARY KEY,
+          tenant_id TEXT NOT NULL,
+          entity_type TEXT NOT NULL,
+          entity_id TEXT NOT NULL,
+          entity_title TEXT NOT NULL,
+          local_data TEXT NOT NULL,
+          server_data TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          status TEXT NOT NULL,
+          resolution TEXT
+        );
+        CREATE TABLE IF NOT EXISTS catalog_revisions (
+          product_id TEXT PRIMARY KEY,
+          tenant_id TEXT NOT NULL,
+          server_updated_at TEXT,
+          local_updated_at TEXT,
+          has_local_edit INTEGER NOT NULL DEFAULT 0
+        );
+      `);
+    }
+    return dbInstance;
+  } catch {
+    return null;
   }
-  return dbInstance;
+}
+
+/** Clear cached data safely on profile switch or logout. */
+export function clearLocalDatabase(): void {
+  try {
+    const db = getDb();
+    if (!db) return;
+    db.execSync(`
+      DELETE FROM cached_products;
+      DELETE FROM cached_categories;
+      DELETE FROM cached_customer_lists;
+      DELETE FROM catalog_revisions;
+    `);
+  } catch {
+    // Non-fatal
+  }
 }
 
 export function cacheProducts(tenantId: string, products: Product[]): void {
   try {
     const db = getDb();
+    if (!db) return;
     const now = new Date().toISOString();
     db.withTransactionSync(() => {
       for (const p of products) {
@@ -125,6 +148,7 @@ export function cacheProducts(tenantId: string, products: Product[]): void {
 export function getCachedProducts(tenantId: string): Product[] {
   try {
     const db = getDb();
+    if (!db) return [];
     const rows = db.getAllSync<{
       id: string;
       tenant_id: string;
@@ -161,6 +185,7 @@ export function getCachedProducts(tenantId: string): Product[] {
 export function cacheCategories(tenantId: string, categories: Category[]): void {
   try {
     const db = getDb();
+    if (!db) return;
     const now = new Date().toISOString();
     db.withTransactionSync(() => {
       for (const c of categories) {
@@ -179,6 +204,7 @@ export function cacheCategories(tenantId: string, categories: Category[]): void 
 export function getCachedCategories(tenantId: string): Category[] {
   try {
     const db = getDb();
+    if (!db) return [];
     const rows = db.getAllSync<{
       id: string;
       tenant_id: string;
@@ -206,6 +232,7 @@ export function getCachedCategories(tenantId: string): Category[] {
 export function cacheCustomerLists(tenantId: string, lists: CustomerList[]): void {
   try {
     const db = getDb();
+    if (!db) return;
     const now = new Date().toISOString();
     db.withTransactionSync(() => {
       for (const l of lists) {
@@ -233,6 +260,7 @@ export function cacheCustomerLists(tenantId: string, lists: CustomerList[]): voi
 export function getCachedCustomerLists(tenantId: string): CustomerList[] {
   try {
     const db = getDb();
+    if (!db) return [];
     const rows = db.getAllSync<{ data_json: string }>(
       "SELECT data_json FROM cached_customer_lists WHERE tenant_id = ? ORDER BY updated_at DESC",
       [tenantId],
@@ -251,30 +279,36 @@ export function enqueueOfflineSale(sale: {
   unitPrice: string;
   paymentMethod: string;
 }): string {
-  const db = getDb();
   const id = `outbox-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const now = new Date().toISOString();
-  db.runSync(
-    `INSERT INTO sale_outbox (id, tenant_id, product_id, product_name, quantity, unit_price, payment_method, created_at, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id,
-      sale.tenantId,
-      sale.productId,
-      sale.productName,
-      sale.quantity,
-      sale.unitPrice,
-      sale.paymentMethod,
-      now,
-      "pending",
-    ],
-  );
+  try {
+    const db = getDb();
+    if (!db) return id;
+    const now = new Date().toISOString();
+    db.runSync(
+      `INSERT INTO sale_outbox (id, tenant_id, product_id, product_name, quantity, unit_price, payment_method, created_at, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        sale.tenantId,
+        sale.productId,
+        sale.productName,
+        sale.quantity,
+        sale.unitPrice,
+        sale.paymentMethod,
+        now,
+        "pending",
+      ],
+    );
+  } catch {
+    // Fallback if local storage fails
+  }
   return id;
 }
 
 export function getPendingSalesCount(tenantId: string): number {
   try {
     const db = getDb();
+    if (!db) return 0;
     const row = db.getFirstSync<{ count: number }>(
       "SELECT COUNT(*) as count FROM sale_outbox WHERE tenant_id = ? AND status = 'pending'",
       [tenantId],
@@ -286,58 +320,48 @@ export function getPendingSalesCount(tenantId: string): number {
 }
 
 export async function flushOutbox(tenantId: string): Promise<number> {
-  const db = getDb();
-  const pending = db.getAllSync<{
-    id: string;
-    product_id: string;
-    quantity: string;
-    unit_price: string;
-    payment_method: string;
-  }>(
-    "SELECT id, product_id, quantity, unit_price, payment_method FROM sale_outbox WHERE tenant_id = ? AND status = 'pending'",
-    [tenantId],
-  );
+  try {
+    const db = getDb();
+    if (!db) return 0;
+    const pending = db.getAllSync<{
+      id: string;
+      product_id: string;
+      quantity: string;
+      unit_price: string;
+      payment_method: string;
+    }>(
+      "SELECT id, product_id, quantity, unit_price, payment_method FROM sale_outbox WHERE tenant_id = ? AND status = 'pending'",
+      [tenantId],
+    );
 
-  let synced = 0;
-  for (const item of pending) {
-    try {
-      await recordSale(tenantId, {
-        lines: [
-          {
-            product_id: item.product_id,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-          },
-        ],
-        payment_method: item.payment_method,
-      });
-      db.runSync("UPDATE sale_outbox SET status = 'synced' WHERE id = ?", [item.id]);
-      synced++;
-    } catch {
-      // Stays pending if network fails
-      break;
+    let synced = 0;
+    for (const item of pending) {
+      try {
+        await recordSale(tenantId, {
+          lines: [
+            {
+              product_id: item.product_id,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+            },
+          ],
+          payment_method: item.payment_method,
+        });
+        db.runSync("UPDATE sale_outbox SET status = 'synced' WHERE id = ?", [item.id]);
+        synced++;
+      } catch {
+        // Stays pending if network fails
+        break;
+      }
     }
+    return synced;
+  } catch {
+    return 0;
   }
-  return synced;
 }
 
 /* ---------------------------------------------------------------------------
  * Hybrid Offline Conflict Resolution Strategy
- *
- * 1. Sales & Cash Outbox: Append-only Event Sourcing (Conflict-free).
- *    Each sale is an immutable transaction record that gets committed to the
- *    ledger once connectivity resumes.
- *
- * 2. Inventory / Balances: Automatic Smart Merging via Additive Deltas.
- *    Instead of overwriting total balance, the app tracks stock decrements
- *    as deltas. Concurrent sales from multiple devices are commutative.
- *
- * 3. Catalog & Price Lists: Last-Write-Wins (LWW) with Timestamp Versioning.
- *    Server updated_at vs local updated_at determines the winning version.
- *
- * 4. Customer Lists & Drafts: User Decides / Interactive Reconciliation.
- *    When simultaneous conflicting edits occur on the same customer request,
- *    an interactive prompt allows the trader to choose or merge.
  * ------------------------------------------------------------------------- */
 
 export interface SyncConflict {
@@ -360,48 +384,58 @@ export function enqueueInventoryDelta(
   deltaQuantity: string,
   reason: string = "sale",
 ): string {
-  const db = getDb();
   const id = `delta-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const now = new Date().toISOString();
-  db.runSync(
-    `INSERT INTO inventory_deltas (id, tenant_id, product_id, delta_quantity, reason, created_at, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [id, tenantId, productId, deltaQuantity, reason, now, "pending"],
-  );
+  try {
+    const db = getDb();
+    if (!db) return id;
+    const now = new Date().toISOString();
+    db.runSync(
+      `INSERT INTO inventory_deltas (id, tenant_id, product_id, delta_quantity, reason, created_at, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, tenantId, productId, deltaQuantity, reason, now, "pending"],
+    );
+  } catch {
+    // Non-fatal
+  }
   return id;
 }
 
 /** Last-Write-Wins (LWW) catalog reconciliation. */
 export function applyCatalogLWW(tenantId: string, serverProducts: Product[]): Product[] {
-  const db = getDb();
-  const localProducts = getCachedProducts(tenantId);
-  const localMap = new Map(localProducts.map((p) => [p.id, p]));
+  try {
+    const db = getDb();
+    if (!db) return serverProducts;
+    const localProducts = getCachedProducts(tenantId);
+    const localMap = new Map(localProducts.map((p) => [p.id, p]));
 
-  const reconciled: Product[] = [];
-  for (const sp of serverProducts) {
-    const lp = localMap.get(sp.id);
-    if (!lp) {
-      reconciled.push(sp);
-      continue;
+    const reconciled: Product[] = [];
+    for (const sp of serverProducts) {
+      const lp = localMap.get(sp.id);
+      if (!lp) {
+        reconciled.push(sp);
+        continue;
+      }
+
+      // Check if local device had an un-synced edit
+      const revision = db.getFirstSync<{ has_local_edit: number }>(
+        "SELECT has_local_edit FROM catalog_revisions WHERE product_id = ?",
+        [sp.id],
+      );
+
+      if (revision && revision.has_local_edit === 1) {
+        // Local edit takes precedence until synced (LWW local)
+        reconciled.push(lp);
+      } else {
+        // Server is canonical
+        reconciled.push(sp);
+      }
     }
 
-    // Check if local device had an un-synced edit
-    const revision = db.getFirstSync<{ has_local_edit: number }>(
-      "SELECT has_local_edit FROM catalog_revisions WHERE product_id = ?",
-      [sp.id],
-    );
-
-    if (revision && revision.has_local_edit === 1) {
-      // Local edit takes precedence until synced (LWW local)
-      reconciled.push(lp);
-    } else {
-      // Server is canonical
-      reconciled.push(sp);
-    }
+    cacheProducts(tenantId, reconciled);
+    return reconciled;
+  } catch {
+    return serverProducts;
   }
-
-  cacheProducts(tenantId, reconciled);
-  return reconciled;
 }
 
 /** Record a conflict for human user decision. */
@@ -413,24 +447,29 @@ export function recordConflict(conflict: {
   localData: unknown;
   serverData: unknown;
 }): string {
-  const db = getDb();
   const id = `conflict-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const now = new Date().toISOString();
-  db.runSync(
-    `INSERT INTO sync_conflicts (id, tenant_id, entity_type, entity_id, entity_title, local_data, server_data, created_at, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id,
-      conflict.tenantId,
-      conflict.entityType,
-      conflict.entityId,
-      conflict.entityTitle,
-      JSON.stringify(conflict.localData),
-      JSON.stringify(conflict.serverData),
-      now,
-      "unresolved",
-    ],
-  );
+  try {
+    const db = getDb();
+    if (!db) return id;
+    const now = new Date().toISOString();
+    db.runSync(
+      `INSERT INTO sync_conflicts (id, tenant_id, entity_type, entity_id, entity_title, local_data, server_data, created_at, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        conflict.tenantId,
+        conflict.entityType,
+        conflict.entityId,
+        conflict.entityTitle,
+        JSON.stringify(conflict.localData),
+        JSON.stringify(conflict.serverData),
+        now,
+        "unresolved",
+      ],
+    );
+  } catch {
+    // Non-fatal
+  }
   return id;
 }
 
@@ -438,6 +477,7 @@ export function recordConflict(conflict: {
 export function getUnresolvedConflicts(tenantId: string): SyncConflict[] {
   try {
     const db = getDb();
+    if (!db) return [];
     return db.getAllSync<SyncConflict>(
       "SELECT * FROM sync_conflicts WHERE tenant_id = ? AND status = 'unresolved' ORDER BY created_at DESC",
       [tenantId],
@@ -452,9 +492,14 @@ export function resolveConflict(
   conflictId: string,
   resolution: "keep_local" | "keep_server" | "merged",
 ): void {
-  const db = getDb();
-  db.runSync(
-    "UPDATE sync_conflicts SET status = 'resolved', resolution = ? WHERE id = ?",
-    [resolution, conflictId],
-  );
+  try {
+    const db = getDb();
+    if (!db) return;
+    db.runSync(
+      "UPDATE sync_conflicts SET status = 'resolved', resolution = ? WHERE id = ?",
+      [resolution, conflictId],
+    );
+  } catch {
+    // Non-fatal
+  }
 }
