@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -18,49 +18,78 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
+  ArrowLeftIcon,
+  BoxIcon,
+  CannotGetIcon,
+  CheckMarkIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  CloseIcon,
+  CopyIcon,
+  EditIcon,
+  FolderIcon,
+  FolderOpenIcon,
+  ItemBoxIcon,
+  ListIcon,
+  MoreIcon,
+  PeopleIcon,
+  PersonIcon,
+  PhoneIcon,
+  PlusIcon,
+  ReceiptIcon,
+  SearchIcon,
+  ShareIcon,
+  ShopIcon,
+  SyncIcon,
+  TagIcon,
+  TrashIcon,
+  TreeIcon,
+} from "@/components/icons";
+import {
   ApiError,
-  listBusinesses,
-  listCustomerLists,
-  deleteCustomerList,
-  confirmCustomerList,
-  createProduct,
-  updateProduct,
-  copyProducts,
-  listProducts,
-  publishProduct,
-  sellOneProduct,
-  unpublishProduct,
-  workListLine,
-  listCategories,
-  createCategory,
-  listSales,
-  dailySales,
-  recordExpense,
-  listExpenseCategories,
-  receiveStock,
-  listMembers,
-  listInvitations,
-  inviteMember,
-  removeMember,
-  currentUser,
-  getBusiness,
-  updateBusiness,
-  getStorefront,
-  updateStorefront,
   changePassword,
+  confirmCustomerList,
+  copyProducts,
+  createCategory,
+  createProduct,
+  currentUser,
+  dailySales,
+  deleteCategory,
+  deleteCustomerList,
+  deleteProduct,
+  getBusiness,
+  getStorefront,
+  inviteMember,
+  listBusinesses,
+  listCategories,
+  listCustomerLists,
+  listExpenseCategories,
+  listInvitations,
+  listMembers,
+  listProducts,
+  listSales,
+  receiveStock,
+  recordExpense,
+  removeMember,
+  sellOneProduct,
+  updateBusiness,
+  updateCategory,
+  updateProduct,
+  updateStorefront,
+  workListLine,
   type Category,
   type CustomerList,
   type CustomerListLine,
-  type Product,
-  type TenantSummary,
-  type TenantDetails,
-  type StorefrontDetails,
-  type SaleSummary,
   type DailySalesSummary,
   type ExpenseCategory,
   type Member,
-  type MembershipInvitation,
   type MemberRole,
+  type MembershipInvitation,
+  type Product,
+  type SaleSummary,
+  type StorefrontDetails,
+  type TenantDetails,
+  type TenantSummary,
   type UserProfile,
 } from "@/lib/api";
 import {
@@ -155,13 +184,19 @@ export default function Home() {
   // Data states
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [customerLists, setCustomerLists] = useState<CustomerList[]>([]);
   const [sales, setSales] = useState<SaleSummary[]>([]);
   const [dailyStats, setDailyStats] = useState<DailySalesSummary | null>(null);
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<MembershipInvitation[]>([]);
+
+  // Catalog / Shelf Hierarchy states
+  const [currentCategoryId, setCurrentCategoryId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"folder" | "tree">("folder");
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+  const [batchModal, setBatchModal] = useState<{ mode: "copy" | "move"; productIds: string[] } | null>(null);
+  const [savingBatch, setSavingBatch] = useState(false);
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -179,13 +214,19 @@ export default function Home() {
   const [newName, setNewName] = useState("");
   const [newPrice, setNewPrice] = useState("");
   const [newWholesale, setNewWholesale] = useState("");
-  const [newCategoryId, setNewCategoryId] = useState<string | null>(null);
   const [savingProduct, setSavingProduct] = useState(false);
 
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [newCategoryParentId, setNewCategoryParentId] = useState<string | null>(null);
+  const [newCategoryNormalPrice, setNewCategoryNormalPrice] = useState("");
+  const [newCategoryWholesalePrice, setNewCategoryWholesalePrice] = useState("");
   const [savingCategory, setSavingCategory] = useState(false);
+
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editCategoryName, setEditCategoryName] = useState("");
+  const [editCategoryNormalPrice, setEditCategoryNormalPrice] = useState("");
+  const [editCategoryWholesalePrice, setEditCategoryWholesalePrice] = useState("");
+  const [savingEditCategory, setSavingEditCategory] = useState(false);
 
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editPrice, setEditPrice] = useState("");
@@ -324,6 +365,39 @@ export default function Home() {
     })();
   }, [loadData]);
 
+  // Hierarchical Breadcrumbs
+  const breadcrumbs = useMemo(() => {
+    const trail: Category[] = [];
+    let curId = currentCategoryId;
+    while (curId !== null) {
+      const match = categories.find((c) => c.id === curId);
+      if (!match) break;
+      trail.unshift(match);
+      curId = match.parent_id ?? null;
+    }
+    return trail;
+  }, [categories, currentCategoryId]);
+
+  const currentCategory = useMemo(() => {
+    if (!currentCategoryId) return null;
+    return categories.find((c) => c.id === currentCategoryId) ?? null;
+  }, [categories, currentCategoryId]);
+
+  const currentSubcategories = useMemo(() => {
+    return categories.filter((c) => (c.parent_id ?? null) === currentCategoryId);
+  }, [categories, currentCategoryId]);
+
+  const currentProducts = useMemo(() => {
+    if (searchQuery.trim().length >= 2) {
+      const q = searchQuery.trim().toLowerCase();
+      return products.filter((p) => p.name.toLowerCase().includes(q));
+    }
+    if (currentCategoryId === null) {
+      return products.filter((p) => p.category_id === null);
+    }
+    return products.filter((p) => p.category_id === currentCategoryId);
+  }, [products, currentCategoryId, searchQuery]);
+
   const handleSyncOutbox = async () => {
     if (!activeBusiness || isSyncing) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -369,23 +443,6 @@ export default function Home() {
     }
   };
 
-  const handleTogglePublish = async (product: Product) => {
-    if (!activeBusiness) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      const updated = product.is_published
-        ? await unpublishProduct(activeBusiness.id, product.id)
-        : await publishProduct(activeBusiness.id, product.id);
-
-      setProducts((current) =>
-        current.map((p) => (p.id === updated.id ? { ...p, is_published: updated.is_published } : p)),
-      );
-      showToast(updated.is_published ? `${product.name} is now Live` : `${product.name} is now Hidden`);
-    } catch {
-      showToast("Could not update item status.");
-    }
-  };
-
   const handleCreateProduct = async () => {
     if (!activeBusiness || !newName.trim()) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -395,14 +452,13 @@ export default function Home() {
         name: newName.trim(),
         selling_price: newPrice.trim() || null,
         wholesale_price: newWholesale.trim() || null,
-        category_id: newCategoryId || selectedCategory,
+        category_id: currentCategoryId,
       });
       setProducts((curr) => [...curr, created]);
       cacheProducts(activeBusiness.id, [...products, created]);
       setNewName("");
       setNewPrice("");
       setNewWholesale("");
-      setNewCategoryId(null);
       setShowAddProductModal(false);
       showToast(`Added ${created.name} to shelf!`);
     } catch {
@@ -419,18 +475,163 @@ export default function Home() {
     try {
       const created = await createCategory(activeBusiness.id, {
         name: newCategoryName.trim(),
-        parent_id: newCategoryParentId,
+        parent_id: currentCategoryId,
+        default_normal_price: newCategoryNormalPrice.trim() || undefined,
+        default_wholesale_price: newCategoryWholesalePrice.trim() || undefined,
       });
       setCategories((curr) => [...curr, created]);
       setNewCategoryName("");
-      setNewCategoryParentId(null);
+      setNewCategoryNormalPrice("");
+      setNewCategoryWholesalePrice("");
       setShowAddCategoryModal(false);
-      showToast(`Created category: ${created.name}`);
+      showToast(`Created folder: ${created.name}`);
     } catch {
-      showToast("Could not create category.");
+      showToast("Could not create folder.");
     } finally {
       setSavingCategory(false);
     }
+  };
+
+  const handleSaveCategoryEdit = async () => {
+    if (!activeBusiness || !editingCategory) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSavingEditCategory(true);
+    try {
+      const updated = await updateCategory(activeBusiness.id, editingCategory.id, {
+        name: editCategoryName.trim() || undefined,
+        default_normal_price: editCategoryNormalPrice.trim() || null,
+        default_wholesale_price: editCategoryWholesalePrice.trim() || null,
+      });
+      setCategories((curr) => curr.map((c) => (c.id === updated.id ? updated : c)));
+      setEditingCategory(null);
+      showToast(`Updated folder ${updated.name}`);
+    } catch {
+      showToast("Could not update category.");
+    } finally {
+      setSavingEditCategory(false);
+    }
+  };
+
+  const handleDeleteCategory = (category: Category) => {
+    if (!activeBusiness) return;
+    Alert.alert(
+      "Delete Folder?",
+      `Are you sure you want to delete ${category.name}? Items inside will move up to parent folder.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            try {
+              await deleteCategory(activeBusiness.id, category.id, "move_up");
+              setCategories((curr) => curr.filter((c) => c.id !== category.id));
+              if (currentCategoryId === category.id) {
+                setCurrentCategoryId(category.parent_id ?? null);
+              }
+              showToast(`Deleted ${category.name}`);
+              await loadData(activeBusiness.id);
+            } catch {
+              showToast("Could not delete category.");
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleDeleteProduct = (product: Product) => {
+    if (!activeBusiness) return;
+    Alert.alert(
+      "Delete Product?",
+      `Are you sure you want to delete ${product.name}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            try {
+              await deleteProduct(activeBusiness.id, product.id);
+              setProducts((curr) => curr.filter((p) => p.id !== product.id));
+              cacheProducts(activeBusiness.id, products.filter((p) => p.id !== product.id));
+              showToast(`Deleted ${product.name}`);
+            } catch {
+              showToast("Could not delete product.");
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleToggleSelectProduct = (productId: string) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedProductIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) {
+        next.delete(productId);
+      } else {
+        next.add(productId);
+      }
+      return next;
+    });
+  };
+
+  const handleExecuteBatchAction = async (targetCategoryId: string | null) => {
+    if (!activeBusiness || !batchModal) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSavingBatch(true);
+    try {
+      if (batchModal.mode === "copy") {
+        await copyProducts(activeBusiness.id, batchModal.productIds, targetCategoryId);
+        showToast(`Copied ${batchModal.productIds.length} item(s)`);
+      } else {
+        await Promise.all(
+          batchModal.productIds.map((id) =>
+            updateProduct(activeBusiness.id, id, { category_id: targetCategoryId }),
+          ),
+        );
+        showToast(`Moved ${batchModal.productIds.length} item(s)`);
+      }
+      setBatchModal(null);
+      setSelectedProductIds(new Set());
+      await loadData(activeBusiness.id);
+    } catch {
+      showToast("Batch action failed.");
+    } finally {
+      setSavingBatch(false);
+    }
+  };
+
+  const handleBatchDelete = () => {
+    if (!activeBusiness || selectedProductIds.size === 0) return;
+    Alert.alert(
+      "Delete Selected Items?",
+      `Are you sure you want to delete ${selectedProductIds.size} item(s)? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete All",
+          style: "destructive",
+          onPress: async () => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            try {
+              const ids = Array.from(selectedProductIds);
+              await Promise.all(ids.map((id) => deleteProduct(activeBusiness.id, id)));
+              setProducts((curr) => curr.filter((p) => !selectedProductIds.has(p.id)));
+              setSelectedProductIds(new Set());
+              showToast(`Deleted ${ids.length} item(s)`);
+              await loadData(activeBusiness.id);
+            } catch {
+              showToast("Batch deletion failed.");
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleSaveProductEdit = async () => {
@@ -692,18 +893,6 @@ export default function Home() {
     void Linking.openURL(waUrl);
   };
 
-  const handleCopyProduct = async (product: Product) => {
-    if (!activeBusiness) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      await copyProducts(activeBusiness.id, [product.id], product.category_id);
-      await loadData(activeBusiness.id);
-      showToast(`Copied ${product.name}`);
-    } catch {
-      showToast("Could not copy item");
-    }
-  };
-
   const handleDeleteList = (list: CustomerList) => {
     if (!activeBusiness) return;
     Alert.alert(
@@ -728,12 +917,6 @@ export default function Home() {
       ],
     );
   };
-
-  const filteredProducts = products.filter((p) => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory ? p.category_id === selectedCategory : true;
-    return matchesSearch && matchesCategory;
-  });
 
   const pendingListsCount = customerLists.filter((l) => l.status !== "confirmed").length;
 
@@ -769,9 +952,12 @@ export default function Home() {
           {isSyncing ? (
             <ActivityIndicator size="small" color="#084a2f" />
           ) : (
-            <Text style={styles.syncButtonText}>
-              {pendingSyncCount > 0 ? `${pendingSyncCount} Sync` : "Online"}
-            </Text>
+            <View style={styles.syncInner}>
+              <SyncIcon size={14} color="#084a2f" />
+              <Text style={styles.syncButtonText}>
+                {pendingSyncCount > 0 ? `${pendingSyncCount} Sync` : "Online"}
+              </Text>
+            </View>
           )}
         </Pressable>
       </View>
@@ -783,7 +969,7 @@ export default function Home() {
         </View>
       )}
 
-      {/* Main Content Area based on Active Tab */}
+      {/* Main Content Area */}
       <View style={styles.mainContainer}>
         {activeTab === "dashboard" && (
           <ScrollView
@@ -817,7 +1003,7 @@ export default function Home() {
               </View>
             </View>
 
-            {/* Quick Actions Grid */}
+            {/* Quick Actions Grid with Native SVG Icons */}
             <Text style={styles.sectionHeading}>Quick Actions</Text>
             <View style={styles.actionGrid}>
               <Pressable
@@ -827,7 +1013,9 @@ export default function Home() {
                   setShowAddProductModal(true);
                 }}
               >
-                <Text style={styles.actionTileIcon}>[+ Item]</Text>
+                <View style={[styles.actionIconWrap, { backgroundColor: "#064e3b" }]}>
+                  <PlusIcon size={20} color="#4ade80" />
+                </View>
                 <Text style={styles.actionTileTitle}>Add Product</Text>
                 <Text style={styles.actionTileDesc}>New catalog item</Text>
               </Pressable>
@@ -839,7 +1027,9 @@ export default function Home() {
                   setShowExpenseModal(true);
                 }}
               >
-                <Text style={styles.actionTileIcon}>[- Exp]</Text>
+                <View style={[styles.actionIconWrap, { backgroundColor: "#78350f" }]}>
+                  <ReceiptIcon size={20} color="#f59e0b" />
+                </View>
                 <Text style={styles.actionTileTitle}>Log Expense</Text>
                 <Text style={styles.actionTileDesc}>Record market cost</Text>
               </Pressable>
@@ -851,13 +1041,17 @@ export default function Home() {
                   setShowAddCategoryModal(true);
                 }}
               >
-                <Text style={styles.actionTileIcon}>[Cat]</Text>
-                <Text style={styles.actionTileTitle}>New Category</Text>
+                <View style={[styles.actionIconWrap, { backgroundColor: "#1e3a8a" }]}>
+                  <FolderIcon size={20} color="#60a5fa" />
+                </View>
+                <Text style={styles.actionTileTitle}>New Folder</Text>
                 <Text style={styles.actionTileDesc}>Organize shelf</Text>
               </Pressable>
 
               <Pressable style={styles.actionTile} onPress={handleShareStorefront}>
-                <Text style={styles.actionTileIcon}>[Share]</Text>
+                <View style={[styles.actionIconWrap, { backgroundColor: "#065f46" }]}>
+                  <ShareIcon size={20} color="#34d399" />
+                </View>
                 <Text style={styles.actionTileTitle}>Share Shop</Text>
                 <Text style={styles.actionTileDesc}>WhatsApp Catalog</Text>
               </Pressable>
@@ -874,14 +1068,17 @@ export default function Home() {
             {sales.length === 0 ? (
               <View style={styles.emptyBox}>
                 <Text style={styles.emptyTitle}>No sales recorded yet</Text>
-                <Text style={styles.emptySubtitle}>Tap Sell One on any shelf item to start.</Text>
+                <Text style={styles.emptySubtitle}>Tap Sell 1 on any shelf item to start.</Text>
               </View>
             ) : (
               sales.slice(0, 5).map((sale) => (
                 <View key={sale.id} style={styles.saleRow}>
-                  <View>
-                    <Text style={styles.saleReceipt}>{sale.receipt_number}</Text>
-                    <Text style={styles.saleDate}>{sale.payment_method.toUpperCase()}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <ReceiptIcon size={18} color="#4ade80" />
+                    <View>
+                      <Text style={styles.saleReceipt}>{sale.receipt_number}</Text>
+                      <Text style={styles.saleDate}>{sale.payment_method.toUpperCase()}</Text>
+                    </View>
                   </View>
                   <Text style={styles.saleAmount}>{formatMoney(sale.total_amount)}</Text>
                 </View>
@@ -890,124 +1087,383 @@ export default function Home() {
           </ScrollView>
         )}
 
+        {/* Samsung File Manager-Style Shelf Catalog */}
         {activeTab === "shelf" && (
           <View style={styles.tabContainer}>
-            {/* Search & Action Bar */}
+            {/* Top Search & Actions */}
             <View style={styles.shelfTopBar}>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search products..."
-                placeholderTextColor="#8a928e"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
+              <View style={styles.searchBoxWrap}>
+                <SearchIcon size={18} color="#8a928e" />
+                <TextInput
+                  style={styles.searchInputClean}
+                  placeholder="Search products & folders..."
+                  placeholderTextColor="#8a928e"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                />
+                {searchQuery.length > 0 && (
+                  <Pressable onPress={() => setSearchQuery("")}>
+                    <CloseIcon size={16} color="#8a928e" />
+                  </Pressable>
+                )}
+              </View>
+
               <Pressable
-                style={styles.iconAddBtn}
+                style={[styles.modeToggleBtn, viewMode === "tree" && styles.modeToggleBtnActive]}
+                onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setViewMode(viewMode === "folder" ? "tree" : "folder");
+                }}
+              >
+                {viewMode === "folder" ? (
+                  <TreeIcon size={18} color="#f0f6fc" />
+                ) : (
+                  <FolderIcon size={18} color="#4ade80" />
+                )}
+              </Pressable>
+            </View>
+
+            {/* Breadcrumb Trail Bar */}
+            <View style={styles.breadcrumbBar}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.breadcrumbScroll}>
+                <Pressable
+                  style={styles.breadcrumbItem}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setCurrentCategoryId(null);
+                  }}
+                >
+                  <Text style={[styles.breadcrumbText, currentCategoryId === null && styles.breadcrumbActive]}>
+                    Catalog Root
+                  </Text>
+                </Pressable>
+
+                {breadcrumbs.map((crumb, idx) => (
+                  <View key={crumb.id} style={{ flexDirection: "row", alignItems: "center" }}>
+                    <ChevronRightIcon size={14} color="#6e7681" />
+                    <Pressable
+                      style={styles.breadcrumbItem}
+                      onPress={() => {
+                        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setCurrentCategoryId(crumb.id);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.breadcrumbText,
+                          idx === breadcrumbs.length - 1 && styles.breadcrumbActive,
+                        ]}
+                      >
+                        {crumb.name}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </ScrollView>
+
+              {/* Up one level */}
+              {currentCategoryId !== null && (
+                <Pressable
+                  style={styles.upLevelBtn}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setCurrentCategoryId(currentCategory?.parent_id ?? null);
+                  }}
+                >
+                  <ArrowLeftIcon size={16} color="#4ade80" />
+                  <Text style={styles.upLevelText}>Up</Text>
+                </Pressable>
+              )}
+            </View>
+
+            {/* Folder Header Actions */}
+            <View style={styles.folderActionBar}>
+              <Pressable
+                style={styles.folderActionBtn}
+                onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowAddCategoryModal(true);
+                }}
+              >
+                <PlusIcon size={14} color="#60a5fa" />
+                <Text style={[styles.folderActionText, { color: "#60a5fa" }]}>New Folder</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.folderActionBtn}
                 onPress={() => {
                   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setShowAddProductModal(true);
                 }}
               >
-                <Text style={styles.iconAddBtnText}>+ Item</Text>
+                <PlusIcon size={14} color="#4ade80" />
+                <Text style={[styles.folderActionText, { color: "#4ade80" }]}>Add Item</Text>
               </Pressable>
-            </View>
 
-            {/* Category Filter Pills */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
-              <Pressable
-                style={[styles.categoryPill, selectedCategory === null && styles.categoryPillActive]}
-                onPress={() => {
-                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setSelectedCategory(null);
-                }}
-              >
-                <Text
-                  style={[
-                    styles.categoryPillText,
-                    selectedCategory === null && styles.categoryPillTextActive,
-                  ]}
-                >
-                  All ({products.length})
-                </Text>
-              </Pressable>
-              {categories.map((cat) => {
-                const count = products.filter((p) => p.category_id === cat.id).length;
-                return (
+              {currentCategory && (
+                <>
                   <Pressable
-                    key={cat.id}
-                    style={[styles.categoryPill, selectedCategory === cat.id && styles.categoryPillActive]}
+                    style={styles.folderActionBtn}
                     onPress={() => {
                       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setSelectedCategory(cat.id);
+                      setEditingCategory(currentCategory);
+                      setEditCategoryName(currentCategory.name);
+                      setEditCategoryNormalPrice(currentCategory.default_normal_price ?? "");
+                      setEditCategoryWholesalePrice(currentCategory.default_wholesale_price ?? "");
                     }}
                   >
-                    <Text
-                      style={[
-                        styles.categoryPillText,
-                        selectedCategory === cat.id && styles.categoryPillTextActive,
-                      ]}
-                    >
-                      {cat.name} ({count})
-                    </Text>
+                    <EditIcon size={14} color="#f59e0b" />
+                    <Text style={[styles.folderActionText, { color: "#f59e0b" }]}>Edit</Text>
                   </Pressable>
-                );
-              })}
-            </ScrollView>
 
-            {/* Products List */}
-            <FlatList
-              data={filteredProducts}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.listPadding}
-              renderItem={({ item }) => (
-                <View style={styles.productCard}>
-                  <View style={styles.productInfo}>
-                    <Text style={styles.productName}>{item.name}</Text>
-                    <View style={styles.priceRow}>
-                      <Text style={styles.normalPrice}>
-                        {formatMoney(item.effective_normal_price ?? item.selling_price)}
-                      </Text>
-                      {item.effective_wholesale_price && (
-                        <Text style={styles.wholesalePrice}>
-                          Wholesale: {formatMoney(item.effective_wholesale_price)}
-                        </Text>
-                      )}
+                  <Pressable
+                    style={styles.folderActionBtn}
+                    onPress={() => handleDeleteCategory(currentCategory)}
+                  >
+                    <TrashIcon size={14} color="#f87171" />
+                    <Text style={[styles.folderActionText, { color: "#f87171" }]}>Delete</Text>
+                  </Pressable>
+                </>
+              )}
+            </View>
+
+            {/* View Mode: Tree View */}
+            {viewMode === "tree" ? (
+              <ScrollView style={styles.treeScroll}>
+                <Text style={styles.treeHeading}>Catalog Hierarchy Tree</Text>
+                {categories.length === 0 ? (
+                  <View style={styles.emptyBox}>
+                    <Text style={styles.emptyTitle}>No categories created</Text>
+                    <Text style={styles.emptySubtitle}>Tap New Folder to create one.</Text>
+                  </View>
+                ) : (
+                  categories
+                    .filter((c) => c.parent_id === null)
+                    .map((rootCat) => {
+                      const childCats = categories.filter((c) => c.parent_id === rootCat.id);
+                      const rootProds = products.filter((p) => p.category_id === rootCat.id);
+                      return (
+                        <View key={rootCat.id} style={styles.treeRootNode}>
+                          <Pressable
+                            style={styles.treeNodeHeader}
+                            onPress={() => {
+                              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              setCurrentCategoryId(rootCat.id);
+                              setViewMode("folder");
+                            }}
+                          >
+                            <FolderIcon size={18} color="#60a5fa" />
+                            <Text style={styles.treeNodeName}>{rootCat.name}</Text>
+                            <Text style={styles.treeNodeMeta}>
+                              ({childCats.length} folders, {rootProds.length} items)
+                            </Text>
+                          </Pressable>
+
+                          {childCats.map((child) => {
+                            const childProds = products.filter((p) => p.category_id === child.id);
+                            return (
+                              <Pressable
+                                key={child.id}
+                                style={styles.treeChildNode}
+                                onPress={() => {
+                                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                  setCurrentCategoryId(child.id);
+                                  setViewMode("folder");
+                                }}
+                              >
+                                <Text style={styles.treeElbow}>|-- </Text>
+                                <FolderOpenIcon size={16} color="#93c5fd" />
+                                <Text style={styles.treeChildName}>{child.name}</Text>
+                                <Text style={styles.treeNodeMeta}>({childProds.length} items)</Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      );
+                    })
+                )}
+              </ScrollView>
+            ) : (
+              /* Folder View */
+              <ScrollView style={styles.scrollContent}>
+                {/* Subcategories Folders Section */}
+                {currentSubcategories.length > 0 && (
+                  <View style={styles.foldersSection}>
+                    <Text style={styles.subHeading}>Folders ({currentSubcategories.length})</Text>
+                    <View style={styles.foldersGrid}>
+                      {currentSubcategories.map((cat) => {
+                        const childCount = categories.filter((c) => c.parent_id === cat.id).length;
+                        const prodCount = products.filter((p) => p.category_id === cat.id).length;
+                        return (
+                          <Pressable
+                            key={cat.id}
+                            style={styles.folderCard}
+                            onPress={() => {
+                              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              setCurrentCategoryId(cat.id);
+                            }}
+                          >
+                            <View style={styles.folderIconRow}>
+                              <FolderIcon size={24} color="#60a5fa" />
+                              <ChevronRightIcon size={16} color="#6e7681" />
+                            </View>
+                            <Text style={styles.folderName} numberOfLines={1}>{cat.name}</Text>
+                            <Text style={styles.folderMeta}>
+                              {childCount > 0 ? `${childCount} subfolders, ` : ""}{prodCount} item(s)
+                            </Text>
+                            {cat.default_normal_price && (
+                              <Text style={styles.folderPrice}>
+                                Def: {formatMoney(cat.default_normal_price)}
+                              </Text>
+                            )}
+                          </Pressable>
+                        );
+                      })}
                     </View>
                   </View>
+                )}
 
-                  <View style={styles.productActions}>
-                    <Pressable style={styles.sellOneBtn} onPress={() => handleSellOne(item)}>
-                      <Text style={styles.sellOneBtnText}>Sell 1</Text>
-                    </Pressable>
-
-                    <Pressable
-                      style={styles.stockBtn}
-                      onPress={() => {
-                        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setRestockProduct(item);
-                      }}
-                    >
-                      <Text style={styles.stockBtnText}>Restock</Text>
-                    </Pressable>
-
-                    <Pressable
-                      style={styles.editBtn}
-                      onPress={() => {
-                        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setEditingProduct(item);
-                        setEditPrice(item.selling_price ?? "");
-                        setEditWholesale(item.effective_wholesale_price ?? "");
-                      }}
-                    >
-                      <Text style={styles.editBtnText}>Edit</Text>
-                    </Pressable>
+                {/* Items in Current Folder Section */}
+                <View style={styles.itemsSection}>
+                  <View style={styles.sectionHeaderRow}>
+                    <Text style={styles.subHeading}>
+                      Items in {currentCategory?.name ?? "Root"} ({currentProducts.length})
+                    </Text>
+                    {currentProducts.length > 0 && (
+                      <Pressable
+                        onPress={() => {
+                          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          if (selectedProductIds.size === currentProducts.length) {
+                            setSelectedProductIds(new Set());
+                          } else {
+                            setSelectedProductIds(new Set(currentProducts.map((p) => p.id)));
+                          }
+                        }}
+                      >
+                        <Text style={styles.selectAllLink}>
+                          {selectedProductIds.size === currentProducts.length ? "Deselect All" : "Select All"}
+                        </Text>
+                      </Pressable>
+                    )}
                   </View>
+
+                  {currentProducts.length === 0 ? (
+                    <View style={styles.emptyBox}>
+                      <ItemBoxIcon size={32} color="#6e7681" />
+                      <Text style={styles.emptyTitle}>No items in this folder</Text>
+                      <Text style={styles.emptySubtitle}>Tap Add Item above to place items here.</Text>
+                    </View>
+                  ) : (
+                    currentProducts.map((item) => {
+                      const isSelected = selectedProductIds.has(item.id);
+                      return (
+                        <View key={item.id} style={[styles.productCard, isSelected && styles.productCardSelected]}>
+                          <View style={styles.productCardTop}>
+                            <Pressable
+                              style={styles.checkboxTouch}
+                              onPress={() => handleToggleSelectProduct(item.id)}
+                            >
+                              <View style={[styles.checkbox, isSelected && styles.checkboxActive]}>
+                                {isSelected && <CheckMarkIcon size={12} color="#ffffff" />}
+                              </View>
+                            </Pressable>
+
+                            <View style={styles.productInfo}>
+                              <Text style={styles.productName}>{item.name}</Text>
+                              <View style={styles.priceRow}>
+                                <Text style={styles.normalPrice}>
+                                  {formatMoney(item.effective_normal_price ?? item.selling_price)}
+                                </Text>
+                                {item.effective_wholesale_price && (
+                                  <Text style={styles.wholesalePrice}>
+                                    Wholesale: {formatMoney(item.effective_wholesale_price)}
+                                  </Text>
+                                )}
+                              </View>
+                            </View>
+                          </View>
+
+                          <View style={styles.productActions}>
+                            <Pressable style={styles.sellOneBtn} onPress={() => handleSellOne(item)}>
+                              <Text style={styles.sellOneBtnText}>Sell 1</Text>
+                            </Pressable>
+
+                            <Pressable
+                              style={styles.stockBtn}
+                              onPress={() => {
+                                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                setRestockProduct(item);
+                              }}
+                            >
+                              <Text style={styles.stockBtnText}>Restock</Text>
+                            </Pressable>
+
+                            <Pressable
+                              style={styles.editBtn}
+                              onPress={() => {
+                                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                setEditingProduct(item);
+                                setEditPrice(item.selling_price ?? "");
+                                setEditWholesale(item.effective_wholesale_price ?? "");
+                              }}
+                            >
+                              <EditIcon size={14} color="#8b949e" />
+                            </Pressable>
+
+                            <Pressable
+                              style={styles.deleteBtn}
+                              onPress={() => handleDeleteProduct(item)}
+                            >
+                              <TrashIcon size={14} color="#f87171" />
+                            </Pressable>
+                          </View>
+                        </View>
+                      );
+                    })
+                  )}
                 </View>
-              )}
-            />
+              </ScrollView>
+            )}
+
+            {/* Sticky Multi-Select Batch Action Bar */}
+            {selectedProductIds.size > 0 && (
+              <View style={styles.batchActionBar}>
+                <Text style={styles.batchCountText}>{selectedProductIds.size} selected</Text>
+                <View style={styles.batchBtnRow}>
+                  <Pressable
+                    style={styles.batchBtn}
+                    onPress={() =>
+                      setBatchModal({ mode: "copy", productIds: Array.from(selectedProductIds) })
+                    }
+                  >
+                    <CopyIcon size={14} color="#ffffff" />
+                    <Text style={styles.batchBtnText}>Copy</Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.batchBtn}
+                    onPress={() =>
+                      setBatchModal({ mode: "move", productIds: Array.from(selectedProductIds) })
+                    }
+                  >
+                    <ChevronRightIcon size={14} color="#ffffff" />
+                    <Text style={styles.batchBtnText}>Move</Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={[styles.batchBtn, styles.batchDeleteBtn]}
+                    onPress={handleBatchDelete}
+                  >
+                    <TrashIcon size={14} color="#ffffff" />
+                    <Text style={styles.batchBtnText}>Delete</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
           </View>
         )}
 
+        {/* Customer Lists / Waybills */}
         {activeTab === "lists" && (
           <FlatList
             data={customerLists}
@@ -1049,15 +1505,30 @@ export default function Home() {
                                   {line.quantity}x {line.product_name ?? line.free_text}
                                 </Text>
                                 <Text style={styles.linePrice}>
-                                  {line.shop_price ? formatMoney(line.shop_price) : "Price not set"}
+                                  {line.shop_price ? formatMoney(line.shop_price) : "Set Price"}
                                 </Text>
                               </View>
 
-                              <View style={styles.lineButtons}>
+                              <View style={styles.lineActions}>
                                 <Pressable
-                                  style={styles.setPriceBtn}
+                                  style={[
+                                    styles.lineStatusBtn,
+                                    line.state === "cannot_get" && styles.lineStatusBtnUnavailable,
+                                  ]}
+                                  onPress={() =>
+                                    handleToggleCannotGet(item.id, line.id, line.state)
+                                  }
+                                >
+                                  {line.state === "cannot_get" ? (
+                                    <CannotGetIcon size={14} color="#fca5a5" />
+                                  ) : (
+                                    <CheckMarkIcon size={14} color="#86efac" />
+                                  )}
+                                </Pressable>
+
+                                <Pressable
+                                  style={styles.linePriceBtn}
                                   onPress={() => {
-                                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                                     setPricingLine({
                                       listId: item.id,
                                       lineId: line.id,
@@ -1067,19 +1538,7 @@ export default function Home() {
                                     setPriceInput(line.shop_price ?? "");
                                   }}
                                 >
-                                  <Text style={styles.setPriceBtnText}>Set Price</Text>
-                                </Pressable>
-
-                                <Pressable
-                                  style={[
-                                    styles.cannotGetBtn,
-                                    line.state === "cannot_get" && styles.cannotGetActive,
-                                  ]}
-                                  onPress={() => handleToggleCannotGet(item.id, line.id, line.state)}
-                                >
-                                  <Text style={styles.cannotGetText}>
-                                    {line.state === "cannot_get" ? "Unavailable" : "Have It"}
-                                  </Text>
+                                  <EditIcon size={14} color="#8a928e" />
                                 </Pressable>
                               </View>
                             </View>
@@ -1089,17 +1548,22 @@ export default function Home() {
                     </View>
                   ))}
 
-                  {/* Order Footer & Actions */}
+                  {/* List Total & Actions */}
                   <View style={styles.listFooter}>
-                    <Text style={styles.totalPrice}>
-                      Total: {formatMoney(item.priced_total ?? "0")}
-                    </Text>
-                    <View style={styles.listActionRow}>
+                    <View>
+                      <Text style={styles.totalLabel}>Total Quoted</Text>
+                      <Text style={styles.totalAmount}>
+                        {item.priced_total ? formatMoney(item.priced_total) : "Incomplete"}
+                      </Text>
+                    </View>
+
+                    <View style={styles.footerActions}>
                       <Pressable
-                        style={styles.waQuoteBtn}
+                        style={styles.waBtn}
                         onPress={() => handleShareQuoteOnWhatsApp(item)}
                       >
-                        <Text style={styles.waQuoteBtnText}>Share Quote</Text>
+                        <ShareIcon size={14} color="#ffffff" />
+                        <Text style={styles.waBtnText}>WhatsApp Quote</Text>
                       </Pressable>
 
                       {!isConfirmed && (
@@ -1107,9 +1571,17 @@ export default function Home() {
                           style={styles.confirmBtn}
                           onPress={() => handleConfirmList(item)}
                         >
-                          <Text style={styles.confirmBtnText}>Confirm Order</Text>
+                          <CheckMarkIcon size={14} color="#ffffff" />
+                          <Text style={styles.confirmBtnText}>Confirm</Text>
                         </Pressable>
                       )}
+
+                      <Pressable
+                        style={styles.deleteListBtn}
+                        onPress={() => handleDeleteList(item)}
+                      >
+                        <TrashIcon size={14} color="#f87171" />
+                      </Pressable>
                     </View>
                   </View>
                 </View>
@@ -1118,47 +1590,122 @@ export default function Home() {
           />
         )}
 
+        {/* Trading Ledger Tab */}
         {activeTab === "trading" && (
           <ScrollView style={styles.scrollContent}>
-            {/* Today's Summary Card */}
             <View style={styles.tradingSummaryCard}>
-              <Text style={styles.tradingLabel}>Trading Summary</Text>
-              <Text style={styles.tradingTotal}>
+              <Text style={styles.tradingSummaryLabel}>Today's Gross Sales</Text>
+              <Text style={styles.tradingSummaryAmount}>
                 {formatMoney(dailyStats?.total_revenue ?? "0")}
               </Text>
-              <Text style={styles.tradingCount}>{dailyStats?.total_sales ?? 0} completed sales</Text>
+              <Text style={styles.tradingSummaryMeta}>
+                {dailyStats?.total_sales ?? 0} transaction(s) recorded today
+              </Text>
             </View>
 
-            <View style={styles.tradingButtonRow}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionHeading}>Sales Transactions</Text>
               <Pressable
-                style={styles.primaryTradingBtn}
-                onPress={() => {
-                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setShowExpenseModal(true);
-                }}
+                style={styles.logExpenseBtn}
+                onPress={() => setShowExpenseModal(true)}
               >
-                <Text style={styles.primaryTradingBtnText}>+ Log Expense</Text>
+                <PlusIcon size={12} color="#ffffff" />
+                <Text style={styles.logExpenseBtnText}>Expense</Text>
               </Pressable>
             </View>
 
-            {/* Sales Ledger */}
-            <Text style={styles.sectionHeading}>Sales Ledger</Text>
             {sales.map((s) => (
-              <View key={s.id} style={styles.ledgerRow}>
-                <View>
-                  <Text style={styles.ledgerReceipt}>{s.receipt_number}</Text>
-                  <Text style={styles.ledgerDate}>
-                    {new Date(s.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} - {s.payment_method.toUpperCase()}
-                  </Text>
+              <View key={s.id} style={styles.saleRow}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <ReceiptIcon size={18} color="#4ade80" />
+                  <View>
+                    <Text style={styles.saleReceipt}>{s.receipt_number}</Text>
+                    <Text style={styles.saleDate}>
+                      {new Date(s.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} - {s.payment_method.toUpperCase()}
+                    </Text>
+                  </View>
                 </View>
-                <Text style={styles.ledgerAmount}>{formatMoney(s.total_amount)}</Text>
+                <Text style={styles.saleAmount}>{formatMoney(s.total_amount)}</Text>
               </View>
             ))}
           </ScrollView>
         )}
 
+        {/* The Everything / More Tab */}
         {activeTab === "more" && (
           <ScrollView style={styles.scrollContent}>
+            {/* User Profile Header */}
+            <View style={styles.userProfileCard}>
+              <View style={styles.userAvatar}>
+                <Text style={styles.userAvatarText}>
+                  {profile?.first_name ? profile.first_name.slice(0, 1).toUpperCase() : "U"}
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.userProfileName}>
+                  {profile?.first_name} {profile?.last_name ?? ""}
+                </Text>
+                <Text style={styles.userProfilePhone}>{profile?.phone ?? "No phone set"}</Text>
+                <View style={styles.roleBadgeWrap}>
+                  <Text style={styles.roleBadgeText}>
+                    {activeBusiness?.name} - {businessDetails?.phone ? "Online Stall" : "Active Shop"}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Everything in AHIA Grid */}
+            <Text style={styles.sectionHeading}>Everything in AHIA</Text>
+            <View style={styles.everythingGrid}>
+              <Pressable style={styles.everythingTile} onPress={() => setActiveTab("dashboard")}>
+                <ShopIcon size={24} color="#4ade80" />
+                <Text style={styles.everythingTileTitle}>The Shop</Text>
+                <Text style={styles.everythingTileDesc}>Daily counter</Text>
+              </Pressable>
+
+              <Pressable style={styles.everythingTile} onPress={() => setActiveTab("shelf")}>
+                <BoxIcon size={24} color="#60a5fa" />
+                <Text style={styles.everythingTileTitle}>Catalog</Text>
+                <Text style={styles.everythingTileDesc}>Folders & Items</Text>
+              </Pressable>
+
+              <Pressable style={styles.everythingTile} onPress={() => setActiveTab("lists")}>
+                <ListIcon size={24} color="#f59e0b" />
+                <Text style={styles.everythingTileTitle}>Waybills</Text>
+                <Text style={styles.everythingTileDesc}>Customer lists</Text>
+              </Pressable>
+
+              <Pressable style={styles.everythingTile} onPress={() => setActiveTab("trading")}>
+                <ReceiptIcon size={24} color="#a78bfa" />
+                <Text style={styles.everythingTileTitle}>Trading</Text>
+                <Text style={styles.everythingTileDesc}>Daily ledger</Text>
+              </Pressable>
+
+              <Pressable style={styles.everythingTile} onPress={() => setShowStorefrontModal(true)}>
+                <ShareIcon size={24} color="#34d399" />
+                <Text style={styles.everythingTileTitle}>Storefront</Text>
+                <Text style={styles.everythingTileDesc}>WhatsApp link</Text>
+              </Pressable>
+
+              <Pressable style={styles.everythingTile} onPress={() => setShowInviteModal(true)}>
+                <PeopleIcon size={24} color="#38bdf8" />
+                <Text style={styles.everythingTileTitle}>Team</Text>
+                <Text style={styles.everythingTileDesc}>Staff invites</Text>
+              </Pressable>
+
+              <Pressable style={styles.everythingTile} onPress={() => setShowBusinessModal(true)}>
+                <TagIcon size={24} color="#fbbf24" />
+                <Text style={styles.everythingTileTitle}>Stall Profile</Text>
+                <Text style={styles.everythingTileDesc}>Address & name</Text>
+              </Pressable>
+
+              <Pressable style={styles.everythingTile} onPress={() => setShowPasswordModal(true)}>
+                <PersonIcon size={24} color="#f472b6" />
+                <Text style={styles.everythingTileTitle}>Security</Text>
+                <Text style={styles.everythingTileDesc}>PIN & password</Text>
+              </Pressable>
+            </View>
+
             {/* Storefront Studio Card */}
             <View style={styles.moreCard}>
               <View style={styles.sectionHeaderRow}>
@@ -1183,6 +1730,7 @@ export default function Home() {
                 https://ahia.app/shop/{activeBusiness?.slug ?? "stall"}
               </Text>
               <Pressable style={styles.storefrontShareBtn} onPress={handleShareStorefront}>
+                <ShareIcon size={16} color="#ffffff" />
                 <Text style={styles.storefrontShareBtnText}>Share on WhatsApp</Text>
               </Pressable>
             </View>
@@ -1239,40 +1787,35 @@ export default function Home() {
               <Text style={styles.profileDetail}>Phone: {businessDetails?.phone ?? "Not set"}</Text>
             </View>
 
-            {/* User Account & Security */}
-            <View style={styles.moreCard}>
-              <View style={styles.sectionHeaderRow}>
-                <Text style={styles.moreCardTitle}>Account & Security</Text>
-                <Pressable
-                  style={styles.addStaffBtn}
-                  onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setShowPasswordModal(true);
-                  }}
-                >
-                  <Text style={styles.addStaffBtnText}>Change PIN</Text>
-                </Pressable>
-              </View>
-              <Text style={styles.profileDetail}>User: {profile?.first_name} {profile?.last_name ?? ""}</Text>
-              <Text style={styles.profileDetail}>Phone: {profile?.phone ?? "Not set"}</Text>
-            </View>
-
             {/* Sign Out Action */}
             <Pressable
               style={styles.signOutBtn}
-              onPress={async () => {
-                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                await forgetSession();
-                router.replace("/sign-in");
+              onPress={() => {
+                Alert.alert(
+                  "Sign Out of AHIA?",
+                  "You can sign back in at any time with your phone number and password.",
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: "Sign Out",
+                      style: "destructive",
+                      onPress: async () => {
+                        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        await forgetSession();
+                        router.replace("/sign-in");
+                      },
+                    },
+                  ],
+                );
               }}
             >
-              <Text style={styles.signOutBtnText}>Sign Out</Text>
+              <Text style={styles.signOutBtnText}>Sign Out of AHIA</Text>
             </Pressable>
           </ScrollView>
         )}
       </View>
 
-      {/* Bottom Navigation Bar */}
+      {/* Persistent Bottom Navigation Bar with Native SVG Icons */}
       <View style={styles.bottomNav}>
         <Pressable
           style={[styles.navItem, activeTab === "dashboard" && styles.navItemActive]}
@@ -1281,8 +1824,8 @@ export default function Home() {
             setActiveTab("dashboard");
           }}
         >
-          <Text style={[styles.navIcon, activeTab === "dashboard" && styles.navIconActive]}>[H]</Text>
-          <Text style={[styles.navText, activeTab === "dashboard" && styles.navTextActive]}>Home</Text>
+          <ShopIcon size={22} color={activeTab === "dashboard" ? "#4ade80" : "#8b949e"} />
+          <Text style={[styles.navText, activeTab === "dashboard" && styles.navTextActive]}>Shop</Text>
         </Pressable>
 
         <Pressable
@@ -1292,8 +1835,8 @@ export default function Home() {
             setActiveTab("shelf");
           }}
         >
-          <Text style={[styles.navIcon, activeTab === "shelf" && styles.navIconActive]}>[S]</Text>
-          <Text style={[styles.navText, activeTab === "shelf" && styles.navTextActive]}>Shelf</Text>
+          <BoxIcon size={22} color={activeTab === "shelf" ? "#4ade80" : "#8b949e"} />
+          <Text style={[styles.navText, activeTab === "shelf" && styles.navTextActive]}>Catalog</Text>
         </Pressable>
 
         <Pressable
@@ -1303,7 +1846,7 @@ export default function Home() {
             setActiveTab("lists");
           }}
         >
-          <Text style={[styles.navIcon, activeTab === "lists" && styles.navIconActive]}>[L]</Text>
+          <ListIcon size={22} color={activeTab === "lists" ? "#4ade80" : "#8b949e"} />
           <Text style={[styles.navText, activeTab === "lists" && styles.navTextActive]}>Lists</Text>
           {pendingListsCount > 0 && (
             <View style={styles.navBadge}>
@@ -1319,7 +1862,7 @@ export default function Home() {
             setActiveTab("trading");
           }}
         >
-          <Text style={[styles.navIcon, activeTab === "trading" && styles.navIconActive]}>[T]</Text>
+          <ReceiptIcon size={22} color={activeTab === "trading" ? "#4ade80" : "#8b949e"} />
           <Text style={[styles.navText, activeTab === "trading" && styles.navTextActive]}>Trading</Text>
         </Pressable>
 
@@ -1330,7 +1873,7 @@ export default function Home() {
             setActiveTab("more");
           }}
         >
-          <Text style={[styles.navIcon, activeTab === "more" && styles.navIconActive]}>[M]</Text>
+          <MoreIcon size={22} color={activeTab === "more" ? "#4ade80" : "#8b949e"} />
           <Text style={[styles.navText, activeTab === "more" && styles.navTextActive]}>More</Text>
         </Pressable>
       </View>
@@ -1339,7 +1882,7 @@ export default function Home() {
       <Modal visible={showAddProductModal} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Add Product to Shelf</Text>
+            <Text style={styles.modalTitle}>Add Product to {currentCategory?.name ?? "Shelf"}</Text>
             <TextInput
               style={styles.modalInput}
               placeholder="Product Name"
@@ -1349,7 +1892,7 @@ export default function Home() {
             />
             <TextInput
               style={styles.modalInput}
-              placeholder="Retail Price (e.g. 15000)"
+              placeholder="Normal Price (e.g. 15000)"
               placeholderTextColor="#8a928e"
               keyboardType="numeric"
               value={newPrice}
@@ -1357,18 +1900,14 @@ export default function Home() {
             />
             <TextInput
               style={styles.modalInput}
-              placeholder="Wholesale Price (e.g. 13500)"
+              placeholder="Wholesale Price (optional)"
               placeholderTextColor="#8a928e"
               keyboardType="numeric"
               value={newWholesale}
               onChangeText={setNewWholesale}
             />
-
             <View style={styles.modalButtons}>
-              <Pressable
-                style={styles.modalCancelBtn}
-                onPress={() => setShowAddProductModal(false)}
-              >
+              <Pressable style={styles.modalCancelBtn} onPress={() => setShowAddProductModal(false)}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </Pressable>
               <Pressable
@@ -1387,23 +1926,38 @@ export default function Home() {
         </View>
       </Modal>
 
-      {/* Add Category Modal */}
+      {/* Add Category Folder Modal */}
       <Modal visible={showAddCategoryModal} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Create New Category</Text>
+            <Text style={styles.modalTitle}>
+              New Folder under {currentCategory?.name ?? "Catalog Root"}
+            </Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="Category Name (e.g. Generators, Lighting)"
+              placeholder="Folder Name (e.g. Armoured Cables)"
               placeholderTextColor="#8a928e"
               value={newCategoryName}
               onChangeText={setNewCategoryName}
             />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Default Retail Price (optional)"
+              placeholderTextColor="#8a928e"
+              keyboardType="numeric"
+              value={newCategoryNormalPrice}
+              onChangeText={setNewCategoryNormalPrice}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Default Wholesale Price (optional)"
+              placeholderTextColor="#8a928e"
+              keyboardType="numeric"
+              value={newCategoryWholesalePrice}
+              onChangeText={setNewCategoryWholesalePrice}
+            />
             <View style={styles.modalButtons}>
-              <Pressable
-                style={styles.modalCancelBtn}
-                onPress={() => setShowAddCategoryModal(false)}
-              >
+              <Pressable style={styles.modalCancelBtn} onPress={() => setShowAddCategoryModal(false)}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </Pressable>
               <Pressable
@@ -1414,7 +1968,132 @@ export default function Home() {
                 {savingCategory ? (
                   <ActivityIndicator color="#ffffff" size="small" />
                 ) : (
-                  <Text style={styles.modalSaveText}>Create</Text>
+                  <Text style={styles.modalSaveText}>Create Folder</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Category Modal */}
+      <Modal visible={editingCategory !== null} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Edit Folder {editingCategory?.name}</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Folder Name"
+              placeholderTextColor="#8a928e"
+              value={editCategoryName}
+              onChangeText={setEditCategoryName}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Default Retail Price"
+              placeholderTextColor="#8a928e"
+              keyboardType="numeric"
+              value={editCategoryNormalPrice}
+              onChangeText={setEditCategoryNormalPrice}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Default Wholesale Price"
+              placeholderTextColor="#8a928e"
+              keyboardType="numeric"
+              value={editCategoryWholesalePrice}
+              onChangeText={setEditCategoryWholesalePrice}
+            />
+            <View style={styles.modalButtons}>
+              <Pressable style={styles.modalCancelBtn} onPress={() => setEditingCategory(null)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={styles.modalSaveBtn}
+                onPress={handleSaveCategoryEdit}
+                disabled={savingEditCategory}
+              >
+                {savingEditCategory ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Save Changes</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Batch Move / Copy Category Picker Modal */}
+      <Modal visible={batchModal !== null} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>
+              {batchModal?.mode === "copy" ? "Copy Items to Folder" : "Move Items to Folder"}
+            </Text>
+            <Text style={styles.modalSubtitle}>
+              Select the destination folder for {batchModal?.productIds.length} item(s):
+            </Text>
+            <ScrollView style={{ maxHeight: 240, marginVertical: 10 }}>
+              <Pressable
+                style={styles.targetFolderOption}
+                onPress={() => handleExecuteBatchAction(null)}
+              >
+                <FolderIcon size={18} color="#60a5fa" />
+                <Text style={styles.targetFolderName}>[Catalog Root]</Text>
+              </Pressable>
+              {categories.map((c) => (
+                <Pressable
+                  key={c.id}
+                  style={styles.targetFolderOption}
+                  onPress={() => handleExecuteBatchAction(c.id)}
+                >
+                  <FolderIcon size={18} color="#60a5fa" />
+                  <Text style={styles.targetFolderName}>{c.name}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Pressable style={styles.modalCancelBtn} onPress={() => setBatchModal(null)}>
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Product Modal */}
+      <Modal visible={editingProduct !== null} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Edit {editingProduct?.name}</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Normal Price"
+              placeholderTextColor="#8a928e"
+              keyboardType="numeric"
+              value={editPrice}
+              onChangeText={setEditPrice}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Wholesale Price"
+              placeholderTextColor="#8a928e"
+              keyboardType="numeric"
+              value={editWholesale}
+              onChangeText={setEditWholesale}
+            />
+            <View style={styles.modalButtons}>
+              <Pressable style={styles.modalCancelBtn} onPress={() => setEditingProduct(null)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={styles.modalSaveBtn}
+                onPress={handleSaveProductEdit}
+                disabled={savingEdit}
+              >
+                {savingEdit ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Save</Text>
                 )}
               </Pressable>
             </View>
@@ -1426,7 +2105,7 @@ export default function Home() {
       <Modal visible={restockProduct !== null} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Receive Stock: {restockProduct?.name}</Text>
+            <Text style={styles.modalTitle}>Receive Stock for {restockProduct?.name}</Text>
             <TextInput
               style={styles.modalInput}
               placeholder="Quantity Received (e.g. 50)"
@@ -1447,7 +2126,7 @@ export default function Home() {
                 {savingRestock ? (
                   <ActivityIndicator color="#ffffff" size="small" />
                 ) : (
-                  <Text style={styles.modalSaveText}>Receive</Text>
+                  <Text style={styles.modalSaveText}>Receive Stock</Text>
                 )}
               </Pressable>
             </View>
@@ -1455,59 +2134,19 @@ export default function Home() {
         </View>
       </Modal>
 
-      {/* Record Expense Modal */}
-      <Modal visible={showExpenseModal} transparent animationType="slide">
+      {/* Price Input Modal for Line Item */}
+      <Modal visible={pricingLine !== null} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Record Expense</Text>
+            <Text style={styles.modalTitle}>Set Price for {pricingLine?.itemName}</Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="Amount (e.g. 3500)"
-              placeholderTextColor="#8a928e"
-              keyboardType="numeric"
-              value={expenseAmount}
-              onChangeText={setExpenseAmount}
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Description / Note (e.g. Generator Fuel)"
-              placeholderTextColor="#8a928e"
-              value={expenseDescription}
-              onChangeText={setExpenseDescription}
-            />
-
-            <View style={styles.modalButtons}>
-              <Pressable style={styles.modalCancelBtn} onPress={() => setShowExpenseModal(false)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={styles.modalSaveBtn}
-                onPress={handleRecordExpense}
-                disabled={savingExpense}
-              >
-                {savingExpense ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.modalSaveText}>Record</Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Set Line Price Modal */}
-      <Modal visible={pricingLine !== null} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Set Price: {pricingLine?.itemName}</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Unit Price in NGN"
+              placeholder="Price (NGN)"
               placeholderTextColor="#8a928e"
               keyboardType="numeric"
               value={priceInput}
               onChangeText={setPriceInput}
+              autoFocus
             />
             <View style={styles.modalButtons}>
               <Pressable style={styles.modalCancelBtn} onPress={() => setPricingLine(null)}>
@@ -1529,6 +2168,70 @@ export default function Home() {
         </View>
       </Modal>
 
+      {/* Log Expense Modal */}
+      <Modal visible={showExpenseModal} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Log Market Expense</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Amount (e.g. 2500)"
+              placeholderTextColor="#8a928e"
+              keyboardType="numeric"
+              value={expenseAmount}
+              onChangeText={setExpenseAmount}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Description (e.g. Generator Fuel, Offloading)"
+              placeholderTextColor="#8a928e"
+              value={expenseDescription}
+              onChangeText={setExpenseDescription}
+            />
+            {/* Category selection */}
+            <Text style={styles.modalFieldLabel}>Expense Category</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.modalPickerRow}>
+              {expenseCategories.map((c) => (
+                <Pressable
+                  key={c.id}
+                  style={[
+                    styles.rolePill,
+                    expenseCategoryId === c.id && styles.rolePillActive,
+                  ]}
+                  onPress={() => setExpenseCategoryId(c.id)}
+                >
+                  <Text
+                    style={[
+                      styles.rolePillText,
+                      expenseCategoryId === c.id && styles.rolePillTextActive,
+                    ]}
+                  >
+                    {c.name}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <View style={styles.modalButtons}>
+              <Pressable style={styles.modalCancelBtn} onPress={() => setShowExpenseModal(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={styles.modalSaveBtn}
+                onPress={handleRecordExpense}
+                disabled={savingExpense}
+              >
+                {savingExpense ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Record Expense</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Invite Staff Modal */}
       <Modal visible={showInviteModal} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
@@ -1542,7 +2245,7 @@ export default function Home() {
               value={invitePhone}
               onChangeText={setInvitePhone}
             />
-
+            <Text style={styles.modalFieldLabel}>Select Role</Text>
             <View style={styles.rolePickerRow}>
               {(["SALES", "INVENTORY", "ADMIN"] as MemberRole[]).map((r) => (
                 <Pressable
@@ -1556,7 +2259,6 @@ export default function Home() {
                 </Pressable>
               ))}
             </View>
-
             <View style={styles.modalButtons}>
               <Pressable style={styles.modalCancelBtn} onPress={() => setShowInviteModal(false)}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
@@ -1569,7 +2271,7 @@ export default function Home() {
                 {savingInvite ? (
                   <ActivityIndicator color="#ffffff" size="small" />
                 ) : (
-                  <Text style={styles.modalSaveText}>Send Invite</Text>
+                  <Text style={styles.modalSaveText}>Send WhatsApp Invite</Text>
                 )}
               </Pressable>
             </View>
@@ -1784,7 +2486,7 @@ const styles = StyleSheet.create({
   businessSelector: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
     flex: 1,
   },
   businessBadge: {
@@ -1796,32 +2498,37 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   businessBadgeText: {
-    color: "#4ade80",
-    fontWeight: "700",
+    color: "#ffffff",
+    fontWeight: "800",
     fontSize: 16,
   },
   businessName: {
     color: "#f0f6fc",
-    fontSize: 16,
     fontWeight: "700",
+    fontSize: 15,
   },
   businessSub: {
     color: "#8b949e",
-    fontSize: 12,
+    fontSize: 11,
   },
   syncButton: {
+    backgroundColor: "#4ade80",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: "#21262d",
   },
   syncButtonPending: {
-    backgroundColor: "#d97706",
+    backgroundColor: "#f59e0b",
+  },
+  syncInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   syncButtonText: {
-    color: "#4ade80",
+    color: "#084a2f",
+    fontWeight: "700",
     fontSize: 12,
-    fontWeight: "600",
   },
   toast: {
     backgroundColor: "#084a2f",
@@ -1829,9 +2536,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   toastText: {
-    color: "#f0f6fc",
+    color: "#ffffff",
+    fontWeight: "600",
     fontSize: 13,
-    fontWeight: "500",
   },
   mainContainer: {
     flex: 1,
@@ -1846,68 +2553,63 @@ const styles = StyleSheet.create({
   kpiRow: {
     flexDirection: "row",
     gap: 12,
-    marginBottom: 16,
+    marginBottom: 20,
   },
   kpiCard: {
     flex: 1,
     backgroundColor: "#161b22",
+    padding: 16,
     borderRadius: 12,
-    padding: 14,
     borderWidth: 1,
     borderColor: "#30363d",
   },
   kpiCardHighlight: {
     borderColor: "#084a2f",
-    backgroundColor: "#0d281e",
   },
   kpiLabel: {
     color: "#8b949e",
     fontSize: 12,
-    marginBottom: 4,
+    fontWeight: "600",
+    marginBottom: 6,
   },
   kpiValue: {
     color: "#f0f6fc",
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "800",
+    marginBottom: 4,
   },
   kpiMeta: {
     color: "#4ade80",
     fontSize: 11,
-    marginTop: 4,
   },
   sectionHeading: {
     color: "#f0f6fc",
     fontSize: 16,
     fontWeight: "700",
-    marginVertical: 12,
-  },
-  sectionHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  seeAllLink: {
-    color: "#4ade80",
-    fontSize: 13,
-    fontWeight: "600",
+    marginBottom: 12,
   },
   actionGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 16,
+    gap: 12,
+    marginBottom: 24,
   },
   actionTile: {
     width: "48%",
     backgroundColor: "#161b22",
+    padding: 14,
     borderRadius: 12,
-    padding: 12,
     borderWidth: 1,
     borderColor: "#30363d",
+    gap: 6,
   },
-  actionTileIcon: {
-    fontSize: 22,
-    marginBottom: 6,
+  actionIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
   },
   actionTileTitle: {
     color: "#f0f6fc",
@@ -1917,16 +2619,54 @@ const styles = StyleSheet.create({
   actionTileDesc: {
     color: "#8b949e",
     fontSize: 11,
-    marginTop: 2,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  seeAllLink: {
+    color: "#4ade80",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  selectAllLink: {
+    color: "#4ade80",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  emptyBox: {
+    backgroundColor: "#161b22",
+    borderRadius: 12,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#21262d",
+    marginVertical: 12,
+  },
+  emptyTitle: {
+    color: "#f0f6fc",
+    fontSize: 15,
+    fontWeight: "700",
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  emptySubtitle: {
+    color: "#8b949e",
+    fontSize: 12,
+    textAlign: "center",
   },
   saleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     backgroundColor: "#161b22",
-    padding: 12,
-    borderRadius: 8,
+    padding: 14,
+    borderRadius: 10,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#21262d",
   },
   saleReceipt: {
     color: "#f0f6fc",
@@ -1939,80 +2679,158 @@ const styles = StyleSheet.create({
   },
   saleAmount: {
     color: "#4ade80",
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
-  },
-  emptyBox: {
-    padding: 24,
-    alignItems: "center",
-    backgroundColor: "#161b22",
-    borderRadius: 12,
-  },
-  emptyTitle: {
-    color: "#f0f6fc",
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  emptySubtitle: {
-    color: "#8b949e",
-    fontSize: 13,
-    marginTop: 4,
   },
   shelfTopBar: {
     flexDirection: "row",
-    padding: 12,
-    gap: 8,
-    backgroundColor: "#161b22",
-  },
-  searchInput: {
-    flex: 1,
-    backgroundColor: "#0d1117",
-    color: "#f0f6fc",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    fontSize: 14,
-  },
-  iconAddBtn: {
-    backgroundColor: "#084a2f",
-    paddingHorizontal: 14,
-    justifyContent: "center",
-    borderRadius: 8,
-  },
-  iconAddBtnText: {
-    color: "#ffffff",
-    fontWeight: "700",
-    fontSize: 13,
-  },
-  categoryScroll: {
-    maxHeight: 44,
-    paddingHorizontal: 12,
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     backgroundColor: "#161b22",
     borderBottomWidth: 1,
     borderBottomColor: "#21262d",
+    gap: 10,
   },
-  categoryPill: {
+  searchBoxWrap: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#0d1117",
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: "#21262d",
-    marginRight: 8,
-    alignSelf: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#30363d",
+    gap: 8,
+    height: 42,
   },
-  categoryPillActive: {
+  searchInputClean: {
+    flex: 1,
+    color: "#f0f6fc",
+    fontSize: 13,
+  },
+  modeToggleBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    backgroundColor: "#21262d",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modeToggleBtnActive: {
     backgroundColor: "#084a2f",
   },
-  categoryPillText: {
+  breadcrumbBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#161b22",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#21262d",
+    justifyContent: "space-between",
+  },
+  breadcrumbScroll: {
+    alignItems: "center",
+    gap: 6,
+  },
+  breadcrumbItem: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  breadcrumbText: {
     color: "#8b949e",
     fontSize: 12,
     fontWeight: "600",
   },
-  categoryPillTextActive: {
-    color: "#ffffff",
+  breadcrumbActive: {
+    color: "#4ade80",
+    fontWeight: "700",
   },
-  listPadding: {
+  upLevelBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#21262d",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  upLevelText: {
+    color: "#4ade80",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  folderActionBar: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "#0d1117",
+    borderBottomWidth: 1,
+    borderBottomColor: "#21262d",
+  },
+  folderActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#161b22",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#30363d",
+  },
+  folderActionText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  subHeading: {
+    color: "#f0f6fc",
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 10,
+  },
+  foldersSection: {
+    marginBottom: 16,
+  },
+  foldersGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  folderCard: {
+    width: "48%",
+    backgroundColor: "#161b22",
     padding: 12,
-    paddingBottom: 80,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#30363d",
+  },
+  folderIconRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  folderName: {
+    color: "#f0f6fc",
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  folderMeta: {
+    color: "#8b949e",
+    fontSize: 11,
+  },
+  folderPrice: {
+    color: "#4ade80",
+    fontSize: 11,
+    marginTop: 4,
+  },
+  itemsSection: {
+    marginBottom: 40,
   },
   productCard: {
     backgroundColor: "#161b22",
@@ -2022,8 +2840,34 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#30363d",
   },
-  productInfo: {
+  productCardSelected: {
+    borderColor: "#4ade80",
+    backgroundColor: "#0d281e",
+  },
+  productCardTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
     marginBottom: 10,
+  },
+  checkboxTouch: {
+    paddingTop: 2,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: "#8b949e",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxActive: {
+    backgroundColor: "#084a2f",
+    borderColor: "#4ade80",
+  },
+  productInfo: {
+    flex: 1,
   },
   productName: {
     color: "#f0f6fc",
@@ -2073,16 +2917,120 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   editBtn: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 8,
     backgroundColor: "#21262d",
     borderRadius: 6,
     alignItems: "center",
+    justifyContent: "center",
   },
-  editBtnText: {
-    color: "#8b949e",
-    fontWeight: "600",
+  deleteBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: "#7f1d1d",
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  batchActionBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#161b22",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#30363d",
+  },
+  batchCountText: {
+    color: "#4ade80",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  batchBtnRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  batchBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#084a2f",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  batchBtnText: {
+    color: "#ffffff",
     fontSize: 12,
+    fontWeight: "700",
+  },
+  batchDeleteBtn: {
+    backgroundColor: "#dc2626",
+  },
+  treeScroll: {
+    flex: 1,
+    padding: 16,
+  },
+  treeHeading: {
+    color: "#f0f6fc",
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 12,
+  },
+  treeRootNode: {
+    marginBottom: 12,
+    backgroundColor: "#161b22",
+    borderRadius: 8,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#30363d",
+  },
+  treeNodeHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  treeNodeName: {
+    color: "#f0f6fc",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  treeNodeMeta: {
+    color: "#8b949e",
+    fontSize: 11,
+  },
+  treeChildNode: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginLeft: 18,
+    marginTop: 6,
+  },
+  treeElbow: {
+    color: "#6e7681",
+    fontFamily: "monospace",
+  },
+  treeChildName: {
+    color: "#93c5fd",
+    fontSize: 13,
+  },
+  targetFolderOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#21262d",
+  },
+  targetFolderName: {
+    color: "#f0f6fc",
+    fontSize: 14,
+  },
+  listPadding: {
+    padding: 16,
+    paddingBottom: 80,
   },
   listCard: {
     backgroundColor: "#161b22",
@@ -2116,40 +3064,43 @@ const styles = StyleSheet.create({
     backgroundColor: "#084a2f",
   },
   statusPending: {
-    backgroundColor: "#d97706",
+    backgroundColor: "#b45309",
   },
   statusBadgeText: {
     color: "#ffffff",
-    fontSize: 11,
-    fontWeight: "700",
+    fontSize: 10,
+    fontWeight: "800",
   },
   sectionBox: {
     backgroundColor: "#0d1117",
-    padding: 10,
     borderRadius: 8,
-    marginBottom: 10,
+    padding: 10,
+    marginBottom: 8,
   },
   sectionRootTitle: {
     color: "#4ade80",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
     marginBottom: 6,
+    textTransform: "uppercase",
   },
   subSectionBox: {
-    paddingLeft: 6,
+    marginLeft: 4,
+    marginBottom: 6,
   },
   subTitle: {
     color: "#8b949e",
     fontSize: 11,
+    fontStyle: "italic",
     marginBottom: 4,
   },
   lineItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 6,
+    paddingVertical: 4,
     borderBottomWidth: 1,
-    borderBottomColor: "#21262d",
+    borderBottomColor: "#161b22",
   },
   lineMain: {
     flex: 1,
@@ -2159,155 +3110,219 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   linePrice: {
-    color: "#4ade80",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  lineButtons: {
-    flexDirection: "row",
-    gap: 6,
-  },
-  setPriceBtn: {
-    backgroundColor: "#21262d",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  setPriceBtnText: {
-    color: "#f0f6fc",
-    fontSize: 11,
-  },
-  cannotGetBtn: {
-    backgroundColor: "#21262d",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  cannotGetActive: {
-    backgroundColor: "#dc2626",
-  },
-  cannotGetText: {
-    color: "#ffffff",
-    fontSize: 11,
-  },
-  listFooter: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#21262d",
-  },
-  totalPrice: {
-    color: "#4ade80",
-    fontSize: 16,
-    fontWeight: "800",
-    marginBottom: 10,
-  },
-  listActionRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  waQuoteBtn: {
-    flex: 1,
-    backgroundColor: "#25d366",
-    paddingVertical: 8,
-    borderRadius: 6,
-    alignItems: "center",
-  },
-  waQuoteBtnText: {
-    color: "#ffffff",
-    fontWeight: "700",
-    fontSize: 13,
-  },
-  confirmBtn: {
-    flex: 1,
-    backgroundColor: "#084a2f",
-    paddingVertical: 8,
-    borderRadius: 6,
-    alignItems: "center",
-  },
-  confirmBtnText: {
-    color: "#ffffff",
-    fontWeight: "700",
-    fontSize: 13,
-  },
-  tradingSummaryCard: {
-    backgroundColor: "#084a2f",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 14,
-  },
-  tradingLabel: {
-    color: "#86efac",
-    fontSize: 13,
-  },
-  tradingTotal: {
-    color: "#ffffff",
-    fontSize: 24,
-    fontWeight: "800",
-    marginVertical: 4,
-  },
-  tradingCount: {
-    color: "#bbf7d0",
-    fontSize: 12,
-  },
-  tradingButtonRow: {
-    marginBottom: 14,
-  },
-  primaryTradingBtn: {
-    backgroundColor: "#161b22",
-    padding: 12,
-    borderRadius: 8,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  primaryTradingBtnText: {
-    color: "#4ade80",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-  ledgerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#161b22",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  ledgerReceipt: {
-    color: "#f0f6fc",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  ledgerDate: {
     color: "#8b949e",
     fontSize: 11,
   },
-  ledgerAmount: {
+  lineActions: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  lineStatusBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: "#064e3b",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lineStatusBtnUnavailable: {
+    backgroundColor: "#7f1d1d",
+  },
+  linePriceBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: "#21262d",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  listFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: "#21262d",
+    paddingTop: 10,
+    marginTop: 6,
+  },
+  totalLabel: {
+    color: "#8b949e",
+    fontSize: 10,
+  },
+  totalAmount: {
     color: "#4ade80",
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
   },
-  moreCard: {
+  footerActions: {
+    flexDirection: "row",
+    gap: 6,
+    alignItems: "center",
+  },
+  waBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#25d366",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  waBtnText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  confirmBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#084a2f",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  confirmBtnText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  deleteListBtn: {
+    padding: 6,
+    backgroundColor: "#7f1d1d",
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tradingSummaryCard: {
     backgroundColor: "#161b22",
     padding: 16,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#084a2f",
+    marginBottom: 20,
+  },
+  tradingSummaryLabel: {
+    color: "#8b949e",
+    fontSize: 12,
+    fontWeight: "600",
+    marginBottom: 6,
+  },
+  tradingSummaryAmount: {
+    color: "#4ade80",
+    fontSize: 26,
+    fontWeight: "800",
+    marginBottom: 4,
+  },
+  tradingSummaryMeta: {
+    color: "#8b949e",
+    fontSize: 12,
+  },
+  logExpenseBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#78350f",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  logExpenseBtnText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  userProfileCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    backgroundColor: "#161b22",
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#30363d",
+    marginBottom: 18,
+  },
+  userAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#084a2f",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  userAvatarText: {
+    color: "#ffffff",
+    fontSize: 20,
+    fontWeight: "800",
+  },
+  userProfileName: {
+    color: "#f0f6fc",
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  userProfilePhone: {
+    color: "#8b949e",
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  roleBadgeWrap: {
+    alignSelf: "flex-start",
+    backgroundColor: "#064e3b",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  roleBadgeText: {
+    color: "#4ade80",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  everythingGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 20,
+  },
+  everythingTile: {
+    width: "48%",
+    backgroundColor: "#161b22",
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#30363d",
+    alignItems: "flex-start",
+    gap: 4,
+  },
+  everythingTileTitle: {
+    color: "#f0f6fc",
+    fontSize: 14,
+    fontWeight: "700",
+    marginTop: 4,
+  },
+  everythingTileDesc: {
+    color: "#8b949e",
+    fontSize: 11,
+  },
+  moreCard: {
+    backgroundColor: "#161b22",
+    borderRadius: 12,
+    padding: 14,
     marginBottom: 14,
     borderWidth: 1,
     borderColor: "#30363d",
   },
   moreCardTitle: {
     color: "#f0f6fc",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
-    marginBottom: 6,
   },
   moreCardDesc: {
     color: "#8b949e",
-    fontSize: 13,
-    marginBottom: 10,
-    lineHeight: 18,
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 8,
   },
   storefrontUrl: {
     color: "#4ade80",
@@ -2315,10 +3330,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   storefrontShareBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
     backgroundColor: "#25d366",
     padding: 10,
     borderRadius: 6,
-    alignItems: "center",
   },
   storefrontShareBtnText: {
     color: "#ffffff",
@@ -2375,6 +3393,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
     marginBottom: 40,
+    marginTop: 10,
   },
   signOutBtnText: {
     color: "#ffffff",
@@ -2396,17 +3415,10 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   navItemActive: {},
-  navIcon: {
-    fontSize: 18,
-    color: "#8b949e",
-  },
-  navIconActive: {
-    color: "#4ade80",
-  },
   navText: {
     fontSize: 10,
     color: "#8b949e",
-    marginTop: 2,
+    marginTop: 3,
     fontWeight: "500",
   },
   navTextActive: {
@@ -2437,12 +3449,29 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     padding: 20,
+    maxHeight: "85%",
   },
   modalTitle: {
     color: "#f0f6fc",
     fontSize: 16,
     fontWeight: "700",
-    marginBottom: 14,
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    color: "#8b949e",
+    fontSize: 12,
+    marginBottom: 10,
+  },
+  modalFieldLabel: {
+    color: "#8b949e",
+    fontSize: 12,
+    fontWeight: "600",
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  modalPickerRow: {
+    flexDirection: "row",
+    marginBottom: 10,
   },
   modalInput: {
     backgroundColor: "#0d1117",
@@ -2485,11 +3514,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   rolePill: {
-    flex: 1,
-    backgroundColor: "#21262d",
+    paddingHorizontal: 12,
     paddingVertical: 8,
+    backgroundColor: "#21262d",
     borderRadius: 6,
     alignItems: "center",
+    marginRight: 6,
   },
   rolePillActive: {
     backgroundColor: "#084a2f",

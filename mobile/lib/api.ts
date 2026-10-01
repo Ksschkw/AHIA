@@ -126,6 +126,10 @@ export interface Category {
   slug: string;
   parent_id: string | null;
   position: number;
+  description?: string | null;
+  default_normal_price?: string | null;
+  default_wholesale_price?: string | null;
+  default_pieces_per_pack?: number | null;
 }
 
 export interface Product {
@@ -298,6 +302,9 @@ export function createCategory(
   data: {
     name: string;
     parent_id?: string | null;
+    default_normal_price?: string | null;
+    default_wholesale_price?: string | null;
+    default_pieces_per_pack?: number | null;
   },
 ): Promise<Category> {
   return request<Category>(`/api/v1/tenants/${tenantId}/categories`, {
@@ -564,5 +571,35 @@ export function acceptInvitation(token: string): Promise<AcceptedInvitation> {
   return request<AcceptedInvitation>("/api/v1/invitations/accept", {
     method: "POST",
     body: { token },
+  });
+}
+
+export function deleteProduct(
+  tenantId: string,
+  productId: string,
+): Promise<Product> {
+  return request<Product>(`/api/v1/tenants/${tenantId}/products/${productId}`, {
+    method: "DELETE",
+  });
+}
+
+export function deleteCategory(
+  tenantId: string,
+  categoryId: string,
+  strategy: "move_up" | "cascade" | "restrict" = "move_up",
+): Promise<void> {
+  return request<void>(`/api/v1/tenants/${tenantId}/categories/${categoryId}?strategy=${encodeURIComponent(strategy)}`, {
+    method: "DELETE",
+  });
+}
+
+export function moveCategory(
+  tenantId: string,
+  categoryId: string,
+  newParentId: string | null,
+): Promise<Category> {
+  return request<Category>(`/api/v1/tenants/${tenantId}/categories/${categoryId}/move`, {
+    method: "POST",
+    body: { new_parent_id: newParentId },
   });
 }
