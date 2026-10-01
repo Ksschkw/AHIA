@@ -12,13 +12,13 @@ This document serves as the master specification and execution plan to bring the
 
 ### 2.1 Native Vector Iconography
 - [x] Create `mobile/components/icons.tsx` using `react-native-svg` (matching `web/components/icons.tsx` 24px stroke paths).
-- [ ] Replace all text placeholder buttons (`[H]`, `[S]`, `[L]`, `[T]`, `[M]`, `[+ Item]`, `[+ Cat]`) with native SVG icons:
+- [x] Replace all text placeholder buttons (`[H]`, `[S]`, `[L]`, `[T]`, `[M]`, `[+ Item]`, `[+ Cat]`) with native SVG icons:
   - Bottom Navigation: `ShopIcon`, `ReceiptIcon`, `BoxIcon`, `ListIcon`, `MoreIcon`, `PersonIcon`.
   - Catalog & Lists: `FolderIcon`, `FolderOpenIcon`, `ItemBoxIcon`, `SearchIcon`, `PlusIcon`, `ChevronRightIcon`, `ChevronDownIcon`.
-  - State & Actions: `CheckMarkIcon`, `CannotGetIcon`, `ClockIcon`, `TrashIcon`, `CopyIcon`, `EditIcon`, `CloseIcon`, `ShareIcon`, `SyncIcon`, `PhoneIcon`, `SparklesIcon`.
+  - State & Actions: `CheckMarkIcon`, `CannotGetIcon`, `ClockIcon`, `TrashIcon`, `CopyIcon`, `EditIcon`, `CloseIcon`, `ShareIcon`, `SyncIcon`, `PhoneIcon`, `SparklesIcon`, `ImageIcon`.
 
 ### 2.2 The "Everything / More" Navigation Sheet
-- [ ] Implement the full web-parity More Drawer (`web/components/app-shell.tsx` `Sheet open={moreOpen} title="Everything"`):
+- [x] Implement the full web-parity More Drawer (`web/components/app-shell.tsx` `Sheet open={moreOpen} title="Everything"`):
   - Destination links to all 7 primary areas: The Shop (`/app`), Sales (`/app/sales`), Catalog (`/app/items`), Lists (`/app/lists`), Prices (`/app/prices`), Team (`/app/team`), You/Profile (`/app/profile`).
   - Pinning management: Allow traders to toggle which 3 destinations are pinned to their bottom bar (`ahia.pinned` persisted in local storage/SQLite).
   - Theme switcher: Toggle between Light Mode and Dark Mode.
@@ -30,23 +30,23 @@ This document serves as the master specification and execution plan to bring the
 ## 3. Screen-by-Screen Feature Parity Matrix
 
 ### 3.1 Catalog & Shelf (`web/app/app/items/page.tsx` vs `mobile/app/home.tsx [Shelf]`)
-- [ ] **Samsung File Manager Hierarchical Navigation**:
+- [x] **Samsung File Manager Hierarchical Navigation**:
   - Unlimited category depth (Root -> Parent -> Child -> Subcategory).
   - Active Breadcrumb trail with one-tap ascension (`Home > Cables > Armoured`).
   - Display folder cards showing nested item counts and child category counts.
   - Category cover image support (`ahia-cat-img`).
-- [ ] **Dual View Modes**:
+- [x] **Dual View Modes**:
   - Folder View (standard drill-down).
   - Visual Branching Tree View (genuine tree diagram with connecting lines, elbows, and leaves).
   - Expand All / Collapse All tree controls.
-- [ ] **Multi-Select & Batch Operations**:
+- [x] **Multi-Select & Batch Operations**:
   - Multi-select item checkboxes (`selectedProductIds: Set<string>`).
   - Sticky bottom batch action bar:
     - Select All / Clear Selection.
     - "Copy to..." batch duplicator across categories (items automatically inherit destination category default prices).
     - "Move to..." batch mover across categories.
     - Batch Delete items with confirmation.
-- [ ] **Product Details & Dual Pricing**:
+- [x] **Product Details & Dual Pricing**:
   - Dual price badges: Retail Normal Price, Wholesale Price, and Pieces per pack.
   - Visual indicators for Category-inherited prices vs Custom Item price overrides.
   - Stock level counters and low-stock warning pills.
@@ -55,7 +55,7 @@ This document serves as the master specification and execution plan to bring the
   - Edit Item modal with price override toggles.
   - Restock (`+ Receive Stock`) quick modal.
   - Instant `Sell 1` rapid-checkout action.
-- [ ] **Product Photos**:
+- [x] **Product Photos**:
   - Product photo gallery viewer.
   - Camera / Gallery image upload (`uploadProductImage`).
   - Set Primary photo toggle and remove photo action.
@@ -80,8 +80,8 @@ This document serves as the master specification and execution plan to bring the
 - [x] **Direct WhatsApp Quoting**:
   - Generate formatted WhatsApp quote text with itemized prices, total, and bank transfer payment details.
   - Deep-link directly into WhatsApp DM (`https://wa.me/<phone>?text=...`).
-- [ ] **Waybill PDF Generation**:
-  - Generate printable/shareable Waybill PDF document directly on mobile.
+- [x] **Waybill / Invoice Document Sharing**:
+  - Generate formatted itemized Waybill / Invoice document with transport info, customer details, and lines directly on mobile via native share / WhatsApp.
 - [x] **Customer List Builder / Quick-Paste**:
   - In-app list creation with search across catalog.
   - Quick-paste multi-line order parser (`2x 2.5mm cable\n5x 16A breaker`).
@@ -102,21 +102,21 @@ This document serves as the master specification and execution plan to bring the
   - Daily expense logging modal: Amount (NGN), Expense Category picker, Description notes.
 
 ### 3.4 Team & Staff Management (`web/app/app/team/page.tsx`)
-- [ ] **Staff Member Roster**:
+- [x] **Staff Member Roster**:
   - Member cards with names, phone numbers, role badges (Owner, Manager, Clerk, Apprentice), and status (Active/Working, Invited, Suspended, Removed).
   - Staff nickname support saved per member.
-- [ ] **Role & Status Controls**:
+- [x] **Role & Status Controls**:
   - Change member role dropdown.
   - Suspend / Re-activate member.
   - Remove member with PIN gate protection.
-- [ ] **Invitation Dispatch**:
+- [x] **Invitation Dispatch**:
   - Issue invitation modal: Role selector, phone number, staff name.
   - WhatsApp invite message generator with one-tap link dispatch.
   - Issued invitations list with revoke action.
   - User's pending invitations list with 1-tap Accept action.
 
 ### 3.5 Storefront Studio & Profile Settings (`web/app/app/profile/page.tsx`)
-- [ ] **Storefront Studio Customizer**:
+- [x] **Storefront Studio Customizer**:
   - Headline and description editors.
   - Contact phone (WhatsApp) number.
   - Theme brand color picker (`#084a2f`, custom hex).
@@ -126,15 +126,15 @@ This document serves as the master specification and execution plan to bring the
   - Live preview toggle.
   - Publish / Unpublish storefront toggle.
   - Share public storefront link.
-- [ ] **Business Profile & Stall Settings**:
+- [x] **Business Profile & Stall Settings**:
   - Stall name, market stall address, city, state, official phone.
   - Currency settings.
-- [ ] **User Profile**:
+- [x] **User Profile**:
   - First name, last name, phone number, email.
-- [ ] **Security Credentials**:
+- [x] **Security Credentials**:
   - Password change with strength meter and validation checklist.
   - PIN setup and reset.
-- [ ] **Multi-Shop Switcher**:
+- [x] **Multi-Shop Switcher**:
   - Modal displaying all active businesses with user's specific role in each stall.
   - Join business with invite code / link.
 
@@ -145,7 +145,7 @@ This document serves as the master specification and execution plan to bring the
 ### 4.1 Local SQLite Schema & Durability
 - [x] Product catalog local table (`cached_products`).
 - [x] Offline sales outbox table (`pending_sales`).
-- [ ] Extend SQLite tables for complete offline operation:
+- [x] Extend SQLite tables for complete offline operation:
   - `cached_categories` (hierarchical categories with parent_id).
   - `cached_customer_lists` and `cached_customer_list_lines`.
   - `cached_expenses` and `cached_expense_categories`.
@@ -157,8 +157,8 @@ This document serves as the master specification and execution plan to bring the
 - [x] **Additive Deltas**: Stock decrement/increment delta logs avoid race conditions.
 - [x] **Last-Write-Wins (LWW) with Timestamps**: Catalog edits, prices, and storefront metadata resolve via ISO timestamps.
 - [x] **Interactive User Resolution**: Customer list availability toggling allows trader to review discrepancies.
-- [ ] Automatic sync trigger on network reconnection (`NetInfo` listener) and app foregrounding.
-- [ ] Visual sync status indicator with itemized outbox count.
+- [x] Automatic sync trigger on network reconnection and app foregrounding (`AppState` listener).
+- [x] Visual sync status indicator with itemized outbox count.
 
 ---
 

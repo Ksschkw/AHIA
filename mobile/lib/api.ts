@@ -437,7 +437,7 @@ export function receiveStock(
   );
 }
 
-export type MemberRole = "ADMIN" | "SALES" | "INVENTORY";
+export type MemberRole = "OWNER" | "MANAGER" | "SALES" | "INVENTORY" | "ADMIN";
 
 export interface Member {
   id: string;
@@ -487,6 +487,28 @@ export function inviteMember(
 export function removeMember(tenantId: string, memberId: string): Promise<void> {
   return request<void>(`/api/v1/tenants/${tenantId}/members/${memberId}`, {
     method: "DELETE",
+  });
+}
+
+export function changeMemberRole(
+  tenantId: string,
+  memberId: string,
+  role: MemberRole,
+): Promise<Member> {
+  return request<Member>(`/api/v1/tenants/${tenantId}/members/${memberId}`, {
+    method: "PATCH",
+    body: { role_name: role },
+  });
+}
+
+export function changeMemberStatus(
+  tenantId: string,
+  memberId: string,
+  status: "active" | "suspended",
+): Promise<Member> {
+  return request<Member>(`/api/v1/tenants/${tenantId}/members/${memberId}`, {
+    method: "PATCH",
+    body: { status },
   });
 }
 
@@ -595,6 +617,57 @@ export function updateStorefront(
     method: "PATCH",
     body: data,
   });
+}
+
+export function publishStorefront(
+  tenantId: string,
+  details: { headline?: string | null; description?: string | null; contact_phone?: string | null },
+): Promise<StorefrontDetails> {
+  return request<StorefrontDetails>(`/api/v1/tenants/${tenantId}/storefront/publish`, {
+    method: "POST",
+    body: details,
+  });
+}
+
+export function unpublishStorefront(tenantId: string): Promise<StorefrontDetails> {
+  return request<StorefrontDetails>(`/api/v1/tenants/${tenantId}/storefront/unpublish`, {
+    method: "POST",
+    body: {},
+  });
+}
+
+export interface ProductImage {
+  id: string;
+  product_id: string;
+  delivery_url: string;
+  is_primary: boolean;
+  position: number;
+}
+
+export function listProductImages(tenantId: string, productId: string): Promise<ProductImage[]> {
+  return request<ProductImage[]>(`/api/v1/tenants/${tenantId}/products/${productId}/images`);
+}
+
+export function makeProductImagePrimary(
+  tenantId: string,
+  productId: string,
+  imageId: string,
+): Promise<ProductImage> {
+  return request<ProductImage>(
+    `/api/v1/tenants/${tenantId}/products/${productId}/images/${imageId}/primary`,
+    { method: "POST" },
+  );
+}
+
+export function removeProductImage(
+  tenantId: string,
+  productId: string,
+  imageId: string,
+): Promise<void> {
+  return request<void>(
+    `/api/v1/tenants/${tenantId}/products/${productId}/images/${imageId}`,
+    { method: "DELETE" },
+  );
 }
 
 export function changePassword(currentPassword: string, newPassword: string): Promise<void> {

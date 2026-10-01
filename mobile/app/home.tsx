@@ -4,12 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   FlatList,
   Linking,
   Modal,
   Pressable,
   RefreshControl,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -31,6 +33,7 @@ import {
   EditIcon,
   FolderIcon,
   FolderOpenIcon,
+  ImageIcon,
   ItemBoxIcon,
   ListIcon,
   MoreIcon,
@@ -50,7 +53,10 @@ import {
 } from "@/components/icons";
 import {
   ApiError,
+  acceptInvitation,
   cancelSale,
+  changeMemberRole,
+  changeMemberStatus,
   changePassword,
   confirmCustomerList,
   copyProducts,
@@ -71,14 +77,20 @@ import {
   listExpenseCategories,
   listInvitations,
   listMembers,
+  listMyInvitations,
+  listProductImages,
   listProducts,
   listSales,
+  makeProductImagePrimary,
+  publishStorefront,
   receiveStock,
   recordExpense,
   recordSale,
   removeMember,
+  removeProductImage,
   sellOneProduct,
   submitCustomerList,
+  unpublishStorefront,
   updateBusiness,
   updateCategory,
   updateProduct,
@@ -92,7 +104,9 @@ import {
   type Member,
   type MemberRole,
   type MembershipInvitation,
+  type PendingInvitation,
   type Product,
+  type ProductImage,
   type SaleSummary,
   type StorefrontDetails,
   type TenantDetails,
@@ -272,6 +286,11 @@ export default function Home() {
   const [restockQty, setRestockQty] = useState("");
   const [savingRestock, setSavingRestock] = useState(false);
 
+  // Product Gallery state
+  const [galleryProduct, setGalleryProduct] = useState<Product | null>(null);
+  const [galleryImages, setGalleryImages] = useState<ProductImage[]>([]);
+  const [loadingGallery, setLoadingGallery] = useState(false);
+
   const [pricingLine, setPricingLine] = useState<{
     listId: string;
     lineId: string;
@@ -330,7 +349,12 @@ export default function Home() {
   const [storefrontHeadline, setStorefrontHeadline] = useState("");
   const [storefrontDesc, setStorefrontDesc] = useState("");
   const [storefrontPhone, setStorefrontPhone] = useState("");
+  const [storefrontThemeColor, setStorefrontThemeColor] = useState("#084a2f");
+  const [storefrontThemeBg, setStorefrontThemeBg] = useState("#fbf7f0");
+  const [storefrontClosing, setStorefrontClosing] = useState("");
   const [savingStorefront, setSavingStorefront] = useState(false);
+
+  const [myInvitations, setMyInvitations] = useState<PendingInvitation[]>([]);
 
   const [showBusinessModal, setShowBusinessModal] = useState(false);
   const [editBizName, setEditBizName] = useState("");
@@ -378,6 +402,7 @@ export default function Home() {
         freshExpCats,
         freshMembers,
         freshInvs,
+        myInvs,
         bDetails,
         uProfile,
         sDetails,
@@ -390,6 +415,7 @@ export default function Home() {
         listExpenseCategories(tenantId).catch(() => ({ categories: [] })),
         listMembers(tenantId).catch(() => []),
         listInvitations(tenantId).catch(() => []),
+        listMyInvitations().catch(() => []),
         getBusiness(tenantId).catch(() => null),
         currentUser().catch(() => null),
         getStorefront(tenantId).catch(() => null),
@@ -409,9 +435,18 @@ export default function Home() {
       }
       setMembers(freshMembers);
       setInvitations(freshInvs);
+      setMyInvitations(myInvs);
       setBusinessDetails(bDetails);
       setProfile(uProfile);
       setStorefrontDetails(sDetails);
+      if (sDetails) {
+        setStorefrontHeadline(sDetails.headline ?? "");
+        setStorefrontDesc(sDetails.description ?? "");
+        setStorefrontPhone(sDetails.contact_phone ?? "");
+        setStorefrontThemeColor(sDetails.theme_color ?? "#084a2f");
+        setStorefrontThemeBg(sDetails.theme_bg_color ?? "#fbf7f0");
+        setStorefrontClosing(sDetails.closing_statement ?? "");
+      }
       setProblem(null);
     } catch {
       if (cached.length === 0) {
@@ -441,6 +476,23 @@ export default function Home() {
       }
     })();
   }, [loadData]);
+
+  // Foreground auto-sync: flush offline sales outbox when app returns to foreground
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "active" && activeBusiness) {
+        void flushOutbox(activeBusiness.id).then((synced) => {
+          if (synced > 0) {
+            setPendingSyncCount(getPendingSalesCount(activeBusiness.id));
+            showToast(`Synced ${synced} offline sale(s).`);
+          }
+        });
+      }
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [activeBusiness]);
 
   // Hierarchical Breadcrumbs
   const breadcrumbs = useMemo(() => {
@@ -751,6 +803,47 @@ export default function Home() {
     }
   };
 
+  const handleOpenGallery = async (product: Product) => {
+    if (!activeBusiness) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setGalleryProduct(product);
+    setLoadingGallery(true);
+    try {
+      const imgs = await listProductImages(activeBusiness.id, product.id);
+      setGalleryImages(imgs);
+    } catch {
+      setGalleryImages([]);
+    } finally {
+      setLoadingGallery(false);
+    }
+  };
+
+  const handleMakePrimaryImage = async (imageId: string) => {
+    if (!activeBusiness || !galleryProduct) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await makeProductImagePrimary(activeBusiness.id, galleryProduct.id, imageId);
+      setGalleryImages((curr) =>
+        curr.map((img) => ({ ...img, is_primary: img.id === imageId }))
+      );
+      showToast("Primary product photo updated!");
+    } catch {
+      showToast("Could not set primary photo.");
+    }
+  };
+
+  const handleRemoveImage = async (imageId: string) => {
+    if (!activeBusiness || !galleryProduct) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    try {
+      await removeProductImage(activeBusiness.id, galleryProduct.id, imageId);
+      setGalleryImages((curr) => curr.filter((img) => img.id !== imageId));
+      showToast("Photo removed from gallery.");
+    } catch {
+      showToast("Could not remove photo.");
+    }
+  };
+
   const handleRecordExpense = async () => {
     if (!activeBusiness || !expenseAmount.trim() || !expenseCategoryId) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -811,6 +904,9 @@ export default function Home() {
         headline: storefrontHeadline.trim() || null,
         description: storefrontDesc.trim() || null,
         contact_phone: storefrontPhone.trim() || null,
+        theme_color: storefrontThemeColor || null,
+        theme_bg_color: storefrontThemeBg || null,
+        closing_statement: storefrontClosing.trim() || null,
       });
       setStorefrontDetails(updated);
       setShowStorefrontModal(false);
@@ -819,6 +915,110 @@ export default function Home() {
       showToast("Could not update storefront.");
     } finally {
       setSavingStorefront(false);
+    }
+  };
+
+  const handleToggleStorefrontPublish = async () => {
+    if (!activeBusiness) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSavingStorefront(true);
+    try {
+      if (storefrontDetails?.is_published) {
+        const res = await unpublishStorefront(activeBusiness.id);
+        setStorefrontDetails(res);
+        showToast("Storefront is now private (unpublished).");
+      } else {
+        const res = await publishStorefront(activeBusiness.id, {
+          headline: storefrontHeadline.trim() || undefined,
+          description: storefrontDesc.trim() || undefined,
+          contact_phone: storefrontPhone.trim() || undefined,
+        });
+        setStorefrontDetails(res);
+        showToast("Storefront is now live and published!");
+      }
+    } catch {
+      showToast("Could not change publication status.");
+    } finally {
+      setSavingStorefront(false);
+    }
+  };
+
+  const handleToggleMemberStatus = async (member: Member) => {
+    if (!activeBusiness) return;
+    const newStatus = member.status === "active" ? "suspended" : "active";
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      const updated = await changeMemberStatus(activeBusiness.id, member.id, newStatus);
+      setMembers((curr) => curr.map((m) => (m.id === updated.id ? updated : m)));
+      showToast(`Staff member ${newStatus === "active" ? "reactivated" : "suspended"}.`);
+    } catch {
+      showToast("Could not update staff status.");
+    }
+  };
+
+  const handleChangeMemberRole = async (member: Member) => {
+    if (!activeBusiness) return;
+    const roles: MemberRole[] = ["SALES", "INVENTORY", "MANAGER", "OWNER"];
+    const currentIndex = roles.indexOf(member.role);
+    const nextRole = roles[(currentIndex + 1) % roles.length];
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      const updated = await changeMemberRole(activeBusiness.id, member.id, nextRole);
+      setMembers((curr) => curr.map((m) => (m.id === updated.id ? updated : m)));
+      showToast(`Role changed to ${nextRole}`);
+    } catch {
+      showToast("Could not change member role.");
+    }
+  };
+
+  const handleAcceptMyInvitation = async (inv: PendingInvitation) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    try {
+      await acceptInvitation(inv.id);
+      showToast(`Joined ${inv.tenant_name}! Reloading shops...`);
+      const found = await listBusinesses();
+      setBusinesses(found);
+      if (found.length > 0) {
+        setActiveBusiness(found[0]);
+        await loadData(found[0].id);
+      }
+    } catch {
+      showToast("Could not accept invitation.");
+    }
+  };
+
+  const handleShareWaybillReceipt = async (item: CustomerList) => {
+    if (!activeBusiness) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const cleanPhone = formatWaNumber(item.customer_phone);
+    const dateStr = new Date(item.created_at).toLocaleDateString([], {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+
+    let linesText = "";
+    item.lines.forEach((l, idx) => {
+      const name = l.product_name || l.free_text || "Item";
+      const priceStr = l.shop_price ? formatMoney(l.shop_price) : "Pending";
+      linesText += `${idx + 1}. ${l.quantity}x ${name} - ${priceStr}\n`;
+    });
+
+    const waybillInfo = item.waybill_number
+      ? `\nWAYBILL DETAILS:\nTransporter: ${item.transporter_name || "Courier"}\nWaybill #: ${item.waybill_number}${item.dispatch_cost ? `\nDispatch Cost: ${formatMoney(item.dispatch_cost)}` : ""}${item.tracking_url ? `\nTracking URL: ${item.tracking_url}` : ""}\n`
+      : "";
+
+    const receipt = `==============================\nWAYBILL & INVOICE\n${activeBusiness.name.toUpperCase()}\nDate: ${dateStr}\nCustomer: ${item.customer_name || item.customer_phone || "Customer"}\nPhone: ${item.customer_phone || "N/A"}\n==============================\nITEMS:\n${linesText}==============================${waybillInfo}TOTAL: ${item.priced_total ? formatMoney(item.priced_total) : "Incomplete"}\n\nThank you for doing business with us!\n==============================`;
+
+    const waUrl = cleanPhone
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(receipt)}`
+      : `https://wa.me/?text=${encodeURIComponent(receipt)}`;
+
+    const canOpen = await Linking.canOpenURL(waUrl);
+    if (canOpen) {
+      await Linking.openURL(waUrl);
+    } else {
+      await Share.share({ message: receipt });
     }
   };
 
@@ -1629,6 +1829,13 @@ export default function Home() {
                             </Pressable>
 
                             <Pressable
+                              style={styles.photoBtn}
+                              onPress={() => handleOpenGallery(item)}
+                            >
+                              <ImageIcon size={14} color="#60a5fa" />
+                            </Pressable>
+
+                            <Pressable
                               style={styles.editBtn}
                               onPress={() => {
                                 void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1890,6 +2097,14 @@ export default function Home() {
                       >
                         <ShareIcon size={14} color="#ffffff" />
                         <Text style={styles.waBtnText}>WhatsApp</Text>
+                      </Pressable>
+
+                      <Pressable
+                        style={styles.invoiceBtn}
+                        onPress={() => handleShareWaybillReceipt(item)}
+                      >
+                        <ReceiptIcon size={14} color="#ffffff" />
+                        <Text style={styles.invoiceBtnText}>Invoice</Text>
                       </Pressable>
 
                       {isConfirmed && !item.waybill_number && (
@@ -2184,20 +2399,49 @@ export default function Home() {
             {/* Storefront Studio Card */}
             <View style={styles.moreCard}>
               <View style={styles.sectionHeaderRow}>
-                <Text style={styles.moreCardTitle}>Storefront Studio</Text>
-                <Pressable
-                  style={styles.addStaffBtn}
-                  onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setStorefrontHeadline(storefrontDetails?.headline ?? "");
-                    setStorefrontDesc(storefrontDetails?.description ?? "");
-                    setStorefrontPhone(storefrontDetails?.contact_phone ?? "");
-                    setShowStorefrontModal(true);
-                  }}
-                >
-                  <Text style={styles.addStaffBtnText}>Edit</Text>
-                </Pressable>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Text style={styles.moreCardTitle}>Storefront Studio</Text>
+                  <View
+                    style={[
+                      styles.storefrontStatusPill,
+                      storefrontDetails?.is_published
+                        ? styles.storefrontStatusPublished
+                        : styles.storefrontStatusDraft,
+                    ]}
+                  >
+                    <Text style={styles.storefrontStatusText}>
+                      {storefrontDetails?.is_published ? "PUBLISHED" : "DRAFT"}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: "row", gap: 6 }}>
+                  <Pressable
+                    style={styles.publishToggleBtn}
+                    onPress={handleToggleStorefrontPublish}
+                  >
+                    <Text style={styles.publishToggleBtnText}>
+                      {storefrontDetails?.is_published ? "Unpublish" : "Go Live"}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.addStaffBtn}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setStorefrontHeadline(storefrontDetails?.headline ?? "");
+                      setStorefrontDesc(storefrontDetails?.description ?? "");
+                      setStorefrontPhone(storefrontDetails?.contact_phone ?? "");
+                      setStorefrontThemeColor(storefrontDetails?.theme_color ?? "#084a2f");
+                      setStorefrontThemeBg(storefrontDetails?.theme_bg_color ?? "#fbf7f0");
+                      setStorefrontClosing(storefrontDetails?.closing_statement ?? "");
+                      setShowStorefrontModal(true);
+                    }}
+                  >
+                    <Text style={styles.addStaffBtnText}>Edit</Text>
+                  </Pressable>
+                </View>
               </View>
+
               <Text style={styles.moreCardDesc}>
                 {storefrontDetails?.headline || "Your public shop catalog is live on AHIA."}
               </Text>
@@ -2206,7 +2450,7 @@ export default function Home() {
               </Text>
               <Pressable style={styles.storefrontShareBtn} onPress={handleShareStorefront}>
                 <ShareIcon size={16} color="#ffffff" />
-                <Text style={styles.storefrontShareBtnText}>Share on WhatsApp</Text>
+                <Text style={styles.storefrontShareBtnText}>Share Storefront Link</Text>
               </Pressable>
             </View>
 
@@ -2224,12 +2468,35 @@ export default function Home() {
                   <Text style={styles.addStaffBtnText}>+ Invite</Text>
                 </Pressable>
               </View>
+
+              {/* Members List */}
               {members.map((m) => (
                 <View key={m.id} style={styles.memberRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.memberName}>{m.first_name} {m.last_name ?? ""}</Text>
-                    <Text style={styles.memberRole}>{m.role} - {m.status.toUpperCase()}</Text>
+                    <Text style={styles.memberName}>
+                      {m.first_name} {m.last_name ?? ""}
+                    </Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
+                      <Pressable
+                        style={styles.memberRoleBadge}
+                        onPress={() => handleChangeMemberRole(m)}
+                      >
+                        <Text style={styles.memberRoleBadgeText}>{m.role}</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[
+                          styles.memberStatusBadge,
+                          m.status === "active" ? styles.memberStatusActive : styles.memberStatusSuspended,
+                        ]}
+                        onPress={() => handleToggleMemberStatus(m)}
+                      >
+                        <Text style={styles.memberStatusBadgeText}>
+                          {m.status.toUpperCase()}
+                        </Text>
+                      </Pressable>
+                    </View>
                   </View>
+
                   <Pressable
                     style={styles.removeStaffBtn}
                     onPress={() => handleRemoveMember(m)}
@@ -2238,6 +2505,44 @@ export default function Home() {
                   </Pressable>
                 </View>
               ))}
+
+              {/* Sent Invitations */}
+              {invitations.length > 0 && (
+                <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: "#21262d", paddingTop: 10 }}>
+                  <Text style={styles.invitationSubHeading}>Sent Invitations ({invitations.length})</Text>
+                  {invitations.map((inv) => (
+                    <View key={inv.id} style={styles.invitationRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.invitationPhone}>{inv.phone || inv.email || "Invited"}</Text>
+                        <Text style={styles.invitationMeta}>Role: {inv.role} - {inv.status.toUpperCase()}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Pending Invitations Received by User */}
+              {myInvitations.length > 0 && (
+                <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: "#084a2f", paddingTop: 10 }}>
+                  <Text style={[styles.invitationSubHeading, { color: "#4ade80" }]}>
+                    Invitations Waiting for You ({myInvitations.length})
+                  </Text>
+                  {myInvitations.map((inv) => (
+                    <View key={inv.id} style={styles.invitationRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.invitationPhone}>{inv.tenant_name}</Text>
+                        <Text style={styles.invitationMeta}>Role: {inv.role_name}</Text>
+                      </View>
+                      <Pressable
+                        style={styles.acceptInviteBtn}
+                        onPress={() => handleAcceptMyInvitation(inv)}
+                      >
+                        <Text style={styles.acceptInviteBtnText}>Accept</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
 
             {/* Business Info */}
@@ -3117,33 +3422,188 @@ export default function Home() {
         </View>
       </Modal>
 
+      {/* Product Image Gallery Modal */}
+      <Modal visible={galleryProduct !== null} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>{galleryProduct?.name ?? "Product"}</Text>
+                <Text style={styles.modalSubtitle}>Photo Gallery & Cover Image</Text>
+              </View>
+              <Pressable
+                style={styles.closeModalBtn}
+                onPress={() => setGalleryProduct(null)}
+              >
+                <CloseIcon size={18} color="#8b949e" />
+              </Pressable>
+            </View>
+
+            {loadingGallery ? (
+              <View style={{ padding: 40, alignItems: "center" }}>
+                <ActivityIndicator color="#4ade80" size="large" />
+              </View>
+            ) : galleryImages.length === 0 ? (
+              <View style={styles.emptyGalleryBox}>
+                <ImageIcon size={36} color="#6e7681" />
+                <Text style={styles.emptyTitle}>No photos attached yet</Text>
+                <Text style={styles.emptySubtitle}>
+                  Photos attached to this product appear here and on your public web storefront.
+                </Text>
+              </View>
+            ) : (
+              <ScrollView style={{ maxHeight: 280, marginBottom: 12 }}>
+                {galleryImages.map((img) => (
+                  <View key={img.id} style={styles.galleryImageRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.galleryImageUrl} numberOfLines={1}>
+                        {img.delivery_url}
+                      </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
+                        {img.is_primary && (
+                          <View style={styles.primaryCoverBadge}>
+                            <Text style={styles.primaryCoverBadgeText}>PRIMARY COVER</Text>
+                          </View>
+                        )}
+                        <Text style={styles.galleryPositionText}>Position: {img.position}</Text>
+                      </View>
+                    </View>
+
+                    <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+                      {!img.is_primary && (
+                        <Pressable
+                          style={styles.makePrimaryBtn}
+                          onPress={() => handleMakePrimaryImage(img.id)}
+                        >
+                          <Text style={styles.makePrimaryBtnText}>Set Cover</Text>
+                        </Pressable>
+                      )}
+                      <Pressable
+                        style={styles.deletePhotoBtn}
+                        onPress={() => handleRemoveImage(img.id)}
+                      >
+                        <TrashIcon size={14} color="#f87171" />
+                      </Pressable>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={styles.modalCancelBtn}
+                onPress={() => setGalleryProduct(null)}
+              >
+                <Text style={styles.modalCancelText}>Close</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Storefront Customization Modal */}
       <Modal visible={showStorefrontModal} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Customize Storefront</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Headline (e.g. Best Electricals in Alaba)"
-              placeholderTextColor="#8a928e"
-              value={storefrontHeadline}
-              onChangeText={setStorefrontHeadline}
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Description (e.g. Wholesale generators, cables & fittings)"
-              placeholderTextColor="#8a928e"
-              value={storefrontDesc}
-              onChangeText={setStorefrontDesc}
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="WhatsApp / Contact Phone"
-              placeholderTextColor="#8a928e"
-              keyboardType="phone-pad"
-              value={storefrontPhone}
-              onChangeText={setStorefrontPhone}
-            />
+            <Text style={styles.modalSubtitle}>
+              Control how buyers experience your stall on WhatsApp and the web.
+            </Text>
+
+            <ScrollView style={{ maxHeight: 380 }}>
+              <Text style={styles.modalFieldLabel}>Storefront Headline</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Headline (e.g. Best Electricals in Alaba)"
+                placeholderTextColor="#8a928e"
+                value={storefrontHeadline}
+                onChangeText={setStorefrontHeadline}
+              />
+
+              <Text style={styles.modalFieldLabel}>About Your Shop</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Description (e.g. Wholesale generators, cables & fittings)"
+                placeholderTextColor="#8a928e"
+                value={storefrontDesc}
+                onChangeText={setStorefrontDesc}
+              />
+
+              <Text style={styles.modalFieldLabel}>WhatsApp / Contact Phone</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="WhatsApp Phone Number"
+                placeholderTextColor="#8a928e"
+                keyboardType="phone-pad"
+                value={storefrontPhone}
+                onChangeText={setStorefrontPhone}
+              />
+
+              {/* Brand Accent Color */}
+              <Text style={styles.modalFieldLabel}>Brand Theme Color</Text>
+              <View style={styles.colorPillsRow}>
+                {[
+                  { hex: "#084a2f", name: "Forest" },
+                  { hex: "#1e3a8a", name: "Navy" },
+                  { hex: "#b45309", name: "Amber" },
+                  { hex: "#7f1d1d", name: "Crimson" },
+                  { hex: "#312e81", name: "Indigo" },
+                ].map((c) => (
+                  <Pressable
+                    key={c.hex}
+                    style={[
+                      styles.colorPill,
+                      { backgroundColor: c.hex },
+                      storefrontThemeColor === c.hex && styles.colorPillSelected,
+                    ]}
+                    onPress={() => setStorefrontThemeColor(c.hex)}
+                  >
+                    {storefrontThemeColor === c.hex && (
+                      <CheckMarkIcon size={12} color="#ffffff" />
+                    )}
+                  </Pressable>
+                ))}
+              </View>
+
+              {/* Background Tone */}
+              <Text style={styles.modalFieldLabel}>Background Tone</Text>
+              <View style={styles.colorPillsRow}>
+                {[
+                  { hex: "#fbf7f0", name: "Warm Cream" },
+                  { hex: "#ffffff", name: "Crisp White" },
+                  { hex: "#f1f5f9", name: "Slate Gray" },
+                  { hex: "#0d1117", name: "Dark" },
+                ].map((c) => (
+                  <Pressable
+                    key={c.hex}
+                    style={[
+                      styles.colorPill,
+                      { backgroundColor: c.hex, borderWidth: 1, borderColor: "#30363d" },
+                      storefrontThemeBg === c.hex && styles.colorPillSelected,
+                    ]}
+                    onPress={() => setStorefrontThemeBg(c.hex)}
+                  >
+                    {storefrontThemeBg === c.hex && (
+                      <CheckMarkIcon
+                        size={12}
+                        color={c.hex === "#0d1117" ? "#ffffff" : "#000000"}
+                      />
+                    )}
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={styles.modalFieldLabel}>Closing Statement / Notice</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. Thanks for shopping! Deliveries dispatched daily by 4pm."
+                placeholderTextColor="#8a928e"
+                value={storefrontClosing}
+                onChangeText={setStorefrontClosing}
+              />
+            </ScrollView>
+
             <View style={styles.modalButtons}>
               <Pressable style={styles.modalCancelBtn} onPress={() => setShowStorefrontModal(false)}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
@@ -3238,6 +3698,50 @@ export default function Home() {
               textContentType="newPassword"
               importantForAutofill="yes"
             />
+
+            {/* Password Strength Checklist */}
+            {newPassword.length > 0 && (
+              <View style={styles.passwordMeterBox}>
+                <View style={styles.passwordStrengthRow}>
+                  <Text style={styles.passwordStrengthLabel}>Strength:</Text>
+                  <Text
+                    style={[
+                      styles.passwordStrengthValue,
+                      newPassword.length >= 8 && /\d/.test(newPassword)
+                        ? styles.strengthStrong
+                        : newPassword.length >= 8
+                        ? styles.strengthMedium
+                        : styles.strengthWeak,
+                    ]}
+                  >
+                    {newPassword.length >= 8 && /\d/.test(newPassword)
+                      ? "Strong"
+                      : newPassword.length >= 8
+                      ? "Medium"
+                      : "Too Short"}
+                  </Text>
+                </View>
+                <View style={styles.strengthBarWrap}>
+                  <View
+                    style={[
+                      styles.strengthBar,
+                      newPassword.length >= 8 && /\d/.test(newPassword)
+                        ? styles.barStrong
+                        : newPassword.length >= 8
+                        ? styles.barMedium
+                        : styles.barWeak,
+                    ]}
+                  />
+                </View>
+                <Text style={styles.pwdChecklistText}>
+                  {newPassword.length >= 8 ? "[OK]" : "[ ]"} Minimum 8 characters
+                </Text>
+                <Text style={styles.pwdChecklistText}>
+                  {/\d/.test(newPassword) ? "[OK]" : "[ ]"} Contains a number
+                </Text>
+              </View>
+            )}
+
             <View style={styles.modalButtons}>
               <Pressable style={styles.modalCancelBtn} onPress={() => setShowPasswordModal(false)}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
@@ -4631,6 +5135,248 @@ const styles = StyleSheet.create({
   },
   rolePillTextActive: {
     color: "#ffffff",
+  },
+  storefrontStatusPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  storefrontStatusPublished: {
+    backgroundColor: "#064e3b",
+  },
+  storefrontStatusDraft: {
+    backgroundColor: "#21262d",
+  },
+  storefrontStatusText: {
+    color: "#ffffff",
+    fontSize: 9,
+    fontWeight: "800",
+  },
+  publishToggleBtn: {
+    backgroundColor: "#21262d",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#30363d",
+  },
+  publishToggleBtnText: {
+    color: "#f0f6fc",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  memberRoleBadge: {
+    backgroundColor: "#084a2f",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  memberRoleBadgeText: {
+    color: "#4ade80",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  memberStatusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  memberStatusActive: {
+    backgroundColor: "#166534",
+  },
+  memberStatusSuspended: {
+    backgroundColor: "#7f1d1d",
+  },
+  memberStatusBadgeText: {
+    color: "#ffffff",
+    fontSize: 9,
+    fontWeight: "700",
+  },
+  invitationSubHeading: {
+    color: "#8b949e",
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  invitationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: "#21262d",
+  },
+  invitationPhone: {
+    color: "#f0f6fc",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  invitationMeta: {
+    color: "#8b949e",
+    fontSize: 11,
+  },
+  acceptInviteBtn: {
+    backgroundColor: "#084a2f",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  acceptInviteBtnText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  photoBtn: {
+    padding: 6,
+    backgroundColor: "#1e3a8a",
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  invoiceBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#4338ca",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  invoiceBtnText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  closeModalBtn: {
+    padding: 4,
+  },
+  emptyGalleryBox: {
+    alignItems: "center",
+    paddingVertical: 30,
+    paddingHorizontal: 20,
+  },
+  galleryImageRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#0d1117",
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#21262d",
+  },
+  galleryImageUrl: {
+    color: "#f0f6fc",
+    fontSize: 12,
+  },
+  primaryCoverBadge: {
+    backgroundColor: "#084a2f",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  primaryCoverBadgeText: {
+    color: "#4ade80",
+    fontSize: 9,
+    fontWeight: "800",
+  },
+  galleryPositionText: {
+    color: "#8b949e",
+    fontSize: 11,
+  },
+  makePrimaryBtn: {
+    backgroundColor: "#21262d",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  makePrimaryBtnText: {
+    color: "#4ade80",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  deletePhotoBtn: {
+    padding: 6,
+    backgroundColor: "#21262d",
+    borderRadius: 4,
+  },
+  colorPillsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 12,
+  },
+  colorPill: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  colorPillSelected: {
+    borderWidth: 3,
+    borderColor: "#4ade80",
+  },
+  passwordMeterBox: {
+    backgroundColor: "#0d1117",
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#21262d",
+  },
+  passwordStrengthRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  passwordStrengthLabel: {
+    color: "#8b949e",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  passwordStrengthValue: {
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  strengthStrong: {
+    color: "#4ade80",
+  },
+  strengthMedium: {
+    color: "#fde047",
+  },
+  strengthWeak: {
+    color: "#f87171",
+  },
+  strengthBarWrap: {
+    height: 4,
+    backgroundColor: "#21262d",
+    borderRadius: 2,
+    marginBottom: 8,
+    overflow: "hidden",
+  },
+  strengthBar: {
+    height: 4,
+    borderRadius: 2,
+  },
+  barStrong: {
+    width: "100%",
+    backgroundColor: "#4ade80",
+  },
+  barMedium: {
+    width: "60%",
+    backgroundColor: "#fde047",
+  },
+  barWeak: {
+    width: "25%",
+    backgroundColor: "#f87171",
+  },
+  pwdChecklistText: {
+    color: "#8b949e",
+    fontSize: 11,
+    marginTop: 2,
   },
   shopOption: {
     padding: 14,
