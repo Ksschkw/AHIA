@@ -1,5 +1,16 @@
 import * as SQLite from "expo-sqlite";
-import { type Product, type Category, type CustomerList, recordSale } from "./api";
+import {
+  type Product,
+  type Category,
+  type CustomerList,
+  recordSale,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+} from "./api";
 
 /**
  * Local SQLite storage for offline shelf reading, categories, customer lists, and durable sale outbox.
@@ -88,6 +99,16 @@ function getDb(): SQLite.SQLiteDatabase | null {
           server_updated_at TEXT,
           local_updated_at TEXT,
           has_local_edit INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS sync_outbox (
+          id TEXT PRIMARY KEY,
+          tenant_id TEXT NOT NULL,
+          action TEXT NOT NULL,
+          entity_type TEXT NOT NULL,
+          payload_json TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          status TEXT NOT NULL,
+          retry_count INTEGER NOT NULL DEFAULT 0
         );
       `);
     }
@@ -359,6 +380,345 @@ export async function flushOutbox(tenantId: string): Promise<number> {
     return 0;
   }
 }
+
+/** Enqueue a generic mutation into SQLite sync_outbox. */
+export function enqueueOutboxMutation(
+  tenantId: string,
+  action: "CREATE_CATEGORY" | "UPDATE_CATEGORY" | "DELETE_CATEGORY" | "CREATE_PRODUCT" | "UPDATE_PRODUCT" | "DELETE_PRODUCT",
+  entityType: "category" | "product",
+  payload: Record<string, unknown>,
+): string {
+  const id = `outbox-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  try {
+    const db = getDb();
+    if (!db) return id;
+    const now = new Date().toISOString();
+    db.runSync(
+      `INSERT INTO sync_outbox (id, tenant_id, action, entity_type, payload_json, created_at, status, retry_count)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, tenantId, action, entityType, JSON.stringify(payload), now, "pending", 0],
+    );
+  } catch {
+    // Non-fatal
+  }
+  return id;
+}
+
+/** Total pending outbox count across sales and catalog mutations. */
+export function getPendingOutboxCount(tenantId: string): number {
+  try {
+    const db = getDb();
+    if (!db) return 0;
+    const saleRow = db.getFirstSync<{ count: number }>(
+      "SELECT COUNT(*) as count FROM sale_outbox WHERE tenant_id = ? AND status = 'pending'",
+      [tenantId],
+    );
+    const syncRow = db.getFirstSync<{ count: number }>(
+      "SELECT COUNT(*) as count FROM sync_outbox WHERE tenant_id = ? AND status = 'pending'",
+      [tenantId],
+    );
+    return (saleRow?.count ?? 0) + (syncRow?.count ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
+/** Create a category locally first in SQLite and enqueue for sync. */
+export function createLocalCategory(
+  tenantId: string,
+  data: {
+    name: string;
+    parent_id?: string | null;
+    default_normal_price?: string | null;
+    default_wholesale_price?: string | null;
+  },
+): Category {
+  const tempId = `cat-local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const slug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  const category: Category = {
+    id: tempId,
+    tenant_id: tenantId,
+    name: data.name,
+    slug: slug || "category",
+    parent_id: data.parent_id ?? null,
+    position: 0,
+    default_normal_price: data.default_normal_price ?? null,
+    default_wholesale_price: data.default_wholesale_price ?? null,
+  };
+
+  try {
+    const db = getDb();
+    if (db) {
+      const now = new Date().toISOString();
+      db.runSync(
+        `INSERT OR REPLACE INTO cached_categories (id, tenant_id, name, slug, parent_id, position, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [category.id, tenantId, category.name, category.slug, category.parent_id, 0, now],
+      );
+    }
+  } catch {
+    // Non-fatal
+  }
+
+  enqueueOutboxMutation(tenantId, "CREATE_CATEGORY", "category", {
+    temp_id: tempId,
+    name: data.name,
+    parent_id: data.parent_id ?? null,
+    default_normal_price: data.default_normal_price ?? null,
+    default_wholesale_price: data.default_wholesale_price ?? null,
+  });
+
+  return category;
+}
+
+/** Update a category locally and enqueue for sync. */
+export function updateLocalCategory(
+  tenantId: string,
+  categoryId: string,
+  data: {
+    name?: string;
+    default_normal_price?: string | null;
+    default_wholesale_price?: string | null;
+  },
+): void {
+  try {
+    const db = getDb();
+    if (db && data.name) {
+      db.runSync("UPDATE cached_categories SET name = ? WHERE id = ? AND tenant_id = ?", [
+        data.name,
+        categoryId,
+        tenantId,
+      ]);
+    }
+  } catch {
+    // Non-fatal
+  }
+
+  enqueueOutboxMutation(tenantId, "UPDATE_CATEGORY", "category", {
+    category_id: categoryId,
+    ...data,
+  });
+}
+
+/** Delete a category locally and enqueue for sync. */
+export function deleteLocalCategory(tenantId: string, categoryId: string): void {
+  try {
+    const db = getDb();
+    if (db) {
+      db.runSync("DELETE FROM cached_categories WHERE id = ? AND tenant_id = ?", [
+        categoryId,
+        tenantId,
+      ]);
+    }
+  } catch {
+    // Non-fatal
+  }
+
+  enqueueOutboxMutation(tenantId, "DELETE_CATEGORY", "category", {
+    category_id: categoryId,
+  });
+}
+
+/** Create a product locally first in SQLite and enqueue for sync. */
+export function createLocalProduct(
+  tenantId: string,
+  data: {
+    name: string;
+    selling_price?: string | null;
+    wholesale_price?: string | null;
+    category_id?: string | null;
+    description?: string | null;
+  },
+): Product {
+  const tempId = `prod-local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const slug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  const product: Product = {
+    id: tempId,
+    tenant_id: tenantId,
+    name: data.name,
+    slug: slug || "product",
+    category_id: data.category_id ?? null,
+    description: data.description ?? null,
+    selling_price: data.selling_price ?? null,
+    effective_normal_price: data.selling_price ?? null,
+    effective_wholesale_price: data.wholesale_price ?? null,
+    is_active: true,
+    is_published: true,
+  };
+
+  try {
+    const db = getDb();
+    if (db) {
+      const now = new Date().toISOString();
+      db.runSync(
+        `INSERT OR REPLACE INTO cached_products
+         (id, tenant_id, name, slug, category_id, selling_price, effective_normal_price, effective_wholesale_price, is_published, is_active, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          product.id,
+          tenantId,
+          product.name,
+          product.slug,
+          product.category_id,
+          product.selling_price,
+          product.effective_normal_price,
+          product.effective_wholesale_price,
+          1,
+          1,
+          now,
+        ],
+      );
+    }
+  } catch {
+    // Non-fatal
+  }
+
+  enqueueOutboxMutation(tenantId, "CREATE_PRODUCT", "product", {
+    temp_id: tempId,
+    name: data.name,
+    selling_price: data.selling_price ?? null,
+    wholesale_price: data.wholesale_price ?? null,
+    category_id: data.category_id ?? null,
+    description: data.description ?? null,
+  });
+
+  return product;
+}
+
+/** Update a product locally and enqueue for sync. */
+export function updateLocalProduct(
+  tenantId: string,
+  productId: string,
+  data: Partial<Product>,
+): void {
+  try {
+    const db = getDb();
+    if (db) {
+      if (data.name) {
+        db.runSync("UPDATE cached_products SET name = ? WHERE id = ? AND tenant_id = ?", [
+          data.name,
+          productId,
+          tenantId,
+        ]);
+      }
+      if (data.selling_price !== undefined) {
+        db.runSync("UPDATE cached_products SET selling_price = ? WHERE id = ? AND tenant_id = ?", [
+          data.selling_price,
+          productId,
+          tenantId,
+        ]);
+      }
+    }
+  } catch {
+    // Non-fatal
+  }
+
+  enqueueOutboxMutation(tenantId, "UPDATE_PRODUCT", "product", {
+    product_id: productId,
+    ...data,
+  });
+}
+
+/** Delete a product locally and enqueue for sync. */
+export function deleteLocalProduct(tenantId: string, productId: string): void {
+  try {
+    const db = getDb();
+    if (db) {
+      db.runSync("DELETE FROM cached_products WHERE id = ? AND tenant_id = ?", [
+        productId,
+        tenantId,
+      ]);
+    }
+  } catch {
+    // Non-fatal
+  }
+
+  enqueueOutboxMutation(tenantId, "DELETE_PRODUCT", "product", {
+    product_id: productId,
+  });
+}
+
+/** Flush both sales outbox and catalog mutation outbox. */
+export async function flushSyncOutbox(tenantId: string): Promise<{ sales: number; mutations: number }> {
+  const salesCount = await flushOutbox(tenantId);
+  let mutationsCount = 0;
+
+  try {
+    const db = getDb();
+    if (!db) return { sales: salesCount, mutations: 0 };
+
+    const pending = db.getAllSync<{
+      id: string;
+      action: string;
+      entity_type: string;
+      payload_json: string;
+    }>(
+      "SELECT id, action, entity_type, payload_json FROM sync_outbox WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at ASC",
+      [tenantId],
+    );
+
+    for (const item of pending) {
+      try {
+        const payload = JSON.parse(item.payload_json);
+
+        if (item.action === "CREATE_CATEGORY") {
+          const created = await createCategory(tenantId, {
+            name: payload.name,
+            parent_id: payload.parent_id,
+            default_normal_price: payload.default_normal_price,
+            default_wholesale_price: payload.default_wholesale_price,
+          });
+          // Replace temp id in local cache
+          db.runSync("UPDATE cached_categories SET id = ? WHERE id = ?", [
+            created.id,
+            payload.temp_id,
+          ]);
+        } else if (item.action === "UPDATE_CATEGORY") {
+          await updateCategory(tenantId, payload.category_id, {
+            name: payload.name,
+            default_normal_price: payload.default_normal_price,
+            default_wholesale_price: payload.default_wholesale_price,
+          });
+        } else if (item.action === "DELETE_CATEGORY") {
+          await deleteCategory(tenantId, payload.category_id);
+        } else if (item.action === "CREATE_PRODUCT") {
+          const created = await createProduct(tenantId, {
+            name: payload.name,
+            selling_price: payload.selling_price,
+            wholesale_price: payload.wholesale_price,
+            category_id: payload.category_id,
+            description: payload.description,
+          });
+          // Replace temp id in local cache
+          db.runSync("UPDATE cached_products SET id = ? WHERE id = ?", [
+            created.id,
+            payload.temp_id,
+          ]);
+        } else if (item.action === "UPDATE_PRODUCT") {
+          await updateProduct(tenantId, payload.product_id, {
+            name: payload.name,
+            selling_price: payload.selling_price,
+            wholesale_price: payload.wholesale_price,
+            category_id: payload.category_id,
+          });
+        } else if (item.action === "DELETE_PRODUCT") {
+          await deleteProduct(tenantId, payload.product_id);
+        }
+
+        db.runSync("UPDATE sync_outbox SET status = 'synced' WHERE id = ?", [item.id]);
+        mutationsCount++;
+      } catch {
+        // Stop on first failure (network stall / offline) - remaining mutations stay pending
+        break;
+      }
+    }
+  } catch {
+    // Non-fatal
+  }
+
+  return { sales: salesCount, mutations: mutationsCount };
+}
+
 
 /* ---------------------------------------------------------------------------
  * Hybrid Offline Conflict Resolution Strategy

@@ -6,8 +6,10 @@ import {
   Alert,
   AppState,
   FlatList,
+  KeyboardAvoidingView,
   Linking,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -18,7 +20,29 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
+import {
+  cacheCategories,
+  cacheCustomerLists,
+  cacheProducts,
+  clearLocalDatabase,
+  createLocalCategory,
+  createLocalProduct,
+  deleteLocalCategory,
+  deleteLocalProduct,
+  enqueueOfflineSale,
+  flushSyncOutbox,
+  getCachedCategories,
+  getCachedCustomerLists,
+  getCachedProducts,
+  getPendingOutboxCount,
+  updateLocalCategory,
+  updateLocalProduct,
+} from "@/lib/db";
+import { forgetSession } from "@/lib/session";
+import { getTheme, getSavedThemeMode, saveThemeMode, type ThemeMode, type ThemePalette } from "@/lib/theme";
+import { hasBusinessPin, setBusinessPin, verifyBusinessPin } from "@/lib/pin";
+import { useAppLifecycle } from "@/lib/lifecycle";
+import { fetchUnreadCount } from "@/lib/notifications";
 import {
   ArrowLeftIcon,
   BoxIcon,
@@ -121,19 +145,6 @@ import {
   type TenantSummary,
   type UserProfile,
 } from "@/lib/api";
-import {
-  cacheCategories,
-  cacheCustomerLists,
-  cacheProducts,
-  clearLocalDatabase,
-  enqueueOfflineSale,
-  flushOutbox,
-  getCachedCategories,
-  getCachedCustomerLists,
-  getCachedProducts,
-  getPendingSalesCount,
-} from "@/lib/db";
-import { forgetSession } from "@/lib/session";
 
 type TabKey = "dashboard" | "shelf" | "lists" | "trading" | "more";
 
@@ -372,16 +383,38 @@ export default function Home() {
   const [savingBusiness, setSavingBusiness] = useState(false);
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [securityTab, setSecurityTab] = useState<"password" | "pin">("password");
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
+  const [hasPin, setHasPin] = useState(false);
+  const [businessPinInput, setBusinessPinInput] = useState("");
+  const [businessPinConfirm, setBusinessPinConfirm] = useState("");
+  const [savingPin, setSavingPin] = useState(false);
 
   const [showShopModal, setShowShopModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
-  const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
+  const [activeSubView, setActiveSubView] = useState<"team" | null>(null);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+
+  const [themeMode, setThemeMode] = useState<ThemeMode>("light");
+  const theme = useMemo(() => getTheme(themeMode), [themeMode]);
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
+  useEffect(() => {
+    void getSavedThemeMode().then((mode) => setThemeMode(mode));
+  }, []);
+
+  const handleToggleTheme = (mode: ThemeMode) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setThemeMode(mode);
+    void saveThemeMode(mode);
+    showToast(mode === "light" ? "Switched to Light Ivory Theme" : "Switched to Dark Theme");
+  };
 
   const userRole = (activeBusiness?.role_name ?? "OWNER").toUpperCase();
+  const isOwner = userRole === "OWNER";
   const isOwnerOrManager = userRole === "OWNER" || userRole === "MANAGER";
   const isInventoryStaff = userRole === "INVENTORY";
 
@@ -395,6 +428,23 @@ export default function Home() {
     setNotice(msg);
     setTimeout(() => setNotice(null), 3200);
   };
+
+  useAppLifecycle({
+    onResume: () => {
+      if (activeBusiness) {
+        setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
+        void flushSyncOutbox(activeBusiness.id).then((res) => {
+          if (res.sales > 0 || res.mutations > 0) {
+            void loadData(activeBusiness.id);
+          }
+          setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
+        });
+        void fetchUnreadCount(activeBusiness.id).then((count) => {
+          setUnreadCount(count);
+        });
+      }
+    },
+  });
 
   const loadData = useCallback(async (tenantId: string) => {
     const cached = getCachedProducts(tenantId);
@@ -411,8 +461,10 @@ export default function Home() {
       setCustomerLists(cachedLists);
     }
 
-    const pending = getPendingSalesCount(tenantId);
+    const pending = getPendingOutboxCount(tenantId);
     setPendingSyncCount(pending);
+    void hasBusinessPin(tenantId).then((has) => setHasPin(has));
+    void fetchUnreadCount(tenantId).then((count) => setUnreadCount(count));
 
     try {
       const [
@@ -502,23 +554,6 @@ export default function Home() {
     })();
   }, [loadData]);
 
-  // Foreground auto-sync: flush offline sales outbox when app returns to foreground
-  useEffect(() => {
-    const subscription = AppState.addEventListener("change", (nextAppState) => {
-      if (nextAppState === "active" && activeBusiness) {
-        void flushOutbox(activeBusiness.id).then((synced) => {
-          if (synced > 0) {
-            setPendingSyncCount(getPendingSalesCount(activeBusiness.id));
-            showToast(`Synced ${synced} offline sale(s).`);
-          }
-        });
-      }
-    });
-    return () => {
-      subscription.remove();
-    };
-  }, [activeBusiness]);
-
   // Hierarchical Breadcrumbs
   const breadcrumbs = useMemo(() => {
     const trail: Category[] = [];
@@ -557,17 +592,19 @@ export default function Home() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsSyncing(true);
     try {
-      const synced = await flushOutbox(activeBusiness.id);
-      const remaining = getPendingSalesCount(activeBusiness.id);
+      const res = await flushSyncOutbox(activeBusiness.id);
+      const remaining = getPendingOutboxCount(activeBusiness.id);
       setPendingSyncCount(remaining);
       await loadData(activeBusiness.id);
-      if (synced > 0) {
-        showToast(`Synced ${synced} offline sale(s).`);
-      } else {
+      if (res.sales > 0 || res.mutations > 0) {
+        showToast(`Synced ${res.sales} sales & ${res.mutations} updates!`);
+      } else if (remaining === 0) {
         showToast("Everything is up to date.");
+      } else {
+        showToast("Offline. Changes queued safely in device SQLite.");
       }
     } catch {
-      showToast("Sync failed. Will retry automatically.");
+      showToast("Sync deferred. Offline changes safe.");
     } finally {
       setIsSyncing(false);
     }
@@ -592,7 +629,7 @@ export default function Home() {
         unitPrice: price,
         paymentMethod: "cash",
       });
-      setPendingSyncCount(getPendingSalesCount(activeBusiness.id));
+      setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
       showToast(`Saved offline: 1 ${product.name}`);
     }
   };
@@ -602,21 +639,24 @@ export default function Home() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSavingProduct(true);
     try {
-      const created = await createProduct(activeBusiness.id, {
+      const created = createLocalProduct(activeBusiness.id, {
         name: newName.trim(),
         selling_price: newPrice.trim() || null,
         wholesale_price: newWholesale.trim() || null,
         category_id: currentCategoryId,
       });
       setProducts((curr) => [...curr, created]);
-      cacheProducts(activeBusiness.id, [...products, created]);
       setNewName("");
       setNewPrice("");
       setNewWholesale("");
       setShowAddProductModal(false);
       showToast(`Added ${created.name} to shelf!`);
+      setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
+      void flushSyncOutbox(activeBusiness.id).then(() => {
+        setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
+      });
     } catch {
-      showToast("Could not save item. Check connection.");
+      showToast("Could not save item.");
     } finally {
       setSavingProduct(false);
     }
@@ -627,7 +667,7 @@ export default function Home() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSavingCategory(true);
     try {
-      const created = await createCategory(activeBusiness.id, {
+      const created = createLocalCategory(activeBusiness.id, {
         name: newCategoryName.trim(),
         parent_id: currentCategoryId,
         default_normal_price: newCategoryNormalPrice.trim() || undefined,
@@ -638,9 +678,13 @@ export default function Home() {
       setNewCategoryNormalPrice("");
       setNewCategoryWholesalePrice("");
       setShowAddCategoryModal(false);
-      showToast(`Created folder: ${created.name}`);
+      showToast(`Created category: ${created.name}`);
+      setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
+      void flushSyncOutbox(activeBusiness.id).then(() => {
+        setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
+      });
     } catch {
-      showToast("Could not create folder.");
+      showToast("Could not create category.");
     } finally {
       setSavingCategory(false);
     }
@@ -651,14 +695,29 @@ export default function Home() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSavingEditCategory(true);
     try {
-      const updated = await updateCategory(activeBusiness.id, editingCategory.id, {
+      updateLocalCategory(activeBusiness.id, editingCategory.id, {
         name: editCategoryName.trim() || undefined,
         default_normal_price: editCategoryNormalPrice.trim() || null,
         default_wholesale_price: editCategoryWholesalePrice.trim() || null,
       });
-      setCategories((curr) => curr.map((c) => (c.id === updated.id ? updated : c)));
+      setCategories((curr) =>
+        curr.map((c) =>
+          c.id === editingCategory.id
+            ? {
+                ...c,
+                name: editCategoryName.trim() || c.name,
+                default_normal_price: editCategoryNormalPrice.trim() || c.default_normal_price,
+                default_wholesale_price: editCategoryWholesalePrice.trim() || c.default_wholesale_price,
+              }
+            : c,
+        ),
+      );
       setEditingCategory(null);
-      showToast(`Updated folder ${updated.name}`);
+      showToast(`Updated category ${editCategoryName.trim() || editingCategory.name}`);
+      setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
+      void flushSyncOutbox(activeBusiness.id).then(() => {
+        setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
+      });
     } catch {
       showToast("Could not update category.");
     } finally {
@@ -669,26 +728,25 @@ export default function Home() {
   const handleDeleteCategory = (category: Category) => {
     if (!activeBusiness) return;
     Alert.alert(
-      "Delete Folder?",
-      `Are you sure you want to delete ${category.name}? Items inside will move up to parent folder.`,
+      "Delete Category?",
+      `Are you sure you want to delete ${category.name}? Items inside will move up to parent category.`,
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Delete",
           style: "destructive",
-          onPress: async () => {
+          onPress: () => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            try {
-              await deleteCategory(activeBusiness.id, category.id, "move_up");
-              setCategories((curr) => curr.filter((c) => c.id !== category.id));
-              if (currentCategoryId === category.id) {
-                setCurrentCategoryId(category.parent_id ?? null);
-              }
-              showToast(`Deleted ${category.name}`);
-              await loadData(activeBusiness.id);
-            } catch {
-              showToast("Could not delete category.");
+            deleteLocalCategory(activeBusiness.id, category.id);
+            setCategories((curr) => curr.filter((c) => c.id !== category.id));
+            if (currentCategoryId === category.id) {
+              setCurrentCategoryId(category.parent_id ?? null);
             }
+            showToast(`Deleted ${category.name}`);
+            setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
+            void flushSyncOutbox(activeBusiness.id).then(() => {
+              setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
+            });
           },
         },
       ],
@@ -705,20 +763,45 @@ export default function Home() {
         {
           text: "Delete",
           style: "destructive",
-          onPress: async () => {
+          onPress: () => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            try {
-              await deleteProduct(activeBusiness.id, product.id);
-              setProducts((curr) => curr.filter((p) => p.id !== product.id));
-              cacheProducts(activeBusiness.id, products.filter((p) => p.id !== product.id));
-              showToast(`Deleted ${product.name}`);
-            } catch {
-              showToast("Could not delete product.");
-            }
+            deleteLocalProduct(activeBusiness.id, product.id);
+            setProducts((curr) => curr.filter((p) => p.id !== product.id));
+            showToast(`Deleted ${product.name}`);
+            setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
+            void flushSyncOutbox(activeBusiness.id).then(() => {
+              setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
+            });
           },
         },
       ],
     );
+  };
+
+  const handleSaveBusinessPin = async () => {
+    if (!activeBusiness || !isOwner) return;
+    if (businessPinInput.trim().length < 4) {
+      showToast("Security PIN must be at least 4 digits.");
+      return;
+    }
+    if (businessPinInput !== businessPinConfirm) {
+      showToast("PINs do not match.");
+      return;
+    }
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSavingPin(true);
+    try {
+      await setBusinessPin(activeBusiness.id, businessPinInput.trim());
+      setHasPin(true);
+      setBusinessPinInput("");
+      setBusinessPinConfirm("");
+      showToast("Stall Security PIN set successfully!");
+      setShowPasswordModal(false);
+    } catch {
+      showToast("Could not save Security PIN.");
+    } finally {
+      setSavingPin(false);
+    }
   };
 
   const handleToggleSelectProduct = (productId: string) => {
@@ -1170,6 +1253,27 @@ export default function Home() {
     }
   };
 
+    const handleShareInviteWhatsApp = async (inv: MembershipInvitation) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const shopName = activeBusiness?.name ?? "our stall";
+    const inviteMsg = `Hello! You have been invited to join ${shopName} on AHIA as a ${inv.role}. Download AHIA or sign in at https://useahia-hazel.vercel.app to accept!`;
+    const targetPhone = inv.phone ? formatWaNumber(inv.phone) : null;
+    const waUrl = targetPhone
+      ? `whatsapp://send?phone=${targetPhone}&text=${encodeURIComponent(inviteMsg)}`
+      : `whatsapp://send?text=${encodeURIComponent(inviteMsg)}`;
+
+    try {
+      const supported = await Linking.canOpenURL(waUrl);
+      if (supported) {
+        await Linking.openURL(waUrl);
+      } else {
+        await Share.share({ message: inviteMsg });
+      }
+    } catch {
+      await Share.share({ message: inviteMsg });
+    }
+  };
+
   const handleRemoveMember = (member: Member) => {
     if (!activeBusiness) return;
     Alert.alert(
@@ -1560,9 +1664,9 @@ export default function Home() {
               </View>
 
               <View style={styles.kpiCard}>
-                <Text style={styles.kpiLabel}>Shelf Folders</Text>
+                <Text style={styles.kpiLabel}>Shelf Categories</Text>
                 <Text style={styles.kpiValue}>{categories.length}</Text>
-                <Text style={styles.kpiMeta}>Categories</Text>
+                <Text style={styles.kpiMeta}>Product Groups</Text>
               </View>
             </View>
 
@@ -1610,7 +1714,7 @@ export default function Home() {
                   <View style={[styles.actionIconWrap, { backgroundColor: "#1e3a8a" }]}>
                     <FolderIcon size={20} color="#60a5fa" />
                   </View>
-                  <Text style={styles.actionTileTitle}>New Folder</Text>
+                  <Text style={styles.actionTileTitle}>New Category</Text>
                   <Text style={styles.actionTileDesc}>Organize shelf</Text>
                 </Pressable>
               )}
@@ -1665,7 +1769,7 @@ export default function Home() {
                 <SearchIcon size={18} color="#8a928e" />
                 <TextInput
                   style={styles.searchInputClean}
-                  placeholder="Search products & folders..."
+                  placeholder="Search products & categories..."
                   placeholderTextColor="#8a928e"
                   value={searchQuery}
                   onChangeText={setSearchQuery}
@@ -1745,7 +1849,7 @@ export default function Home() {
               )}
             </View>
 
-            {/* Folder Header Actions */}
+            {/* Category Header Actions */}
             <View style={styles.folderActionBar}>
               {isOwnerOrManager && (
                 <Pressable
@@ -1756,7 +1860,7 @@ export default function Home() {
                   }}
                 >
                   <PlusIcon size={14} color="#60a5fa" />
-                  <Text style={[styles.folderActionText, { color: "#60a5fa" }]}>New Folder</Text>
+                  <Text style={[styles.folderActionText, { color: "#60a5fa" }]}>New Category</Text>
                 </Pressable>
               )}
 
@@ -1807,7 +1911,7 @@ export default function Home() {
                 {categories.length === 0 ? (
                   <View style={styles.emptyBox}>
                     <Text style={styles.emptyTitle}>No categories created</Text>
-                    <Text style={styles.emptySubtitle}>Tap New Folder to create one.</Text>
+                    <Text style={styles.emptySubtitle}>Tap New Category to create one.</Text>
                   </View>
                 ) : (
                   categories
@@ -1828,7 +1932,7 @@ export default function Home() {
                             <FolderIcon size={18} color="#60a5fa" />
                             <Text style={styles.treeNodeName}>{rootCat.name}</Text>
                             <Text style={styles.treeNodeMeta}>
-                              ({childCats.length} folders, {rootProds.length} items)
+                              ({childCats.length} categories, {rootProds.length} items)
                             </Text>
                           </Pressable>
 
@@ -1859,10 +1963,10 @@ export default function Home() {
             ) : (
               /* Folder View */
               <ScrollView style={styles.scrollContent}>
-                {/* Subcategories Folders Section */}
+                {/* Subcategories Section */}
                 {currentSubcategories.length > 0 && (
                   <View style={styles.foldersSection}>
-                    <Text style={styles.subHeading}>Folders ({currentSubcategories.length})</Text>
+                    <Text style={styles.subHeading}>Categories ({currentSubcategories.length})</Text>
                     <View style={styles.foldersGrid}>
                       {currentSubcategories.map((cat) => {
                         const childCount = categories.filter((c) => c.parent_id === cat.id).length;
@@ -1882,7 +1986,7 @@ export default function Home() {
                             </View>
                             <Text style={styles.folderName} numberOfLines={1}>{cat.name}</Text>
                             <Text style={styles.folderMeta}>
-                              {childCount > 0 ? `${childCount} subfolders, ` : ""}{prodCount} item(s)
+                              {childCount > 0 ? `${childCount} subcategories, ` : ""}{prodCount} item(s)
                             </Text>
                             {cat.default_normal_price && (
                               <Text style={styles.folderPrice}>
@@ -1896,7 +2000,7 @@ export default function Home() {
                   </View>
                 )}
 
-                {/* Items in Current Folder Section */}
+                {/* Items in Current Category Section */}
                 <View style={styles.itemsSection}>
                   <View style={styles.sectionHeaderRow}>
                     <Text style={styles.subHeading}>
@@ -1923,7 +2027,7 @@ export default function Home() {
                   {currentProducts.length === 0 ? (
                     <View style={styles.emptyBox}>
                       <ItemBoxIcon size={32} color="#6e7681" />
-                      <Text style={styles.emptyTitle}>No items in this folder</Text>
+                      <Text style={styles.emptyTitle}>No items in this category</Text>
                       <Text style={styles.emptySubtitle}>Tap Add Item above to place items here.</Text>
                     </View>
                   ) : (
@@ -2511,6 +2615,252 @@ export default function Home() {
 
         {/* The Everything / More Tab */}
         {activeTab === "more" && (
+          activeSubView === "team" ? (
+            <ScrollView style={styles.scrollContent}>
+              {/* Back Bar */}
+              <View style={styles.teamTopBar}>
+                <Pressable
+                  style={styles.teamBackBtn}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setActiveSubView(null);
+                  }}
+                >
+                  <ArrowLeftIcon size={18} color={theme.text} />
+                  <Text style={styles.teamBackBtnText}>Back to More</Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.teamInviteTopBtn}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowInviteModal(true);
+                  }}
+                >
+                  <PlusIcon size={16} color="#ffffff" />
+                  <Text style={styles.teamInviteTopBtnText}>+ Invite Staff</Text>
+                </Pressable>
+              </View>
+
+              {/* Team Banner */}
+              <View style={styles.teamBannerCard}>
+                <View style={styles.teamBannerIconWrap}>
+                  <PeopleIcon size={26} color="#4ade80" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.teamBannerTitle}>Team & Staff Management</Text>
+                  <Text style={styles.teamBannerSub}>
+                    {activeBusiness?.name} - Manage staff members, send WhatsApp invitations, and configure role permissions.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Quick stats row */}
+              <View style={styles.teamStatsRow}>
+                <View style={styles.teamStatBox}>
+                  <Text style={styles.teamStatValue}>{members.length}</Text>
+                  <Text style={styles.teamStatLabel}>Staff Members</Text>
+                </View>
+                <View style={styles.teamStatBox}>
+                  <Text style={styles.teamStatValue}>
+                    {members.filter((m) => m.status === "active").length}
+                  </Text>
+                  <Text style={styles.teamStatLabel}>Active Staff</Text>
+                </View>
+                <View style={styles.teamStatBox}>
+                  <Text style={styles.teamStatValue}>{invitations.length}</Text>
+                  <Text style={styles.teamStatLabel}>Sent Invites</Text>
+                </View>
+              </View>
+
+              {/* Active Members Section */}
+              <View style={styles.moreCard}>
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={styles.moreCardTitle}>Staff Members ({members.length})</Text>
+                  <Pressable
+                    style={styles.addStaffBtn}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setShowInviteModal(true);
+                    }}
+                  >
+                    <Text style={styles.addStaffBtnText}>+ Invite</Text>
+                  </Pressable>
+                </View>
+                <Text style={styles.moreCardDesc}>
+                  Tap any staff member's role badge to cycle their permission level, or tap status to toggle Active / Suspended.
+                </Text>
+
+                {members.length === 0 ? (
+                  <Text style={styles.emptySubtitle}>No staff members added yet.</Text>
+                ) : (
+                  members.map((m) => (
+                    <View key={m.id} style={styles.teamMemberCard}>
+                      <View style={styles.teamMemberAvatar}>
+                        <Text style={styles.teamMemberAvatarText}>
+                          {m.first_name ? m.first_name.slice(0, 1).toUpperCase() : "S"}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.teamMemberName}>
+                          {m.first_name} {m.last_name ?? ""}
+                        </Text>
+                        <Text style={styles.teamMemberMeta}>
+                          {m.phone || m.email || "No contact info"}
+                        </Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 }}>
+                          <Pressable
+                            style={styles.memberRoleBadge}
+                            onPress={() => handleChangeMemberRole(m)}
+                          >
+                            <Text style={styles.memberRoleBadgeText}>{m.role}</Text>
+                          </Pressable>
+                          <Pressable
+                            style={[
+                              styles.memberStatusBadge,
+                              m.status === "active" ? styles.memberStatusActive : styles.memberStatusSuspended,
+                            ]}
+                            onPress={() => handleToggleMemberStatus(m)}
+                          >
+                            <Text style={styles.memberStatusBadgeText}>
+                              {(m.status ?? "ACTIVE").toUpperCase()}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                      {isOwner && m.role !== "OWNER" && (
+                        <Pressable
+                          style={styles.removeStaffBtn}
+                          onPress={() => handleRemoveMember(m)}
+                        >
+                          <Text style={styles.removeStaffBtnText}>Remove</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  ))
+                )}
+              </View>
+
+              {/* Sent Invitations Section */}
+              <View style={styles.moreCard}>
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={styles.moreCardTitle}>Sent Invitations ({invitations.length})</Text>
+                  <Pressable
+                    style={styles.addStaffBtn}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setShowInviteModal(true);
+                    }}
+                  >
+                    <Text style={styles.addStaffBtnText}>+ Send New</Text>
+                  </Pressable>
+                </View>
+                <Text style={styles.moreCardDesc}>
+                  Track invitations sent to staff. Tap Share to send their invite link directly via WhatsApp.
+                </Text>
+
+                {invitations.length === 0 ? (
+                  <View style={styles.emptyInviteBox}>
+                    <Text style={styles.emptySubtitle}>No pending staff invitations.</Text>
+                    <Pressable
+                      style={styles.emptyInviteBtn}
+                      onPress={() => setShowInviteModal(true)}
+                    >
+                      <Text style={styles.emptyInviteBtnText}>Invite your first staff member</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  invitations.map((inv) => (
+                    <View key={inv.id} style={styles.sentInviteCard}>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                          <Text style={styles.sentInviteTarget}>
+                            {inv.phone || inv.email || "Invited Staff"}
+                          </Text>
+                          <View style={styles.sentInviteRolePill}>
+                            <Text style={styles.sentInviteRolePillText}>{inv.role}</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.sentInviteStatus}>
+                          Status: {(inv.status ?? "PENDING").toUpperCase()} - Created: {new Date(inv.created_at).toLocaleDateString()}
+                        </Text>
+                      </View>
+
+                      <Pressable
+                        style={styles.inviteShareWhatsAppBtn}
+                        onPress={() => handleShareInviteWhatsApp(inv)}
+                      >
+                        <ShareIcon size={14} color="#ffffff" />
+                        <Text style={styles.inviteShareWhatsAppBtnText}>Share</Text>
+                      </Pressable>
+                    </View>
+                  ))
+                )}
+              </View>
+
+              {/* Invitations Waiting For You */}
+              {myInvitations.length > 0 && (
+                <View style={styles.moreCard}>
+                  <Text style={[styles.moreCardTitle, { color: "#4ade80" }]}>
+                    Invitations Waiting for You ({myInvitations.length})
+                  </Text>
+                  <Text style={styles.moreCardDesc}>
+                    Other businesses have invited you to join their team on AHIA:
+                  </Text>
+                  {myInvitations.map((inv) => (
+                    <View key={inv.id} style={styles.invitationRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.invitationPhone}>{inv.tenant_name}</Text>
+                        <Text style={styles.invitationMeta}>Role: {inv.role_name}</Text>
+                      </View>
+                      <Pressable
+                        style={styles.acceptInviteBtn}
+                        onPress={() => handleAcceptMyInvitation(inv)}
+                      >
+                        <Text style={styles.acceptInviteBtnText}>Accept</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Role Permissions Guide */}
+              <View style={styles.moreCard}>
+                <Text style={styles.moreCardTitle}>Role Permissions Guide</Text>
+                <Text style={styles.moreCardDesc}>
+                  Summary of privileges for each stall role:
+                </Text>
+                <View style={styles.roleGuideList}>
+                  <View style={styles.roleGuideItem}>
+                    <Text style={styles.roleGuideName}>Owner</Text>
+                    <Text style={styles.roleGuideDesc}>
+                      Full stall ownership, financial records, team management, business security PIN, and storefront settings.
+                    </Text>
+                  </View>
+                  <View style={styles.roleGuideItem}>
+                    <Text style={styles.roleGuideName}>Manager</Text>
+                    <Text style={styles.roleGuideDesc}>
+                      Sales recording, inventory & shelf categories, order lists, and staff management.
+                    </Text>
+                  </View>
+                  <View style={styles.roleGuideItem}>
+                    <Text style={styles.roleGuideName}>Sales / Cashier</Text>
+                    <Text style={styles.roleGuideDesc}>
+                      Record customer sales, print/send customer WhatsApp receipts, search products and prices.
+                    </Text>
+                  </View>
+                  <View style={styles.roleGuideItem}>
+                    <Text style={styles.roleGuideName}>Inventory</Text>
+                    <Text style={styles.roleGuideDesc}>
+                      Manage categories and products, update stock quantities, view stock alerts.
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          ) : (
           <ScrollView style={styles.scrollContent}>
             {/* User Profile Header */}
             <View style={styles.userProfileCard}>
@@ -2584,10 +2934,16 @@ export default function Home() {
               )}
 
               {isOwnerOrManager && (
-                <Pressable style={styles.everythingTile} onPress={() => setShowInviteModal(true)}>
+                <Pressable
+                  style={styles.everythingTile}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setActiveSubView("team");
+                  }}
+                >
                   <PeopleIcon size={24} color="#38bdf8" />
-                  <Text style={styles.everythingTileTitle}>Team</Text>
-                  <Text style={styles.everythingTileDesc}>Staff invites</Text>
+                  <Text style={styles.everythingTileTitle}>Team & Staff</Text>
+                  <Text style={styles.everythingTileDesc}>Manage team & invites</Text>
                 </Pressable>
               )}
 
@@ -2704,7 +3060,7 @@ export default function Home() {
                           onPress={() => handleToggleMemberStatus(m)}
                         >
                           <Text style={styles.memberStatusBadgeText}>
-                            {m.status.toUpperCase()}
+                            {(m.status ?? "ACTIVE").toUpperCase()}
                           </Text>
                         </Pressable>
                       </View>
@@ -2727,7 +3083,7 @@ export default function Home() {
                       <View key={inv.id} style={styles.invitationRow}>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.invitationPhone}>{inv.phone || inv.email || "Invited"}</Text>
-                          <Text style={styles.invitationMeta}>Role: {inv.role} - {inv.status.toUpperCase()}</Text>
+                          <Text style={styles.invitationMeta}>Role: {inv.role} - {(inv.status ?? "PENDING").toUpperCase()}</Text>
                         </View>
                       </View>
                     ))}
@@ -2797,11 +3153,7 @@ export default function Home() {
                     styles.themeToggleBtn,
                     themeMode === "light" && styles.themeToggleBtnActive,
                   ]}
-                  onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setThemeMode("light");
-                    showToast("Switched to Light Ivory Theme");
-                  }}
+                  onPress={() => handleToggleTheme("light")}
                 >
                   <Text
                     style={[
@@ -2817,11 +3169,7 @@ export default function Home() {
                     styles.themeToggleBtn,
                     themeMode === "dark" && styles.themeToggleBtnActive,
                   ]}
-                  onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setThemeMode("dark");
-                    showToast("Switched to Dark Theme");
-                  }}
+                  onPress={() => handleToggleTheme("dark")}
                 >
                   <Text
                     style={[
@@ -2846,6 +3194,7 @@ export default function Home() {
               <Text style={styles.signOutBtnText}>Sign Out of AHIA</Text>
             </Pressable>
           </ScrollView>
+          )
         )}
       </View>
 
@@ -2866,6 +3215,7 @@ export default function Home() {
           style={[styles.navItem, activeTab === "shelf" && styles.navItemActive]}
           onPress={() => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setActiveSubView(null);
             setActiveTab("shelf");
           }}
         >
@@ -2877,6 +3227,7 @@ export default function Home() {
           style={[styles.navItem, activeTab === "lists" && styles.navItemActive]}
           onPress={() => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setActiveSubView(null);
             setActiveTab("lists");
           }}
         >
@@ -2893,6 +3244,7 @@ export default function Home() {
           style={[styles.navItem, activeTab === "trading" && styles.navItemActive]}
           onPress={() => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setActiveSubView(null);
             setActiveTab("trading");
           }}
         >
@@ -2914,148 +3266,172 @@ export default function Home() {
 
       {/* Add Product Modal */}
       <Modal visible={showAddProductModal} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Add Product to {currentCategory?.name ?? "Shelf"}</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Product Name"
-              placeholderTextColor="#8a928e"
-              value={newName}
-              onChangeText={setNewName}
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Normal Price (e.g. 15000)"
-              placeholderTextColor="#8a928e"
-              keyboardType="numeric"
-              value={newPrice}
-              onChangeText={setNewPrice}
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Wholesale Price (optional)"
-              placeholderTextColor="#8a928e"
-              keyboardType="numeric"
-              value={newWholesale}
-              onChangeText={setNewWholesale}
-            />
-            <View style={styles.modalButtons}>
-              <Pressable style={styles.modalCancelBtn} onPress={() => setShowAddProductModal(false)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={styles.modalSaveBtn}
-                onPress={handleCreateProduct}
-                disabled={savingProduct}
-              >
-                {savingProduct ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.modalSaveText}>Save Item</Text>
-                )}
-              </Pressable>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ flexGrow: 1, justifyContent: "flex-end" }}
+          >
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Add Product to {currentCategory?.name ?? "Shelf"}</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Product Name"
+                placeholderTextColor="#8a928e"
+                value={newName}
+                onChangeText={setNewName}
+              />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Normal Price (e.g. 15000)"
+                placeholderTextColor="#8a928e"
+                keyboardType="numeric"
+                value={newPrice}
+                onChangeText={setNewPrice}
+              />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Wholesale Price (optional)"
+                placeholderTextColor="#8a928e"
+                keyboardType="numeric"
+                value={newWholesale}
+                onChangeText={setNewWholesale}
+              />
+              <View style={styles.modalButtons}>
+                <Pressable style={styles.modalCancelBtn} onPress={() => setShowAddProductModal(false)}>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.modalSaveBtn}
+                  onPress={handleCreateProduct}
+                  disabled={savingProduct}
+                >
+                  {savingProduct ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text style={styles.modalSaveText}>Save Item</Text>
+                  )}
+                </Pressable>
+              </View>
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
-      {/* Add Category Folder Modal */}
+      {/* Add Category Modal */}
       <Modal visible={showAddCategoryModal} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              New Folder under {currentCategory?.name ?? "Catalog Root"}
-            </Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Folder Name (e.g. Armoured Cables)"
-              placeholderTextColor="#8a928e"
-              value={newCategoryName}
-              onChangeText={setNewCategoryName}
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Default Retail Price (optional)"
-              placeholderTextColor="#8a928e"
-              keyboardType="numeric"
-              value={newCategoryNormalPrice}
-              onChangeText={setNewCategoryNormalPrice}
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Default Wholesale Price (optional)"
-              placeholderTextColor="#8a928e"
-              keyboardType="numeric"
-              value={newCategoryWholesalePrice}
-              onChangeText={setNewCategoryWholesalePrice}
-            />
-            <View style={styles.modalButtons}>
-              <Pressable style={styles.modalCancelBtn} onPress={() => setShowAddCategoryModal(false)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={styles.modalSaveBtn}
-                onPress={handleCreateCategory}
-                disabled={savingCategory}
-              >
-                {savingCategory ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.modalSaveText}>Create Folder</Text>
-                )}
-              </Pressable>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ flexGrow: 1, justifyContent: "flex-end" }}
+          >
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>
+                New Category under {currentCategory?.name ?? "Catalog Root"}
+              </Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Category Name (e.g. Armoured Cables)"
+                placeholderTextColor="#8a928e"
+                value={newCategoryName}
+                onChangeText={setNewCategoryName}
+              />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Default Retail Price (optional)"
+                placeholderTextColor="#8a928e"
+                keyboardType="numeric"
+                value={newCategoryNormalPrice}
+                onChangeText={setNewCategoryNormalPrice}
+              />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Default Wholesale Price (optional)"
+                placeholderTextColor="#8a928e"
+                keyboardType="numeric"
+                value={newCategoryWholesalePrice}
+                onChangeText={setNewCategoryWholesalePrice}
+              />
+              <View style={styles.modalButtons}>
+                <Pressable style={styles.modalCancelBtn} onPress={() => setShowAddCategoryModal(false)}>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.modalSaveBtn}
+                  onPress={handleCreateCategory}
+                  disabled={savingCategory}
+                >
+                  {savingCategory ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text style={styles.modalSaveText}>Create Category</Text>
+                  )}
+                </Pressable>
+              </View>
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Edit Category Modal */}
       <Modal visible={editingCategory !== null} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Edit Folder {editingCategory?.name}</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Folder Name"
-              placeholderTextColor="#8a928e"
-              value={editCategoryName}
-              onChangeText={setEditCategoryName}
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Default Retail Price"
-              placeholderTextColor="#8a928e"
-              keyboardType="numeric"
-              value={editCategoryNormalPrice}
-              onChangeText={setEditCategoryNormalPrice}
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Default Wholesale Price"
-              placeholderTextColor="#8a928e"
-              keyboardType="numeric"
-              value={editCategoryWholesalePrice}
-              onChangeText={setEditCategoryWholesalePrice}
-            />
-            <View style={styles.modalButtons}>
-              <Pressable style={styles.modalCancelBtn} onPress={() => setEditingCategory(null)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={styles.modalSaveBtn}
-                onPress={handleSaveCategoryEdit}
-                disabled={savingEditCategory}
-              >
-                {savingEditCategory ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.modalSaveText}>Save Changes</Text>
-                )}
-              </Pressable>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ flexGrow: 1, justifyContent: "flex-end" }}
+          >
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Edit Category {editingCategory?.name}</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Category Name"
+                placeholderTextColor="#8a928e"
+                value={editCategoryName}
+                onChangeText={setEditCategoryName}
+              />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Default Retail Price"
+                placeholderTextColor="#8a928e"
+                keyboardType="numeric"
+                value={editCategoryNormalPrice}
+                onChangeText={setEditCategoryNormalPrice}
+              />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Default Wholesale Price"
+                placeholderTextColor="#8a928e"
+                keyboardType="numeric"
+                value={editCategoryWholesalePrice}
+                onChangeText={setEditCategoryWholesalePrice}
+              />
+              <View style={styles.modalButtons}>
+                <Pressable style={styles.modalCancelBtn} onPress={() => setEditingCategory(null)}>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.modalSaveBtn}
+                  onPress={handleSaveCategoryEdit}
+                  disabled={savingEditCategory}
+                >
+                  {savingEditCategory ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text style={styles.modalSaveText}>Save Changes</Text>
+                  )}
+                </Pressable>
+              </View>
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Batch Move / Copy Category Picker Modal */}
@@ -3063,10 +3439,10 @@ export default function Home() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>
-              {batchModal?.mode === "copy" ? "Copy Items to Folder" : "Move Items to Folder"}
+              {batchModal?.mode === "copy" ? "Copy Items to Category" : "Move Items to Category"}
             </Text>
             <Text style={styles.modalSubtitle}>
-              Select the destination folder for {batchModal?.productIds.length} item(s):
+              Select the destination category for {batchModal?.productIds.length} item(s):
             </Text>
             <ScrollView style={{ maxHeight: 240, marginVertical: 10 }}>
               <Pressable
@@ -3631,49 +4007,57 @@ export default function Home() {
 
       {/* Invite Staff Modal */}
       <Modal visible={showInviteModal} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Invite Staff Member</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Phone Number (e.g. 08012345678)"
-              placeholderTextColor="#8a928e"
-              keyboardType="phone-pad"
-              value={invitePhone}
-              onChangeText={setInvitePhone}
-            />
-            <Text style={styles.modalFieldLabel}>Select Role</Text>
-            <View style={styles.rolePickerRow}>
-              {(["SALES", "INVENTORY", "ADMIN"] as MemberRole[]).map((r) => (
-                <Pressable
-                  key={r}
-                  style={[styles.rolePill, inviteRole === r && styles.rolePillActive]}
-                  onPress={() => setInviteRole(r)}
-                >
-                  <Text style={[styles.rolePillText, inviteRole === r && styles.rolePillTextActive]}>
-                    {r}
-                  </Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ flexGrow: 1, justifyContent: "flex-end" }}
+          >
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Invite Staff Member</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Phone Number (e.g. 08012345678)"
+                placeholderTextColor="#8a928e"
+                keyboardType="phone-pad"
+                value={invitePhone}
+                onChangeText={setInvitePhone}
+              />
+              <Text style={styles.modalFieldLabel}>Select Staff Role</Text>
+              <View style={styles.rolePickerRow}>
+                {(["SALES", "MANAGER", "INVENTORY"] as MemberRole[]).map((r) => (
+                  <Pressable
+                    key={r}
+                    style={[styles.rolePill, inviteRole === r && styles.rolePillActive]}
+                    onPress={() => setInviteRole(r)}
+                  >
+                    <Text style={[styles.rolePillText, inviteRole === r && styles.rolePillTextActive]}>
+                      {r === "SALES" ? "Sales Staff" : r === "MANAGER" ? "Manager" : "Inventory"}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              <View style={styles.modalButtons}>
+                <Pressable style={styles.modalCancelBtn} onPress={() => setShowInviteModal(false)}>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
                 </Pressable>
-              ))}
+                <Pressable
+                  style={styles.modalSaveBtn}
+                  onPress={handleInviteStaff}
+                  disabled={savingInvite}
+                >
+                  {savingInvite ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text style={styles.modalSaveText}>Send WhatsApp Invite</Text>
+                  )}
+                </Pressable>
+              </View>
             </View>
-            <View style={styles.modalButtons}>
-              <Pressable style={styles.modalCancelBtn} onPress={() => setShowInviteModal(false)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={styles.modalSaveBtn}
-                onPress={handleInviteStaff}
-                disabled={savingInvite}
-              >
-                {savingInvite ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.modalSaveText}>Send WhatsApp Invite</Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Product Image Gallery Modal */}
@@ -3925,95 +4309,204 @@ export default function Home() {
         </View>
       </Modal>
 
-      {/* Change Password Modal */}
+      {/* Security Credentials Modal (Password & Stall PIN) */}
       <Modal visible={showPasswordModal} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Update Security PIN / Password</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Current Password"
-              placeholderTextColor="#8a928e"
-              secureTextEntry
-              value={oldPassword}
-              onChangeText={setOldPassword}
-              autoComplete="current-password"
-              textContentType="password"
-              importantForAutofill="yes"
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="New Password (min 8 chars)"
-              placeholderTextColor="#8a928e"
-              secureTextEntry
-              value={newPassword}
-              onChangeText={setNewPassword}
-              autoComplete="new-password"
-              textContentType="newPassword"
-              importantForAutofill="yes"
-            />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ flexGrow: 1, justifyContent: "flex-end" }}
+          >
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Security & Stall Protection</Text>
 
-            {/* Password Strength Checklist */}
-            {newPassword.length > 0 && (
-              <View style={styles.passwordMeterBox}>
-                <View style={styles.passwordStrengthRow}>
-                  <Text style={styles.passwordStrengthLabel}>Strength:</Text>
+              {/* Sub-tabs: Account Password vs Stall Security PIN */}
+              <View style={styles.securityTabRow}>
+                <Pressable
+                  style={[
+                    styles.securityTabBtn,
+                    securityTab === "password" && styles.securityTabBtnActive,
+                  ]}
+                  onPress={() => setSecurityTab("password")}
+                >
                   <Text
                     style={[
-                      styles.passwordStrengthValue,
-                      newPassword.length >= 8 && /\d/.test(newPassword)
-                        ? styles.strengthStrong
-                        : newPassword.length >= 8
-                        ? styles.strengthMedium
-                        : styles.strengthWeak,
+                      styles.securityTabText,
+                      securityTab === "password" && styles.securityTabTextActive,
                     ]}
                   >
-                    {newPassword.length >= 8 && /\d/.test(newPassword)
-                      ? "Strong"
-                      : newPassword.length >= 8
-                      ? "Medium"
-                      : "Too Short"}
+                    Account Password
                   </Text>
-                </View>
-                <View style={styles.strengthBarWrap}>
-                  <View
+                </Pressable>
+                {isOwner && (
+                  <Pressable
                     style={[
-                      styles.strengthBar,
-                      newPassword.length >= 8 && /\d/.test(newPassword)
-                        ? styles.barStrong
-                        : newPassword.length >= 8
-                        ? styles.barMedium
-                        : styles.barWeak,
+                      styles.securityTabBtn,
+                      securityTab === "pin" && styles.securityTabBtnActive,
                     ]}
-                  />
-                </View>
-                <Text style={styles.pwdChecklistText}>
-                  {newPassword.length >= 8 ? "[OK]" : "[ ]"} Minimum 8 characters
-                </Text>
-                <Text style={styles.pwdChecklistText}>
-                  {/\d/.test(newPassword) ? "[OK]" : "[ ]"} Contains a number
-                </Text>
-              </View>
-            )}
-
-            <View style={styles.modalButtons}>
-              <Pressable style={styles.modalCancelBtn} onPress={() => setShowPasswordModal(false)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={styles.modalSaveBtn}
-                onPress={handleChangePassword}
-                disabled={savingPassword}
-              >
-                {savingPassword ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.modalSaveText}>Change Password</Text>
+                    onPress={() => setSecurityTab("pin")}
+                  >
+                    <Text
+                      style={[
+                        styles.securityTabText,
+                        securityTab === "pin" && styles.securityTabTextActive,
+                      ]}
+                    >
+                      Stall PIN (Owner)
+                    </Text>
+                  </Pressable>
                 )}
-              </Pressable>
+              </View>
+
+              {securityTab === "password" ? (
+                /* Personal Account Password Section */
+                <View>
+                  <Text style={styles.modalSubtitle}>
+                    Update your personal account password used to sign into AHIA.
+                  </Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="Current Password"
+                    placeholderTextColor="#8a928e"
+                    secureTextEntry
+                    value={oldPassword}
+                    onChangeText={setOldPassword}
+                    autoComplete="current-password"
+                    textContentType="password"
+                    importantForAutofill="yes"
+                  />
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="New Password (min 8 chars)"
+                    placeholderTextColor="#8a928e"
+                    secureTextEntry
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    autoComplete="new-password"
+                    textContentType="newPassword"
+                    importantForAutofill="yes"
+                  />
+
+                  {newPassword.length > 0 && (
+                    <View style={styles.passwordMeterBox}>
+                      <View style={styles.passwordStrengthRow}>
+                        <Text style={styles.passwordStrengthLabel}>Strength:</Text>
+                        <Text
+                          style={[
+                            styles.passwordStrengthValue,
+                            newPassword.length >= 8 && /\d/.test(newPassword)
+                              ? styles.strengthStrong
+                              : newPassword.length >= 8
+                              ? styles.strengthMedium
+                              : styles.strengthWeak,
+                          ]}
+                        >
+                          {newPassword.length >= 8 && /\d/.test(newPassword)
+                            ? "Strong"
+                            : newPassword.length >= 8
+                            ? "Medium"
+                            : "Too Short"}
+                        </Text>
+                      </View>
+                      <View style={styles.strengthBarWrap}>
+                        <View
+                          style={[
+                            styles.strengthBar,
+                            newPassword.length >= 8 && /\d/.test(newPassword)
+                              ? styles.barStrong
+                              : newPassword.length >= 8
+                              ? styles.barMedium
+                              : styles.barWeak,
+                          ]}
+                        />
+                      </View>
+                      <Text style={styles.pwdChecklistText}>
+                        {newPassword.length >= 8 ? "[OK]" : "[ ]"} Minimum 8 characters
+                      </Text>
+                      <Text style={styles.pwdChecklistText}>
+                        {/\d/.test(newPassword) ? "[OK]" : "[ ]"} Contains a number
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={styles.modalButtons}>
+                    <Pressable
+                      style={styles.modalCancelBtn}
+                      onPress={() => setShowPasswordModal(false)}
+                    >
+                      <Text style={styles.modalCancelText}>Cancel</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.modalSaveBtn}
+                      onPress={handleChangePassword}
+                      disabled={savingPassword}
+                    >
+                      {savingPassword ? (
+                        <ActivityIndicator color="#ffffff" size="small" />
+                      ) : (
+                        <Text style={styles.modalSaveText}>Change Password</Text>
+                      )}
+                    </Pressable>
+                  </View>
+                </View>
+              ) : (
+                /* Stall Security PIN Section (Owner Only) */
+                <View>
+                  <Text style={styles.modalSubtitle}>
+                    The Business Security PIN is linked directly to this stall. Only the Business Owner can set or change it. It protects sensitive owner actions (price changes, deleting items, and staff removal).
+                  </Text>
+                  <View style={styles.pinStatusBox}>
+                    <LockIcon size={16} color={hasPin ? "#4ade80" : "#f59e0b"} />
+                    <Text style={[styles.pinStatusText, { color: hasPin ? "#4ade80" : "#f59e0b" }]}>
+                      {hasPin ? "Stall Security PIN is Active" : "No PIN Set for this Stall"}
+                    </Text>
+                  </View>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="New 4-6 Digit Security PIN"
+                    placeholderTextColor="#8a928e"
+                    keyboardType="numeric"
+                    maxLength={6}
+                    secureTextEntry
+                    value={businessPinInput}
+                    onChangeText={setBusinessPinInput}
+                  />
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="Confirm Security PIN"
+                    placeholderTextColor="#8a928e"
+                    keyboardType="numeric"
+                    maxLength={6}
+                    secureTextEntry
+                    value={businessPinConfirm}
+                    onChangeText={setBusinessPinConfirm}
+                  />
+                  <View style={styles.modalButtons}>
+                    <Pressable
+                      style={styles.modalCancelBtn}
+                      onPress={() => setShowPasswordModal(false)}
+                    >
+                      <Text style={styles.modalCancelText}>Cancel</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.modalSaveBtn}
+                      onPress={handleSaveBusinessPin}
+                      disabled={savingPin}
+                    >
+                      {savingPin ? (
+                        <ActivityIndicator color="#ffffff" size="small" />
+                      ) : (
+                        <Text style={styles.modalSaveText}>Save Stall PIN</Text>
+                      )}
+                    </Pressable>
+                  </View>
+                </View>
+              )}
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Edit User Profile Modal */}
@@ -4130,7 +4623,7 @@ export default function Home() {
         animationType="fade"
         onRequestClose={() => setShowSignOutModal(false)}
       >
-        <View style={styles.modalBackdrop}>
+        <View style={styles.centeredModalBackdrop}>
           <View style={styles.signOutModalCard}>
             <View style={styles.signOutIconWrap}>
               <LockIcon size={28} color="#dc2626" />
@@ -4166,10 +4659,10 @@ export default function Home() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ThemePalette) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#0d1117",
+    backgroundColor: theme.bg,
   },
   header: {
     flexDirection: "row",
@@ -4178,8 +4671,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#21262d",
-    backgroundColor: "#161b22",
+    borderBottomColor: theme.borderLight,
+    backgroundColor: theme.card,
   },
   businessSelector: {
     flexDirection: "row",
@@ -4201,12 +4694,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   businessName: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontWeight: "700",
     fontSize: 15,
   },
   businessSub: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 11,
   },
   syncButton: {
@@ -4255,23 +4748,23 @@ const styles = StyleSheet.create({
   },
   kpiCard: {
     flex: 1,
-    backgroundColor: "#161b22",
+    backgroundColor: theme.card,
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#30363d",
+    borderColor: theme.border,
   },
   kpiCardHighlight: {
     borderColor: "#084a2f",
   },
   kpiLabel: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 12,
     fontWeight: "600",
     marginBottom: 6,
   },
   kpiValue: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 20,
     fontWeight: "800",
     marginBottom: 4,
@@ -4281,7 +4774,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   sectionHeading: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 16,
     fontWeight: "700",
     marginBottom: 12,
@@ -4294,11 +4787,11 @@ const styles = StyleSheet.create({
   },
   actionTile: {
     width: "48%",
-    backgroundColor: "#161b22",
+    backgroundColor: theme.card,
     padding: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#30363d",
+    borderColor: theme.border,
     gap: 6,
   },
   actionIconWrap: {
@@ -4310,12 +4803,12 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   actionTileTitle: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 14,
     fontWeight: "700",
   },
   actionTileDesc: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 11,
   },
   sectionHeaderRow: {
@@ -4335,23 +4828,23 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   emptyBox: {
-    backgroundColor: "#161b22",
+    backgroundColor: theme.card,
     borderRadius: 12,
     padding: 24,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#21262d",
+    borderColor: theme.borderLight,
     marginVertical: 12,
   },
   emptyTitle: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 15,
     fontWeight: "700",
     marginTop: 8,
     marginBottom: 4,
   },
   emptySubtitle: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 12,
     textAlign: "center",
   },
@@ -4359,20 +4852,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#161b22",
+    backgroundColor: theme.card,
     padding: 14,
     borderRadius: 10,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: "#21262d",
+    borderColor: theme.borderLight,
   },
   saleReceipt: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 14,
     fontWeight: "600",
   },
   saleDate: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 11,
   },
   saleAmount: {
@@ -4385,33 +4878,33 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: "#161b22",
+    backgroundColor: theme.card,
     borderBottomWidth: 1,
-    borderBottomColor: "#21262d",
+    borderBottomColor: theme.borderLight,
     gap: 10,
   },
   searchBoxWrap: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0d1117",
+    backgroundColor: theme.bg,
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#30363d",
+    borderColor: theme.border,
     gap: 8,
     height: 42,
   },
   searchInputClean: {
     flex: 1,
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 13,
   },
   modeToggleBtn: {
     width: 42,
     height: 42,
     borderRadius: 8,
-    backgroundColor: "#21262d",
+    backgroundColor: theme.cardHover,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -4421,11 +4914,11 @@ const styles = StyleSheet.create({
   breadcrumbBar: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#161b22",
+    backgroundColor: theme.card,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#21262d",
+    borderBottomColor: theme.borderLight,
     justifyContent: "space-between",
   },
   breadcrumbScroll: {
@@ -4437,7 +4930,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   breadcrumbText: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 12,
     fontWeight: "600",
   },
@@ -4449,7 +4942,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#21262d",
+    backgroundColor: theme.cardHover,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
@@ -4465,27 +4958,27 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: "#0d1117",
+    backgroundColor: theme.bg,
     borderBottomWidth: 1,
-    borderBottomColor: "#21262d",
+    borderBottomColor: theme.borderLight,
   },
   folderActionBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#161b22",
+    backgroundColor: theme.card,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#30363d",
+    borderColor: theme.border,
   },
   folderActionText: {
     fontSize: 12,
     fontWeight: "600",
   },
   subHeading: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 14,
     fontWeight: "700",
     marginBottom: 10,
@@ -4500,11 +4993,11 @@ const styles = StyleSheet.create({
   },
   folderCard: {
     width: "48%",
-    backgroundColor: "#161b22",
+    backgroundColor: theme.card,
     padding: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#30363d",
+    borderColor: theme.border,
   },
   folderIconRow: {
     flexDirection: "row",
@@ -4513,13 +5006,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   folderName: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 14,
     fontWeight: "700",
     marginBottom: 2,
   },
   folderMeta: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 11,
   },
   folderPrice: {
@@ -4531,12 +5024,12 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   productCard: {
-    backgroundColor: "#161b22",
+    backgroundColor: theme.card,
     padding: 14,
     borderRadius: 12,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: "#30363d",
+    borderColor: theme.border,
   },
   productCardSelected: {
     borderColor: "#4ade80",
@@ -4568,7 +5061,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   productName: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 15,
     fontWeight: "700",
   },
@@ -4605,19 +5098,19 @@ const styles = StyleSheet.create({
   stockBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: "#21262d",
+    backgroundColor: theme.cardHover,
     borderRadius: 6,
     alignItems: "center",
   },
   stockBtnText: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontWeight: "600",
     fontSize: 12,
   },
   editBtn: {
     paddingHorizontal: 10,
     paddingVertical: 8,
-    backgroundColor: "#21262d",
+    backgroundColor: theme.cardHover,
     borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
@@ -4634,11 +5127,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#161b22",
+    backgroundColor: theme.card,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: "#30363d",
+    borderTopColor: theme.border,
   },
   batchCountText: {
     color: "#4ade80",
@@ -4671,18 +5164,18 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   treeHeading: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 16,
     fontWeight: "700",
     marginBottom: 12,
   },
   treeRootNode: {
     marginBottom: 12,
-    backgroundColor: "#161b22",
+    backgroundColor: theme.card,
     borderRadius: 8,
     padding: 10,
     borderWidth: 1,
-    borderColor: "#30363d",
+    borderColor: theme.border,
   },
   treeNodeHeader: {
     flexDirection: "row",
@@ -4690,12 +5183,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   treeNodeName: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 14,
     fontWeight: "700",
   },
   treeNodeMeta: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 11,
   },
   treeChildNode: {
@@ -4706,7 +5199,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   treeElbow: {
-    color: "#6e7681",
+    color: theme.textMuted,
     fontFamily: "monospace",
   },
   treeChildName: {
@@ -4720,10 +5213,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#21262d",
+    borderBottomColor: theme.borderLight,
   },
   targetFolderName: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 14,
   },
   listPadding: {
@@ -4737,12 +5230,12 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   listsHeaderTitle: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 16,
     fontWeight: "700",
   },
   listsHeaderSubtitle: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 12,
     marginTop: 2,
   },
@@ -4774,12 +5267,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   listCard: {
-    backgroundColor: "#161b22",
+    backgroundColor: theme.card,
     borderRadius: 12,
     padding: 14,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: "#30363d",
+    borderColor: theme.border,
   },
   listCardHeader: {
     flexDirection: "row",
@@ -4788,12 +5281,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   listCustomerName: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 16,
     fontWeight: "700",
   },
   listDate: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 12,
   },
   statusBadge: {
@@ -4813,7 +5306,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   sectionBox: {
-    backgroundColor: "#0d1117",
+    backgroundColor: theme.bg,
     borderRadius: 8,
     padding: 10,
     marginBottom: 8,
@@ -4830,7 +5323,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   subTitle: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 11,
     fontStyle: "italic",
     marginBottom: 4,
@@ -4841,7 +5334,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#21262d",
+    borderBottomColor: theme.borderLight,
   },
   lineMain: {
     flex: 1,
@@ -4855,7 +5348,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   lineName: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 14,
     fontWeight: "600",
   },
@@ -4874,7 +5367,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#7f1d1d",
   },
   lineStateSomewhere: {
-    backgroundColor: "#21262d",
+    backgroundColor: theme.cardHover,
   },
   lineStateBadgeText: {
     color: "#ffffff",
@@ -4893,7 +5386,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   lineCost: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 12,
   },
   lineMargin: {
@@ -4933,13 +5426,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#7f1d1d",
   },
   lineStatusBtnSomewhere: {
-    backgroundColor: "#21262d",
+    backgroundColor: theme.cardHover,
   },
   linePriceBtn: {
     width: 32,
     height: 32,
     borderRadius: 6,
-    backgroundColor: "#21262d",
+    backgroundColor: theme.cardHover,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -4967,12 +5460,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     borderTopWidth: 1,
-    borderTopColor: "#21262d",
+    borderTopColor: theme.borderLight,
     paddingTop: 10,
     marginTop: 6,
   },
   totalLabel: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 10,
   },
   totalAmount: {
@@ -5031,15 +5524,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#0d1117",
+    backgroundColor: theme.bg,
     padding: 10,
     borderRadius: 6,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#30363d",
+    borderColor: theme.border,
   },
   marginPreviewLabel: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 12,
     fontWeight: "600",
   },
@@ -5055,7 +5548,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   tradingSummaryCard: {
-    backgroundColor: "#161b22",
+    backgroundColor: theme.card,
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
@@ -5063,7 +5556,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   tradingSummaryLabel: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 12,
     fontWeight: "600",
     marginBottom: 6,
@@ -5075,7 +5568,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   tradingSummaryMeta: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 12,
   },
   logExpenseBtn: {
@@ -5106,13 +5599,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: "#21262d",
+    backgroundColor: theme.cardHover,
   },
   tradingPillActive: {
     backgroundColor: "#084a2f",
   },
   tradingPillText: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 12,
     fontWeight: "600",
   },
@@ -5152,10 +5645,10 @@ const styles = StyleSheet.create({
   },
   saleAmountCancelled: {
     textDecorationLine: "line-through",
-    color: "#6e7681",
+    color: theme.textMuted,
   },
   voidBtn: {
-    backgroundColor: "#21262d",
+    backgroundColor: theme.cardHover,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
@@ -5171,17 +5664,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 6,
-    backgroundColor: "#0d1117",
+    backgroundColor: theme.bg,
     marginBottom: 6,
     borderWidth: 1,
-    borderColor: "#21262d",
+    borderColor: theme.borderLight,
   },
   productPickRowActive: {
     borderColor: "#4ade80",
     backgroundColor: "#0d281e",
   },
   productPickName: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 13,
     fontWeight: "600",
   },
@@ -5189,18 +5682,18 @@ const styles = StyleSheet.create({
     color: "#4ade80",
   },
   productPickMeta: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 11,
   },
   userProfileCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    backgroundColor: "#161b22",
+    backgroundColor: theme.card,
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#30363d",
+    borderColor: theme.border,
     marginBottom: 18,
   },
   userAvatar: {
@@ -5217,13 +5710,13 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   userProfileName: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 16,
     fontWeight: "700",
     marginBottom: 2,
   },
   userProfilePhone: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 12,
     marginBottom: 4,
   },
@@ -5247,39 +5740,39 @@ const styles = StyleSheet.create({
   },
   everythingTile: {
     width: "48%",
-    backgroundColor: "#161b22",
+    backgroundColor: theme.card,
     padding: 14,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#30363d",
+    borderColor: theme.border,
     alignItems: "flex-start",
     gap: 4,
   },
   everythingTileTitle: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 14,
     fontWeight: "700",
     marginTop: 4,
   },
   everythingTileDesc: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 11,
   },
   moreCard: {
-    backgroundColor: "#161b22",
+    backgroundColor: theme.card,
     borderRadius: 12,
     padding: 14,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: "#30363d",
+    borderColor: theme.border,
   },
   moreCardTitle: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 15,
     fontWeight: "700",
   },
   moreCardDesc: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 12,
     marginTop: 4,
     marginBottom: 8,
@@ -5320,15 +5813,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#21262d",
+    borderBottomColor: theme.borderLight,
   },
   memberName: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 14,
     fontWeight: "600",
   },
   memberRole: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 12,
   },
   removeStaffBtn: {
@@ -5343,7 +5836,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   profileDetail: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 13,
     marginBottom: 4,
   },
@@ -5362,9 +5855,9 @@ const styles = StyleSheet.create({
   },
   bottomNav: {
     flexDirection: "row",
-    backgroundColor: "#161b22",
+    backgroundColor: theme.card,
     borderTopWidth: 1,
-    borderTopColor: "#21262d",
+    borderTopColor: theme.borderLight,
     paddingBottom: 6,
     paddingTop: 8,
   },
@@ -5377,7 +5870,7 @@ const styles = StyleSheet.create({
   navItemActive: {},
   navText: {
     fontSize: 10,
-    color: "#8b949e",
+    color: theme.textSecondary,
     marginTop: 3,
     fontWeight: "500",
   },
@@ -5405,25 +5898,25 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalCard: {
-    backgroundColor: "#161b22",
+    backgroundColor: theme.card,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     padding: 20,
     maxHeight: "85%",
   },
   modalTitle: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 16,
     fontWeight: "700",
     marginBottom: 4,
   },
   modalSubtitle: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 12,
     marginBottom: 10,
   },
   modalFieldLabel: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 12,
     fontWeight: "600",
     marginBottom: 6,
@@ -5434,8 +5927,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   modalInput: {
-    backgroundColor: "#0d1117",
-    color: "#f0f6fc",
+    backgroundColor: theme.bg,
+    color: theme.text,
     padding: 12,
     borderRadius: 8,
     marginBottom: 10,
@@ -5448,13 +5941,13 @@ const styles = StyleSheet.create({
   },
   modalCancelBtn: {
     flex: 1,
-    backgroundColor: "#21262d",
+    backgroundColor: theme.cardHover,
     padding: 12,
     borderRadius: 8,
     alignItems: "center",
   },
   modalCancelText: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontWeight: "600",
   },
   modalSaveBtn: {
@@ -5476,7 +5969,7 @@ const styles = StyleSheet.create({
   rolePill: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: "#21262d",
+    backgroundColor: theme.cardHover,
     borderRadius: 6,
     alignItems: "center",
     marginRight: 6,
@@ -5485,7 +5978,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#084a2f",
   },
   rolePillText: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 12,
     fontWeight: "600",
   },
@@ -5501,7 +5994,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#064e3b",
   },
   storefrontStatusDraft: {
-    backgroundColor: "#21262d",
+    backgroundColor: theme.cardHover,
   },
   storefrontStatusText: {
     color: "#ffffff",
@@ -5509,15 +6002,15 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   publishToggleBtn: {
-    backgroundColor: "#21262d",
+    backgroundColor: theme.cardHover,
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#30363d",
+    borderColor: theme.border,
   },
   publishToggleBtnText: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 11,
     fontWeight: "600",
   },
@@ -5549,7 +6042,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   invitationSubHeading: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 11,
     fontWeight: "700",
     textTransform: "uppercase",
@@ -5561,15 +6054,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 6,
     borderBottomWidth: 1,
-    borderBottomColor: "#21262d",
+    borderBottomColor: theme.borderLight,
   },
   invitationPhone: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 13,
     fontWeight: "600",
   },
   invitationMeta: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 11,
   },
   acceptInviteBtn: {
@@ -5616,15 +6109,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#0d1117",
+    backgroundColor: theme.bg,
     padding: 10,
     borderRadius: 8,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: "#21262d",
+    borderColor: theme.borderLight,
   },
   galleryImageUrl: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 12,
   },
   primaryCoverBadge: {
@@ -5639,11 +6132,11 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   galleryPositionText: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 11,
   },
   makePrimaryBtn: {
-    backgroundColor: "#21262d",
+    backgroundColor: theme.cardHover,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
@@ -5655,7 +6148,7 @@ const styles = StyleSheet.create({
   },
   deletePhotoBtn: {
     padding: 6,
-    backgroundColor: "#21262d",
+    backgroundColor: theme.cardHover,
     borderRadius: 4,
   },
   colorPillsRow: {
@@ -5675,12 +6168,12 @@ const styles = StyleSheet.create({
     borderColor: "#4ade80",
   },
   passwordMeterBox: {
-    backgroundColor: "#0d1117",
+    backgroundColor: theme.bg,
     padding: 10,
     borderRadius: 8,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#21262d",
+    borderColor: theme.borderLight,
   },
   passwordStrengthRow: {
     flexDirection: "row",
@@ -5689,7 +6182,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   passwordStrengthLabel: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 11,
     fontWeight: "600",
   },
@@ -5708,7 +6201,7 @@ const styles = StyleSheet.create({
   },
   strengthBarWrap: {
     height: 4,
-    backgroundColor: "#21262d",
+    backgroundColor: theme.cardHover,
     borderRadius: 2,
     marginBottom: 8,
     overflow: "hidden",
@@ -5730,13 +6223,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#f87171",
   },
   pwdChecklistText: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 11,
     marginTop: 2,
   },
   shopOption: {
     padding: 14,
-    backgroundColor: "#0d1117",
+    backgroundColor: theme.bg,
     borderRadius: 8,
     marginBottom: 8,
   },
@@ -5745,7 +6238,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   shopOptionName: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 14,
   },
   shopOptionNameActive: {
@@ -5759,7 +6252,7 @@ const styles = StyleSheet.create({
     color: "#f59e0b",
   },
   lowStockSection: {
-    backgroundColor: "#161b22",
+    backgroundColor: theme.card,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#78350f",
@@ -5788,15 +6281,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#21262d",
+    borderBottomColor: theme.borderLight,
   },
   lowStockName: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 13,
     fontWeight: "600",
   },
   lowStockQty: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 11,
     marginTop: 2,
   },
@@ -5825,7 +6318,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#064e3b",
   },
   itemPublishDraft: {
-    backgroundColor: "#21262d",
+    backgroundColor: theme.cardHover,
   },
   itemPublishBadgeText: {
     fontSize: 9,
@@ -5835,7 +6328,7 @@ const styles = StyleSheet.create({
     color: "#4ade80",
   },
   itemPublishBadgeTextDraft: {
-    color: "#8b949e",
+    color: theme.textSecondary,
   },
   shareBtn: {
     padding: 6,
@@ -5845,33 +6338,33 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   userProfileEmail: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 12,
     marginTop: 1,
   },
   editProfileBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: "#21262d",
+    backgroundColor: theme.cardHover,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#30363d",
+    borderColor: theme.border,
     alignSelf: "flex-start",
   },
   editProfileBtnText: {
-    color: "#f0f6fc",
+    color: theme.text,
     fontSize: 12,
     fontWeight: "600",
   },
   signOutModalCard: {
-    backgroundColor: "#161b22",
+    backgroundColor: theme.card,
     borderRadius: 16,
     padding: 24,
     alignItems: "center",
     width: "100%",
     maxWidth: 340,
     borderWidth: 1,
-    borderColor: "#30363d",
+    borderColor: theme.border,
   },
   signOutIconWrap: {
     width: 56,
@@ -5885,13 +6378,13 @@ const styles = StyleSheet.create({
   signOutModalTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#f0f6fc",
+    color: theme.text,
     marginBottom: 8,
     textAlign: "center",
   },
   signOutModalDesc: {
     fontSize: 14,
-    color: "#8b949e",
+    color: theme.textSecondary,
     textAlign: "center",
     lineHeight: 20,
     marginBottom: 20,
@@ -5905,12 +6398,12 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: "#21262d",
+    backgroundColor: theme.cardHover,
     alignItems: "center",
     justifyContent: "center",
   },
   signOutCancelText: {
-    color: "#c9d1d9",
+    color: theme.text,
     fontWeight: "600",
     fontSize: 14,
   },
@@ -5933,8 +6426,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#30363d",
-    backgroundColor: "#21262d",
+    borderColor: theme.border,
+    backgroundColor: theme.cardHover,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -5943,7 +6436,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#064e3b",
   },
   themeToggleBtnText: {
-    color: "#8b949e",
+    color: theme.textSecondary,
     fontSize: 12,
     fontWeight: "600",
     textAlign: "center",
@@ -5951,5 +6444,270 @@ const styles = StyleSheet.create({
   themeToggleBtnTextActive: {
     color: "#ffffff",
     fontWeight: "700",
+  },
+  // Dedicated Team Management Styles
+  teamTopBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+    backgroundColor: theme.card,
+    marginBottom: 12,
+  },
+  teamBackBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: theme.cardHover,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  teamBackBtnText: {
+    color: theme.text,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  teamInviteTopBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#084a2f",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  teamInviteTopBtnText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  teamBannerCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: theme.card,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  teamBannerIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.mode === "light" ? "#e6f4ea" : "#0d281e",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  teamBannerTitle: {
+    color: theme.text,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  teamBannerSub: {
+    color: theme.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  teamStatsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 12,
+  },
+  teamStatBox: {
+    flex: 1,
+    backgroundColor: theme.card,
+    borderRadius: 10,
+    padding: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  teamStatValue: {
+    color: theme.mode === "light" ? "#084a2f" : "#4ade80",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  teamStatLabel: {
+    color: theme.textSecondary,
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 4,
+  },
+  teamMemberCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.borderLight,
+  },
+  teamMemberAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.mode === "light" ? "#084a2f" : "#21262d",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  teamMemberAvatarText: {
+    color: "#ffffff",
+    fontWeight: "800",
+    fontSize: 15,
+  },
+  teamMemberName: {
+    color: theme.text,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  teamMemberMeta: {
+    color: theme.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  sentInviteCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: theme.cardHover,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.border,
+    marginTop: 10,
+  },
+  sentInviteTarget: {
+    color: theme.text,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  sentInviteRolePill: {
+    backgroundColor: theme.mode === "light" ? "#e6f4ea" : "#0d281e",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#4ade80",
+  },
+  sentInviteRolePillText: {
+    color: theme.mode === "light" ? "#084a2f" : "#4ade80",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  sentInviteStatus: {
+    color: theme.textSecondary,
+    fontSize: 11,
+    marginTop: 4,
+  },
+  inviteShareWhatsAppBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#25d366",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  inviteShareWhatsAppBtnText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  emptyInviteBox: {
+    paddingVertical: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyInviteBtn: {
+    marginTop: 10,
+    backgroundColor: "#084a2f",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  emptyInviteBtnText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  roleGuideList: {
+    marginTop: 10,
+    gap: 8,
+  },
+  roleGuideItem: {
+    backgroundColor: theme.cardHover,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  roleGuideName: {
+    color: theme.mode === "light" ? "#084a2f" : "#4ade80",
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  roleGuideDesc: {
+    color: theme.textSecondary,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  securityTabRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  securityTabBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.cardHover,
+    alignItems: "center",
+  },
+  securityTabBtnActive: {
+    borderColor: "#4ade80",
+    backgroundColor: theme.mode === "light" ? "#e6f4ea" : "#064e3b",
+  },
+  securityTabText: {
+    color: theme.textSecondary,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  securityTabTextActive: {
+    color: theme.mode === "light" ? "#084a2f" : "#ffffff",
+    fontWeight: "700",
+  },
+  pinStatusBox: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: theme.cardHover,
+    borderWidth: 1,
+    borderColor: theme.border,
+    marginBottom: 16,
+  },
+  pinStatusText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  centeredModalBackdrop: {
+    flex: 1,
+    backgroundColor: theme.modalBackdrop,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
   },
 });

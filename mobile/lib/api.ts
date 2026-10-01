@@ -780,3 +780,31 @@ export interface LowStockProduct {
 export function lowStock(tenantId: string, limit = "5"): Promise<LowStockProduct[]> {
   return request<LowStockProduct[]>(`/api/v1/tenants/${tenantId}/reports/low-stock?limit=${limit}`);
 }
+
+export interface AppNotification {
+  id: string;
+  tenant_id: string;
+  recipient_user_id: string;
+  notification_type: string;
+  title?: string;
+  body?: string;
+  created_at: string;
+  read_at?: string | null;
+  entity_id?: string | null;
+}
+
+export function getNotifications(tenantId: string, unreadOnly: boolean = false): Promise<AppNotification[]> {
+  return request<AppNotification[]>(
+    `/api/v1/tenants/${tenantId}/notifications?unread_only=${unreadOnly}`,
+  );
+}
+
+export function getUnreadNotificationCount(tenantId: string): Promise<{ unread: number }> {
+  return request<{ unread: number }>(`/api/v1/tenants/${tenantId}/notifications/unread-count`);
+}
+
+export function markNotificationRead(tenantId: string, notificationId: string): Promise<AppNotification> {
+  return request<AppNotification>(`/api/v1/tenants/${tenantId}/notifications/${notificationId}/read`, {
+    method: "POST",
+  });
+}

@@ -117,6 +117,22 @@ export default async function ShopPage({ params }: Params) {
     shop.description,
   );
   const isBgDark = isDarkColor(themeBg);
+  const themeVariables: React.CSSProperties = {
+    "--shop-theme-color": themeColor,
+    "--shop-theme-bg": themeBg,
+    "--shop-theme-bg-image": themeBgImage ? `url(${themeBgImage})` : "none",
+    "--shop-brand-text": isBgDark ? "#f8fafc" : "#0f172a",
+    "--card": isBgDark ? "#161e19" : "#ffffff",
+    "--card-hover": isBgDark ? "#1f2a23" : "#f8fafc",
+    "--sand": themeBg,
+    "--sand-2": isBgDark ? "#111814" : "#f1ede4",
+    "--ink": isBgDark ? "#f8fafc" : "#0f172a",
+    "--ink-2": isBgDark ? "#cbd5e1" : "#334155",
+    "--ink-3": isBgDark ? "#94a3b8" : "#64748b",
+    "--line": isBgDark ? "#26352b" : "#e2dcd2",
+    "--line-strong": isBgDark ? "#384d3e" : "#cbbfaf",
+    color: isBgDark ? "#f8fafc" : "#0f172a",
+  } as React.CSSProperties;
 
   // The message arrives already written, because a customer with an empty text box often sends nothing.
   const message = `Hello ${shop.business_name}, I want to order:\n\n- \n\n(My name and delivery address:)`;
@@ -127,14 +143,7 @@ export default async function ShopPage({ params }: Params) {
     <main
       id="shop_root"
       className={styles.page}
-      style={
-        {
-          "--shop-theme-color": themeColor,
-          "--shop-theme-bg": themeBg,
-          "--shop-theme-bg-image": themeBgImage ? `url(${themeBgImage})` : "none",
-          "--shop-brand-text": isBgDark ? "#f0ede6" : "var(--ink)",
-        } as React.CSSProperties
-      }
+      style={themeVariables}
     >
       <script
         dangerouslySetInnerHTML={{
