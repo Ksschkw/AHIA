@@ -76,6 +76,7 @@ import {
   SearchIcon,
   ShareIcon,
   ShopIcon,
+  SparklesIcon,
   SyncIcon,
   TagIcon,
   TrashIcon,
@@ -261,6 +262,60 @@ function getEffectiveCategoryPrice(
   return { normal, wholesale };
 }
 
+function findBestPricesForLine(
+  line: CustomerListLine,
+  allProducts: Product[],
+  allCats: Category[]
+): { normal: string | null; wholesale: string | null; source: string | null } {
+  if (line.product_id) {
+    const prod = allProducts.find((p) => p.id === line.product_id);
+    if (prod) {
+      const normal = prod.effective_normal_price || prod.selling_price || null;
+      const wholesale = prod.effective_wholesale_price || null;
+      if (normal || wholesale) {
+        return { normal, wholesale, source: prod.name };
+      }
+      if (prod.category_id) {
+        const catPrices = getEffectiveCategoryPrice(prod.category_id, allCats);
+        if (catPrices.normal || catPrices.wholesale) {
+          return { normal: catPrices.normal, wholesale: catPrices.wholesale, source: "Category" };
+        }
+      }
+    }
+  }
+
+  const nameToMatch = (line.product_name || line.free_text || "").toLowerCase().trim();
+  if (nameToMatch) {
+    const matched = allProducts.find(
+      (p) => p.name.toLowerCase() === nameToMatch || nameToMatch.includes(p.name.toLowerCase())
+    );
+    if (matched) {
+      const normal = matched.effective_normal_price || matched.selling_price || null;
+      const wholesale = matched.effective_wholesale_price || null;
+      if (normal || wholesale) {
+        return { normal, wholesale, source: matched.name };
+      }
+      if (matched.category_id) {
+        const catPrices = getEffectiveCategoryPrice(matched.category_id, allCats);
+        if (catPrices.normal || catPrices.wholesale) {
+          return { normal: catPrices.normal, wholesale: catPrices.wholesale, source: "Category" };
+        }
+      }
+    }
+
+    for (const cat of allCats) {
+      if (nameToMatch.includes(cat.name.toLowerCase()) || (cat.slug && nameToMatch.includes(cat.slug.toLowerCase()))) {
+        const catPrices = getEffectiveCategoryPrice(cat.id, allCats);
+        if (catPrices.normal || catPrices.wholesale) {
+          return { normal: catPrices.normal, wholesale: catPrices.wholesale, source: cat.name };
+        }
+      }
+    }
+  }
+
+  return { normal: null, wholesale: null, source: null };
+}
+
 function parseQuickPaste(raw: string): Array<{ text: string; quantity: string }> {
   return raw
     .split("\n")
@@ -425,7 +480,13 @@ export default function Home() {
   } | null>(null);
   const [priceInput, setPriceInput] = useState("");
   const [costInput, setCostInput] = useState("");
+  const [applyPriceToAll, setApplyPriceToAll] = useState(false);
   const [savingPrice, setSavingPrice] = useState(false);
+  const [autoPricingListId, setAutoPricingListId] = useState<string | null>(null);
+
+  // Official Invoice modal state
+  const [invoiceModalList, setInvoiceModalList] = useState<CustomerList | null>(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   // Dispatch Waybill modal state
   const [dispatchModalList, setDispatchModalList] = useState<CustomerList | null>(null);
@@ -1379,15 +1440,10 @@ export default function Home() {
     }
   };
 
-  const handleShareWaybillReceipt = async (item: CustomerList) => {
+  const handleShareReceiptText = async (item: CustomerList) => {
     if (!activeBusiness) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    showToast("Generating official business invoice...");
     try {
-      await generateAndSharePdfInvoice(activeBusiness, businessDetails, item);
-    } catch {
-      // Fallback to formatted WhatsApp message if sharing fails
-      showToast("Could not export PDF. Sharing invoice via text...");
       const cleanPhone = formatWaNumber(item.customer_phone);
       const dateStr = new Date(item.created_at).toLocaleDateString([], {
         month: "short",
@@ -1395,18 +1451,35 @@ export default function Home() {
         year: "numeric",
       });
 
+      let runningSubtotal = 0;
       let linesText = "";
       item.lines.forEach((l, idx) => {
         const name = l.product_name || l.free_text || "Item";
-        const priceStr = l.shop_price ? formatMoney(l.shop_price) : "Pending";
-        linesText += `${idx + 1}. ${l.quantity}x ${name} - ${priceStr}\n`;
+        const qty = Number(l.quantity) || 1;
+        const unit = Number(l.shop_price ?? "0");
+        const hasPrice = Boolean(l.shop_price && Number.isFinite(unit));
+        if (hasPrice) {
+          runningSubtotal += unit * qty;
+        }
+        const priceStr = hasPrice
+          ? `${formatMoney(l.shop_price)} (Total: ${formatMoney((unit * qty).toString())})`
+          : "(Awaiting price)";
+        linesText += `${idx + 1}. ${qty}x ${name} - ${priceStr}\n`;
       });
+
+      const dispatchCostNum = Number(item.dispatch_cost ?? "0");
+      const computedTotal = runningSubtotal + dispatchCostNum;
+      const totalDisplay = item.priced_total
+        ? formatMoney(item.priced_total)
+        : runningSubtotal > 0
+        ? `${formatMoney(computedTotal.toString())} (Partial)`
+        : "Pending pricing";
 
       const waybillInfo = item.waybill_number
         ? `\nWAYBILL DETAILS:\nTransporter: ${item.transporter_name || "Courier"}\nWaybill #: ${item.waybill_number}${item.dispatch_cost ? `\nDispatch Cost: ${formatMoney(item.dispatch_cost)}` : ""}${item.tracking_url ? `\nTracking URL: ${item.tracking_url}` : ""}\n`
         : "";
 
-      const receipt = `==============================\nOFFICIAL INVOICE\n${activeBusiness.name.toUpperCase()}\nDate: ${dateStr}\nCustomer: ${item.customer_name || item.customer_phone || "Customer"}\nPhone: ${item.customer_phone || "N/A"}\n==============================\nITEMS:\n${linesText}==============================${waybillInfo}TOTAL: ${item.priced_total ? formatMoney(item.priced_total) : "Incomplete"}\n\nThank you for doing business with us!\n==============================`;
+      const receipt = `==============================\nOFFICIAL INVOICE\n${activeBusiness.name.toUpperCase()}\nDate: ${dateStr}\nCustomer: ${item.customer_name || item.customer_phone || "Customer"}\nPhone: ${item.customer_phone || "N/A"}\nStatus: ${item.status.toUpperCase()}\n==============================\nITEMS:\n${linesText}==============================${waybillInfo}TOTAL: ${totalDisplay}\n\nThank you for doing business with us!\n==============================`;
 
       const waUrl = cleanPhone
         ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(receipt)}`
@@ -1418,6 +1491,23 @@ export default function Home() {
       } else {
         await Share.share({ message: receipt });
       }
+    } catch {
+      showToast("Could not share invoice.");
+    }
+  };
+
+  const handleExportPdfInvoice = async (item: CustomerList) => {
+    if (!activeBusiness) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setExportingPdf(true);
+    showToast("Generating official business invoice PDF...");
+    try {
+      await generateAndSharePdfInvoice(activeBusiness, businessDetails, item);
+      showToast("Invoice PDF generated and shared!");
+    } catch {
+      showToast("Could not export PDF. Please check device permissions.");
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -1538,19 +1628,85 @@ export default function Home() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSavingPrice(true);
     try {
-      const updatedList = await workListLine(activeBusiness.id, pricingLine.listId, pricingLine.lineId, {
-        shop_price: priceInput.trim() || null,
-        cost_price: costInput.trim() || null,
+      const cleanShopPrice = priceInput.trim() || null;
+      const cleanCostPrice = costInput.trim() || null;
+
+      let updatedList = await workListLine(activeBusiness.id, pricingLine.listId, pricingLine.lineId, {
+        shop_price: cleanShopPrice,
+        cost_price: cleanCostPrice,
       });
+
+      if (applyPriceToAll && cleanShopPrice) {
+        const targetList = customerLists.find((l) => l.id === pricingLine.listId);
+        if (targetList) {
+          const otherUnpriced = targetList.lines.filter(
+            (l) => l.id !== pricingLine.lineId && !l.shop_price && l.note !== "heading"
+          );
+          for (const otherLine of otherUnpriced) {
+            try {
+              updatedList = await workListLine(activeBusiness.id, pricingLine.listId, otherLine.id, {
+                shop_price: cleanShopPrice,
+                cost_price: cleanCostPrice,
+              });
+            } catch {
+              // skip single line error
+            }
+          }
+        }
+      }
+
       setCustomerLists((curr) => curr.map((l) => (l.id === updatedList.id ? updatedList : l)));
       setPricingLine(null);
       setPriceInput("");
       setCostInput("");
-      showToast("Line prices & cost updated!");
+      setApplyPriceToAll(false);
+      showToast(applyPriceToAll ? "Applied prices to all list items!" : "Line prices & cost updated!");
     } catch {
       showToast("Could not update price.");
     } finally {
       setSavingPrice(false);
+    }
+  };
+
+  const handleAutoPriceList = async (list: CustomerList) => {
+    if (!activeBusiness) return;
+    const unpriced = list.lines.filter((l) => !l.shop_price && l.note !== "heading");
+    if (unpriced.length === 0) {
+      showToast("All items in this list already have prices!");
+      return;
+    }
+
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setAutoPricingListId(list.id);
+    try {
+      let updated = list;
+      let pricedCount = 0;
+
+      for (const line of unpriced) {
+        const matched = findBestPricesForLine(line, products, categories);
+        if (matched.normal || matched.wholesale) {
+          try {
+            updated = await workListLine(activeBusiness.id, list.id, line.id, {
+              shop_price: matched.normal,
+              cost_price: matched.wholesale,
+            });
+            pricedCount++;
+          } catch {
+            // skip on single line error
+          }
+        }
+      }
+
+      if (pricedCount > 0) {
+        setCustomerLists((curr) => curr.map((l) => (l.id === updated.id ? updated : l)));
+        showToast(`Auto-priced ${pricedCount} item(s) from catalogue & categories!`);
+      } else {
+        showToast("No catalogue matches found. Tap edit on any item to set prices.");
+      }
+    } catch {
+      showToast("Could not auto-price list.");
+    } finally {
+      setAutoPricingListId(null);
     }
   };
 
@@ -1645,11 +1801,15 @@ export default function Home() {
   const handleExecutePinConfirm = async (providedPin?: string) => {
     if (!activeBusiness || !pinConfirmList) return;
 
-    // Check if any line is unpriced
-    const unpricedLines = pinConfirmList.lines.filter((l) => !l.shop_price);
+    // Retrieve fresh list reference to prevent stale line checks
+    const currentList = customerLists.find((l) => l.id === pinConfirmList.id) || pinConfirmList;
+
+    // Check if any product line is unpriced (excluding headings)
+    const unpricedLines = currentList.lines.filter((l) => !l.shop_price && l.note !== "heading");
     if (unpricedLines.length > 0) {
+      const sampleItem = unpricedLines[0].product_name || unpricedLines[0].free_text || "Item";
       setConfirmError(
-        `Cannot confirm order: ${unpricedLines.length} item(s) are still unpriced. All items must have prices before confirming.`
+        `Cannot confirm order: ${unpricedLines.length} item(s) (including "${sampleItem}") are unpriced.`
       );
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
@@ -1674,7 +1834,7 @@ export default function Home() {
     setSavingConfirm(true);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     try {
-      const confirmed = await confirmCustomerList(activeBusiness.id, pinConfirmList.id);
+      const confirmed = await confirmCustomerList(activeBusiness.id, currentList.id);
       setCustomerLists((curr) => curr.map((l) => (l.id === confirmed.id ? confirmed : l)));
       setPinConfirmList(null);
       setPinValue("");
@@ -1682,6 +1842,38 @@ export default function Home() {
     } catch (err: any) {
       const msg = err?.message || "Could not confirm order. Make sure all items have prices.";
       setConfirmError(msg);
+    } finally {
+      setSavingConfirm(false);
+    }
+  };
+
+  const handlePriceRemainingLinesZeroAndConfirm = async () => {
+    if (!activeBusiness || !pinConfirmList) return;
+    const currentList = customerLists.find((l) => l.id === pinConfirmList.id) || pinConfirmList;
+    const unpricedLines = currentList.lines.filter((l) => !l.shop_price && l.note !== "heading");
+    setSavingConfirm(true);
+    try {
+      let updated = currentList;
+      for (const line of unpricedLines) {
+        try {
+          updated = await workListLine(activeBusiness.id, currentList.id, line.id, {
+            shop_price: "0",
+            cost_price: "0",
+          });
+        } catch {
+          // ignore single line error
+        }
+      }
+      setCustomerLists((curr) => curr.map((l) => (l.id === updated.id ? updated : l)));
+      setPinConfirmList(updated);
+      setConfirmError(null);
+      const confirmed = await confirmCustomerList(activeBusiness.id, updated.id);
+      setCustomerLists((curr) => curr.map((l) => (l.id === confirmed.id ? confirmed : l)));
+      setPinConfirmList(null);
+      setPinValue("");
+      showToast("Order confirmed successfully!");
+    } catch (err: any) {
+      setConfirmError(err?.message || "Could not confirm order.");
     } finally {
       setSavingConfirm(false);
     }
@@ -2639,6 +2831,9 @@ export default function Home() {
                                   <Pressable
                                     style={styles.linePriceBtn}
                                     onPress={() => {
+                                      const best = findBestPricesForLine(line, products, categories);
+                                      const initialShop = line.shop_price ?? best.normal ?? "";
+                                      const initialCost = line.cost_price ?? best.wholesale ?? "";
                                       setPricingLine({
                                         listId: item.id,
                                         lineId: line.id,
@@ -2646,8 +2841,9 @@ export default function Home() {
                                         currentShopPrice: line.shop_price ?? "",
                                         currentCostPrice: line.cost_price ?? "",
                                       });
-                                      setPriceInput(line.shop_price ?? "");
-                                      setCostInput(line.cost_price ?? "");
+                                      setPriceInput(initialShop);
+                                      setCostInput(initialCost);
+                                      setApplyPriceToAll(false);
                                     }}
                                   >
                                     <EditIcon size={14} color="#8a928e" />
@@ -2674,14 +2870,59 @@ export default function Home() {
 
                   {/* List Total & Actions */}
                   <View style={styles.listFooter}>
-                    <View>
-                      <Text style={styles.totalLabel}>Total Quoted</Text>
-                      <Text style={styles.totalAmount}>
-                        {item.priced_total ? formatMoney(item.priced_total) : "Incomplete"}
-                      </Text>
+                    <View style={styles.listFooterTop}>
+                      <View style={{ flex: 1, paddingRight: 8 }}>
+                        <Text style={styles.totalLabel}>Total Quoted</Text>
+                        <Text style={styles.totalAmount} numberOfLines={1}>
+                          {item.priced_total
+                            ? formatMoney(item.priced_total)
+                            : (() => {
+                                const pricedSum = item.lines.reduce((acc, l) => {
+                                  const p = Number(l.shop_price ?? "0");
+                                  const q = Number(l.quantity) || 1;
+                                  return acc + (l.shop_price && Number.isFinite(p) ? p * q : 0);
+                                }, 0);
+                                return pricedSum > 0
+                                  ? `${formatMoney(pricedSum.toString())} (Partial)`
+                                  : "Pending Pricing";
+                              })()}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.statusPill,
+                          isConfirmed ? styles.statusPillConfirmed : styles.statusPillDraft,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.statusPillText,
+                            isConfirmed ? styles.statusPillTextConfirmed : styles.statusPillTextDraft,
+                          ]}
+                        >
+                          {isConfirmed ? "Confirmed" : "Draft"}
+                        </Text>
+                      </View>
                     </View>
 
                     <View style={styles.footerActions}>
+                      {item.lines.some((l) => !l.shop_price && l.note !== "heading") && !isConfirmed && (
+                        <Pressable
+                          style={styles.autoPriceBtn}
+                          onPress={() => handleAutoPriceList(item)}
+                          disabled={autoPricingListId === item.id}
+                        >
+                          {autoPricingListId === item.id ? (
+                            <ActivityIndicator size="small" color="#084a2f" />
+                          ) : (
+                            <>
+                              <SparklesIcon size={14} color="#084a2f" />
+                              <Text style={styles.autoPriceBtnText}>Auto-Price</Text>
+                            </>
+                          )}
+                        </Pressable>
+                      )}
+
                       <Pressable
                         style={styles.waBtn}
                         onPress={() => handleShareQuoteOnWhatsApp(item)}
@@ -2692,7 +2933,7 @@ export default function Home() {
 
                       <Pressable
                         style={styles.invoiceBtn}
-                        onPress={() => handleShareWaybillReceipt(item)}
+                        onPress={() => setInvoiceModalList(item)}
                       >
                         <ReceiptIcon size={14} color="#ffffff" />
                         <Text style={styles.invoiceBtnText}>Invoice</Text>
@@ -2721,6 +2962,7 @@ export default function Home() {
                           onPress={() => {
                             setPinConfirmList(item);
                             setPinValue("");
+                            setConfirmError(null);
                           }}
                         >
                           <CheckMarkIcon size={14} color="#ffffff" />
@@ -4081,6 +4323,43 @@ export default function Home() {
                 onChangeText={setCostInput}
               />
 
+              {/* Quick Fill Category Chips */}
+              {categories.filter((c) => {
+                const p = getEffectiveCategoryPrice(c.id, categories);
+                return Boolean(p.normal || p.wholesale);
+              }).length > 0 && (
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={styles.modalFieldLabel}>Quick Fill from Category Default</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: "row", marginTop: 4 }}>
+                    {categories
+                      .filter((c) => {
+                        const p = getEffectiveCategoryPrice(c.id, categories);
+                        return Boolean(p.normal || p.wholesale);
+                      })
+                      .map((cat) => {
+                        const prices = getEffectiveCategoryPrice(cat.id, categories);
+                        return (
+                          <Pressable
+                            key={cat.id}
+                            style={styles.categoryPricePill}
+                            onPress={() => {
+                              if (prices.normal) setPriceInput(prices.normal);
+                              if (prices.wholesale) setCostInput(prices.wholesale);
+                            }}
+                          >
+                            <Text style={styles.categoryPricePillName}>{cat.name}</Text>
+                            <Text style={styles.categoryPricePillPrices}>
+                              {prices.normal ? `Sell: NGN ${prices.normal}` : ""}
+                              {prices.normal && prices.wholesale ? " | " : ""}
+                              {prices.wholesale ? `Cost: NGN ${prices.wholesale}` : ""}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                  </ScrollView>
+                </View>
+              )}
+
               {priceInput.trim() && costInput.trim() && (
                 <View style={styles.marginPreviewBox}>
                   <Text style={styles.marginPreviewLabel}>Expected Profit Margin:</Text>
@@ -4095,6 +4374,18 @@ export default function Home() {
                   </Text>
                 </View>
               )}
+
+              <Pressable
+                style={styles.applyAllCheckboxRow}
+                onPress={() => setApplyPriceToAll(!applyPriceToAll)}
+              >
+                <View style={[styles.checkboxBox, applyPriceToAll && styles.checkboxBoxChecked]}>
+                  {applyPriceToAll && <CheckMarkIcon size={12} color="#ffffff" />}
+                </View>
+                <Text style={styles.applyAllCheckboxLabel}>
+                  Apply these prices to all other unpriced items in this list
+                </Text>
+              </Pressable>
 
               <View style={styles.modalButtons}>
                 <Pressable style={styles.modalCancelBtn} onPress={() => setPricingLine(null)}>
@@ -4219,6 +4510,20 @@ export default function Home() {
                   disabled={savingConfirm}
                 />
 
+                {confirmError && (
+                  <View style={{ marginTop: 12, alignItems: "center" }}>
+                    <Pressable
+                      style={styles.zeroPriceBypassBtn}
+                      onPress={handlePriceRemainingLinesZeroAndConfirm}
+                      disabled={savingConfirm}
+                    >
+                      <Text style={styles.zeroPriceBypassText}>
+                        Price Remaining Items as NGN 0 & Confirm
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
+
                 <View style={styles.modalButtons}>
                   <Pressable
                     style={styles.modalCancelBtn}
@@ -4238,16 +4543,53 @@ export default function Home() {
                 <Text style={styles.modalSubtitle}>
                   Confirm order for {pinConfirmList?.customer_name || pinConfirmList?.customer_phone}?
                   {"\n\n"}
-                  Note: No business security PIN is configured yet. You can confirm directly now, or set a PIN in Business Settings.
+                  Note: No stall security PIN is configured yet. You can confirm directly now, or set a PIN in Business Settings to protect transactions.
                 </Text>
 
                 {confirmError ? (
-                  <Text style={styles.modalInlineError}>{confirmError}</Text>
+                  <View style={{ marginBottom: 12 }}>
+                    <Text style={styles.modalInlineError}>{confirmError}</Text>
+                    <Pressable
+                      style={[styles.zeroPriceBypassBtn, { marginTop: 8 }]}
+                      onPress={handlePriceRemainingLinesZeroAndConfirm}
+                      disabled={savingConfirm}
+                    >
+                      <Text style={styles.zeroPriceBypassText}>
+                        Price Remaining Items as NGN 0 & Confirm
+                      </Text>
+                    </Pressable>
+                  </View>
                 ) : null}
 
-                <View style={styles.modalButtons}>
+                <View style={[styles.modalButtons, { flexDirection: "column", gap: 8 }]}>
                   <Pressable
-                    style={styles.modalCancelBtn}
+                    style={[styles.modalSaveBtn, { width: "100%", height: 46 }]}
+                    onPress={() => handleExecutePinConfirm()}
+                    disabled={savingConfirm}
+                  >
+                    {savingConfirm ? (
+                      <ActivityIndicator color="#ffffff" size="small" />
+                    ) : (
+                      <Text style={styles.modalSaveText}>Confirm Order (Without PIN)</Text>
+                    )}
+                  </Pressable>
+
+                  <Pressable
+                    style={[styles.modalSecondaryBtn, { width: "100%", height: 46 }]}
+                    onPress={() => {
+                      setPinConfirmList(null);
+                      setConfirmError(null);
+                      setSecurityTab("pin");
+                      setShowPasswordModal(true);
+                    }}
+                    disabled={savingConfirm}
+                  >
+                    <LockIcon size={16} color="#084a2f" />
+                    <Text style={styles.modalSecondaryText}>Set Security PIN Now</Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={[styles.modalCancelBtn, { width: "100%" }]}
                     onPress={() => {
                       setPinConfirmList(null);
                       setConfirmError(null);
@@ -4256,19 +4598,186 @@ export default function Home() {
                   >
                     <Text style={styles.modalCancelText}>Cancel</Text>
                   </Pressable>
-                  <Pressable
-                    style={styles.modalSaveBtn}
-                    onPress={() => handleExecutePinConfirm()}
-                    disabled={savingConfirm}
-                  >
-                    {savingConfirm ? (
-                      <ActivityIndicator color="#ffffff" size="small" />
-                    ) : (
-                      <Text style={styles.modalSaveText}>Confirm Order Now</Text>
-                    )}
-                  </Pressable>
                 </View>
               </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Official Invoice Modal */}
+      <Modal statusBarTranslucent visible={invoiceModalList !== null} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxHeight: "90%", padding: 16 }]}>
+            <View style={styles.invoiceModalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>{activeBusiness?.name || "Official Invoice"}</Text>
+                <Text style={styles.modalSubtitle}>
+                  Order #{invoiceModalList ? invoiceModalList.id.slice(0, 8) : ""}
+                </Text>
+              </View>
+              <Pressable
+                style={styles.closeCircleBtn}
+                onPress={() => setInvoiceModalList(null)}
+              >
+                <CloseIcon size={18} color="#64748b" />
+              </Pressable>
+            </View>
+
+            {invoiceModalList && (
+              <ScrollView style={{ marginTop: 10 }} showsVerticalScrollIndicator={false}>
+                {/* Customer Meta */}
+                <View style={styles.invoiceClientBox}>
+                  <View>
+                    <Text style={styles.invoiceClientLabel}>BILLED TO</Text>
+                    <Text style={styles.invoiceClientName}>
+                      {invoiceModalList.customer_name || invoiceModalList.customer_phone || "Customer"}
+                    </Text>
+                    <Text style={styles.invoiceClientPhone}>
+                      Phone: {invoiceModalList.customer_phone || "N/A"}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={styles.invoiceClientLabel}>STATUS</Text>
+                    <View
+                      style={[
+                        styles.statusPill,
+                        invoiceModalList.status === "confirmed"
+                          ? styles.statusPillConfirmed
+                          : styles.statusPillDraft,
+                        { marginTop: 4 },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusPillText,
+                          invoiceModalList.status === "confirmed"
+                            ? styles.statusPillTextConfirmed
+                            : styles.statusPillTextDraft,
+                        ]}
+                      >
+                        {invoiceModalList.status}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Itemized Table */}
+                <View style={styles.invoiceTable}>
+                  <View style={styles.invoiceTableHeader}>
+                    <Text style={[styles.invoiceTh, { flex: 2 }]}>ITEM</Text>
+                    <Text style={[styles.invoiceTh, { width: 40, textAlign: "center" }]}>QTY</Text>
+                    <Text style={[styles.invoiceTh, { width: 85, textAlign: "right" }]}>UNIT</Text>
+                    <Text style={[styles.invoiceTh, { width: 95, textAlign: "right" }]}>TOTAL</Text>
+                  </View>
+
+                  {invoiceModalList.lines.map((line, idx) => {
+                    const name = line.product_name || line.free_text || "Item";
+                    const qty = Number(line.quantity) || 1;
+                    const unitPrice = Number(line.shop_price ?? "0");
+                    const hasPrice = Boolean(line.shop_price && Number.isFinite(unitPrice));
+                    const lineTotal = hasPrice ? unitPrice * qty : 0;
+
+                    return (
+                      <View key={line.id || idx} style={styles.invoiceTableRow}>
+                        <View style={{ flex: 2 }}>
+                          <Text style={styles.invoiceItemName}>{name}</Text>
+                          {line.note && line.note !== "heading" ? (
+                            <Text style={styles.invoiceItemNote}>{line.note}</Text>
+                          ) : null}
+                        </View>
+                        <Text style={[styles.invoiceItemQty, { width: 40, textAlign: "center" }]}>
+                          {line.quantity}
+                        </Text>
+                        <Text style={[styles.invoiceItemPrice, { width: 85, textAlign: "right" }]}>
+                          {hasPrice ? formatMoney(line.shop_price) : "Pending"}
+                        </Text>
+                        <Text style={[styles.invoiceItemTotal, { width: 95, textAlign: "right" }]}>
+                          {hasPrice ? formatMoney(lineTotal.toString()) : "-"}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+
+                {/* Summary / Totals */}
+                {(() => {
+                  const subtotal = invoiceModalList.lines.reduce((acc, l) => {
+                    const p = Number(l.shop_price ?? "0");
+                    const q = Number(l.quantity) || 1;
+                    return acc + (l.shop_price && Number.isFinite(p) ? p * q : 0);
+                  }, 0);
+                  const dispatchFee = Number(invoiceModalList.dispatch_cost ?? "0");
+                  const grandTotal = invoiceModalList.priced_total
+                    ? formatMoney(invoiceModalList.priced_total)
+                    : formatMoney((subtotal + dispatchFee).toString());
+
+                  return (
+                    <View style={styles.invoiceSummaryBox}>
+                      <View style={styles.invoiceSummaryRow}>
+                        <Text style={styles.invoiceSummaryLabel}>Subtotal</Text>
+                        <Text style={styles.invoiceSummaryValue}>{formatMoney(subtotal.toString())}</Text>
+                      </View>
+                      {invoiceModalList.dispatch_cost ? (
+                        <View style={styles.invoiceSummaryRow}>
+                          <Text style={styles.invoiceSummaryLabel}>Waybill / Dispatch</Text>
+                          <Text style={styles.invoiceSummaryValue}>
+                            {formatMoney(invoiceModalList.dispatch_cost)}
+                          </Text>
+                        </View>
+                      ) : null}
+                      <View style={[styles.invoiceSummaryRow, styles.invoiceGrandTotalRow]}>
+                        <Text style={styles.invoiceGrandTotalLabel}>Total Due</Text>
+                        <Text style={styles.invoiceGrandTotalValue}>{grandTotal}</Text>
+                      </View>
+                    </View>
+                  );
+                })()}
+
+                {/* Waybill tracking details if dispatched */}
+                {invoiceModalList.waybill_number && (
+                  <View style={styles.invoiceWaybillBox}>
+                    <Text style={styles.invoiceWaybillTitle}>WAYBILL & DISPATCH TRACKING</Text>
+                    <Text style={styles.invoiceWaybillText}>
+                      Transporter: {invoiceModalList.transporter_name || "Courier"}
+                    </Text>
+                    <Text style={styles.invoiceWaybillText}>
+                      Waybill #: {invoiceModalList.waybill_number}
+                    </Text>
+                    {invoiceModalList.transporter_phone && (
+                      <Text style={styles.invoiceWaybillText}>
+                        Phone: {invoiceModalList.transporter_phone}
+                      </Text>
+                    )}
+                  </View>
+                )}
+
+                {/* Action Buttons */}
+                <View style={styles.invoiceModalActions}>
+                  <Pressable
+                    style={styles.invoiceExportPdfBtn}
+                    onPress={() => handleExportPdfInvoice(invoiceModalList)}
+                    disabled={exportingPdf}
+                  >
+                    {exportingPdf ? (
+                      <ActivityIndicator color="#ffffff" size="small" />
+                    ) : (
+                      <>
+                        <ReceiptIcon size={16} color="#ffffff" />
+                        <Text style={styles.invoiceExportPdfText}>Export PDF</Text>
+                      </>
+                    )}
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.invoiceShareWaBtn}
+                    onPress={() => handleShareReceiptText(invoiceModalList)}
+                  >
+                    <ShareIcon size={16} color="#ffffff" />
+                    <Text style={styles.invoiceShareWaText}>Share via WhatsApp</Text>
+                  </Pressable>
+                </View>
+              </ScrollView>
             )}
           </View>
         </View>
@@ -6191,27 +6700,332 @@ const createStyles = (theme: ThemePalette) => StyleSheet.create({
     flex: 1,
   },
   listFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     borderTopWidth: 1,
     borderTopColor: theme.borderLight,
     paddingTop: 10,
     marginTop: 6,
   },
+  listFooterTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
   totalLabel: {
     color: theme.textSecondary,
     fontSize: 10,
+    fontWeight: "600",
+    textTransform: "uppercase",
   },
   totalAmount: {
     color: "#4ade80",
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "700",
+  },
+  statusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  statusPillConfirmed: {
+    backgroundColor: "#dcfce7",
+  },
+  statusPillDraft: {
+    backgroundColor: "#fef9c3",
+  },
+  statusPillText: {
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  statusPillTextConfirmed: {
+    color: "#15803d",
+  },
+  statusPillTextDraft: {
+    color: "#a16207",
   },
   footerActions: {
     flexDirection: "row",
-    gap: 6,
+    flexWrap: "wrap",
+    gap: 8,
     alignItems: "center",
+    justifyContent: "flex-end",
+  },
+  autoPriceBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#dcfce7",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#86efac",
+  },
+  autoPriceBtnText: {
+    color: "#084a2f",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  categoryPricePill: {
+    backgroundColor: theme.card,
+    borderWidth: 1,
+    borderColor: theme.border,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  categoryPricePillName: {
+    color: theme.text,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  categoryPricePillPrices: {
+    color: "#4ade80",
+    fontSize: 10,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  applyAllCheckboxRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 10,
+    gap: 8,
+  },
+  checkboxBox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: theme.border,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.card,
+  },
+  checkboxBoxChecked: {
+    backgroundColor: "#084a2f",
+    borderColor: "#084a2f",
+  },
+  applyAllCheckboxLabel: {
+    color: theme.text,
+    fontSize: 12,
+    flex: 1,
+  },
+  zeroPriceBypassBtn: {
+    backgroundColor: "#fef3c7",
+    borderWidth: 1,
+    borderColor: "#f59e0b",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  zeroPriceBypassText: {
+    color: "#b45309",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  modalSecondaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#f0fdf4",
+    borderWidth: 1,
+    borderColor: "#86efac",
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  modalSecondaryText: {
+    color: "#084a2f",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  invoiceModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  closeCircleBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.bg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  invoiceClientBox: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    backgroundColor: theme.card,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: theme.borderLight,
+  },
+  invoiceClientLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: theme.textSecondary,
+    letterSpacing: 0.5,
+  },
+  invoiceClientName: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: theme.text,
+    marginTop: 2,
+  },
+  invoiceClientPhone: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
+  invoiceTable: {
+    borderWidth: 1,
+    borderColor: theme.borderLight,
+    borderRadius: 8,
+    overflow: "hidden",
+    marginBottom: 12,
+  },
+  invoiceTableHeader: {
+    flexDirection: "row",
+    backgroundColor: theme.cardHover,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.borderLight,
+  },
+  invoiceTh: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: theme.textSecondary,
+  },
+  invoiceTableRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.borderLight,
+  },
+  invoiceItemName: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: theme.text,
+  },
+  invoiceItemNote: {
+    fontSize: 10,
+    color: theme.textSecondary,
+    marginTop: 1,
+  },
+  invoiceItemQty: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: theme.text,
+  },
+  invoiceItemPrice: {
+    fontSize: 12,
+    color: theme.text,
+  },
+  invoiceItemTotal: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#4ade80",
+  },
+  invoiceSummaryBox: {
+    backgroundColor: theme.card,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: theme.borderLight,
+  },
+  invoiceSummaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 3,
+  },
+  invoiceSummaryLabel: {
+    fontSize: 12,
+    color: theme.textSecondary,
+  },
+  invoiceSummaryValue: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: theme.text,
+  },
+  invoiceGrandTotalRow: {
+    borderTopWidth: 1,
+    borderTopColor: theme.borderLight,
+    paddingTop: 8,
+    marginTop: 6,
+  },
+  invoiceGrandTotalLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: theme.text,
+  },
+  invoiceGrandTotalValue: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#4ade80",
+  },
+  invoiceWaybillBox: {
+    backgroundColor: theme.card,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: theme.borderLight,
+  },
+  invoiceWaybillTitle: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#4ade80",
+    marginBottom: 4,
+  },
+  invoiceWaybillText: {
+    fontSize: 12,
+    color: theme.text,
+    lineHeight: 18,
+  },
+  invoiceModalActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 6,
+    marginBottom: 16,
+  },
+  invoiceExportPdfBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#084a2f",
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  invoiceExportPdfText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  invoiceShareWaBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#25d366",
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  invoiceShareWaText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "700",
   },
   waBtn: {
     flexDirection: "row",
