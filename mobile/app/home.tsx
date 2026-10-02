@@ -201,6 +201,36 @@ function getInvitationStatus(
   return (inv.status ? inv.status.toUpperCase() : "PENDING") as any;
 }
 
+function getCategoryDescendantIds(catId: string, allCats: Category[]): Set<string> {
+  const result = new Set<string>([catId]);
+  const queue = [catId];
+  while (queue.length > 0) {
+    const parent = queue.shift()!;
+    for (const c of allCats) {
+      if (c.parent_id === parent && !result.has(c.id)) {
+        result.add(c.id);
+        queue.push(c.id);
+      }
+    }
+  }
+  return result;
+}
+
+function countCategoryProducts(
+  catId: string,
+  allCats: Category[],
+  allProds: Product[]
+): { direct: number; total: number } {
+  const descendantIds = getCategoryDescendantIds(catId, allCats);
+  let direct = 0;
+  let total = 0;
+  for (const p of allProds) {
+    if (p.category_id === catId) direct++;
+    if (p.category_id && descendantIds.has(p.category_id)) total++;
+  }
+  return { direct, total };
+}
+
 function parseQuickPaste(raw: string): Array<{ text: string; quantity: string }> {
   return raw
     .split("\n")
@@ -2058,7 +2088,7 @@ export default function Home() {
                     .filter((c) => c.parent_id === null)
                     .map((rootCat) => {
                       const childCats = categories.filter((c) => c.parent_id === rootCat.id);
-                      const rootProds = products.filter((p) => p.category_id === rootCat.id);
+                      const { total: rootTotal } = countCategoryProducts(rootCat.id, categories, products);
                       return (
                         <View key={rootCat.id} style={styles.treeRootNode}>
                           <Pressable
@@ -2072,12 +2102,12 @@ export default function Home() {
                             <FolderIcon size={18} color="#60a5fa" />
                             <Text style={styles.treeNodeName}>{rootCat.name}</Text>
                             <Text style={styles.treeNodeMeta}>
-                              ({childCats.length} categories, {rootProds.length} items)
+                              ({childCats.length} categories, {rootTotal} items)
                             </Text>
                           </Pressable>
 
                           {childCats.map((child) => {
-                            const childProds = products.filter((p) => p.category_id === child.id);
+                            const { total: childTotal } = countCategoryProducts(child.id, categories, products);
                             return (
                               <Pressable
                                 key={child.id}
@@ -2091,7 +2121,7 @@ export default function Home() {
                                 <Text style={styles.treeElbow}>|-- </Text>
                                 <FolderOpenIcon size={16} color="#93c5fd" />
                                 <Text style={styles.treeChildName}>{child.name}</Text>
-                                <Text style={styles.treeNodeMeta}>({childProds.length} items)</Text>
+                                <Text style={styles.treeNodeMeta}>({childTotal} items)</Text>
                               </Pressable>
                             );
                           })}
@@ -2110,7 +2140,7 @@ export default function Home() {
                     <View style={styles.foldersGrid}>
                       {currentSubcategories.map((cat) => {
                         const childCount = categories.filter((c) => c.parent_id === cat.id).length;
-                        const prodCount = products.filter((p) => p.category_id === cat.id).length;
+                        const { total: prodCount } = countCategoryProducts(cat.id, categories, products);
                         return (
                           <Pressable
                             key={cat.id}
@@ -2126,7 +2156,7 @@ export default function Home() {
                             </View>
                             <Text style={styles.folderName} numberOfLines={1}>{cat.name}</Text>
                             <Text style={styles.folderMeta}>
-                              {childCount > 0 ? `${childCount} subcategories, ` : ""}{prodCount} item(s)
+                              {childCount > 0 ? `${childCount} subcategories, ` : ""}{prodCount} item{prodCount === 1 ? "" : "s"}
                             </Text>
                             {cat.default_normal_price && (
                               <Text style={styles.folderPrice}>
