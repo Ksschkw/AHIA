@@ -1,6 +1,16 @@
+import * as Haptics from "expo-haptics";
 import { Link, useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import { AhiaMark } from "@/components/ahia-mark";
 import { CredentialField } from "@/components/credential-field";
@@ -10,7 +20,7 @@ import { ApiError, registerAccount } from "@/lib/api";
 /**
  * Register Account Screen.
  *
- * Professional onboarding flow with clear input validation and Nigerian phone format guidance.
+ * Professional onboarding flow with automatic keyboard avoidance and bubbly tactile buttons.
  */
 export default function Register() {
   const router = useRouter();
@@ -27,6 +37,7 @@ export default function Register() {
     firstName.trim().length >= 1 && phone.trim().length >= 7 && password.length >= 8 && !mismatch;
 
   async function submit() {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setProblem(null);
     setBusy(true);
     try {
@@ -42,7 +53,16 @@ export default function Register() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={{ flex: 1, backgroundColor: "#fbf7f0" }}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
+    >
+      <ScrollView
+        contentContainerStyle={styles.page}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets={true}
+      >
       <View style={styles.topNav}>
         <Pressable
           style={styles.backBtn}
@@ -152,12 +172,14 @@ export default function Register() {
         </Link>
       </View>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   page: {
     padding: 24,
+    paddingBottom: 56,
     backgroundColor: "#fbf7f0",
     flexGrow: 1,
     justifyContent: "center",
@@ -170,9 +192,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
     alignSelf: "flex-start",
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
     backgroundColor: "#e8eee2",
   },
   backBtnText: {
@@ -232,12 +254,21 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   button: {
-    minHeight: 52,
-    borderRadius: 10,
+    minHeight: 56,
+    borderRadius: 28,
     backgroundColor: "#084a2f",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 6,
+    marginTop: 8,
+    shadowColor: "#084a2f",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.28,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  buttonPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.92,
   },
   buttonBusy: {
     opacity: 0.6,

@@ -3,6 +3,7 @@ import {
   type Product,
   type Category,
   type CustomerList,
+  type BusinessMembership,
   recordSale,
   createCategory,
   updateCategory,
@@ -40,6 +41,7 @@ function getDb(): SQLite.SQLiteDatabase | null {
           effective_wholesale_price TEXT,
           is_published INTEGER NOT NULL,
           is_active INTEGER NOT NULL,
+          image_url TEXT,
           updated_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS cached_categories (
@@ -49,6 +51,7 @@ function getDb(): SQLite.SQLiteDatabase | null {
           slug TEXT NOT NULL,
           parent_id TEXT,
           position INTEGER NOT NULL DEFAULT 0,
+          image_url TEXT,
           updated_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS cached_customer_lists (
@@ -59,6 +62,16 @@ function getDb(): SQLite.SQLiteDatabase | null {
           status TEXT NOT NULL,
           priced_total TEXT,
           data_json TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS cached_businesses (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          slug TEXT NOT NULL,
+          currency TEXT NOT NULL DEFAULT 'NGN',
+          role_name TEXT NOT NULL DEFAULT 'OWNER',
+          is_active INTEGER NOT NULL DEFAULT 1,
+          logo_url TEXT,
           updated_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS sale_outbox (
@@ -143,8 +156,8 @@ export function cacheProducts(tenantId: string, products: Product[]): void {
       for (const p of products) {
         db.runSync(
           `INSERT OR REPLACE INTO cached_products
-           (id, tenant_id, name, slug, category_id, selling_price, effective_normal_price, effective_wholesale_price, is_published, is_active, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, tenant_id, name, slug, category_id, selling_price, effective_normal_price, effective_wholesale_price, is_published, is_active, image_url, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             p.id,
             tenantId,
@@ -156,6 +169,7 @@ export function cacheProducts(tenantId: string, products: Product[]): void {
             p.effective_wholesale_price,
             p.is_published ? 1 : 0,
             p.is_active ? 1 : 0,
+            p.image_url ?? null,
             now,
           ],
         );
@@ -181,6 +195,7 @@ export function getCachedProducts(tenantId: string): Product[] {
       effective_wholesale_price: string | null;
       is_published: number;
       is_active: number;
+      image_url?: string | null;
     }>(
       "SELECT * FROM cached_products WHERE tenant_id = ? ORDER BY name ASC",
       [tenantId],
@@ -197,6 +212,7 @@ export function getCachedProducts(tenantId: string): Product[] {
       effective_wholesale_price: r.effective_wholesale_price,
       is_active: r.is_active === 1,
       is_published: r.is_published === 1,
+      image_url: r.image_url ?? null,
     }));
   } catch {
     return [];
@@ -211,9 +227,9 @@ export function cacheCategories(tenantId: string, categories: Category[]): void 
     db.withTransactionSync(() => {
       for (const c of categories) {
         db.runSync(
-          `INSERT OR REPLACE INTO cached_categories (id, tenant_id, name, slug, parent_id, position, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [c.id, tenantId, c.name, c.slug, c.parent_id ?? null, c.position ?? 0, now],
+          `INSERT OR REPLACE INTO cached_categories (id, tenant_id, name, slug, parent_id, position, image_url, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [c.id, tenantId, c.name, c.slug, c.parent_id ?? null, c.position ?? 0, c.image_url ?? null, now],
         );
       }
     });
@@ -233,8 +249,9 @@ export function getCachedCategories(tenantId: string): Category[] {
       slug: string;
       parent_id: string | null;
       position: number;
+      image_url?: string | null;
     }>(
-      "SELECT id, tenant_id, name, slug, parent_id, position FROM cached_categories WHERE tenant_id = ? ORDER BY position ASC, name ASC",
+      "SELECT id, tenant_id, name, slug, parent_id, position, image_url FROM cached_categories WHERE tenant_id = ? ORDER BY position ASC, name ASC",
       [tenantId],
     );
     return rows.map((r) => ({
@@ -244,6 +261,7 @@ export function getCachedCategories(tenantId: string): Category[] {
       slug: r.slug,
       parent_id: r.parent_id,
       position: r.position,
+      image_url: r.image_url ?? null,
     }));
   } catch {
     return [];
@@ -287,6 +305,52 @@ export function getCachedCustomerLists(tenantId: string): CustomerList[] {
       [tenantId],
     );
     return rows.map((r) => JSON.parse(r.data_json) as CustomerList);
+  } catch {
+    return [];
+  }
+}
+
+export function cacheBusinesses(businesses: BusinessMembership[]): void {
+  try {
+    const db = getDb();
+    if (!db) return;
+    const now = new Date().toISOString();
+    db.withTransactionSync(() => {
+      for (const b of businesses) {
+        db.runSync(
+          `INSERT OR REPLACE INTO cached_businesses (id, name, slug, currency, role_name, is_active, logo_url, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [b.id, b.name, b.slug, b.currency || "NGN", b.role_name || "OWNER", b.is_active ? 1 : 0, b.logo_url ?? null, now],
+        );
+      }
+    });
+  } catch {
+    // Non-fatal
+  }
+}
+
+export function getCachedBusinesses(): BusinessMembership[] {
+  try {
+    const db = getDb();
+    if (!db) return [];
+    const rows = db.getAllSync<{
+      id: string;
+      name: string;
+      slug: string;
+      currency: string;
+      role_name: string;
+      is_active: number;
+      logo_url?: string | null;
+    }>("SELECT id, name, slug, currency, role_name, is_active, logo_url FROM cached_businesses WHERE is_active = 1 ORDER BY name ASC");
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      slug: r.slug,
+      currency: r.currency,
+      role_name: r.role_name,
+      is_active: Boolean(r.is_active),
+      logo_url: r.logo_url ?? null,
+    }));
   } catch {
     return [];
   }
@@ -431,6 +495,7 @@ export function createLocalCategory(
     parent_id?: string | null;
     default_normal_price?: string | null;
     default_wholesale_price?: string | null;
+    image_url?: string | null;
   },
 ): Category {
   const tempId = `cat-local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -444,6 +509,7 @@ export function createLocalCategory(
     position: 0,
     default_normal_price: data.default_normal_price ?? null,
     default_wholesale_price: data.default_wholesale_price ?? null,
+    image_url: data.image_url ?? null,
   };
 
   try {
@@ -451,9 +517,9 @@ export function createLocalCategory(
     if (db) {
       const now = new Date().toISOString();
       db.runSync(
-        `INSERT OR REPLACE INTO cached_categories (id, tenant_id, name, slug, parent_id, position, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [category.id, tenantId, category.name, category.slug, category.parent_id, 0, now],
+        `INSERT OR REPLACE INTO cached_categories (id, tenant_id, name, slug, parent_id, position, image_url, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [category.id, tenantId, category.name, category.slug, category.parent_id, 0, category.image_url ?? null, now],
       );
     }
   } catch {
@@ -479,16 +545,26 @@ export function updateLocalCategory(
     name?: string;
     default_normal_price?: string | null;
     default_wholesale_price?: string | null;
+    image_url?: string | null;
   },
 ): void {
   try {
     const db = getDb();
-    if (db && data.name) {
-      db.runSync("UPDATE cached_categories SET name = ? WHERE id = ? AND tenant_id = ?", [
-        data.name,
-        categoryId,
-        tenantId,
-      ]);
+    if (db) {
+      if (data.name) {
+        db.runSync("UPDATE cached_categories SET name = ? WHERE id = ? AND tenant_id = ?", [
+          data.name,
+          categoryId,
+          tenantId,
+        ]);
+      }
+      if (data.image_url !== undefined) {
+        db.runSync("UPDATE cached_categories SET image_url = ? WHERE id = ? AND tenant_id = ?", [
+          data.image_url,
+          categoryId,
+          tenantId,
+        ]);
+      }
     }
   } catch {
     // Non-fatal
@@ -528,6 +604,7 @@ export function createLocalProduct(
     wholesale_price?: string | null;
     category_id?: string | null;
     description?: string | null;
+    image_url?: string | null;
   },
 ): Product {
   const tempId = `prod-local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -544,6 +621,7 @@ export function createLocalProduct(
     effective_wholesale_price: data.wholesale_price ?? null,
     is_active: true,
     is_published: true,
+    image_url: data.image_url ?? null,
   };
 
   try {
@@ -552,8 +630,8 @@ export function createLocalProduct(
       const now = new Date().toISOString();
       db.runSync(
         `INSERT OR REPLACE INTO cached_products
-         (id, tenant_id, name, slug, category_id, selling_price, effective_normal_price, effective_wholesale_price, is_published, is_active, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, tenant_id, name, slug, category_id, selling_price, effective_normal_price, effective_wholesale_price, is_published, is_active, image_url, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           product.id,
           tenantId,
@@ -565,6 +643,7 @@ export function createLocalProduct(
           product.effective_wholesale_price,
           1,
           1,
+          product.image_url ?? null,
           now,
         ],
       );
@@ -604,6 +683,13 @@ export function updateLocalProduct(
       if (data.selling_price !== undefined) {
         db.runSync("UPDATE cached_products SET selling_price = ? WHERE id = ? AND tenant_id = ?", [
           data.selling_price,
+          productId,
+          tenantId,
+        ]);
+      }
+      if (data.image_url !== undefined) {
+        db.runSync("UPDATE cached_products SET image_url = ? WHERE id = ? AND tenant_id = ?", [
+          data.image_url,
           productId,
           tenantId,
         ]);
@@ -859,6 +945,26 @@ export function resolveConflict(
       "UPDATE sync_conflicts SET status = 'resolved', resolution = ? WHERE id = ?",
       [resolution, conflictId],
     );
+  } catch {
+    // Non-fatal
+  }
+}
+
+
+/** Update cached business logo or details locally. */
+export function updateCachedBusiness(
+  tenantId: string,
+  data: { name?: string; logo_url?: string | null },
+): void {
+  try {
+    const db = getDb();
+    if (!db) return;
+    if (data.name) {
+      db.runSync("UPDATE cached_businesses SET name = ? WHERE id = ?", [data.name, tenantId]);
+    }
+    if (data.logo_url !== undefined) {
+      db.runSync("UPDATE cached_businesses SET logo_url = ? WHERE id = ?", [data.logo_url, tenantId]);
+    }
   } catch {
     // Non-fatal
   }

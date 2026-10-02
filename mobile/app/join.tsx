@@ -2,6 +2,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -75,82 +77,92 @@ export default function Join() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <View style={styles.header}>
-        <Text style={styles.title}>Join a Business</Text>
-        <Text style={styles.subtitle}>
-          Accept an invite or enter an invitation token from your shop owner.
-        </Text>
-      </View>
-
-      {accepted ? (
-        <View style={styles.successCard}>
-          <Text style={styles.successTitle}>You are in!</Text>
-          <Text style={styles.successBody}>
-            You have successfully joined {accepted.tenant_name} as {accepted.role_name}.
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={{ flex: 1, backgroundColor: "#0d1117" }}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
+    >
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets={true}
+      >
+        <View style={styles.header}>
+          <Text style={styles.title}>Join a Business</Text>
+          <Text style={styles.subtitle}>
+            Accept an invite or enter an invitation token from your shop owner.
           </Text>
-          <Pressable
-            style={styles.primaryBtn}
-            onPress={() => router.replace("/home")}
-          >
-            <Text style={styles.primaryBtnText}>Open Shop</Text>
-          </Pressable>
         </View>
-      ) : (
-        <View style={styles.card}>
-          {problem ? <Text style={styles.problemText}>{problem}</Text> : null}
 
-          {pendingInvitations.length > 0 ? (
-            <View style={styles.pendingSection}>
-              <Text style={styles.sectionHeading}>Pending Invitations for You</Text>
-              {pendingInvitations.map((inv) => (
-                <View key={inv.id} style={styles.invitationRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.invTenantName}>{inv.tenant_name}</Text>
-                    <Text style={styles.invRole}>Role: {inv.role_name}</Text>
-                  </View>
-                  <Pressable
-                    style={styles.acceptBtn}
-                    onPress={() => handleAccept(inv.id)}
-                    disabled={busy}
-                  >
-                    <Text style={styles.acceptBtnText}>Accept</Text>
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-          ) : null}
-
-          <View style={styles.inputSection}>
-            <Text style={styles.inputLabel}>Invitation Token / Code</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Paste invitation token here"
-              placeholderTextColor="#8a928e"
-              value={token}
-              onChangeText={setToken}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
+        {accepted ? (
+          <View style={styles.successCard}>
+            <Text style={styles.successTitle}>You are in!</Text>
+            <Text style={styles.successBody}>
+              You have successfully joined {accepted.tenant_name} as {accepted.role_name}.
+            </Text>
             <Pressable
-              style={[styles.primaryBtn, (!token.trim() || busy) ? styles.btnDisabled : null]}
-              disabled={!token.trim() || busy}
-              onPress={() => handleAccept(token)}
+              style={styles.primaryBtn}
+              onPress={() => router.replace("/home")}
             >
-              {busy ? (
-                <ActivityIndicator color="#ffffff" size="small" />
-              ) : (
-                <Text style={styles.primaryBtnText}>Join Business</Text>
-              )}
+              <Text style={styles.primaryBtnText}>Open Shop</Text>
             </Pressable>
           </View>
+        ) : (
+          <View style={styles.card}>
+            {problem ? <Text style={styles.problemText}>{problem}</Text> : null}
 
-          <Pressable style={styles.backBtn} onPress={() => router.replace("/home")}>
-            <Text style={styles.backBtnText}>Back to Home</Text>
-          </Pressable>
-        </View>
-      )}
-    </ScrollView>
+            {pendingInvitations.length > 0 ? (
+              <View style={styles.pendingSection}>
+                <Text style={styles.sectionHeading}>Pending Invitations for You</Text>
+                {pendingInvitations.map((inv) => (
+                  <View key={inv.id} style={styles.invitationRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.invTenantName}>{inv.tenant_name}</Text>
+                      <Text style={styles.invRole}>Role: {inv.role_name}</Text>
+                    </View>
+                    <Pressable
+                      style={styles.acceptBtn}
+                      onPress={() => handleAccept(inv.id)}
+                      disabled={busy}
+                    >
+                      <Text style={styles.acceptBtnText}>Accept</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            <View style={styles.inputSection}>
+              <Text style={styles.inputLabel}>Invitation Token / Code</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Paste invitation token here"
+                placeholderTextColor="#8a928e"
+                value={token}
+                onChangeText={setToken}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <Pressable
+                style={[styles.primaryBtn, (!token.trim() || busy) ? styles.btnDisabled : null]}
+                disabled={!token.trim() || busy}
+                onPress={() => handleAccept(token)}
+              >
+                {busy ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.primaryBtnText}>Join Business</Text>
+                )}
+              </Pressable>
+            </View>
+
+            <Pressable style={styles.backBtn} onPress={() => router.replace("/home")}>
+              <Text style={styles.backBtnText}>Back to Home</Text>
+            </Pressable>
+          </View>
+        )}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

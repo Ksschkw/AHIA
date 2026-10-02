@@ -1,6 +1,16 @@
+import * as Haptics from "expo-haptics";
 import { Link, useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import { AhiaMark } from "@/components/ahia-mark";
 import { CredentialField } from "@/components/credential-field";
@@ -11,7 +21,7 @@ import { ApiError, signIn } from "@/lib/api";
  * Sign In Screen.
  *
  * Polished, high-contrast entry point matching AHIA web styling.
- * Supports phone number or email identifier with automatic keyboard optimization.
+ * Supports phone number or email identifier with automatic keyboard avoidance and bubbly tactile buttons.
  */
 export default function SignIn() {
   const router = useRouter();
@@ -21,6 +31,7 @@ export default function SignIn() {
   const [problem, setProblem] = useState<string | null>(null);
 
   async function submit() {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setProblem(null);
     setBusy(true);
     try {
@@ -36,84 +47,99 @@ export default function SignIn() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-      <View style={styles.topNav}>
-        <Pressable
-          style={styles.backBtn}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <ChevronLeftIcon size={20} color="#084a2f" />
-          <Text style={styles.backBtnText}>Back</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.header}>
-        <View style={styles.markWrap}>
-          <AhiaMark />
-        </View>
-        <Text style={styles.title}>Welcome back</Text>
-        <Text style={styles.subtitle}>
-          Sign in to manage your stall, price customer lists, and record daily sales.
-        </Text>
-      </View>
-
-      <View style={styles.card}>
-        <CredentialField
-          label="Phone number or email"
-          value={identifier}
-          onChange={setIdentifier}
-          placeholder="0803 123 4567 or you@example.com"
-          keyboardType="default"
-          autoComplete="username"
-          textContentType="username"
-        />
-
-        <CredentialField
-          label="Password"
-          value={password}
-          onChange={setPassword}
-          secret
-          autoComplete="current-password"
-          textContentType="password"
-        />
-
-        {problem ? (
-          <View style={styles.problemBox}>
-            <Text style={styles.problemText}>{problem}</Text>
-          </View>
-        ) : null}
-
-        <Pressable
-          style={[styles.button, busy ? styles.buttonBusy : null]}
-          disabled={busy || identifier.trim().length < 3 || password.length < 1}
-          onPress={() => void submit()}
-          accessibilityRole="button"
-        >
-          {busy ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <Text style={styles.buttonText}>Sign in to your stall</Text>
-          )}
-        </Pressable>
-      </View>
-
-      <View style={styles.footer}>
-        <Text style={styles.footerPrompt}>New to AHIA?</Text>
-        <Link href="/register" asChild>
-          <Pressable accessibilityRole="button" style={styles.link}>
-            <Text style={styles.linkText}>Create a new account</Text>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={{ flex: 1, backgroundColor: "#fbf7f0" }}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
+    >
+      <ScrollView
+        contentContainerStyle={styles.page}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets={true}
+      >
+        <View style={styles.topNav}>
+          <Pressable
+            style={styles.backBtn}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <ChevronLeftIcon size={20} color="#084a2f" />
+            <Text style={styles.backBtnText}>Back</Text>
           </Pressable>
-        </Link>
-      </View>
-    </ScrollView>
+        </View>
+
+        <View style={styles.header}>
+          <View style={styles.markWrap}>
+            <AhiaMark />
+          </View>
+          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.subtitle}>
+            Sign in to manage your stall, price customer lists, and record daily sales.
+          </Text>
+        </View>
+
+        <View style={styles.card}>
+          <CredentialField
+            label="Phone number or email"
+            value={identifier}
+            onChange={setIdentifier}
+            placeholder="0803 123 4567 or you@example.com"
+            keyboardType="default"
+            autoComplete="username"
+            textContentType="username"
+          />
+
+          <CredentialField
+            label="Password"
+            value={password}
+            onChange={setPassword}
+            secret
+            autoComplete="current-password"
+            textContentType="password"
+          />
+
+          {problem ? (
+            <View style={styles.problemBox}>
+              <Text style={styles.problemText}>{problem}</Text>
+            </View>
+          ) : null}
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.button,
+              busy ? styles.buttonBusy : null,
+              pressed ? styles.buttonPressed : null,
+            ]}
+            disabled={busy || identifier.trim().length < 3 || password.length < 1}
+            onPress={() => void submit()}
+            accessibilityRole="button"
+          >
+            {busy ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.buttonText}>Sign in to your stall</Text>
+            )}
+          </Pressable>
+        </View>
+
+        <View style={styles.footer}>
+          <Text style={styles.footerPrompt}>New to AHIA?</Text>
+          <Link href="/register" asChild>
+            <Pressable accessibilityRole="button" style={styles.link}>
+              <Text style={styles.linkText}>Create a new account</Text>
+            </Pressable>
+          </Link>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   page: {
     padding: 24,
+    paddingBottom: 56,
     backgroundColor: "#fbf7f0",
     flexGrow: 1,
     justifyContent: "center",
@@ -126,9 +152,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
     alignSelf: "flex-start",
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
     backgroundColor: "#e8eee2",
   },
   backBtnText: {
@@ -159,8 +185,8 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: "#ffffff",
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 22,
     gap: 16,
     borderWidth: 1,
     borderColor: "#e5ded2",
@@ -184,12 +210,21 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   button: {
-    minHeight: 52,
-    borderRadius: 10,
+    minHeight: 56,
+    borderRadius: 28,
     backgroundColor: "#084a2f",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 6,
+    marginTop: 8,
+    shadowColor: "#084a2f",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.28,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  buttonPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.92,
   },
   buttonBusy: {
     opacity: 0.7,

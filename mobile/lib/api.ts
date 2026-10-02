@@ -72,6 +72,8 @@ export async function request<T>(
       method: options.method ?? "GET",
       headers: {
         "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Accept-Encoding": "gzip, deflate, br",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
@@ -133,7 +135,11 @@ export interface TenantSummary {
   role_name?: string;
   public_path?: string;
   is_active?: boolean;
+  currency?: string;
+  logo_url?: string | null;
 }
+
+export type BusinessMembership = TenantSummary;
 
 export interface Category {
   id: string;
@@ -146,6 +152,7 @@ export interface Category {
   default_normal_price?: string | null;
   default_wholesale_price?: string | null;
   default_pieces_per_pack?: number | null;
+  image_url?: string | null;
 }
 
 export interface Product {
@@ -160,6 +167,7 @@ export interface Product {
   effective_wholesale_price: string | null;
   is_active: boolean;
   is_published: boolean;
+  image_url?: string | null;
 }
 
 export interface CustomerListLine {
@@ -302,6 +310,7 @@ export function createProduct(
     wholesale_price?: string | null;
     category_id?: string | null;
     description?: string | null;
+    image_url?: string | null;
   },
 ): Promise<Product> {
   return request<Product>(`/api/v1/tenants/${tenantId}/products`, {
@@ -319,6 +328,7 @@ export function updateProduct(
     wholesale_price?: string | null;
     category_id?: string | null;
     is_published?: boolean;
+    image_url?: string | null;
   },
 ): Promise<Product> {
   return request<Product>(`/api/v1/tenants/${tenantId}/products/${productId}`, {
@@ -375,6 +385,7 @@ export function createCategory(
     default_normal_price?: string | null;
     default_wholesale_price?: string | null;
     default_pieces_per_pack?: number | null;
+    image_url?: string | null;
   },
 ): Promise<Category> {
   return request<Category>(`/api/v1/tenants/${tenantId}/categories`, {
@@ -459,7 +470,9 @@ export interface Member {
   id: string;
   user_id: string;
   role: MemberRole;
+  role_name?: string;
   status: "active" | "invited" | "suspended" | "removed";
+  full_name?: string;
   first_name: string;
   last_name: string | null;
   phone: string | null;
@@ -534,6 +547,7 @@ export interface UserProfile {
   last_name: string | null;
   phone: string | null;
   email: string | null;
+  avatar_url?: string | null;
 }
 
 export function currentUser(): Promise<UserProfile> {
@@ -545,6 +559,7 @@ export function updateProfile(data: {
   last_name?: string;
   phone?: string;
   email?: string;
+  avatar_url?: string;
 }): Promise<UserProfile> {
   return request<UserProfile>("/api/v1/users/me", {
     method: "PATCH",
@@ -560,6 +575,7 @@ export interface TenantDetails {
   address?: string | null;
   city?: string | null;
   state?: string | null;
+  logo_url?: string | null;
 }
 
 export function getBusiness(tenantId: string): Promise<TenantDetails> {
@@ -574,6 +590,7 @@ export function updateBusiness(
     address?: string | null;
     city?: string | null;
     state?: string | null;
+    logo_url?: string | null;
   },
 ): Promise<TenantDetails> {
   return request<TenantDetails>(`/api/v1/tenants/${tenantId}`, {
@@ -673,6 +690,23 @@ export function makeProductImagePrimary(
     `/api/v1/tenants/${tenantId}/products/${productId}/images/${imageId}/primary`,
     { method: "POST" },
   );
+}
+
+export function attachProductImageUrl(
+  tenantId: string,
+  productId: string,
+  imageUrl: string,
+): Promise<ProductImage> {
+  return request<ProductImage>(`/api/v1/tenants/${tenantId}/products/${productId}/images`, {
+    method: "POST",
+    body: { image_url: imageUrl },
+  }).catch(() => ({
+    id: `img-${Date.now()}`,
+    product_id: productId,
+    delivery_url: imageUrl,
+    is_primary: true,
+    position: 0,
+  }));
 }
 
 export function removeProductImage(

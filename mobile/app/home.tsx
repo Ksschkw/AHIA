@@ -21,6 +21,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
+  cacheBusinesses,
   cacheCategories,
   cacheCustomerLists,
   cacheProducts,
@@ -29,8 +30,10 @@ import {
   createLocalProduct,
   deleteLocalCategory,
   deleteLocalProduct,
+  updateCachedBusiness,
   enqueueOfflineSale,
   flushSyncOutbox,
+  getCachedBusinesses,
   getCachedCategories,
   getCachedCustomerLists,
   getCachedProducts,
@@ -103,6 +106,7 @@ import {
   listInvitations,
   listMembers,
   listMyInvitations,
+  attachProductImageUrl,
   listProductImages,
   listProducts,
   listSales,
@@ -279,6 +283,16 @@ export default function Home() {
   const [problem, setProblem] = useState<string | null>(null);
 
   // Modals
+  // Image & Logo States
+  const [newProductImage, setNewProductImage] = useState("");
+  const [editProductImage, setEditProductImage] = useState("");
+  const [newCategoryIcon, setNewCategoryIcon] = useState("");
+  const [editCategoryIcon, setEditCategoryIcon] = useState("");
+  const [newPhotoUrl, setNewPhotoUrl] = useState("");
+  const [attachingPhoto, setAttachingPhoto] = useState(false);
+  const [editBizLogo, setEditBizLogo] = useState("");
+  const [editAvatarUrl, setEditAvatarUrl] = useState("");
+
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPrice, setNewPrice] = useState("");
@@ -536,23 +550,62 @@ export default function Home() {
   }, [expenseCategoryId]);
 
   useEffect(() => {
+    // 1. Immediately hydrate from local SQLite so the UI is never blank or placeholder
+    const cachedBiz = getCachedBusinesses();
+    if (cachedBiz.length > 0) {
+      setBusinesses(cachedBiz);
+      const initial = cachedBiz[0];
+      setActiveBusiness(initial);
+      void loadData(initial.id);
+    }
+
+    // 2. Refresh from network in background
     void (async () => {
       try {
         const found = await listBusinesses();
         setBusinesses(found);
+        cacheBusinesses(found);
         if (found.length > 0) {
-          const initial = found[0];
+          const initial = found.find((b) => b.id === (activeBusiness?.id ?? cachedBiz[0]?.id)) ?? found[0];
           setActiveBusiness(initial);
           await loadData(initial.id);
         } else {
           setLoading(false);
         }
       } catch (error) {
-        setProblem(error instanceof ApiError ? error.message : "We could not load your shops.");
+        if (cachedBiz.length === 0) {
+          setProblem(error instanceof ApiError ? error.message : "We could not load your shops.");
+        }
         setLoading(false);
       }
     })();
   }, [loadData]);
+
+  // Periodic background auto-sync every 15 seconds
+  useEffect(() => {
+    if (!activeBusiness) return;
+    const interval = setInterval(() => {
+      void (async () => {
+        try {
+          const pending = getPendingOutboxCount(activeBusiness.id);
+          if (pending > 0) {
+            const res = await flushSyncOutbox(activeBusiness.id);
+            if (res.sales > 0 || res.mutations > 0) {
+              setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
+              const freshP = getCachedProducts(activeBusiness.id);
+              const freshC = getCachedCategories(activeBusiness.id);
+              setProducts(freshP);
+              setCategories(freshC);
+            }
+          }
+        } catch {
+          // Offline, non-fatal background poll
+        }
+      })();
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [activeBusiness]);
 
   // Hierarchical Breadcrumbs
   const breadcrumbs = useMemo(() => {
@@ -644,11 +697,13 @@ export default function Home() {
         selling_price: newPrice.trim() || null,
         wholesale_price: newWholesale.trim() || null,
         category_id: currentCategoryId,
+        image_url: newProductImage.trim() || null,
       });
       setProducts((curr) => [...curr, created]);
       setNewName("");
       setNewPrice("");
       setNewWholesale("");
+      setNewProductImage("");
       setShowAddProductModal(false);
       showToast(`Added ${created.name} to shelf!`);
       setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
@@ -672,11 +727,13 @@ export default function Home() {
         parent_id: currentCategoryId,
         default_normal_price: newCategoryNormalPrice.trim() || undefined,
         default_wholesale_price: newCategoryWholesalePrice.trim() || undefined,
+        image_url: newCategoryIcon.trim() || null,
       });
       setCategories((curr) => [...curr, created]);
       setNewCategoryName("");
       setNewCategoryNormalPrice("");
       setNewCategoryWholesalePrice("");
+      setNewCategoryIcon("");
       setShowAddCategoryModal(false);
       showToast(`Created category: ${created.name}`);
       setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
@@ -699,6 +756,7 @@ export default function Home() {
         name: editCategoryName.trim() || undefined,
         default_normal_price: editCategoryNormalPrice.trim() || null,
         default_wholesale_price: editCategoryWholesalePrice.trim() || null,
+        image_url: editCategoryIcon.trim() || null,
       });
       setCategories((curr) =>
         curr.map((c) =>
@@ -708,11 +766,13 @@ export default function Home() {
                 name: editCategoryName.trim() || c.name,
                 default_normal_price: editCategoryNormalPrice.trim() || c.default_normal_price,
                 default_wholesale_price: editCategoryWholesalePrice.trim() || c.default_wholesale_price,
+                image_url: editCategoryIcon.trim() || c.image_url,
               }
             : c,
         ),
       );
       setEditingCategory(null);
+      setEditCategoryIcon("");
       showToast(`Updated category ${editCategoryName.trim() || editingCategory.name}`);
       setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
       void flushSyncOutbox(activeBusiness.id).then(() => {
@@ -739,6 +799,7 @@ export default function Home() {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             deleteLocalCategory(activeBusiness.id, category.id);
             setCategories((curr) => curr.filter((c) => c.id !== category.id));
+    if (activeBusiness) void flushSyncOutbox(activeBusiness.id).catch(() => {});
             if (currentCategoryId === category.id) {
               setCurrentCategoryId(category.parent_id ?? null);
             }
@@ -945,13 +1006,19 @@ export default function Home() {
       const updated = await updateProduct(activeBusiness.id, editingProduct.id, {
         selling_price: editPrice.trim() || null,
         wholesale_price: editWholesale.trim() || null,
+        image_url: editProductImage.trim() || null,
       });
-      setProducts((curr) => curr.map((p) => (p.id === updated.id ? updated : p)));
+      const prodWithImg: Product = {
+        ...updated,
+        image_url: editProductImage.trim() || updated.image_url || null,
+      };
+      setProducts((curr) => curr.map((p) => (p.id === updated.id ? prodWithImg : p)));
       cacheProducts(
         activeBusiness.id,
-        products.map((p) => (p.id === updated.id ? updated : p)),
+        products.map((p) => (p.id === updated.id ? prodWithImg : p)),
       );
       setEditingProduct(null);
+      setEditProductImage("");
       showToast(`Updated ${updated.name}`);
     } catch {
       showToast("Could not update item prices.");
@@ -989,6 +1056,29 @@ export default function Home() {
       setGalleryImages([]);
     } finally {
       setLoadingGallery(false);
+    }
+  };
+
+  const handleAttachPhoto = async () => {
+    if (!activeBusiness || !galleryProduct || !newPhotoUrl.trim()) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setAttachingPhoto(true);
+    try {
+      const img = await attachProductImageUrl(activeBusiness.id, galleryProduct.id, newPhotoUrl.trim());
+      setGalleryImages((curr) => [...curr, img]);
+      setProducts((curr) =>
+        curr.map((p) => (p.id === galleryProduct.id ? { ...p, image_url: newPhotoUrl.trim() } : p))
+      );
+      cacheProducts(
+        activeBusiness.id,
+        products.map((p) => (p.id === galleryProduct.id ? { ...p, image_url: newPhotoUrl.trim() } : p))
+      );
+      setNewPhotoUrl("");
+      showToast("Photo attached to product!");
+    } catch {
+      showToast("Could not attach photo.");
+    } finally {
+      setAttachingPhoto(false);
     }
   };
 
@@ -1205,8 +1295,16 @@ export default function Home() {
         name: editBizName.trim() || undefined,
         address: editBizAddress.trim() || undefined,
         phone: editBizPhone.trim() || undefined,
+        logo_url: editBizLogo.trim() || undefined,
       });
       setBusinessDetails(updated);
+      if (editBizLogo.trim()) {
+        updateCachedBusiness(activeBusiness.id, {
+          name: editBizName.trim() || undefined,
+          logo_url: editBizLogo.trim(),
+        });
+        setActiveBusiness((curr) => (curr ? { ...curr, logo_url: editBizLogo.trim() } : curr));
+      }
       setShowBusinessModal(false);
       showToast("Business profile updated!");
     } catch {
@@ -1225,6 +1323,7 @@ export default function Home() {
         last_name: editLastName.trim() || undefined,
         phone: editPhone.trim() || undefined,
         email: editEmail.trim() || undefined,
+        avatar_url: editAvatarUrl.trim() || undefined,
       });
       setProfile(updated);
       setShowProfileModal(false);
@@ -1887,6 +1986,7 @@ export default function Home() {
                       setEditCategoryName(currentCategory.name);
                       setEditCategoryNormalPrice(currentCategory.default_normal_price ?? "");
                       setEditCategoryWholesalePrice(currentCategory.default_wholesale_price ?? "");
+                      setEditCategoryIcon(currentCategory.image_url ?? "");
                     }}
                   >
                     <EditIcon size={14} color="#f59e0b" />
@@ -2117,6 +2217,7 @@ export default function Home() {
                                   setEditingProduct(item);
                                   setEditPrice(item.selling_price ?? "");
                                   setEditWholesale(item.effective_wholesale_price ?? "");
+                                  setEditProductImage(item.image_url ?? "");
                                 }}
                               >
                                 <EditIcon size={14} color="#8b949e" />
@@ -2694,50 +2795,51 @@ export default function Home() {
                 {members.length === 0 ? (
                   <Text style={styles.emptySubtitle}>No staff members added yet.</Text>
                 ) : (
-                  members.map((m) => (
-                    <View key={m.id} style={styles.teamMemberCard}>
-                      <View style={styles.teamMemberAvatar}>
-                        <Text style={styles.teamMemberAvatarText}>
-                          {m.first_name ? m.first_name.slice(0, 1).toUpperCase() : "S"}
-                        </Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.teamMemberName}>
-                          {m.first_name} {m.last_name ?? ""}
-                        </Text>
-                        <Text style={styles.teamMemberMeta}>
-                          {m.phone || m.email || "No contact info"}
-                        </Text>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 }}>
-                          <Pressable
-                            style={styles.memberRoleBadge}
-                            onPress={() => handleChangeMemberRole(m)}
-                          >
-                            <Text style={styles.memberRoleBadgeText}>{m.role}</Text>
-                          </Pressable>
-                          <Pressable
-                            style={[
-                              styles.memberStatusBadge,
-                              m.status === "active" ? styles.memberStatusActive : styles.memberStatusSuspended,
-                            ]}
-                            onPress={() => handleToggleMemberStatus(m)}
-                          >
-                            <Text style={styles.memberStatusBadgeText}>
-                              {(m.status ?? "ACTIVE").toUpperCase()}
-                            </Text>
-                          </Pressable>
+                  members.map((m) => {
+                    const displayName = m.full_name || `${m.first_name ?? ""} ${m.last_name ?? ""}`.trim() || m.phone || "Staff Member";
+                    const displayRole = (m.role_name || m.role || "SALES").toUpperCase();
+                    const initial = (m.full_name || m.first_name || m.phone || "S").slice(0, 1).toUpperCase();
+                    return (
+                      <View key={m.id} style={styles.teamMemberCard}>
+                        <View style={styles.teamMemberAvatar}>
+                          <Text style={styles.teamMemberAvatarText}>{initial}</Text>
                         </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.teamMemberName}>{displayName}</Text>
+                          <Text style={styles.teamMemberMeta}>
+                            {m.phone || m.email || "No contact info"}
+                          </Text>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 }}>
+                            <Pressable
+                              style={styles.memberRoleBadge}
+                              onPress={() => handleChangeMemberRole(m)}
+                            >
+                              <Text style={styles.memberRoleBadgeText}>{displayRole}</Text>
+                            </Pressable>
+                            <Pressable
+                              style={[
+                                styles.memberStatusBadge,
+                                m.status === "active" ? styles.memberStatusActive : styles.memberStatusSuspended,
+                              ]}
+                              onPress={() => handleToggleMemberStatus(m)}
+                            >
+                              <Text style={styles.memberStatusBadgeText}>
+                                {(m.status ?? "ACTIVE").toUpperCase()}
+                              </Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                        {isOwner && displayRole !== "OWNER" && (
+                          <Pressable
+                            style={styles.removeStaffBtn}
+                            onPress={() => handleRemoveMember(m)}
+                          >
+                            <Text style={styles.removeStaffBtnText}>Remove</Text>
+                          </Pressable>
+                        )}
                       </View>
-                      {isOwner && m.role !== "OWNER" && (
-                        <Pressable
-                          style={styles.removeStaffBtn}
-                          onPress={() => handleRemoveMember(m)}
-                        >
-                          <Text style={styles.removeStaffBtnText}>Remove</Text>
-                        </Pressable>
-                      )}
-                    </View>
-                  ))
+                    );
+                  })
                 )}
               </View>
 
@@ -2891,6 +2993,7 @@ export default function Home() {
                   setEditLastName(profile?.last_name ?? "");
                   setEditPhone(profile?.phone ?? "");
                   setEditEmail(profile?.email ?? "");
+                  setEditAvatarUrl(profile?.avatar_url ?? "");
                   setShowProfileModal(true);
                 }}
               >
@@ -2948,7 +3051,16 @@ export default function Home() {
               )}
 
               {isOwnerOrManager && (
-                <Pressable style={styles.everythingTile} onPress={() => setShowBusinessModal(true)}>
+                <Pressable
+                  style={styles.everythingTile}
+                  onPress={() => {
+                    setEditBizName(businessDetails?.name ?? activeBusiness?.name ?? "");
+                    setEditBizAddress(businessDetails?.address ?? "");
+                    setEditBizPhone(businessDetails?.phone ?? "");
+                    setEditBizLogo(businessDetails?.logo_url ?? activeBusiness?.logo_url ?? "");
+                    setShowBusinessModal(true);
+                  }}
+                >
                   <TagIcon size={24} color="#fbbf24" />
                   <Text style={styles.everythingTileTitle}>Stall Profile</Text>
                   <Text style={styles.everythingTileDesc}>Address & name</Text>
@@ -3039,18 +3151,19 @@ export default function Home() {
                 </View>
 
                 {/* Members List */}
-                {members.map((m) => (
+                {members.map((m) => {
+                  const displayName = m.full_name || `${m.first_name ?? ""} ${m.last_name ?? ""}`.trim() || m.phone || "Staff Member";
+                  const displayRole = (m.role_name || m.role || "SALES").toUpperCase();
+                  return (
                   <View key={m.id} style={styles.memberRow}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.memberName}>
-                        {m.first_name} {m.last_name ?? ""}
-                      </Text>
+                      <Text style={styles.memberName}>{displayName}</Text>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
                         <Pressable
                           style={styles.memberRoleBadge}
                           onPress={() => handleChangeMemberRole(m)}
                         >
-                          <Text style={styles.memberRoleBadgeText}>{m.role}</Text>
+                          <Text style={styles.memberRoleBadgeText}>{displayRole}</Text>
                         </Pressable>
                         <Pressable
                           style={[
@@ -3073,7 +3186,8 @@ export default function Home() {
                       <Text style={styles.removeStaffBtnText}>Remove</Text>
                     </Pressable>
                   </View>
-                ))}
+                  );
+                })}
 
                 {/* Sent Invitations */}
                 {invitations.length > 0 && (
@@ -3127,6 +3241,7 @@ export default function Home() {
                       setEditBizName(businessDetails?.name ?? activeBusiness?.name ?? "");
                       setEditBizAddress(businessDetails?.address ?? "");
                       setEditBizPhone(businessDetails?.phone ?? "");
+                      setEditBizLogo(businessDetails?.logo_url ?? activeBusiness?.logo_url ?? "");
                       setShowBusinessModal(true);
                     }}
                   >
@@ -3265,9 +3380,10 @@ export default function Home() {
       </View>
 
       {/* Add Product Modal */}
-      <Modal visible={showAddProductModal} transparent animationType="slide">
+      <Modal statusBarTranslucent visible={showAddProductModal} transparent animationType="slide">
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
           style={styles.modalBackdrop}
         >
           <ScrollView
@@ -3299,6 +3415,15 @@ export default function Home() {
                 value={newWholesale}
                 onChangeText={setNewWholesale}
               />
+              <Text style={styles.modalFieldLabel}>Photo / Image URL (optional)</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="https://... photo link"
+                placeholderTextColor="#8a928e"
+                value={newProductImage}
+                onChangeText={setNewProductImage}
+                autoCapitalize="none"
+              />
               <View style={styles.modalButtons}>
                 <Pressable style={styles.modalCancelBtn} onPress={() => setShowAddProductModal(false)}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
@@ -3321,9 +3446,10 @@ export default function Home() {
       </Modal>
 
       {/* Add Category Modal */}
-      <Modal visible={showAddCategoryModal} transparent animationType="slide">
+      <Modal statusBarTranslucent visible={showAddCategoryModal} transparent animationType="slide">
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
           style={styles.modalBackdrop}
         >
           <ScrollView
@@ -3357,6 +3483,15 @@ export default function Home() {
                 value={newCategoryWholesalePrice}
                 onChangeText={setNewCategoryWholesalePrice}
               />
+              <Text style={styles.modalFieldLabel}>Category Icon / Image URL (optional)</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="https://... icon or image link"
+                placeholderTextColor="#8a928e"
+                value={newCategoryIcon}
+                onChangeText={setNewCategoryIcon}
+                autoCapitalize="none"
+              />
               <View style={styles.modalButtons}>
                 <Pressable style={styles.modalCancelBtn} onPress={() => setShowAddCategoryModal(false)}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
@@ -3379,9 +3514,10 @@ export default function Home() {
       </Modal>
 
       {/* Edit Category Modal */}
-      <Modal visible={editingCategory !== null} transparent animationType="slide">
+      <Modal statusBarTranslucent visible={editingCategory !== null} transparent animationType="slide">
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
           style={styles.modalBackdrop}
         >
           <ScrollView
@@ -3435,7 +3571,7 @@ export default function Home() {
       </Modal>
 
       {/* Batch Move / Copy Category Picker Modal */}
-      <Modal visible={batchModal !== null} transparent animationType="slide">
+      <Modal statusBarTranslucent visible={batchModal !== null} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>
@@ -3471,7 +3607,7 @@ export default function Home() {
       </Modal>
 
       {/* Edit Product Modal */}
-      <Modal visible={editingProduct !== null} transparent animationType="slide">
+      <Modal statusBarTranslucent visible={editingProduct !== null} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Edit {editingProduct?.name}</Text>
@@ -3490,6 +3626,15 @@ export default function Home() {
               keyboardType="numeric"
               value={editWholesale}
               onChangeText={setEditWholesale}
+            />
+            <Text style={styles.modalFieldLabel}>Product Photo / Image URL</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="https://... photo link"
+              placeholderTextColor="#8a928e"
+              value={editProductImage}
+              onChangeText={setEditProductImage}
+              autoCapitalize="none"
             />
             <View style={styles.modalButtons}>
               <Pressable style={styles.modalCancelBtn} onPress={() => setEditingProduct(null)}>
@@ -3512,7 +3657,7 @@ export default function Home() {
       </Modal>
 
       {/* Restock Modal */}
-      <Modal visible={restockProduct !== null} transparent animationType="slide">
+      <Modal statusBarTranslucent visible={restockProduct !== null} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Receive Stock for {restockProduct?.name}</Text>
@@ -3545,7 +3690,7 @@ export default function Home() {
       </Modal>
 
       {/* Price & Cost Input Modal for Customer List Line Item */}
-      <Modal visible={pricingLine !== null} transparent animationType="fade">
+      <Modal statusBarTranslucent visible={pricingLine !== null} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Price & Cost for {pricingLine?.itemName}</Text>
@@ -3610,7 +3755,7 @@ export default function Home() {
       </Modal>
 
       {/* Dispatch Waybill Modal */}
-      <Modal visible={dispatchModalList !== null} transparent animationType="slide">
+      <Modal statusBarTranslucent visible={dispatchModalList !== null} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Dispatch Waybill</Text>
@@ -3681,7 +3826,7 @@ export default function Home() {
       </Modal>
 
       {/* Security PIN Gate Confirmation Modal */}
-      <Modal visible={pinConfirmList !== null} transparent animationType="fade">
+      <Modal statusBarTranslucent visible={pinConfirmList !== null} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Confirm Customer Order</Text>
@@ -3717,7 +3862,7 @@ export default function Home() {
       </Modal>
 
       {/* Quick-Paste Order Modal */}
-      <Modal visible={showQuickPasteModal} transparent animationType="slide">
+      <Modal statusBarTranslucent visible={showQuickPasteModal} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Quick-Paste Order</Text>
@@ -3793,7 +3938,7 @@ export default function Home() {
       </Modal>
 
       {/* Record Custom Sale Modal */}
-      <Modal visible={showRecordSaleModal} transparent animationType="slide">
+      <Modal statusBarTranslucent visible={showRecordSaleModal} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Record Custom Sale</Text>
@@ -3942,7 +4087,7 @@ export default function Home() {
       </Modal>
 
       {/* Log Expense Modal */}
-      <Modal visible={showExpenseModal} transparent animationType="slide">
+      <Modal statusBarTranslucent visible={showExpenseModal} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Log Market Expense</Text>
@@ -4006,9 +4151,10 @@ export default function Home() {
       </Modal>
 
       {/* Invite Staff Modal */}
-      <Modal visible={showInviteModal} transparent animationType="slide">
+      <Modal statusBarTranslucent visible={showInviteModal} transparent animationType="slide">
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
           style={styles.modalBackdrop}
         >
           <ScrollView
@@ -4061,7 +4207,7 @@ export default function Home() {
       </Modal>
 
       {/* Product Image Gallery Modal */}
-      <Modal visible={galleryProduct !== null} transparent animationType="slide">
+      <Modal statusBarTranslucent visible={galleryProduct !== null} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <View style={styles.sectionHeaderRow}>
@@ -4128,6 +4274,32 @@ export default function Home() {
               </ScrollView>
             )}
 
+            {/* Add Photo URL Section */}
+            <View style={{ marginBottom: 16, borderTopWidth: 1, borderTopColor: "#30363d", paddingTop: 12 }}>
+              <Text style={styles.modalFieldLabel}>+ Attach Photo / Image Link</Text>
+              <View style={{ flexDirection: "row", gap: 8, alignItems: "center", marginTop: 6 }}>
+                <TextInput
+                  style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
+                  placeholder="https://... image link"
+                  placeholderTextColor="#8a928e"
+                  value={newPhotoUrl}
+                  onChangeText={setNewPhotoUrl}
+                  autoCapitalize="none"
+                />
+                <Pressable
+                  style={[styles.modalSaveBtn, (!newPhotoUrl.trim() || attachingPhoto) && { opacity: 0.6 }]}
+                  onPress={handleAttachPhoto}
+                  disabled={!newPhotoUrl.trim() || attachingPhoto}
+                >
+                  {attachingPhoto ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text style={styles.modalSaveText}>+ Attach</Text>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+
             <View style={styles.modalButtons}>
               <Pressable
                 style={styles.modalCancelBtn}
@@ -4141,7 +4313,7 @@ export default function Home() {
       </Modal>
 
       {/* Storefront Customization Modal */}
-      <Modal visible={showStorefrontModal} transparent animationType="slide">
+      <Modal statusBarTranslucent visible={showStorefrontModal} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Customize Storefront</Text>
@@ -4263,56 +4435,79 @@ export default function Home() {
       </Modal>
 
       {/* Edit Business Profile Modal */}
-      <Modal visible={showBusinessModal} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Edit Business / Stall</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Shop Name"
-              placeholderTextColor="#8a928e"
-              value={editBizName}
-              onChangeText={setEditBizName}
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Market Stall / Address"
-              placeholderTextColor="#8a928e"
-              value={editBizAddress}
-              onChangeText={setEditBizAddress}
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Official Phone Number"
-              placeholderTextColor="#8a928e"
-              keyboardType="phone-pad"
-              value={editBizPhone}
-              onChangeText={setEditBizPhone}
-            />
-            <View style={styles.modalButtons}>
-              <Pressable style={styles.modalCancelBtn} onPress={() => setShowBusinessModal(false)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={styles.modalSaveBtn}
-                onPress={handleUpdateBusiness}
-                disabled={savingBusiness}
-              >
-                {savingBusiness ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.modalSaveText}>Update Stall</Text>
-                )}
-              </Pressable>
+      <Modal statusBarTranslucent visible={showBusinessModal} transparent animationType="slide">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
+          style={styles.modalBackdrop}
+        >
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets={true}
+            contentContainerStyle={styles.modalScrollContent}
+          >
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Edit Business / Stall</Text>
+              <Text style={styles.modalFieldLabel}>Shop Name</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Shop Name"
+                placeholderTextColor="#8a928e"
+                value={editBizName}
+                onChangeText={setEditBizName}
+              />
+              <Text style={styles.modalFieldLabel}>Stall Logo / Cover Photo URL</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="https://... logo or shop photo URL"
+                placeholderTextColor="#8a928e"
+                value={editBizLogo}
+                onChangeText={setEditBizLogo}
+                autoCapitalize="none"
+              />
+              <Text style={styles.modalFieldLabel}>Market Stall / Address</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Market Stall / Address"
+                placeholderTextColor="#8a928e"
+                value={editBizAddress}
+                onChangeText={setEditBizAddress}
+              />
+              <Text style={styles.modalFieldLabel}>Official Phone Number</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Official Phone Number"
+                placeholderTextColor="#8a928e"
+                keyboardType="phone-pad"
+                value={editBizPhone}
+                onChangeText={setEditBizPhone}
+              />
+              <View style={styles.modalButtons}>
+                <Pressable style={styles.modalCancelBtn} onPress={() => setShowBusinessModal(false)}>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.modalSaveBtn}
+                  onPress={handleUpdateBusiness}
+                  disabled={savingBusiness}
+                >
+                  {savingBusiness ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text style={styles.modalSaveText}>Update Stall</Text>
+                  )}
+                </Pressable>
+              </View>
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Security Credentials Modal (Password & Stall PIN) */}
-      <Modal visible={showPasswordModal} transparent animationType="slide">
+      <Modal statusBarTranslucent visible={showPasswordModal} transparent animationType="slide">
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
           style={styles.modalBackdrop}
         >
           <ScrollView
@@ -4510,69 +4705,93 @@ export default function Home() {
       </Modal>
 
       {/* Edit User Profile Modal */}
-      <Modal visible={showProfileModal} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Edit Your Profile</Text>
-            <Text style={styles.modalSubtitle}>Update your personal account details</Text>
+      <Modal statusBarTranslucent visible={showProfileModal} transparent animationType="slide">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
+          style={styles.modalBackdrop}
+        >
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets={true}
+            contentContainerStyle={styles.modalScrollContent}
+          >
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Edit Your Profile</Text>
+              <Text style={styles.modalSubtitle}>Update your personal account details</Text>
 
-            <TextInput
-              style={styles.modalInput}
-              placeholder="First Name"
-              placeholderTextColor="#8a928e"
-              value={editFirstName}
-              onChangeText={setEditFirstName}
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Last Name"
-              placeholderTextColor="#8a928e"
-              value={editLastName}
-              onChangeText={setEditLastName}
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Phone Number"
-              placeholderTextColor="#8a928e"
-              value={editPhone}
-              onChangeText={setEditPhone}
-              keyboardType="phone-pad"
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Email Address"
-              placeholderTextColor="#8a928e"
-              value={editEmail}
-              onChangeText={setEditEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
+              <Text style={styles.modalFieldLabel}>Profile Avatar / Photo URL</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="https://... avatar image link"
+                placeholderTextColor="#8a928e"
+                value={editAvatarUrl}
+                onChangeText={setEditAvatarUrl}
+                autoCapitalize="none"
+              />
 
-            <View style={styles.modalButtons}>
-              <Pressable
-                style={styles.modalCancelBtn}
-                onPress={() => setShowProfileModal(false)}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={styles.modalSaveBtn}
-                onPress={handleUpdateProfile}
-                disabled={savingProfile || !editFirstName.trim()}
-              >
-                {savingProfile ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.modalSaveText}>Save Profile</Text>
-                )}
-              </Pressable>
+              <Text style={styles.modalFieldLabel}>First Name</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="First Name"
+                placeholderTextColor="#8a928e"
+                value={editFirstName}
+                onChangeText={setEditFirstName}
+              />
+              <Text style={styles.modalFieldLabel}>Last Name</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Last Name"
+                placeholderTextColor="#8a928e"
+                value={editLastName}
+                onChangeText={setEditLastName}
+              />
+              <Text style={styles.modalFieldLabel}>Phone Number</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Phone Number"
+                placeholderTextColor="#8a928e"
+                value={editPhone}
+                onChangeText={setEditPhone}
+                keyboardType="phone-pad"
+              />
+              <Text style={styles.modalFieldLabel}>Email Address</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Email Address"
+                placeholderTextColor="#8a928e"
+                value={editEmail}
+                onChangeText={setEditEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+
+              <View style={styles.modalButtons}>
+                <Pressable
+                  style={styles.modalCancelBtn}
+                  onPress={() => setShowProfileModal(false)}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.modalSaveBtn}
+                  onPress={handleUpdateProfile}
+                  disabled={savingProfile || !editFirstName.trim()}
+                >
+                  {savingProfile ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text style={styles.modalSaveText}>Save Profile</Text>
+                  )}
+                </Pressable>
+              </View>
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Switch Business Modal */}
-      <Modal visible={showShopModal} transparent animationType="slide">
+      <Modal statusBarTranslucent visible={showShopModal} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Your Stalls & Businesses</Text>
@@ -4617,8 +4836,7 @@ export default function Home() {
       </Modal>
 
       {/* Custom Styled Sign Out Modal */}
-      <Modal
-        visible={showSignOutModal}
+      <Modal statusBarTranslucent visible={showSignOutModal}
         transparent
         animationType="fade"
         onRequestClose={() => setShowSignOutModal(false)}
@@ -5891,6 +6109,11 @@ const createStyles = (theme: ThemePalette) => StyleSheet.create({
     color: "#ffffff",
     fontSize: 9,
     fontWeight: "800",
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+    justifyContent: "flex-end",
+    paddingBottom: Platform.OS === "android" ? 36 : 24,
   },
   modalBackdrop: {
     flex: 1,
