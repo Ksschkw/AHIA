@@ -26,7 +26,11 @@
       "bundleIdentifier": "app.ahia.mobile",
       "supportsTablet": true
     },
-    "plugins": ["expo-router", "expo-secure-store"],
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-sharing"
+    ],
     "experiments": {
       "typedRoutes": true
     }

@@ -3598,13 +3598,13 @@ export default function Home() {
       {/* Add Product Modal */}
       <Modal statusBarTranslucent visible={showAddProductModal} transparent animationType="slide">
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.modalBackdrop}
         >
           <ScrollView
+            style={{ width: "100%" }}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ flexGrow: 1, justifyContent: "flex-end" }}
+            contentContainerStyle={styles.modalScrollContent}
           >
             <View style={styles.modalCard}>
               <Text style={styles.modalTitle}>Add Product to {currentCategory?.name ?? "Shelf"}</Text>
@@ -3703,13 +3703,13 @@ export default function Home() {
       {/* Add Category Modal */}
       <Modal statusBarTranslucent visible={showAddCategoryModal} transparent animationType="slide">
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.modalBackdrop}
         >
           <ScrollView
+            style={{ width: "100%" }}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ flexGrow: 1, justifyContent: "flex-end" }}
+            contentContainerStyle={styles.modalScrollContent}
           >
             <View style={styles.modalCard}>
               <Text style={styles.modalTitle}>
@@ -3795,13 +3795,13 @@ export default function Home() {
       {/* Edit Category Modal */}
       <Modal statusBarTranslucent visible={editingCategory !== null} transparent animationType="slide">
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.modalBackdrop}
         >
           <ScrollView
+            style={{ width: "100%" }}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ flexGrow: 1, justifyContent: "flex-end" }}
+            contentContainerStyle={styles.modalScrollContent}
           >
             <View style={styles.modalCard}>
               <Text style={styles.modalTitle}>Edit Category {editingCategory?.name}</Text>
@@ -3828,6 +3828,39 @@ export default function Home() {
                 value={editCategoryWholesalePrice}
                 onChangeText={setEditCategoryWholesalePrice}
               />
+              <Text style={styles.modalFieldLabel}>Category Icon / Photo</Text>
+              {editCategoryIcon ? (
+                <View style={styles.imagePickerPreviewBox}>
+                  <Image source={{ uri: editCategoryIcon }} style={styles.imagePickerThumb} />
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={styles.imagePickerSelectedText} numberOfLines={1}>
+                      {editCategoryIcon.startsWith("file://") ? "Selected from Device" : editCategoryIcon}
+                    </Text>
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      <Pressable
+                        style={styles.imagePickerActionBtn}
+                        onPress={() => handlePickDeviceImage((uri) => setEditCategoryIcon(uri))}
+                      >
+                        <Text style={styles.imagePickerActionBtnText}>Change</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.imagePickerActionBtn, styles.imagePickerRemoveBtn]}
+                        onPress={() => setEditCategoryIcon("")}
+                      >
+                        <Text style={[styles.imagePickerActionBtnText, { color: "#f87171" }]}>Remove</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <Pressable
+                  style={styles.imagePickerButton}
+                  onPress={() => handlePickDeviceImage((uri) => setEditCategoryIcon(uri))}
+                >
+                  <CameraIcon size={20} color="#4ade80" />
+                  <Text style={styles.imagePickerButtonText}>Choose Category Icon / Photo</Text>
+                </Pressable>
+              )}
               <View style={styles.modalButtons}>
                 <Pressable style={styles.modalCancelBtn} onPress={() => setEditingCategory(null)}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
@@ -3887,245 +3920,281 @@ export default function Home() {
 
       {/* Edit Product Modal */}
       <Modal statusBarTranslucent visible={editingProduct !== null} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Edit {editingProduct?.name}</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Normal Price"
-              placeholderTextColor="#8a928e"
-              keyboardType="numeric"
-              value={editPrice}
-              onChangeText={setEditPrice}
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Wholesale Price"
-              placeholderTextColor="#8a928e"
-              keyboardType="numeric"
-              value={editWholesale}
-              onChangeText={setEditWholesale}
-            />
-            <Text style={styles.modalFieldLabel}>Product Photo</Text>
-            {editProductImage ? (
-              <View style={styles.imagePickerPreviewBox}>
-                <Image source={{ uri: editProductImage }} style={styles.imagePickerThumb} />
-                <View style={{ flex: 1, gap: 4 }}>
-                  <Text style={styles.imagePickerSelectedText} numberOfLines={1}>
-                    {editProductImage.startsWith("file://") ? "Selected from Device" : editProductImage}
-                  </Text>
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <Pressable
-                      style={styles.imagePickerActionBtn}
-                      onPress={() => handlePickDeviceImage((uri) => setEditProductImage(uri))}
-                    >
-                      <Text style={styles.imagePickerActionBtnText}>Change</Text>
-                    </Pressable>
-                    <Pressable
-                      style={[styles.imagePickerActionBtn, styles.imagePickerRemoveBtn]}
-                      onPress={() => setEditProductImage("")}
-                    >
-                      <Text style={[styles.imagePickerActionBtnText, { color: "#f87171" }]}>Remove</Text>
-                    </Pressable>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
+          <ScrollView
+            style={{ width: "100%" }}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.modalScrollContent}
+          >
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Edit {editingProduct?.name}</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Normal Price"
+                placeholderTextColor="#8a928e"
+                keyboardType="numeric"
+                value={editPrice}
+                onChangeText={setEditPrice}
+              />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Wholesale Price"
+                placeholderTextColor="#8a928e"
+                keyboardType="numeric"
+                value={editWholesale}
+                onChangeText={setEditWholesale}
+              />
+              <Text style={styles.modalFieldLabel}>Product Photo</Text>
+              {editProductImage ? (
+                <View style={styles.imagePickerPreviewBox}>
+                  <Image source={{ uri: editProductImage }} style={styles.imagePickerThumb} />
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={styles.imagePickerSelectedText} numberOfLines={1}>
+                      {editProductImage.startsWith("file://") ? "Selected from Device" : editProductImage}
+                    </Text>
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      <Pressable
+                        style={styles.imagePickerActionBtn}
+                        onPress={() => handlePickDeviceImage((uri) => setEditProductImage(uri))}
+                      >
+                        <Text style={styles.imagePickerActionBtnText}>Change</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.imagePickerActionBtn, styles.imagePickerRemoveBtn]}
+                        onPress={() => setEditProductImage("")}
+                      >
+                        <Text style={[styles.imagePickerActionBtnText, { color: "#f87171" }]}>Remove</Text>
+                      </Pressable>
+                    </View>
                   </View>
                 </View>
+              ) : (
+                <Pressable
+                  style={styles.imagePickerButton}
+                  onPress={() => handlePickDeviceImage((uri) => setEditProductImage(uri))}
+                >
+                  <CameraIcon size={20} color="#4ade80" />
+                  <Text style={styles.imagePickerButtonText}>Choose Photo from Phone</Text>
+                </Pressable>
+              )}
+              <View style={styles.modalButtons}>
+                <Pressable style={styles.modalCancelBtn} onPress={() => setEditingProduct(null)}>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.modalSaveBtn}
+                  onPress={handleSaveProductEdit}
+                  disabled={savingEdit}
+                >
+                  {savingEdit ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text style={styles.modalSaveText}>Save</Text>
+                  )}
+                </Pressable>
               </View>
-            ) : (
-              <Pressable
-                style={styles.imagePickerButton}
-                onPress={() => handlePickDeviceImage((uri) => setEditProductImage(uri))}
-              >
-                <CameraIcon size={20} color="#4ade80" />
-                <Text style={styles.imagePickerButtonText}>Choose Photo from Phone</Text>
-              </Pressable>
-            )}
-            <View style={styles.modalButtons}>
-              <Pressable style={styles.modalCancelBtn} onPress={() => setEditingProduct(null)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={styles.modalSaveBtn}
-                onPress={handleSaveProductEdit}
-                disabled={savingEdit}
-              >
-                {savingEdit ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.modalSaveText}>Save</Text>
-                )}
-              </Pressable>
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Restock Modal */}
       <Modal statusBarTranslucent visible={restockProduct !== null} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Receive Stock for {restockProduct?.name}</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Quantity Received (e.g. 50)"
-              placeholderTextColor="#8a928e"
-              keyboardType="numeric"
-              value={restockQty}
-              onChangeText={setRestockQty}
-            />
-            <View style={styles.modalButtons}>
-              <Pressable style={styles.modalCancelBtn} onPress={() => setRestockProduct(null)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={styles.modalSaveBtn}
-                onPress={handleReceiveStock}
-                disabled={savingRestock}
-              >
-                {savingRestock ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.modalSaveText}>Receive Stock</Text>
-                )}
-              </Pressable>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
+          <ScrollView
+            style={{ width: "100%" }}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.modalScrollContent}
+          >
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Receive Stock for {restockProduct?.name}</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Quantity Received (e.g. 50)"
+                placeholderTextColor="#8a928e"
+                keyboardType="numeric"
+                value={restockQty}
+                onChangeText={setRestockQty}
+              />
+              <View style={styles.modalButtons}>
+                <Pressable style={styles.modalCancelBtn} onPress={() => setRestockProduct(null)}>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.modalSaveBtn}
+                  onPress={handleReceiveStock}
+                  disabled={savingRestock}
+                >
+                  {savingRestock ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text style={styles.modalSaveText}>Receive Stock</Text>
+                  )}
+                </Pressable>
+              </View>
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Price & Cost Input Modal for Customer List Line Item */}
       <Modal statusBarTranslucent visible={pricingLine !== null} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Price & Cost for {pricingLine?.itemName}</Text>
-            <Text style={styles.modalSubtitle}>
-              Write what it costs you in the market and what you charge the customer.
-            </Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
+          <ScrollView
+            style={{ width: "100%" }}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.modalScrollContent}
+          >
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Price & Cost for {pricingLine?.itemName}</Text>
+              <Text style={styles.modalSubtitle}>
+                Write what it costs you in the market and what you charge the customer.
+              </Text>
 
-            <Text style={styles.modalFieldLabel}>Customer Selling Price (NGN)</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Selling Price (e.g. 15000)"
-              placeholderTextColor="#8a928e"
-              keyboardType="numeric"
-              value={priceInput}
-              onChangeText={setPriceInput}
-              autoFocus
-            />
+              <Text style={styles.modalFieldLabel}>Customer Selling Price (NGN)</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Selling Price (e.g. 15000)"
+                placeholderTextColor="#8a928e"
+                keyboardType="numeric"
+                value={priceInput}
+                onChangeText={setPriceInput}
+                autoFocus
+              />
 
-            <Text style={styles.modalFieldLabel}>Market Cost Price (NGN)</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Cost Price (e.g. 12000)"
-              placeholderTextColor="#8a928e"
-              keyboardType="numeric"
-              value={costInput}
-              onChangeText={setCostInput}
-            />
+              <Text style={styles.modalFieldLabel}>Market Cost Price (NGN)</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Cost Price (e.g. 12000)"
+                placeholderTextColor="#8a928e"
+                keyboardType="numeric"
+                value={costInput}
+                onChangeText={setCostInput}
+              />
 
-            {priceInput.trim() && costInput.trim() && (
-              <View style={styles.marginPreviewBox}>
-                <Text style={styles.marginPreviewLabel}>Expected Profit Margin:</Text>
-                <Text
-                  style={[
-                    styles.marginPreviewValue,
-                    Number(priceInput) >= Number(costInput) ? styles.marginPositive : styles.marginNegative,
-                  ]}
+              {priceInput.trim() && costInput.trim() && (
+                <View style={styles.marginPreviewBox}>
+                  <Text style={styles.marginPreviewLabel}>Expected Profit Margin:</Text>
+                  <Text
+                    style={[
+                      styles.marginPreviewValue,
+                      Number(priceInput) >= Number(costInput) ? styles.marginPositive : styles.marginNegative,
+                    ]}
+                  >
+                    {Number(priceInput) >= Number(costInput) ? "+" : ""}
+                    {formatMoney((Number(priceInput) - Number(costInput)).toString())}
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.modalButtons}>
+                <Pressable style={styles.modalCancelBtn} onPress={() => setPricingLine(null)}>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.modalSaveBtn}
+                  onPress={handleSaveLinePrice}
+                  disabled={savingPrice}
                 >
-                  {Number(priceInput) >= Number(costInput) ? "+" : ""}
-                  {formatMoney((Number(priceInput) - Number(costInput)).toString())}
-                </Text>
+                  {savingPrice ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text style={styles.modalSaveText}>Save Pricing</Text>
+                  )}
+                </Pressable>
               </View>
-            )}
-
-            <View style={styles.modalButtons}>
-              <Pressable style={styles.modalCancelBtn} onPress={() => setPricingLine(null)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={styles.modalSaveBtn}
-                onPress={handleSaveLinePrice}
-                disabled={savingPrice}
-              >
-                {savingPrice ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.modalSaveText}>Save Pricing</Text>
-                )}
-              </Pressable>
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Dispatch Waybill Modal */}
       <Modal statusBarTranslucent visible={dispatchModalList !== null} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Dispatch Waybill</Text>
-            <Text style={styles.modalSubtitle}>
-              Record transportation details for {dispatchModalList?.customer_name || dispatchModalList?.customer_phone}
-            </Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
+          <ScrollView
+            style={{ width: "100%" }}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.modalScrollContent}
+          >
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Dispatch Waybill</Text>
+              <Text style={styles.modalSubtitle}>
+                Record transportation details for {dispatchModalList?.customer_name || dispatchModalList?.customer_phone}
+              </Text>
 
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Transporter Name (e.g. GIG Logistics, Young Shall Grow)"
-              placeholderTextColor="#8a928e"
-              value={transporterName}
-              onChangeText={setTransporterName}
-            />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Transporter Name (e.g. GIG Logistics, Young Shall Grow)"
+                placeholderTextColor="#8a928e"
+                value={transporterName}
+                onChangeText={setTransporterName}
+              />
 
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Transporter Phone (e.g. 08012345678)"
-              placeholderTextColor="#8a928e"
-              keyboardType="phone-pad"
-              value={transporterPhone}
-              onChangeText={setTransporterPhone}
-            />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Transporter Phone (e.g. 08012345678)"
+                placeholderTextColor="#8a928e"
+                keyboardType="phone-pad"
+                value={transporterPhone}
+                onChangeText={setTransporterPhone}
+              />
 
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Waybill / Receipt Number (e.g. WYB-98432)"
-              placeholderTextColor="#8a928e"
-              value={waybillNumber}
-              onChangeText={setWaybillNumber}
-            />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Waybill / Receipt Number (e.g. WYB-98432)"
+                placeholderTextColor="#8a928e"
+                value={waybillNumber}
+                onChangeText={setWaybillNumber}
+              />
 
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Dispatch Cost (NGN, optional)"
-              placeholderTextColor="#8a928e"
-              keyboardType="numeric"
-              value={dispatchCost}
-              onChangeText={setDispatchCost}
-            />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Dispatch Cost (NGN, optional)"
+                placeholderTextColor="#8a928e"
+                keyboardType="numeric"
+                value={dispatchCost}
+                onChangeText={setDispatchCost}
+              />
 
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Tracking Link (optional)"
-              placeholderTextColor="#8a928e"
-              value={trackingUrl}
-              onChangeText={setTrackingUrl}
-            />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Tracking Link (optional)"
+                placeholderTextColor="#8a928e"
+                value={trackingUrl}
+                onChangeText={setTrackingUrl}
+              />
 
-            <View style={styles.modalButtons}>
-              <Pressable style={styles.modalCancelBtn} onPress={() => setDispatchModalList(null)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={styles.modalSaveBtn}
-                onPress={handleDispatchWaybill}
-                disabled={savingDispatch}
-              >
-                {savingDispatch ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.modalSaveText}>Record Dispatch</Text>
-                )}
-              </Pressable>
+              <View style={styles.modalButtons}>
+                <Pressable style={styles.modalCancelBtn} onPress={() => setDispatchModalList(null)}>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.modalSaveBtn}
+                  onPress={handleDispatchWaybill}
+                  disabled={savingDispatch}
+                >
+                  {savingDispatch ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text style={styles.modalSaveText}>Record Dispatch</Text>
+                  )}
+                </Pressable>
+              </View>
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Security PIN Gate Confirmation Modal */}
@@ -4207,85 +4276,102 @@ export default function Home() {
 
       {/* Quick-Paste Order Modal */}
       <Modal statusBarTranslucent visible={showQuickPasteModal} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Quick-Paste Order</Text>
-            <Text style={styles.modalSubtitle}>
-              Paste a WhatsApp message or rough note. We will itemize each line automatically.
-            </Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
+          <ScrollView
+            style={{ width: "100%" }}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.modalScrollContent}
+          >
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Quick-Paste Order</Text>
+              <Text style={styles.modalSubtitle}>
+                Paste a WhatsApp message or rough note. We will itemize each line automatically.
+              </Text>
 
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Customer Phone (e.g. 08012345678)"
-              placeholderTextColor="#8a928e"
-              keyboardType="phone-pad"
-              value={quickPastePhone}
-              onChangeText={setQuickPastePhone}
-            />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Customer Phone (e.g. 08012345678)"
+                placeholderTextColor="#8a928e"
+                keyboardType="phone-pad"
+                value={quickPastePhone}
+                onChangeText={setQuickPastePhone}
+              />
 
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Customer Name (optional)"
-              placeholderTextColor="#8a928e"
-              value={quickPasteName}
-              onChangeText={setQuickPasteName}
-            />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Customer Name (optional)"
+                placeholderTextColor="#8a928e"
+                value={quickPasteName}
+                onChangeText={setQuickPasteName}
+              />
 
-            <Text style={styles.modalFieldLabel}>Order Note / Message</Text>
-            <TextInput
-              style={[styles.modalInput, { height: 120, textAlignVertical: "top" }]}
-              placeholder={"2x 2.5mm cable\n5x 16A breaker\n1 roll binding wire"}
-              placeholderTextColor="#8a928e"
-              multiline
-              value={quickPasteText}
-              onChangeText={setQuickPasteText}
-            />
+              <Text style={styles.modalFieldLabel}>Order Note / Message</Text>
+              <TextInput
+                style={[styles.modalInput, { height: 120, textAlignVertical: "top" }]}
+                placeholder={"2x 2.5mm cable\n5x 16A breaker\n1 roll binding wire"}
+                placeholderTextColor="#8a928e"
+                multiline
+                value={quickPasteText}
+                onChangeText={setQuickPasteText}
+              />
 
-            {/* Live parse summary */}
-            {quickPasteText.trim().length > 0 && (
-              <View style={styles.quickPasteSummaryBox}>
-                <Text style={styles.quickPasteSummaryText}>
-                  Parsed: {parseQuickPaste(quickPasteText).length} item(s) found
-                </Text>
+              {/* Live parse summary */}
+              {quickPasteText.trim().length > 0 && (
+                <View style={styles.quickPasteSummaryBox}>
+                  <Text style={styles.quickPasteSummaryText}>
+                    Parsed: {parseQuickPaste(quickPasteText).length} item(s) found
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.modalButtons}>
+                <Pressable
+                  style={styles.modalCancelBtn}
+                  onPress={() => {
+                    setShowQuickPasteModal(false);
+                    setQuickPastePhone("");
+                    setQuickPasteName("");
+                    setQuickPasteText("");
+                  }}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.modalSaveBtn,
+                    (!quickPastePhone.trim() || !quickPasteText.trim()) && { opacity: 0.5 },
+                  ]}
+                  onPress={handleQuickPasteSubmit}
+                  disabled={savingQuickPaste || !quickPastePhone.trim() || !quickPasteText.trim()}
+                >
+                  {savingQuickPaste ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text style={styles.modalSaveText}>Create Order</Text>
+                  )}
+                </Pressable>
               </View>
-            )}
-
-            <View style={styles.modalButtons}>
-              <Pressable
-                style={styles.modalCancelBtn}
-                onPress={() => {
-                  setShowQuickPasteModal(false);
-                  setQuickPastePhone("");
-                  setQuickPasteName("");
-                  setQuickPasteText("");
-                }}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[
-                  styles.modalSaveBtn,
-                  (!quickPastePhone.trim() || !quickPasteText.trim()) && { opacity: 0.5 },
-                ]}
-                onPress={handleQuickPasteSubmit}
-                disabled={savingQuickPaste || !quickPastePhone.trim() || !quickPasteText.trim()}
-              >
-                {savingQuickPaste ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.modalSaveText}>Create Order</Text>
-                )}
-              </Pressable>
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Record Custom Sale Modal */}
       <Modal statusBarTranslucent visible={showRecordSaleModal} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Record Custom Sale</Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
+          <ScrollView
+            style={{ width: "100%" }}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.modalScrollContent}
+          >
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Record Custom Sale</Text>
             <Text style={styles.modalSubtitle}>
               Select an inventory product and record a walk-in sale.
             </Text>
@@ -4427,96 +4513,106 @@ export default function Home() {
               </Pressable>
             </View>
           </View>
-        </View>
-      </Modal>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Modal>
 
       {/* Log Expense Modal */}
       <Modal statusBarTranslucent visible={showExpenseModal} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Log Market Expense</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Amount (e.g. 2500)"
-              placeholderTextColor="#8a928e"
-              keyboardType="numeric"
-              value={expenseAmount}
-              onChangeText={setExpenseAmount}
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Description (e.g. Generator Fuel, Offloading)"
-              placeholderTextColor="#8a928e"
-              value={expenseDescription}
-              onChangeText={setExpenseDescription}
-            />
-            {/* Category selection */}
-            <Text style={styles.modalFieldLabel}>Expense Category</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.modalPickerRow}>
-              {expenseCategories.map((c) => {
-                const key = c.value || c.id || "OTHER";
-                const label = c.label || c.name || "Expense";
-                const isSelected = expenseCategoryId === key;
-                return (
-                  <Pressable
-                    key={key}
-                    style={[
-                      styles.rolePill,
-                      isSelected && styles.rolePillActive,
-                    ]}
-                    onPress={() => {
-                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setExpenseCategoryId(key);
-                      setExpenseError(null);
-                    }}
-                  >
-                    <Text
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
+          <ScrollView
+            style={{ width: "100%" }}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.modalScrollContent}
+          >
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Log Market Expense</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Amount (e.g. 2500)"
+                placeholderTextColor="#8a928e"
+                keyboardType="numeric"
+                value={expenseAmount}
+                onChangeText={setExpenseAmount}
+              />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Description (e.g. Generator Fuel, Offloading)"
+                placeholderTextColor="#8a928e"
+                value={expenseDescription}
+                onChangeText={setExpenseDescription}
+              />
+              {/* Category selection */}
+              <Text style={styles.modalFieldLabel}>Expense Category</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.modalPickerRow}>
+                {expenseCategories.map((c) => {
+                  const key = c.value || c.id || "OTHER";
+                  const label = c.label || c.name || "Expense";
+                  const isSelected = expenseCategoryId === key;
+                  return (
+                    <Pressable
+                      key={key}
                       style={[
-                        styles.rolePillText,
-                        isSelected && styles.rolePillTextActive,
+                        styles.rolePill,
+                        isSelected && styles.rolePillActive,
                       ]}
+                      onPress={() => {
+                        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setExpenseCategoryId(key);
+                        setExpenseError(null);
+                      }}
                     >
-                      {label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+                      <Text
+                        style={[
+                          styles.rolePillText,
+                          isSelected && styles.rolePillTextActive,
+                        ]}
+                      >
+                        {label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
 
-            {expenseError ? (
-              <Text style={styles.modalInlineError}>{expenseError}</Text>
-            ) : null}
+              {expenseError ? (
+                <Text style={styles.modalInlineError}>{expenseError}</Text>
+              ) : null}
 
-            <View style={styles.modalButtons}>
-              <Pressable style={styles.modalCancelBtn} onPress={() => setShowExpenseModal(false)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={styles.modalSaveBtn}
-                onPress={handleRecordExpense}
-                disabled={savingExpense}
-              >
-                {savingExpense ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.modalSaveText}>Record Expense</Text>
-                )}
-              </Pressable>
+              <View style={styles.modalButtons}>
+                <Pressable style={styles.modalCancelBtn} onPress={() => setShowExpenseModal(false)}>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.modalSaveBtn}
+                  onPress={handleRecordExpense}
+                  disabled={savingExpense}
+                >
+                  {savingExpense ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text style={styles.modalSaveText}>Record Expense</Text>
+                  )}
+                </Pressable>
+              </View>
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Invite Staff Modal */}
       <Modal statusBarTranslucent visible={showInviteModal} transparent animationType="slide">
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.modalBackdrop}
         >
           <ScrollView
+            style={{ width: "100%" }}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ flexGrow: 1, justifyContent: "flex-end" }}
+            contentContainerStyle={styles.modalScrollContent}
           >
             <View style={styles.modalCard}>
               <Text style={styles.modalTitle}>Invite Staff Member</Text>
@@ -4631,13 +4727,20 @@ export default function Home() {
               </ScrollView>
             )}
 
-            {/* Add Photo URL Section */}
+            {/* Add Photo URL / Phone Picker Section */}
             <View style={{ marginBottom: 16, borderTopWidth: 1, borderTopColor: "#30363d", paddingTop: 12 }}>
-              <Text style={styles.modalFieldLabel}>+ Attach Photo / Image Link</Text>
-              <View style={{ flexDirection: "row", gap: 8, alignItems: "center", marginTop: 6 }}>
+              <Text style={styles.modalFieldLabel}>+ Attach Photo to Gallery</Text>
+              <Pressable
+                style={[styles.imagePickerButton, { marginBottom: 8 }]}
+                onPress={() => handlePickDeviceImage((uri) => setNewPhotoUrl(uri))}
+              >
+                <CameraIcon size={18} color="#4ade80" />
+                <Text style={styles.imagePickerButtonText}>Choose Photo from Phone</Text>
+              </Pressable>
+              <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
                 <TextInput
                   style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
-                  placeholder="https://... image link"
+                  placeholder="Or paste photo / image link (https://...)"
                   placeholderTextColor="#8a928e"
                   value={newPhotoUrl}
                   onChangeText={setNewPhotoUrl}
@@ -4671,14 +4774,22 @@ export default function Home() {
 
       {/* Storefront Customization Modal */}
       <Modal statusBarTranslucent visible={showStorefrontModal} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Customize Storefront</Text>
-            <Text style={styles.modalSubtitle}>
-              Control how buyers experience your stall on WhatsApp and the web.
-            </Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
+          <ScrollView
+            style={{ width: "100%" }}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.modalScrollContent}
+          >
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Customize Storefront</Text>
+              <Text style={styles.modalSubtitle}>
+                Control how buyers experience your stall on WhatsApp and the web.
+              </Text>
 
-            <ScrollView style={{ maxHeight: 380 }}>
+              <View style={{ maxHeight: 380 }}>
               <Text style={styles.modalFieldLabel}>Storefront Headline</Text>
               <TextInput
                 style={styles.modalInput}
@@ -4769,7 +4880,7 @@ export default function Home() {
                 value={storefrontClosing}
                 onChangeText={setStorefrontClosing}
               />
-            </ScrollView>
+            </View>
 
             <View style={styles.modalButtons}>
               <Pressable style={styles.modalCancelBtn} onPress={() => setShowStorefrontModal(false)}>
@@ -4788,17 +4899,18 @@ export default function Home() {
               </Pressable>
             </View>
           </View>
-        </View>
-      </Modal>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Modal>
 
       {/* Edit Business Profile Modal */}
       <Modal statusBarTranslucent visible={showBusinessModal} transparent animationType="slide">
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.modalBackdrop}
         >
           <ScrollView
+            style={{ width: "100%" }}
             keyboardShouldPersistTaps="handled"
             automaticallyAdjustKeyboardInsets={true}
             contentContainerStyle={styles.modalScrollContent}
@@ -4813,15 +4925,39 @@ export default function Home() {
                 value={editBizName}
                 onChangeText={setEditBizName}
               />
-              <Text style={styles.modalFieldLabel}>Stall Logo / Cover Photo URL</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="https://... logo or shop photo URL"
-                placeholderTextColor="#8a928e"
-                value={editBizLogo}
-                onChangeText={setEditBizLogo}
-                autoCapitalize="none"
-              />
+              <Text style={styles.modalFieldLabel}>Stall Logo / Cover Photo</Text>
+              {editBizLogo ? (
+                <View style={styles.imagePickerPreviewBox}>
+                  <Image source={{ uri: editBizLogo }} style={styles.imagePickerThumb} />
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={styles.imagePickerSelectedText} numberOfLines={1}>
+                      {editBizLogo.startsWith("file://") ? "Selected from Device" : editBizLogo}
+                    </Text>
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      <Pressable
+                        style={styles.imagePickerActionBtn}
+                        onPress={() => handlePickDeviceImage((uri) => setEditBizLogo(uri))}
+                      >
+                        <Text style={styles.imagePickerActionBtnText}>Change</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.imagePickerActionBtn, styles.imagePickerRemoveBtn]}
+                        onPress={() => setEditBizLogo("")}
+                      >
+                        <Text style={[styles.imagePickerActionBtnText, { color: "#f87171" }]}>Remove</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <Pressable
+                  style={styles.imagePickerButton}
+                  onPress={() => handlePickDeviceImage((uri) => setEditBizLogo(uri))}
+                >
+                  <CameraIcon size={20} color="#4ade80" />
+                  <Text style={styles.imagePickerButtonText}>Choose Stall Logo from Phone</Text>
+                </Pressable>
+              )}
               <Text style={styles.modalFieldLabel}>Market Stall / Address</Text>
               <TextInput
                 style={styles.modalInput}
@@ -4863,13 +4999,13 @@ export default function Home() {
       {/* Security Credentials Modal (Password & Stall PIN) */}
       <Modal statusBarTranslucent visible={showPasswordModal} transparent animationType="slide">
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.modalBackdrop}
         >
           <ScrollView
+            style={{ width: "100%" }}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ flexGrow: 1, justifyContent: "flex-end" }}
+            contentContainerStyle={styles.modalScrollContent}
           >
             <View style={styles.modalCard}>
               <Text style={styles.modalTitle}>Security & Stall Protection</Text>
@@ -5064,11 +5200,11 @@ export default function Home() {
       {/* Edit User Profile Modal */}
       <Modal statusBarTranslucent visible={showProfileModal} transparent animationType="slide">
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.modalBackdrop}
         >
           <ScrollView
+            style={{ width: "100%" }}
             keyboardShouldPersistTaps="handled"
             automaticallyAdjustKeyboardInsets={true}
             contentContainerStyle={styles.modalScrollContent}
@@ -5077,15 +5213,39 @@ export default function Home() {
               <Text style={styles.modalTitle}>Edit Your Profile</Text>
               <Text style={styles.modalSubtitle}>Update your personal account details</Text>
 
-              <Text style={styles.modalFieldLabel}>Profile Avatar / Photo URL</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="https://... avatar image link"
-                placeholderTextColor="#8a928e"
-                value={editAvatarUrl}
-                onChangeText={setEditAvatarUrl}
-                autoCapitalize="none"
-              />
+              <Text style={styles.modalFieldLabel}>Profile Avatar / Photo</Text>
+              {editAvatarUrl ? (
+                <View style={styles.imagePickerPreviewBox}>
+                  <Image source={{ uri: editAvatarUrl }} style={styles.imagePickerThumb} />
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={styles.imagePickerSelectedText} numberOfLines={1}>
+                      {editAvatarUrl.startsWith("file://") ? "Selected from Device" : editAvatarUrl}
+                    </Text>
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      <Pressable
+                        style={styles.imagePickerActionBtn}
+                        onPress={() => handlePickDeviceImage((uri) => setEditAvatarUrl(uri))}
+                      >
+                        <Text style={styles.imagePickerActionBtnText}>Change</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.imagePickerActionBtn, styles.imagePickerRemoveBtn]}
+                        onPress={() => setEditAvatarUrl("")}
+                      >
+                        <Text style={[styles.imagePickerActionBtnText, { color: "#f87171" }]}>Remove</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <Pressable
+                  style={styles.imagePickerButton}
+                  onPress={() => handlePickDeviceImage((uri) => setEditAvatarUrl(uri))}
+                >
+                  <CameraIcon size={20} color="#4ade80" />
+                  <Text style={styles.imagePickerButtonText}>Choose Profile Photo from Phone</Text>
+                </Pressable>
+              )}
 
               <Text style={styles.modalFieldLabel}>First Name</Text>
               <TextInput
@@ -6469,14 +6629,15 @@ const createStyles = (theme: ThemePalette) => StyleSheet.create({
   },
   modalScrollContent: {
     flexGrow: 1,
-    justifyContent: "flex-start",
-    paddingTop: Platform.OS === "android" ? 32 : 48,
-    paddingBottom: 340,
-    paddingHorizontal: 16,
+    justifyContent: "center",
+    paddingVertical: 24,
   },
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 16,
   },
   modalCard: {
     backgroundColor: theme.card,
