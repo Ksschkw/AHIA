@@ -6,6 +6,7 @@ import {
   Alert,
   AppState,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -19,6 +20,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   cacheBusinesses,
@@ -49,6 +51,7 @@ import { fetchUnreadCount } from "@/lib/notifications";
 import {
   ArrowLeftIcon,
   BoxIcon,
+  CameraIcon,
   CannotGetIcon,
   CartIcon,
   CheckMarkIcon,
@@ -1151,6 +1154,29 @@ export default function Home() {
       setGalleryImages([]);
     } finally {
       setLoadingGallery(false);
+    }
+  };
+
+  const handlePickDeviceImage = async (onSelected: (uri: string) => void) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        showToast("Photo library access is needed to select images.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]?.uri) {
+        onSelected(result.assets[0].uri);
+        showToast("Photo selected from device.");
+      }
+    } catch {
+      showToast("Could not open photo library.");
     }
   };
 
@@ -3620,15 +3646,39 @@ export default function Home() {
                   </>
                 );
               })()}
-              <Text style={styles.modalFieldLabel}>Photo / Image URL (optional)</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="https://... photo link"
-                placeholderTextColor="#8a928e"
-                value={newProductImage}
-                onChangeText={setNewProductImage}
-                autoCapitalize="none"
-              />
+              <Text style={styles.modalFieldLabel}>Product Photo (optional)</Text>
+              {newProductImage ? (
+                <View style={styles.imagePickerPreviewBox}>
+                  <Image source={{ uri: newProductImage }} style={styles.imagePickerThumb} />
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={styles.imagePickerSelectedText} numberOfLines={1}>
+                      {newProductImage.startsWith("file://") ? "Selected from Device" : newProductImage}
+                    </Text>
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      <Pressable
+                        style={styles.imagePickerActionBtn}
+                        onPress={() => handlePickDeviceImage((uri) => setNewProductImage(uri))}
+                      >
+                        <Text style={styles.imagePickerActionBtnText}>Change</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.imagePickerActionBtn, styles.imagePickerRemoveBtn]}
+                        onPress={() => setNewProductImage("")}
+                      >
+                        <Text style={[styles.imagePickerActionBtnText, { color: "#f87171" }]}>Remove</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <Pressable
+                  style={styles.imagePickerButton}
+                  onPress={() => handlePickDeviceImage((uri) => setNewProductImage(uri))}
+                >
+                  <CameraIcon size={20} color="#4ade80" />
+                  <Text style={styles.imagePickerButtonText}>Choose Photo from Phone</Text>
+                </Pressable>
+              )}
               <View style={styles.modalButtons}>
                 <Pressable style={styles.modalCancelBtn} onPress={() => setShowAddProductModal(false)}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
@@ -3688,15 +3738,39 @@ export default function Home() {
                 value={newCategoryWholesalePrice}
                 onChangeText={setNewCategoryWholesalePrice}
               />
-              <Text style={styles.modalFieldLabel}>Category Icon / Image URL (optional)</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="https://... icon or image link"
-                placeholderTextColor="#8a928e"
-                value={newCategoryIcon}
-                onChangeText={setNewCategoryIcon}
-                autoCapitalize="none"
-              />
+              <Text style={styles.modalFieldLabel}>Category Icon / Photo (optional)</Text>
+              {newCategoryIcon ? (
+                <View style={styles.imagePickerPreviewBox}>
+                  <Image source={{ uri: newCategoryIcon }} style={styles.imagePickerThumb} />
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={styles.imagePickerSelectedText} numberOfLines={1}>
+                      {newCategoryIcon.startsWith("file://") ? "Selected from Device" : newCategoryIcon}
+                    </Text>
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      <Pressable
+                        style={styles.imagePickerActionBtn}
+                        onPress={() => handlePickDeviceImage((uri) => setNewCategoryIcon(uri))}
+                      >
+                        <Text style={styles.imagePickerActionBtnText}>Change</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.imagePickerActionBtn, styles.imagePickerRemoveBtn]}
+                        onPress={() => setNewCategoryIcon("")}
+                      >
+                        <Text style={[styles.imagePickerActionBtnText, { color: "#f87171" }]}>Remove</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <Pressable
+                  style={styles.imagePickerButton}
+                  onPress={() => handlePickDeviceImage((uri) => setNewCategoryIcon(uri))}
+                >
+                  <CameraIcon size={20} color="#4ade80" />
+                  <Text style={styles.imagePickerButtonText}>Choose Category Icon / Photo</Text>
+                </Pressable>
+              )}
               <View style={styles.modalButtons}>
                 <Pressable style={styles.modalCancelBtn} onPress={() => setShowAddCategoryModal(false)}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
@@ -3832,15 +3906,39 @@ export default function Home() {
               value={editWholesale}
               onChangeText={setEditWholesale}
             />
-            <Text style={styles.modalFieldLabel}>Product Photo / Image URL</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="https://... photo link"
-              placeholderTextColor="#8a928e"
-              value={editProductImage}
-              onChangeText={setEditProductImage}
-              autoCapitalize="none"
-            />
+            <Text style={styles.modalFieldLabel}>Product Photo</Text>
+            {editProductImage ? (
+              <View style={styles.imagePickerPreviewBox}>
+                <Image source={{ uri: editProductImage }} style={styles.imagePickerThumb} />
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={styles.imagePickerSelectedText} numberOfLines={1}>
+                    {editProductImage.startsWith("file://") ? "Selected from Device" : editProductImage}
+                  </Text>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <Pressable
+                      style={styles.imagePickerActionBtn}
+                      onPress={() => handlePickDeviceImage((uri) => setEditProductImage(uri))}
+                    >
+                      <Text style={styles.imagePickerActionBtnText}>Change</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.imagePickerActionBtn, styles.imagePickerRemoveBtn]}
+                      onPress={() => setEditProductImage("")}
+                    >
+                      <Text style={[styles.imagePickerActionBtnText, { color: "#f87171" }]}>Remove</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            ) : (
+              <Pressable
+                style={styles.imagePickerButton}
+                onPress={() => handlePickDeviceImage((uri) => setEditProductImage(uri))}
+              >
+                <CameraIcon size={20} color="#4ade80" />
+                <Text style={styles.imagePickerButtonText}>Choose Photo from Phone</Text>
+              </Pressable>
+            )}
             <View style={styles.modalButtons}>
               <Pressable style={styles.modalCancelBtn} onPress={() => setEditingProduct(null)}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
@@ -7205,5 +7303,62 @@ const createStyles = (theme: ThemePalette) => StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 20,
+  },
+  imagePickerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: "#4ade80",
+    backgroundColor: theme.mode === "light" ? "#f0fdf4" : "#062e1e",
+    marginBottom: 14,
+  },
+  imagePickerButtonText: {
+    color: "#4ade80",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  imagePickerPreviewBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.cardHover,
+    marginBottom: 14,
+  },
+  imagePickerThumb: {
+    width: 60,
+    height: 60,
+    borderRadius: 6,
+    backgroundColor: "#1e293b",
+  },
+  imagePickerSelectedText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: theme.text,
+  },
+  imagePickerActionBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 4,
+    backgroundColor: theme.card,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  imagePickerRemoveBtn: {
+    borderColor: "rgba(248, 113, 113, 0.4)",
+  },
+  imagePickerActionBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: theme.text,
   },
 });
