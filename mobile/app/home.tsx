@@ -183,6 +183,24 @@ function formatWaNumber(rawPhone: string | null | undefined): string | null {
   return digits;
 }
 
+function getInvitationStatus(
+  inv: MembershipInvitation,
+  activeMembers: Member[]
+): "ACCEPTED" | "REVOKED" | "EXPIRED" | "PENDING" {
+  if (inv.accepted_at) return "ACCEPTED";
+  if (inv.revoked_at) return "REVOKED";
+  if (inv.expires_at && new Date(inv.expires_at).getTime() < Date.now()) return "EXPIRED";
+  const invDigits = inv.phone ? inv.phone.replace(/[^\d]/g, "").slice(-10) : null;
+  if (
+    invDigits &&
+    invDigits.length >= 7 &&
+    activeMembers.some((m) => m.phone && m.phone.replace(/[^\d]/g, "").slice(-10) === invDigits)
+  ) {
+    return "ACCEPTED";
+  }
+  return (inv.status ? inv.status.toUpperCase() : "PENDING") as any;
+}
+
 function parseQuickPaste(raw: string): Array<{ text: string; quantity: string }> {
   return raw
     .split("\n")
@@ -2765,7 +2783,7 @@ export default function Home() {
                   }}
                 >
                   <PlusIcon size={16} color="#ffffff" />
-                  <Text style={styles.teamInviteTopBtnText}>+ Invite Staff</Text>
+                  <Text style={styles.teamInviteTopBtnText}>Invite Staff</Text>
                 </Pressable>
               </View>
 
@@ -2898,31 +2916,38 @@ export default function Home() {
                     </Pressable>
                   </View>
                 ) : (
-                  invitations.map((inv) => (
-                    <View key={inv.id} style={styles.sentInviteCard}>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                          <Text style={styles.sentInviteTarget}>
-                            {inv.phone || inv.email || "Invited Staff"}
-                          </Text>
-                          <View style={styles.sentInviteRolePill}>
-                            <Text style={styles.sentInviteRolePillText}>{inv.role}</Text>
+                  invitations.map((inv) => {
+                    const status = getInvitationStatus(inv, members);
+                    const isAccepted = status === "ACCEPTED";
+                    const roleLabel = (inv.role_name || inv.role || "STAFF").toUpperCase();
+                    return (
+                      <View key={inv.id} style={styles.sentInviteCard}>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                            <Text style={styles.sentInviteTarget}>
+                              {inv.phone || inv.email || "Invited Staff"}
+                            </Text>
+                            <View style={styles.sentInviteRolePill}>
+                              <Text style={styles.sentInviteRolePillText}>{roleLabel}</Text>
+                            </View>
                           </View>
+                          <Text style={[styles.sentInviteStatus, isAccepted && { color: "#4ade80" }]}>
+                            Status: {status} - Created: {new Date(inv.created_at).toLocaleDateString()}
+                          </Text>
                         </View>
-                        <Text style={styles.sentInviteStatus}>
-                          Status: {(inv.status ?? "PENDING").toUpperCase()} - Created: {new Date(inv.created_at).toLocaleDateString()}
-                        </Text>
-                      </View>
 
-                      <Pressable
-                        style={styles.inviteShareWhatsAppBtn}
-                        onPress={() => handleShareInviteWhatsApp(inv)}
-                      >
-                        <ShareIcon size={14} color="#ffffff" />
-                        <Text style={styles.inviteShareWhatsAppBtnText}>Share</Text>
-                      </Pressable>
-                    </View>
-                  ))
+                        {!isAccepted && (
+                          <Pressable
+                            style={styles.inviteShareWhatsAppBtn}
+                            onPress={() => handleShareInviteWhatsApp(inv)}
+                          >
+                            <ShareIcon size={14} color="#ffffff" />
+                            <Text style={styles.inviteShareWhatsAppBtnText}>Share</Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    );
+                  })
                 )}
               </View>
 
@@ -3219,14 +3244,21 @@ export default function Home() {
                 {invitations.length > 0 && (
                   <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: "#21262d", paddingTop: 10 }}>
                     <Text style={styles.invitationSubHeading}>Sent Invitations ({invitations.length})</Text>
-                    {invitations.map((inv) => (
-                      <View key={inv.id} style={styles.invitationRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.invitationPhone}>{inv.phone || inv.email || "Invited"}</Text>
-                          <Text style={styles.invitationMeta}>Role: {inv.role} - {(inv.status ?? "PENDING").toUpperCase()}</Text>
+                    {invitations.map((inv) => {
+                      const status = getInvitationStatus(inv, members);
+                      const isAccepted = status === "ACCEPTED";
+                      const roleLabel = (inv.role_name || inv.role || "STAFF").toUpperCase();
+                      return (
+                        <View key={inv.id} style={styles.invitationRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.invitationPhone}>{inv.phone || inv.email || "Invited"}</Text>
+                            <Text style={[styles.invitationMeta, isAccepted && { color: "#4ade80" }]}>
+                              Role: {roleLabel} - {status}
+                            </Text>
+                          </View>
                         </View>
-                      </View>
-                    ))}
+                      );
+                    })}
                   </View>
                 )}
 

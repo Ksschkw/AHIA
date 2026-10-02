@@ -487,11 +487,15 @@ export interface Member {
 export interface MembershipInvitation {
   id: string;
   tenant_id: string;
-  role: MemberRole;
+  role?: MemberRole;
+  role_name?: string;
   phone: string | null;
   email: string | null;
   token?: string;
-  status: "pending" | "accepted" | "expired" | "revoked";
+  status?: "pending" | "accepted" | "expired" | "revoked";
+  expires_at?: string;
+  accepted_at?: string | null;
+  revoked_at?: string | null;
   created_at: string;
 }
 
