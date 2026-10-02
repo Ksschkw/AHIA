@@ -152,6 +152,19 @@ import {
 
 type TabKey = "dashboard" | "shelf" | "lists" | "trading" | "more";
 
+const DEFAULT_EXPENSE_CATEGORIES: ExpenseCategory[] = [
+  { value: "STOCK_PURCHASE", label: "Stock Purchase", is_known_spending: true },
+  { value: "TRANSPORT", label: "Transport & Logistics", is_known_spending: true },
+  { value: "RENT", label: "Stall Rent & Space", is_known_spending: true },
+  { value: "UTILITIES", label: "Generator Fuel & Light", is_known_spending: true },
+  { value: "SALARIES", label: "Staff & Apprentice Pay", is_known_spending: true },
+  { value: "PACKAGING", label: "Nylon & Packaging", is_known_spending: true },
+  { value: "MARKETING", label: "Marketing & Ads", is_known_spending: true },
+  { value: "MAINTENANCE", label: "Repairs & Maintenance", is_known_spending: true },
+  { value: "FEES_AND_LEVIES", label: "Market Toll & Levies", is_known_spending: true },
+  { value: "OTHER", label: "Other Miscellaneous", is_known_spending: false },
+];
+
 function formatMoney(amount: string | null | undefined): string {
   if (!amount) return "Price on request";
   const num = Number(amount);
@@ -259,7 +272,7 @@ export default function Home() {
   const [customerLists, setCustomerLists] = useState<CustomerList[]>([]);
   const [sales, setSales] = useState<SaleSummary[]>([]);
   const [dailyStats, setDailyStats] = useState<DailySalesSummary | null>(null);
-  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>(DEFAULT_EXPENSE_CATEGORIES);
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<MembershipInvitation[]>([]);
   const [runningOut, setRunningOut] = useState<LowStockProduct[]>([]);
@@ -369,8 +382,9 @@ export default function Home() {
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [expenseAmount, setExpenseAmount] = useState("");
   const [expenseDescription, setExpenseDescription] = useState("");
-  const [expenseCategoryId, setExpenseCategoryId] = useState<string>("");
+  const [expenseCategoryId, setExpenseCategoryId] = useState<string>("STOCK_PURCHASE");
   const [expensePaymentMethod, setExpensePaymentMethod] = useState("cash");
+  const [expenseError, setExpenseError] = useState<string | null>(null);
   const [savingExpense, setSavingExpense] = useState(false);
 
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -520,9 +534,10 @@ export default function Home() {
       setSales(freshSales);
       setDailyStats(freshDaily);
       setRunningOut(freshLowStock);
-      setExpenseCategories(freshExpCats.categories);
-      if (freshExpCats.categories.length > 0 && !expenseCategoryId) {
-        setExpenseCategoryId(freshExpCats.categories[0].id);
+      const loadedExpCats = freshExpCats?.categories?.length ? freshExpCats.categories : DEFAULT_EXPENSE_CATEGORIES;
+      setExpenseCategories(loadedExpCats);
+      if (loadedExpCats.length > 0 && !expenseCategoryId) {
+        setExpenseCategoryId(loadedExpCats[0].value || loadedExpCats[0].id || "STOCK_PURCHASE");
       }
       setMembers(freshMembers);
       setInvitations(freshInvs);
@@ -1109,23 +1124,30 @@ export default function Home() {
   };
 
   const handleRecordExpense = async () => {
-    if (!activeBusiness || !expenseAmount.trim() || !expenseCategoryId) return;
+    if (!activeBusiness) return;
+    const cleanAmount = expenseAmount.trim();
+    if (!cleanAmount || isNaN(Number(cleanAmount)) || Number(cleanAmount) <= 0) {
+      setExpenseError("Please enter a valid expense amount in Naira.");
+      return;
+    }
+    const targetCat = expenseCategoryId || (expenseCategories[0]?.value ?? expenseCategories[0]?.id ?? "OTHER");
+    setExpenseError(null);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSavingExpense(true);
     try {
       await recordExpense(activeBusiness.id, {
-        amount: expenseAmount.trim(),
-        category_id: expenseCategoryId,
+        amount: cleanAmount,
+        category: targetCat,
         description: expenseDescription.trim() || null,
-        payment_method: expensePaymentMethod,
+        payment_method: expensePaymentMethod || "cash",
       });
       setExpenseAmount("");
       setExpenseDescription("");
       setShowExpenseModal(false);
       showToast("Expense logged successfully!");
       void loadData(activeBusiness.id);
-    } catch {
-      showToast("Could not record expense.");
+    } catch (err: any) {
+      setExpenseError(err?.message || "Could not record expense. Please verify amount and category.");
     } finally {
       setSavingExpense(false);
     }
@@ -2702,12 +2724,16 @@ export default function Home() {
               <View>
                 <Text style={styles.subHeading}>Market Expenses Categories</Text>
                 <View style={styles.actionGrid}>
-                  {expenseCategories.map((c) => (
-                    <View key={c.id} style={styles.actionTile}>
-                      <Text style={styles.actionTileTitle}>{c.name}</Text>
-                      <Text style={styles.actionTileDesc}>{c.description || "General stall expense"}</Text>
-                    </View>
-                  ))}
+                  {expenseCategories.map((c) => {
+                    const key = c.value || c.id || "OTHER";
+                    const title = c.label || c.name || "Expense";
+                    return (
+                      <View key={key} style={styles.actionTile}>
+                        <Text style={styles.actionTileTitle}>{title}</Text>
+                        <Text style={styles.actionTileDesc}>{c.description || (c.is_known_spending ? "Standard business expense" : "General expense")}</Text>
+                      </View>
+                    );
+                  })}
                 </View>
               </View>
             )}
@@ -4109,26 +4135,39 @@ export default function Home() {
             {/* Category selection */}
             <Text style={styles.modalFieldLabel}>Expense Category</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.modalPickerRow}>
-              {expenseCategories.map((c) => (
-                <Pressable
-                  key={c.id}
-                  style={[
-                    styles.rolePill,
-                    expenseCategoryId === c.id && styles.rolePillActive,
-                  ]}
-                  onPress={() => setExpenseCategoryId(c.id)}
-                >
-                  <Text
+              {expenseCategories.map((c) => {
+                const key = c.value || c.id || "OTHER";
+                const label = c.label || c.name || "Expense";
+                const isSelected = expenseCategoryId === key;
+                return (
+                  <Pressable
+                    key={key}
                     style={[
-                      styles.rolePillText,
-                      expenseCategoryId === c.id && styles.rolePillTextActive,
+                      styles.rolePill,
+                      isSelected && styles.rolePillActive,
                     ]}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setExpenseCategoryId(key);
+                      setExpenseError(null);
+                    }}
                   >
-                    {c.name}
-                  </Text>
-                </Pressable>
-              ))}
+                    <Text
+                      style={[
+                        styles.rolePillText,
+                        isSelected && styles.rolePillTextActive,
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </ScrollView>
+
+            {expenseError ? (
+              <Text style={styles.modalInlineError}>{expenseError}</Text>
+            ) : null}
 
             <View style={styles.modalButtons}>
               <Pressable style={styles.modalCancelBtn} onPress={() => setShowExpenseModal(false)}>
@@ -6190,6 +6229,13 @@ const createStyles = (theme: ThemePalette) => StyleSheet.create({
   modalSaveText: {
     color: "#ffffff",
     fontWeight: "700",
+  },
+  modalInlineError: {
+    color: "#f87171",
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 8,
+    textAlign: "center",
   },
   rolePickerRow: {
     flexDirection: "row",

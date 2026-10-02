@@ -426,8 +426,12 @@ export function dailySales(tenantId: string): Promise<DailySalesSummary> {
 }
 
 export interface ExpenseCategory {
-  id: string;
-  name: string;
+  value: string;
+  label: string;
+  is_known_spending?: boolean;
+  // Fallbacks for backward compatibility
+  id?: string;
+  name?: string;
   description?: string | null;
 }
 
@@ -438,10 +442,10 @@ export function listExpenseCategories(tenantId: string): Promise<{ categories: E
 export function recordExpense(
   tenantId: string,
   data: {
-    category_id: string;
+    category: string;
     amount: string;
     description?: string | null;
-    payment_method: string;
+    payment_method?: string;
   },
 ): Promise<{ id: string; amount: string }> {
   return request<{ id: string; amount: string }>(`/api/v1/tenants/${tenantId}/expenses`, {
