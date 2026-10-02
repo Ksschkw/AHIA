@@ -369,3 +369,100 @@
   font-size: 12px;
   color: var(--ink-3);
 }
+
+/* App Announcement Banner ------------------------------------------------ */
+
+.appBanner {
+  background: linear-gradient(90deg, #063d27 0%, #0b5d3b 50%, #084a2f 100%);
+  color: #ffffff;
+  padding: 10px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.appBannerContent {
+  max-width: 1140px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.appBannerBadge {
+  background: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.appBannerText {
+  font-weight: 600;
+}
+
+.appBannerSub {
+  opacity: 0.75;
+  font-size: 12px;
+}
+
+.appBannerBtn {
+  background: #ffffff;
+  color: #0b5d3b;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.appBannerBtn:hover {
+  background: #e6f4ea;
+  transform: translateY(-1px);
+}
+
+.navApk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(11, 93, 59, 0.1);
+  color: var(--leaf-dark);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(11, 93, 59, 0.2);
+  transition: background 0.15s ease;
+}
+
+.navApk:hover {
+  background: rgba(11, 93, 59, 0.2);
+}
+
+.apkCta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 54px;
+  padding: 0 28px;
+  border-radius: 999px;
+  font-weight: 700;
+  text-decoration: none;
+  font-size: 15px;
+  background: #1e293b;
+  color: #ffffff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.25);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.apkCta:hover {
+  background: #0f172a;
+  transform: translateY(-1px);
+}

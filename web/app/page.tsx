@@ -41,12 +41,38 @@ const CAPABILITIES = [
 export default function Landing() {
   return (
     <main className={styles.page}>
+      <aside className={styles.appBanner}>
+        <div className={styles.appBannerContent}>
+          <span className={styles.appBannerBadge}>NEW MOBILE APP</span>
+          <span className={styles.appBannerText}>
+            AHIA for Android is live! Direct APK download (v0.4.2)
+          </span>
+          <span className={styles.appBannerSub}>Google Play &amp; App Store coming soon</span>
+          <a
+            className={styles.appBannerBtn}
+            href="https://github.com/Ksschkw/AHIA/releases/download/v0.4.2/AHIA-v0.4.2-android.apk"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Download APK (43MB)
+          </a>
+        </div>
+      </aside>
+
       <header className={styles.topbar}>
         <span className={styles.brand}>
           <BrandMark size={34} />
           <Wordmark />
         </span>
         <nav className={styles.nav}>
+          <a
+            className={styles.navApk}
+            href="https://github.com/Ksschkw/AHIA/releases/download/v0.4.2/AHIA-v0.4.2-android.apk"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Get App (APK)
+          </a>
           <Link className={styles.navLink} href="/start">
             Sign in
           </Link>
@@ -75,6 +101,14 @@ export default function Landing() {
             <Link className={styles.primaryCta} href="/start?intent=create">
               Open your shop
             </Link>
+            <a
+              className={styles.apkCta}
+              href="https://github.com/Ksschkw/AHIA/releases/download/v0.4.2/AHIA-v0.4.2-android.apk"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Download Android APK
+            </a>
             <Link className={styles.quietCta} href="/start">
               I already have an account
             </Link>

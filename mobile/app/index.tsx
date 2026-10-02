@@ -3,16 +3,20 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import Animated, { FadeIn, FadeInDown, FadeOut } from "react-native-reanimated";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  FadeOut,
+} from "react-native-reanimated";
 
 import { AhiaMark } from "@/components/ahia-mark";
 import {
-  BoxIcon,
-  LockIcon,
-  ReceiptIcon,
-  ShopIcon,
-  SyncIcon,
-} from "@/components/icons";
+  OfflineVaultIllustration,
+  RoleShieldIllustration,
+  StallModelIllustration,
+  TradeQuoteIllustration,
+} from "@/components/feature-illustrations";
 import { restoreSession } from "@/lib/api";
 
 interface SlideItem {
@@ -20,7 +24,7 @@ interface SlideItem {
   badge: string;
   title: string;
   subtitle: string;
-  icon: (color: string) => React.ReactNode;
+  illustration: () => React.ReactNode;
 }
 
 const SLIDES: SlideItem[] = [
@@ -30,7 +34,7 @@ const SLIDES: SlideItem[] = [
     title: "Your Entire Stall in Your Pocket",
     subtitle:
       "Manage shelf items, multi-tier normal & wholesale prices, and lightning fast customer tabs from anywhere.",
-    icon: (color) => <ShopIcon size={34} color={color} />,
+    illustration: () => <StallModelIllustration />,
   },
   {
     id: "offline",
@@ -38,7 +42,7 @@ const SLIDES: SlideItem[] = [
     title: "Zero Network? Never Lose a Sale",
     subtitle:
       "Record counter sales, add goods, create categories completely offline. Everything syncs quietly when connectivity returns.",
-    icon: (color) => <SyncIcon size={34} color={color} />,
+    illustration: () => <OfflineVaultIllustration />,
   },
   {
     id: "lists",
@@ -46,7 +50,7 @@ const SLIDES: SlideItem[] = [
     title: "Turn WhatsApp Chats into Priced Lists",
     subtitle:
       "Paste customer messages, price lines with one tap, calculate margins, and send waybill receipts straight to WhatsApp.",
-    icon: (color) => <ReceiptIcon size={34} color={color} />,
+    illustration: () => <TradeQuoteIllustration />,
   },
   {
     id: "security",
@@ -54,7 +58,7 @@ const SLIDES: SlideItem[] = [
     title: "Total Protection for Your Business",
     subtitle:
       "Separate sales apprentices from sensitive financial numbers. Lock profit margins and store settings behind your 4-digit Owner PIN.",
-    icon: (color) => <LockIcon size={34} color={color} />,
+    illustration: () => <RoleShieldIllustration />,
   },
 ];
 
@@ -62,8 +66,9 @@ const SLIDES: SlideItem[] = [
  * The front door of AHIA Mobile.
  *
  * Automatically restores active sessions from SecureStore without requiring the
- * trader to log in again on app reopen. If no session exists, displays an interactive
- * animated feature film slideshow and tactile bubbly curved buttons.
+ * trader to log in again on app reopen.
+ * Features Adobe Illustrator-grade 3D vector object models, Framer Motion-style physics,
+ * and tactile bubbly curved buttons.
  */
 export default function Welcome() {
   const router = useRouter();
@@ -93,21 +98,36 @@ export default function Welcome() {
     };
   }, [router]);
 
-  // Slideshow auto-advance every 4.8 seconds
+  // Slideshow auto-advance every 5 seconds
   useEffect(() => {
     if (checkingAuth) return;
     const timer = setInterval(() => {
       setActiveSlide((prev) => (prev + 1) % SLIDES.length);
-    }, 4800);
+    }, 5000);
+
     return () => clearInterval(timer);
   }, [checkingAuth]);
 
+  const handleSelectSlide = (idx: number) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setActiveSlide(idx);
+  };
+
   if (checkingAuth) {
     return (
-      <View style={styles.splashPage}>
-        <AhiaMark />
-        <Text style={styles.splashBrand}>AHIA</Text>
-        <ActivityIndicator color="#084a2f" style={{ marginTop: 24 }} />
+      <View style={styles.splashScreen}>
+        <LinearGradient
+          colors={["#031c12", "#084a2f", "#031c12"]}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+        <Animated.View entering={FadeIn.duration(400)} style={styles.splashCenter}>
+          <AhiaMark />
+          <Text style={styles.splashTitle}>AHIA</Text>
+          <Text style={styles.splashTagline}>The Operating System for Nigerian Markets</Text>
+          <ActivityIndicator color="#4ade80" size="small" style={{ marginTop: 24 }} />
+        </Animated.View>
       </View>
     );
   }
@@ -115,83 +135,102 @@ export default function Welcome() {
   const current = SLIDES[activeSlide];
 
   return (
-    <LinearGradient colors={["#fbf7f0", "#f4ede0", "#e8eee2"]} style={styles.page}>
-      {/* Brand Header */}
-      <View style={styles.head}>
-        <AhiaMark />
-        <Animated.View entering={FadeInDown.delay(100).duration(450)}>
-          <View style={styles.badgePill}>
-            <Text style={styles.badgePillText}>{current.badge}</Text>
+    <LinearGradient
+      colors={["#02180e", "#063824", "#031e13", "#010f09"]}
+      style={styles.screen}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0.8, y: 1 }}
+    >
+      {/* Top Header Badge */}
+      <Animated.View entering={FadeInDown.duration(400)} style={styles.topHeader}>
+        <View style={styles.brandRow}>
+          <AhiaMark />
+          <View style={styles.brandTextWrap}>
+            <Text style={styles.brandName}>AHIA</Text>
+            <Text style={styles.brandTag}>TRADE OS</Text>
           </View>
-        </Animated.View>
-        <Animated.View entering={FadeInDown.delay(200).duration(450)}>
-          <Text style={styles.brand}>AHIA</Text>
-        </Animated.View>
-      </View>
+        </View>
+      </Animated.View>
 
-      {/* Feature Film Slideshow Card */}
-      <View style={styles.slideshowContainer}>
-        <Pressable
-          style={styles.slideCard}
-          onPress={() => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setActiveSlide((prev) => (prev + 1) % SLIDES.length);
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Next feature slide"
+      {/* Main Presentation Slideshow */}
+      <View style={styles.presentationCard}>
+        {/* Dynamic Vector Object Model Showcase */}
+        <Animated.View
+          key={`model-${current.id}`}
+          entering={FadeInDown.springify().damping(14)}
+          exiting={FadeOut.duration(200)}
+          style={styles.illustrationWrap}
         >
-          <View style={styles.iconCircleWrap}>
-            {current.icon("#084a2f")}
+          {current.illustration()}
+        </Animated.View>
+
+        {/* Feature Narrative & Details */}
+        <Animated.View
+          key={`text-${current.id}`}
+          entering={FadeInUp.springify().damping(15)}
+          exiting={FadeOut.duration(150)}
+          style={styles.slideCopy}
+        >
+          <View style={styles.badgePill}>
+            <Text style={styles.badgeText}>{current.badge}</Text>
           </View>
 
-          <Text style={styles.slideTitle}>{current.title}</Text>
-          <Text style={styles.slideSubtitle}>{current.subtitle}</Text>
+          <Text style={styles.headlineText}>{current.title}</Text>
+          <Text style={styles.descriptionText}>{current.subtitle}</Text>
+        </Animated.View>
 
-          {/* Slide Indicator Pills */}
-          <View style={styles.indicatorRow}>
-            {SLIDES.map((s, idx) => (
-              <Pressable
-                key={s.id}
-                onPress={() => {
-                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setActiveSlide(idx);
-                }}
+        {/* Interactive Indicator Pills */}
+        <View style={styles.indicatorRow}>
+          {SLIDES.map((s, idx) => (
+            <Pressable
+              key={s.id}
+              onPress={() => handleSelectSlide(idx)}
+              style={styles.indicatorHitSlop}
+            >
+              <View
                 style={[
                   styles.indicatorPill,
                   activeSlide === idx && styles.indicatorPillActive,
                 ]}
               />
-            ))}
-          </View>
-        </Pressable>
+            </Pressable>
+          ))}
+        </View>
       </View>
 
-      {/* Tactile Bubbly Curved Action Buttons */}
-      <View style={styles.actions}>
+      {/* Tactile Bubbly Action Buttons */}
+      <View style={styles.bottomSheet}>
+        {/* Primary Tactile Bubbly Button */}
         <Pressable
           style={({ pressed }) => [
             styles.bubblyButtonPrimary,
-            pressed ? styles.bubblyButtonPressed : null,
+            pressed && styles.bubblyButtonPressed,
           ]}
           onPress={() => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             router.push("/sign-in");
           }}
-          accessibilityRole="button"
         >
-          <Text style={styles.bubblyButtonTextPrimary}>Sign in to your stall</Text>
+          <LinearGradient
+            colors={["#10b981", "#059669", "#047857"]}
+            style={styles.bubblyButtonGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <Text style={styles.bubblyButtonTextPrimary}>Log in to your stall</Text>
+          </LinearGradient>
         </Pressable>
 
+        {/* Secondary Tactile Bubbly Button */}
         <Pressable
           style={({ pressed }) => [
             styles.bubblyButtonSecondary,
-            pressed ? styles.bubblyButtonPressed : null,
+            pressed && styles.bubblyButtonPressed,
           ]}
           onPress={() => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             router.push("/register");
           }}
-          accessibilityRole="button"
         >
           <Text style={styles.bubblyButtonTextSecondary}>Create a new account</Text>
         </Pressable>
@@ -213,138 +252,155 @@ export default function Welcome() {
 }
 
 const styles = StyleSheet.create({
-  splashPage: {
+  splashScreen: {
     flex: 1,
-    backgroundColor: "#fbf7f0",
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "center",
   },
-  splashBrand: {
-    fontSize: 36,
+  splashCenter: {
+    alignItems: "center",
+    padding: 24,
+  },
+  splashTitle: {
+    fontSize: 34,
     fontWeight: "900",
-    color: "#084a2f",
-    letterSpacing: -1,
+    color: "#ffffff",
+    letterSpacing: 2,
     marginTop: 16,
   },
-  page: {
-    flex: 1,
-    justifyContent: "space-between",
-    paddingHorizontal: 22,
-    paddingTop: 52,
-    paddingBottom: 28,
-  },
-  head: {
-    alignItems: "center",
-    gap: 10,
-  },
-  badgePill: {
-    backgroundColor: "#e3efe7",
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#c1e1cc",
-  },
-  badgePillText: {
-    color: "#084a2f",
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.6,
-  },
-  brand: {
-    fontSize: 44,
-    fontWeight: "900",
-    color: "#084a2f",
-    letterSpacing: -1.5,
+  splashTagline: {
+    fontSize: 14,
+    color: "#a7f3d0",
+    marginTop: 6,
     textAlign: "center",
   },
-  slideshowContainer: {
-    marginVertical: 12,
+  screen: {
+    flex: 1,
+    paddingTop: 48,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+    justifyContent: "space-between",
   },
-  slideCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.85)",
-    borderRadius: 24,
-    padding: 24,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#e5ded2",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  iconCircleWrap: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: "#e6f4ea",
+  topHeader: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: "#c1e1cc",
-  },
-  slideTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#1e1b16",
-    textAlign: "center",
     marginBottom: 8,
   },
-  slideSubtitle: {
-    fontSize: 14,
-    color: "#5c5549",
-    textAlign: "center",
-    lineHeight: 20,
-    paddingHorizontal: 6,
-    marginBottom: 18,
-  },
-  indicatorRow: {
+  brandRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    backgroundColor: "rgba(6, 78, 59, 0.45)",
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(52, 211, 153, 0.25)",
+  },
+  brandTextWrap: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 5,
+  },
+  brandName: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#ffffff",
+    letterSpacing: 1.2,
+  },
+  brandTag: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#34d399",
+    letterSpacing: 0.5,
+  },
+  presentationCard: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+  },
+  illustrationWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    height: 190,
+    marginBottom: 16,
+  },
+  slideCopy: {
+    alignItems: "center",
+    paddingHorizontal: 16,
+  },
+  badgePill: {
+    backgroundColor: "rgba(52, 211, 153, 0.16)",
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(52, 211, 153, 0.3)",
+    marginBottom: 12,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#34d399",
+    letterSpacing: 0.8,
+  },
+  headlineText: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: "#ffffff",
+    textAlign: "center",
+    letterSpacing: -0.4,
+    marginBottom: 8,
+    lineHeight: 30,
+  },
+  descriptionText: {
+    fontSize: 13,
+    color: "#94a3b8",
+    textAlign: "center",
+    lineHeight: 19,
+    maxWidth: 320,
+  },
+  indicatorRow: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 20,
+  },
+  indicatorHitSlop: {
+    padding: 6,
   },
   indicatorPill: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#cbd5e1",
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
   },
   indicatorPillActive: {
-    width: 26,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#084a2f",
+    width: 24,
+    backgroundColor: "#34d399",
   },
-  actions: {
+  bottomSheet: {
     gap: 12,
+    paddingTop: 8,
   },
   bubblyButtonPrimary: {
-    minHeight: 56,
+    height: 56,
     borderRadius: 28,
-    backgroundColor: "#084a2f",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#084a2f",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 5,
+    overflow: "hidden",
+    shadowColor: "#10b981",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 8,
   },
-  bubblyButtonSecondary: {
-    minHeight: 56,
-    borderRadius: 28,
-    backgroundColor: "#ffffff",
-    borderWidth: 2,
-    borderColor: "#084a2f",
+  bubblyButtonGradient: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    paddingHorizontal: 24,
   },
   bubblyButtonPressed: {
     transform: [{ scale: 0.98 }],
@@ -356,26 +412,35 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 0.2,
   },
+  bubblyButtonSecondary: {
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
   bubblyButtonTextSecondary: {
-    color: "#084a2f",
-    fontSize: 16,
-    fontWeight: "800",
-    letterSpacing: 0.2,
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "700",
   },
   joinLink: {
     alignItems: "center",
-    paddingVertical: 4,
+    paddingVertical: 6,
   },
   joinLinkText: {
-    color: "#084a2f",
-    fontSize: 13,
-    fontWeight: "700",
-    textDecorationLine: "underline",
+    color: "#a7f3d0",
+    fontSize: 12,
+    fontWeight: "600",
   },
   footerVersion: {
-    textAlign: "center",
-    color: "#8c8273",
+    color: "#475569",
     fontSize: 11,
-    marginTop: 4,
+    textAlign: "center",
+    marginTop: 2,
+    fontWeight: "500",
   },
 });
