@@ -80,6 +80,7 @@ import {
   TruckIcon,
 } from "@/components/icons";
 import { PinPad } from "@/components/pin-pad";
+import { generateAndSharePdfInvoice } from "@/lib/invoice";
 import {
   ApiError,
   acceptInvitation,
@@ -1355,35 +1356,42 @@ export default function Home() {
   const handleShareWaybillReceipt = async (item: CustomerList) => {
     if (!activeBusiness) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const cleanPhone = formatWaNumber(item.customer_phone);
-    const dateStr = new Date(item.created_at).toLocaleDateString([], {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    showToast("Generating official business invoice...");
+    try {
+      await generateAndSharePdfInvoice(activeBusiness, businessDetails, item);
+    } catch {
+      // Fallback to formatted WhatsApp message if sharing fails
+      showToast("Could not export PDF. Sharing invoice via text...");
+      const cleanPhone = formatWaNumber(item.customer_phone);
+      const dateStr = new Date(item.created_at).toLocaleDateString([], {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
 
-    let linesText = "";
-    item.lines.forEach((l, idx) => {
-      const name = l.product_name || l.free_text || "Item";
-      const priceStr = l.shop_price ? formatMoney(l.shop_price) : "Pending";
-      linesText += `${idx + 1}. ${l.quantity}x ${name} - ${priceStr}\n`;
-    });
+      let linesText = "";
+      item.lines.forEach((l, idx) => {
+        const name = l.product_name || l.free_text || "Item";
+        const priceStr = l.shop_price ? formatMoney(l.shop_price) : "Pending";
+        linesText += `${idx + 1}. ${l.quantity}x ${name} - ${priceStr}\n`;
+      });
 
-    const waybillInfo = item.waybill_number
-      ? `\nWAYBILL DETAILS:\nTransporter: ${item.transporter_name || "Courier"}\nWaybill #: ${item.waybill_number}${item.dispatch_cost ? `\nDispatch Cost: ${formatMoney(item.dispatch_cost)}` : ""}${item.tracking_url ? `\nTracking URL: ${item.tracking_url}` : ""}\n`
-      : "";
+      const waybillInfo = item.waybill_number
+        ? `\nWAYBILL DETAILS:\nTransporter: ${item.transporter_name || "Courier"}\nWaybill #: ${item.waybill_number}${item.dispatch_cost ? `\nDispatch Cost: ${formatMoney(item.dispatch_cost)}` : ""}${item.tracking_url ? `\nTracking URL: ${item.tracking_url}` : ""}\n`
+        : "";
 
-    const receipt = `==============================\nWAYBILL & INVOICE\n${activeBusiness.name.toUpperCase()}\nDate: ${dateStr}\nCustomer: ${item.customer_name || item.customer_phone || "Customer"}\nPhone: ${item.customer_phone || "N/A"}\n==============================\nITEMS:\n${linesText}==============================${waybillInfo}TOTAL: ${item.priced_total ? formatMoney(item.priced_total) : "Incomplete"}\n\nThank you for doing business with us!\n==============================`;
+      const receipt = `==============================\nOFFICIAL INVOICE\n${activeBusiness.name.toUpperCase()}\nDate: ${dateStr}\nCustomer: ${item.customer_name || item.customer_phone || "Customer"}\nPhone: ${item.customer_phone || "N/A"}\n==============================\nITEMS:\n${linesText}==============================${waybillInfo}TOTAL: ${item.priced_total ? formatMoney(item.priced_total) : "Incomplete"}\n\nThank you for doing business with us!\n==============================`;
 
-    const waUrl = cleanPhone
-      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(receipt)}`
-      : `https://wa.me/?text=${encodeURIComponent(receipt)}`;
+      const waUrl = cleanPhone
+        ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(receipt)}`
+        : `https://wa.me/?text=${encodeURIComponent(receipt)}`;
 
-    const canOpen = await Linking.canOpenURL(waUrl);
-    if (canOpen) {
-      await Linking.openURL(waUrl);
-    } else {
-      await Share.share({ message: receipt });
+      const canOpen = await Linking.canOpenURL(waUrl);
+      if (canOpen) {
+        await Linking.openURL(waUrl);
+      } else {
+        await Share.share({ message: receipt });
+      }
     }
   };
 
@@ -1533,22 +1541,51 @@ export default function Home() {
     const curIdx = CYCLE_LINE_STATES.indexOf(currentState as any);
     const nextIdx = (curIdx + 1) % CYCLE_LINE_STATES.length;
     const nextState = CYCLE_LINE_STATES[nextIdx];
+
+    // Optimistic UI update instantly!
+    setCustomerLists((current) =>
+      current.map((l) =>
+        l.id === listId
+          ? {
+              ...l,
+              lines: l.lines.map((ln) =>
+                ln.id === lineId ? { ...ln, state: nextState } : ln
+              ),
+            }
+          : l
+      )
+    );
+
+    const label =
+      nextState === "have_it"
+        ? "Gotten (on shelf)"
+        : nextState === "buy_it"
+        ? "Buy in market"
+        : nextState === "cannot_get"
+        ? "Cannot get"
+        : "Unchecked";
+    showToast(`Status: ${label}`);
+
     try {
       const updatedList = await workListLine(activeBusiness.id, listId, lineId, { state: nextState });
       setCustomerLists((current) =>
         current.map((l) => (l.id === updatedList.id ? updatedList : l)),
       );
-      const label =
-        nextState === "have_it"
-          ? "On the shelf"
-          : nextState === "buy_it"
-          ? "Buy in market"
-          : nextState === "cannot_get"
-          ? "Cannot get"
-          : "Not checked";
-      showToast(`Status: ${label}`);
     } catch {
-      showToast("Could not update line status.");
+      // Revert if network call failed
+      setCustomerLists((current) =>
+        current.map((l) =>
+          l.id === listId
+            ? {
+                ...l,
+                lines: l.lines.map((ln) =>
+                  ln.id === lineId ? { ...ln, state: currentState as any } : ln
+                ),
+              }
+            : l
+        )
+      );
+      showToast("Could not sync line status to cloud.");
     }
   };
 
@@ -2529,11 +2566,11 @@ export default function Home() {
 
                                   <View style={styles.linePriceDetailRow}>
                                     <Text style={styles.linePrice}>
-                                      Charge: {line.shop_price ? formatMoney(line.shop_price) : "Set Price"}
+                                      Price: {line.shop_price ? formatMoney(line.shop_price) : "Set Price"}
                                     </Text>
                                     {line.cost_price && (
                                       <Text style={styles.lineCost}>
-                                        Cost: {formatMoney(line.cost_price)}
+                                        Market Buy: {formatMoney(line.cost_price)}
                                       </Text>
                                     )}
                                     {hasBoth && (
@@ -2543,7 +2580,7 @@ export default function Home() {
                                           isPositive ? styles.marginPositive : styles.marginNegative,
                                         ]}
                                       >
-                                        Margin: {isPositive ? "+" : ""}{formatMoney(marginVal.toString())}
+                                        Profit: {isPositive ? "+" : ""}{formatMoney(marginVal.toString())}
                                       </Text>
                                     )}
                                   </View>
@@ -2569,7 +2606,7 @@ export default function Home() {
                                     ) : line.state === "cannot_get" ? (
                                       <CannotGetIcon size={14} color="#fca5a5" />
                                     ) : (
-                                      <ClockIcon size={14} color="#94a3b8" />
+                                      <CheckMarkIcon size={14} color="#64748b" />
                                     )}
                                   </Pressable>
 
