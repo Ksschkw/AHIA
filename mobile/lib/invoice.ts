@@ -284,7 +284,7 @@ export async function generateAndSharePdfInvoice(
   const isAvailable = await Sharing.isAvailableAsync();
   if (isAvailable) {
     await Sharing.shareAsync(uri, {
-      UTI: ".pdf",
+      UTI: "com.adobe.pdf",
       mimeType: "application/pdf",
       dialogTitle: `Share Invoice - ${customerName}`,
     });
