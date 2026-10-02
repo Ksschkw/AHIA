@@ -231,6 +231,31 @@ function countCategoryProducts(
   return { direct, total };
 }
 
+function getEffectiveCategoryPrice(
+  categoryId: string | null,
+  allCats: Category[]
+): { normal: string | null; wholesale: string | null } {
+  let currId = categoryId;
+  let normal: string | null = null;
+  let wholesale: string | null = null;
+  const visited = new Set<string>();
+
+  while (currId && !visited.has(currId)) {
+    visited.add(currId);
+    const cat = allCats.find((c) => c.id === currId);
+    if (!cat) break;
+    if (!normal && cat.default_normal_price) {
+      normal = cat.default_normal_price;
+    }
+    if (!wholesale && cat.default_wholesale_price) {
+      wholesale = cat.default_wholesale_price;
+    }
+    if (normal && wholesale) break;
+    currId = cat.parent_id;
+  }
+  return { normal, wholesale };
+}
+
 function parseQuickPaste(raw: string): Array<{ text: string; quantity: string }> {
   return raw
     .split("\n")
@@ -755,10 +780,14 @@ export default function Home() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSavingProduct(true);
     try {
+      const inheritedPrices = getEffectiveCategoryPrice(currentCategoryId, categories);
+      const finalSellingPrice = newPrice.trim() || inheritedPrices.normal || null;
+      const finalWholesalePrice = newWholesale.trim() || inheritedPrices.wholesale || null;
+
       const created = createLocalProduct(activeBusiness.id, {
         name: newName.trim(),
-        selling_price: newPrice.trim() || null,
-        wholesale_price: newWholesale.trim() || null,
+        selling_price: finalSellingPrice,
+        wholesale_price: finalWholesalePrice,
         category_id: currentCategoryId,
         image_url: newProductImage.trim() || null,
       });
@@ -2237,16 +2266,23 @@ export default function Home() {
                                   </Text>
                                 </Pressable>
                               </View>
-                              <View style={styles.priceRow}>
-                                <Text style={styles.normalPrice}>
-                                  {formatMoney(item.effective_normal_price ?? item.selling_price)}
-                                </Text>
-                                {item.effective_wholesale_price && (
-                                  <Text style={styles.wholesalePrice}>
-                                    Wholesale: {formatMoney(item.effective_wholesale_price)}
-                                  </Text>
-                                )}
-                              </View>
+                              {(() => {
+                                const inherited = getEffectiveCategoryPrice(item.category_id, categories);
+                                const normalVal = item.effective_normal_price ?? item.selling_price ?? inherited.normal;
+                                const wholesaleVal = item.effective_wholesale_price ?? inherited.wholesale;
+                                return (
+                                  <View style={styles.priceRow}>
+                                    <Text style={styles.normalPrice}>
+                                      {formatMoney(normalVal)}
+                                    </Text>
+                                    {wholesaleVal && (
+                                      <Text style={styles.wholesalePrice}>
+                                        Wholesale: {formatMoney(wholesaleVal)}
+                                      </Text>
+                                    )}
+                                  </View>
+                                );
+                              })()}
                             </View>
                           </View>
 
@@ -3487,22 +3523,37 @@ export default function Home() {
                 value={newName}
                 onChangeText={setNewName}
               />
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Normal Price (e.g. 15000)"
-                placeholderTextColor="#8a928e"
-                keyboardType="numeric"
-                value={newPrice}
-                onChangeText={setNewPrice}
-              />
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Wholesale Price (optional)"
-                placeholderTextColor="#8a928e"
-                keyboardType="numeric"
-                value={newWholesale}
-                onChangeText={setNewWholesale}
-              />
+              {(() => {
+                const inherited = getEffectiveCategoryPrice(currentCategoryId, categories);
+                return (
+                  <>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder={
+                        inherited.normal
+                          ? `Selling Price (inherits ${formatMoney(inherited.normal)})`
+                          : "Selling Price (NGN, optional)"
+                      }
+                      placeholderTextColor="#8a928e"
+                      keyboardType="numeric"
+                      value={newPrice}
+                      onChangeText={setNewPrice}
+                    />
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder={
+                        inherited.wholesale
+                          ? `Wholesale Price (inherits ${formatMoney(inherited.wholesale)})`
+                          : "Wholesale Price (optional)"
+                      }
+                      placeholderTextColor="#8a928e"
+                      keyboardType="numeric"
+                      value={newWholesale}
+                      onChangeText={setNewWholesale}
+                    />
+                  </>
+                );
+              })()}
               <Text style={styles.modalFieldLabel}>Photo / Image URL (optional)</Text>
               <TextInput
                 style={styles.modalInput}
