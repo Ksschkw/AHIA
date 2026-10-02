@@ -450,7 +450,12 @@ export function recordExpense(
 ): Promise<{ id: string; amount: string }> {
   return request<{ id: string; amount: string }>(`/api/v1/tenants/${tenantId}/expenses`, {
     method: "POST",
-    body: data,
+    body: {
+      category: data.category,
+      amount: data.amount,
+      description: data.description ?? null,
+      payment_method: (data.payment_method || "CASH").toUpperCase(),
+    },
   });
 }
 

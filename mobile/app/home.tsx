@@ -1231,12 +1231,12 @@ export default function Home() {
 
   const handleRecordExpense = async () => {
     if (!activeBusiness) return;
-    const cleanAmount = expenseAmount.trim();
+    const cleanAmount = expenseAmount.trim().replace(/,/g, "");
     if (!cleanAmount || isNaN(Number(cleanAmount)) || Number(cleanAmount) <= 0) {
       setExpenseError("Please enter a valid expense amount in Naira.");
       return;
     }
-    const targetCat = expenseCategoryId || (expenseCategories[0]?.value ?? expenseCategories[0]?.id ?? "OTHER");
+    const targetCat = (expenseCategoryId || (expenseCategories[0]?.value ?? expenseCategories[0]?.id ?? "OTHER")).toUpperCase();
     setExpenseError(null);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSavingExpense(true);
@@ -1245,7 +1245,7 @@ export default function Home() {
         amount: cleanAmount,
         category: targetCat,
         description: expenseDescription.trim() || null,
-        payment_method: expensePaymentMethod || "cash",
+        payment_method: (expensePaymentMethod || "CASH").toUpperCase(),
       });
       setExpenseAmount("");
       setExpenseDescription("");
