@@ -79,6 +79,7 @@ import {
   TreeIcon,
   TruckIcon,
 } from "@/components/icons";
+import { PinPad } from "@/components/pin-pad";
 import {
   ApiError,
   acceptInvitation,
@@ -431,9 +432,10 @@ export default function Home() {
   const [trackingUrl, setTrackingUrl] = useState("");
   const [savingDispatch, setSavingDispatch] = useState(false);
 
-  // Security PIN Confirmation Modal for Customer Lists
   const [pinConfirmList, setPinConfirmList] = useState<CustomerList | null>(null);
   const [pinValue, setPinValue] = useState("");
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [savingConfirm, setSavingConfirm] = useState(false);
 
   // Quick-Paste Customer Order Modal
   const [showQuickPasteModal, setShowQuickPasteModal] = useState(false);
@@ -1577,12 +1579,36 @@ export default function Home() {
     }
   };
 
-  const handleExecutePinConfirm = async () => {
+  const handleExecutePinConfirm = async (providedPin?: string) => {
     if (!activeBusiness || !pinConfirmList) return;
-    if (pinValue.trim().length < 4) {
-      showToast("Enter a 4-digit security PIN");
+
+    // Check if any line is unpriced
+    const unpricedLines = pinConfirmList.lines.filter((l) => !l.shop_price);
+    if (unpricedLines.length > 0) {
+      setConfirmError(
+        `Cannot confirm order: ${unpricedLines.length} item(s) are still unpriced. All items must have prices before confirming.`
+      );
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
+
+    // Verify PIN if the business has configured one
+    if (hasPin) {
+      const pinToCheck = providedPin || pinValue;
+      if (!pinToCheck || pinToCheck.length < 4) {
+        setConfirmError("Enter your 4-digit security PIN");
+        return;
+      }
+      const isValid = await verifyBusinessPin(activeBusiness.id, pinToCheck);
+      if (!isValid) {
+        setConfirmError("Incorrect business security PIN. Please try again.");
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return;
+      }
+    }
+
+    setConfirmError(null);
+    setSavingConfirm(true);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     try {
       const confirmed = await confirmCustomerList(activeBusiness.id, pinConfirmList.id);
@@ -1590,8 +1616,11 @@ export default function Home() {
       setPinConfirmList(null);
       setPinValue("");
       showToast(`Order from ${confirmed.customer_name || confirmed.customer_phone} confirmed!`);
-    } catch {
-      showToast("Could not confirm order. Make sure all items have prices.");
+    } catch (err: any) {
+      const msg = err?.message || "Could not confirm order. Make sure all items have prices.";
+      setConfirmError(msg);
+    } finally {
+      setSavingConfirm(false);
     }
   };
 
@@ -3969,33 +3998,74 @@ export default function Home() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Confirm Customer Order</Text>
-            <Text style={styles.modalSubtitle}>
-              Confirming turns this quotation into an active sale and accounts for payout. Enter your 4-digit security PIN to proceed.
-            </Text>
 
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Enter 4-digit PIN"
-              placeholderTextColor="#8a928e"
-              keyboardType="numeric"
-              secureTextEntry
-              maxLength={6}
-              value={pinValue}
-              onChangeText={setPinValue}
-              autoFocus
-            />
+            {hasPin ? (
+              <>
+                <Text style={styles.modalSubtitle}>
+                  Confirming converts this quote for {pinConfirmList?.customer_name || pinConfirmList?.customer_phone} into an active sale. Enter your 4-digit security PIN to authorize.
+                </Text>
 
-            <View style={styles.modalButtons}>
-              <Pressable style={styles.modalCancelBtn} onPress={() => setPinConfirmList(null)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={styles.modalSaveBtn}
-                onPress={handleExecutePinConfirm}
-              >
-                <Text style={styles.modalSaveText}>Authorize & Confirm</Text>
-              </Pressable>
-            </View>
+                <PinPad
+                  length={4}
+                  onComplete={(pin) => {
+                    setPinValue(pin);
+                    void handleExecutePinConfirm(pin);
+                  }}
+                  error={confirmError}
+                  disabled={savingConfirm}
+                />
+
+                <View style={styles.modalButtons}>
+                  <Pressable
+                    style={styles.modalCancelBtn}
+                    onPress={() => {
+                      setPinConfirmList(null);
+                      setConfirmError(null);
+                      setPinValue("");
+                    }}
+                    disabled={savingConfirm}
+                  >
+                    <Text style={styles.modalCancelText}>Cancel</Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={styles.modalSubtitle}>
+                  Confirm order for {pinConfirmList?.customer_name || pinConfirmList?.customer_phone}?
+                  {"\n\n"}
+                  Note: No business security PIN is configured yet. You can confirm directly now, or set a PIN in Business Settings.
+                </Text>
+
+                {confirmError ? (
+                  <Text style={styles.modalInlineError}>{confirmError}</Text>
+                ) : null}
+
+                <View style={styles.modalButtons}>
+                  <Pressable
+                    style={styles.modalCancelBtn}
+                    onPress={() => {
+                      setPinConfirmList(null);
+                      setConfirmError(null);
+                    }}
+                    disabled={savingConfirm}
+                  >
+                    <Text style={styles.modalCancelText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.modalSaveBtn}
+                    onPress={() => handleExecutePinConfirm()}
+                    disabled={savingConfirm}
+                  >
+                    {savingConfirm ? (
+                      <ActivityIndicator color="#ffffff" size="small" />
+                    ) : (
+                      <Text style={styles.modalSaveText}>Confirm Order Now</Text>
+                    )}
+                  </Pressable>
+                </View>
+              </>
+            )}
           </View>
         </View>
       </Modal>
