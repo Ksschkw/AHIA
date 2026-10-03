@@ -4,6 +4,11 @@ import {
   type Category,
   type CustomerList,
   type BusinessMembership,
+  type TenantSummary,
+  type UserProfile,
+  type TenantDetails,
+  type DailySalesSummary,
+  type SaleSummary,
   recordSale,
   createCategory,
   updateCategory,
@@ -25,108 +30,190 @@ import {
 
 let dbInstance: SQLite.SQLiteDatabase | null = null;
 
+function runMigrations(db: SQLite.SQLiteDatabase): void {
+  // 1. Create tables if they do not exist
+  db.execSync(`
+    CREATE TABLE IF NOT EXISTS cached_products (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      category_id TEXT,
+      selling_price TEXT,
+      effective_normal_price TEXT,
+      effective_wholesale_price TEXT,
+      is_published INTEGER NOT NULL,
+      is_active INTEGER NOT NULL,
+      image_url TEXT,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS cached_categories (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      parent_id TEXT,
+      position INTEGER NOT NULL DEFAULT 0,
+      description TEXT,
+      default_normal_price TEXT,
+      default_wholesale_price TEXT,
+      default_pieces_per_pack INTEGER,
+      image_url TEXT,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS cached_customer_lists (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      customer_name TEXT,
+      customer_phone TEXT,
+      status TEXT NOT NULL,
+      priced_total TEXT,
+      data_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS cached_businesses (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'NGN',
+      role_name TEXT NOT NULL DEFAULT 'OWNER',
+      is_active INTEGER NOT NULL DEFAULT 1,
+      logo_url TEXT,
+      address TEXT,
+      phone TEXT,
+      email TEXT,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS cached_profile (
+      id TEXT PRIMARY KEY,
+      first_name TEXT NOT NULL,
+      last_name TEXT,
+      phone TEXT,
+      email TEXT,
+      avatar_url TEXT,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS cached_business_details (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      phone TEXT,
+      address TEXT,
+      city TEXT,
+      state TEXT,
+      logo_url TEXT,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS cached_daily_stats (
+      tenant_id TEXT PRIMARY KEY,
+      date TEXT NOT NULL,
+      total_revenue TEXT NOT NULL,
+      total_sales INTEGER NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS cached_sales (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      data_json TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS sale_outbox (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      product_id TEXT NOT NULL,
+      product_name TEXT NOT NULL,
+      quantity TEXT NOT NULL,
+      unit_price TEXT NOT NULL,
+      payment_method TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      status TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS inventory_deltas (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      product_id TEXT NOT NULL,
+      delta_quantity TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      status TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS sync_conflicts (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      entity_title TEXT NOT NULL,
+      local_data TEXT NOT NULL,
+      server_data TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      status TEXT NOT NULL,
+      resolution TEXT
+    );
+    CREATE TABLE IF NOT EXISTS catalog_revisions (
+      product_id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      server_updated_at TEXT,
+      local_updated_at TEXT,
+      has_local_edit INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS sync_outbox (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      status TEXT NOT NULL,
+      retry_count INTEGER NOT NULL DEFAULT 0
+    );
+  `);
+
+  // 2. Ensure dynamic schema migration for existing tables on user devices
+  const ensureCol = (table: string, column: string, colDef: string) => {
+    try {
+      const tableInfo = db.getAllSync<{ name: string }>(`PRAGMA table_info(${table})`);
+      const exists = tableInfo.some((c) => c.name.toLowerCase() === column.toLowerCase());
+      if (!exists) {
+        db.execSync(`ALTER TABLE ${table} ADD COLUMN ${column} ${colDef};`);
+      }
+    } catch {
+      // Table may not exist yet or altered previously
+    }
+  };
+
+  ensureCol("cached_categories", "image_url", "TEXT");
+  ensureCol("cached_categories", "description", "TEXT");
+  ensureCol("cached_categories", "default_normal_price", "TEXT");
+  ensureCol("cached_categories", "default_wholesale_price", "TEXT");
+  ensureCol("cached_categories", "default_pieces_per_pack", "INTEGER");
+
+  ensureCol("cached_products", "image_url", "TEXT");
+  ensureCol("cached_products", "effective_normal_price", "TEXT");
+  ensureCol("cached_products", "effective_wholesale_price", "TEXT");
+  ensureCol("cached_products", "description", "TEXT");
+
+  ensureCol("cached_businesses", "logo_url", "TEXT");
+  ensureCol("cached_businesses", "currency", "TEXT DEFAULT 'NGN'");
+  ensureCol("cached_businesses", "role_name", "TEXT DEFAULT 'OWNER'");
+  ensureCol("cached_businesses", "is_active", "INTEGER DEFAULT 1");
+  ensureCol("cached_businesses", "address", "TEXT");
+  ensureCol("cached_businesses", "phone", "TEXT");
+  ensureCol("cached_businesses", "email", "TEXT");
+}
+
 function getDb(): SQLite.SQLiteDatabase | null {
   try {
     if (!dbInstance) {
       dbInstance = SQLite.openDatabaseSync("ahia_local.db");
-      dbInstance.execSync(`
-        CREATE TABLE IF NOT EXISTS cached_products (
-          id TEXT PRIMARY KEY,
-          tenant_id TEXT NOT NULL,
-          name TEXT NOT NULL,
-          slug TEXT NOT NULL,
-          category_id TEXT,
-          selling_price TEXT,
-          effective_normal_price TEXT,
-          effective_wholesale_price TEXT,
-          is_published INTEGER NOT NULL,
-          is_active INTEGER NOT NULL,
-          image_url TEXT,
-          updated_at TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS cached_categories (
-          id TEXT PRIMARY KEY,
-          tenant_id TEXT NOT NULL,
-          name TEXT NOT NULL,
-          slug TEXT NOT NULL,
-          parent_id TEXT,
-          position INTEGER NOT NULL DEFAULT 0,
-          image_url TEXT,
-          updated_at TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS cached_customer_lists (
-          id TEXT PRIMARY KEY,
-          tenant_id TEXT NOT NULL,
-          customer_name TEXT,
-          customer_phone TEXT,
-          status TEXT NOT NULL,
-          priced_total TEXT,
-          data_json TEXT NOT NULL,
-          updated_at TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS cached_businesses (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          slug TEXT NOT NULL,
-          currency TEXT NOT NULL DEFAULT 'NGN',
-          role_name TEXT NOT NULL DEFAULT 'OWNER',
-          is_active INTEGER NOT NULL DEFAULT 1,
-          logo_url TEXT,
-          updated_at TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS sale_outbox (
-          id TEXT PRIMARY KEY,
-          tenant_id TEXT NOT NULL,
-          product_id TEXT NOT NULL,
-          product_name TEXT NOT NULL,
-          quantity TEXT NOT NULL,
-          unit_price TEXT NOT NULL,
-          payment_method TEXT NOT NULL,
-          created_at TEXT NOT NULL,
-          status TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS inventory_deltas (
-          id TEXT PRIMARY KEY,
-          tenant_id TEXT NOT NULL,
-          product_id TEXT NOT NULL,
-          delta_quantity TEXT NOT NULL,
-          reason TEXT NOT NULL,
-          created_at TEXT NOT NULL,
-          status TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS sync_conflicts (
-          id TEXT PRIMARY KEY,
-          tenant_id TEXT NOT NULL,
-          entity_type TEXT NOT NULL,
-          entity_id TEXT NOT NULL,
-          entity_title TEXT NOT NULL,
-          local_data TEXT NOT NULL,
-          server_data TEXT NOT NULL,
-          created_at TEXT NOT NULL,
-          status TEXT NOT NULL,
-          resolution TEXT
-        );
-        CREATE TABLE IF NOT EXISTS catalog_revisions (
-          product_id TEXT PRIMARY KEY,
-          tenant_id TEXT NOT NULL,
-          server_updated_at TEXT,
-          local_updated_at TEXT,
-          has_local_edit INTEGER NOT NULL DEFAULT 0
-        );
-        CREATE TABLE IF NOT EXISTS sync_outbox (
-          id TEXT PRIMARY KEY,
-          tenant_id TEXT NOT NULL,
-          action TEXT NOT NULL,
-          entity_type TEXT NOT NULL,
-          payload_json TEXT NOT NULL,
-          created_at TEXT NOT NULL,
-          status TEXT NOT NULL,
-          retry_count INTEGER NOT NULL DEFAULT 0
-        );
-      `);
+      runMigrations(dbInstance);
     }
     return dbInstance;
-  } catch {
+  } catch (error) {
+    console.warn("[AHIA DB] Error initializing local SQLite:", error);
     return null;
   }
 }
@@ -140,7 +227,13 @@ export function clearLocalDatabase(): void {
       DELETE FROM cached_products;
       DELETE FROM cached_categories;
       DELETE FROM cached_customer_lists;
+      DELETE FROM cached_businesses;
+      DELETE FROM cached_profile;
+      DELETE FROM cached_business_details;
+      DELETE FROM cached_daily_stats;
+      DELETE FROM cached_sales;
       DELETE FROM catalog_revisions;
+      DELETE FROM app_settings;
     `);
   } catch {
     // Non-fatal
@@ -227,9 +320,22 @@ export function cacheCategories(tenantId: string, categories: Category[]): void 
     db.withTransactionSync(() => {
       for (const c of categories) {
         db.runSync(
-          `INSERT OR REPLACE INTO cached_categories (id, tenant_id, name, slug, parent_id, position, image_url, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [c.id, tenantId, c.name, c.slug, c.parent_id ?? null, c.position ?? 0, c.image_url ?? null, now],
+          `INSERT OR REPLACE INTO cached_categories (id, tenant_id, name, slug, parent_id, position, description, default_normal_price, default_wholesale_price, default_pieces_per_pack, image_url, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            c.id,
+            tenantId,
+            c.name,
+            c.slug,
+            c.parent_id ?? null,
+            c.position ?? 0,
+            c.description ?? null,
+            c.default_normal_price ?? null,
+            c.default_wholesale_price ?? null,
+            c.default_pieces_per_pack ?? null,
+            c.image_url ?? null,
+            now,
+          ],
         );
       }
     });
@@ -249,9 +355,13 @@ export function getCachedCategories(tenantId: string): Category[] {
       slug: string;
       parent_id: string | null;
       position: number;
+      description?: string | null;
+      default_normal_price?: string | null;
+      default_wholesale_price?: string | null;
+      default_pieces_per_pack?: number | null;
       image_url?: string | null;
     }>(
-      "SELECT id, tenant_id, name, slug, parent_id, position, image_url FROM cached_categories WHERE tenant_id = ? ORDER BY position ASC, name ASC",
+      "SELECT id, tenant_id, name, slug, parent_id, position, description, default_normal_price, default_wholesale_price, default_pieces_per_pack, image_url FROM cached_categories WHERE tenant_id = ? ORDER BY position ASC, name ASC",
       [tenantId],
     );
     return rows.map((r) => ({
@@ -261,6 +371,10 @@ export function getCachedCategories(tenantId: string): Category[] {
       slug: r.slug,
       parent_id: r.parent_id,
       position: r.position,
+      description: r.description ?? null,
+      default_normal_price: r.default_normal_price ?? null,
+      default_wholesale_price: r.default_wholesale_price ?? null,
+      default_pieces_per_pack: r.default_pieces_per_pack ?? null,
       image_url: r.image_url ?? null,
     }));
   } catch {
@@ -310,17 +424,18 @@ export function getCachedCustomerLists(tenantId: string): CustomerList[] {
   }
 }
 
-export function cacheBusinesses(businesses: BusinessMembership[]): void {
+export function cacheBusinesses(businesses: Array<BusinessMembership | TenantSummary>): void {
   try {
     const db = getDb();
     if (!db) return;
     const now = new Date().toISOString();
     db.withTransactionSync(() => {
       for (const b of businesses) {
+        const isActiveVal = b.is_active === false ? 0 : 1;
         db.runSync(
           `INSERT OR REPLACE INTO cached_businesses (id, name, slug, currency, role_name, is_active, logo_url, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [b.id, b.name, b.slug, b.currency || "NGN", b.role_name || "OWNER", b.is_active ? 1 : 0, b.logo_url ?? null, now],
+          [b.id, b.name, b.slug, b.currency || "NGN", b.role_name || "OWNER", isActiveVal, b.logo_url ?? null, now],
         );
       }
     });
@@ -337,20 +452,224 @@ export function getCachedBusinesses(): BusinessMembership[] {
       id: string;
       name: string;
       slug: string;
-      currency: string;
-      role_name: string;
-      is_active: number;
+      currency?: string | null;
+      role_name?: string | null;
+      is_active?: number | null;
       logo_url?: string | null;
-    }>("SELECT id, name, slug, currency, role_name, is_active, logo_url FROM cached_businesses WHERE is_active = 1 ORDER BY name ASC");
+    }>("SELECT id, name, slug, currency, role_name, is_active, logo_url FROM cached_businesses ORDER BY is_active DESC, updated_at DESC, name ASC");
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
       slug: r.slug,
-      currency: r.currency,
-      role_name: r.role_name,
-      is_active: Boolean(r.is_active),
+      currency: r.currency || "NGN",
+      role_name: r.role_name || "OWNER",
+      is_active: r.is_active !== 0,
       logo_url: r.logo_url ?? null,
     }));
+  } catch {
+    return [];
+  }
+}
+
+/** Persistent App Settings (last active stall, preferences). */
+export function setAppSetting(key: string, value: string): void {
+  try {
+    const db = getDb();
+    if (!db) return;
+    db.runSync(
+      "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)",
+      [key, value],
+    );
+  } catch {
+    // Non-fatal
+  }
+}
+
+export function getAppSetting(key: string): string | null {
+  try {
+    const db = getDb();
+    if (!db) return null;
+    const row = db.getFirstSync<{ value: string }>(
+      "SELECT value FROM app_settings WHERE key = ?",
+      [key],
+    );
+    return row ? row.value : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Cache user profile for offline viewing. */
+export function cacheProfile(profile: UserProfile): void {
+  try {
+    const db = getDb();
+    if (!db) return;
+    const now = new Date().toISOString();
+    db.runSync(
+      `INSERT OR REPLACE INTO cached_profile (id, first_name, last_name, phone, email, avatar_url, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        profile.id,
+        profile.first_name,
+        profile.last_name ?? null,
+        profile.phone ?? null,
+        profile.email ?? null,
+        profile.avatar_url ?? null,
+        now,
+      ],
+    );
+  } catch {
+    // Non-fatal
+  }
+}
+
+export function getCachedProfile(): UserProfile | null {
+  try {
+    const db = getDb();
+    if (!db) return null;
+    const row = db.getFirstSync<{
+      id: string;
+      first_name: string;
+      last_name?: string | null;
+      phone?: string | null;
+      email?: string | null;
+      avatar_url?: string | null;
+    }>("SELECT id, first_name, last_name, phone, email, avatar_url FROM cached_profile ORDER BY updated_at DESC LIMIT 1");
+    if (!row) return null;
+    return {
+      id: row.id,
+      first_name: row.first_name,
+      last_name: row.last_name ?? null,
+      phone: row.phone ?? null,
+      email: row.email ?? null,
+      avatar_url: row.avatar_url ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Cache business details for offline viewing. */
+export function cacheBusinessDetails(tenantId: string, details: TenantDetails): void {
+  try {
+    const db = getDb();
+    if (!db) return;
+    const now = new Date().toISOString();
+    db.runSync(
+      `INSERT OR REPLACE INTO cached_business_details (id, name, slug, phone, address, city, state, logo_url, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        tenantId,
+        details.name,
+        details.slug,
+        details.phone ?? null,
+        details.address ?? null,
+        details.city ?? null,
+        details.state ?? null,
+        details.logo_url ?? null,
+        now,
+      ],
+    );
+  } catch {
+    // Non-fatal
+  }
+}
+
+export function getCachedBusinessDetails(tenantId: string): TenantDetails | null {
+  try {
+    const db = getDb();
+    if (!db) return null;
+    const row = db.getFirstSync<{
+      id: string;
+      name: string;
+      slug: string;
+      phone?: string | null;
+      address?: string | null;
+      city?: string | null;
+      state?: string | null;
+      logo_url?: string | null;
+    }>("SELECT id, name, slug, phone, address, city, state, logo_url FROM cached_business_details WHERE id = ?", [tenantId]);
+    if (!row) return null;
+    return {
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      phone: row.phone ?? null,
+      address: row.address ?? null,
+      city: row.city ?? null,
+      state: row.state ?? null,
+      logo_url: row.logo_url ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Cache daily sales stats for offline viewing. */
+export function cacheDailyStats(tenantId: string, stats: DailySalesSummary): void {
+  try {
+    const db = getDb();
+    if (!db) return;
+    const now = new Date().toISOString();
+    db.runSync(
+      `INSERT OR REPLACE INTO cached_daily_stats (tenant_id, date, total_revenue, total_sales, updated_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      [tenantId, stats.date, stats.total_revenue, stats.total_sales, now],
+    );
+  } catch {
+    // Non-fatal
+  }
+}
+
+export function getCachedDailyStats(tenantId: string): DailySalesSummary | null {
+  try {
+    const db = getDb();
+    if (!db) return null;
+    const row = db.getFirstSync<{
+      tenant_id: string;
+      date: string;
+      total_revenue: string;
+      total_sales: number;
+    }>("SELECT tenant_id, date, total_revenue, total_sales FROM cached_daily_stats WHERE tenant_id = ?", [tenantId]);
+    if (!row) return null;
+    return {
+      date: row.date,
+      total_revenue: row.total_revenue,
+      total_sales: row.total_sales,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Cache recent sales for offline viewing. */
+export function cacheSales(tenantId: string, sales: SaleSummary[]): void {
+  try {
+    const db = getDb();
+    if (!db) return;
+    db.withTransactionSync(() => {
+      for (const s of sales) {
+        db.runSync(
+          `INSERT OR REPLACE INTO cached_sales (id, tenant_id, data_json, created_at)
+           VALUES (?, ?, ?, ?)`,
+          [s.id, tenantId, JSON.stringify(s), s.created_at],
+        );
+      }
+    });
+  } catch {
+    // Non-fatal
+  }
+}
+
+export function getCachedSales(tenantId: string): SaleSummary[] {
+  try {
+    const db = getDb();
+    if (!db) return [];
+    const rows = db.getAllSync<{ data_json: string }>(
+      "SELECT data_json FROM cached_sales WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 50",
+      [tenantId],
+    );
+    return rows.map((r) => JSON.parse(r.data_json) as SaleSummary);
   } catch {
     return [];
   }
@@ -495,6 +814,8 @@ export function createLocalCategory(
     parent_id?: string | null;
     default_normal_price?: string | null;
     default_wholesale_price?: string | null;
+    default_pieces_per_pack?: number | null;
+    description?: string | null;
     image_url?: string | null;
   },
 ): Category {
@@ -507,8 +828,10 @@ export function createLocalCategory(
     slug: slug || "category",
     parent_id: data.parent_id ?? null,
     position: 0,
+    description: data.description ?? null,
     default_normal_price: data.default_normal_price ?? null,
     default_wholesale_price: data.default_wholesale_price ?? null,
+    default_pieces_per_pack: data.default_pieces_per_pack ?? null,
     image_url: data.image_url ?? null,
   };
 
@@ -517,9 +840,22 @@ export function createLocalCategory(
     if (db) {
       const now = new Date().toISOString();
       db.runSync(
-        `INSERT OR REPLACE INTO cached_categories (id, tenant_id, name, slug, parent_id, position, image_url, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [category.id, tenantId, category.name, category.slug, category.parent_id, 0, category.image_url ?? null, now],
+        `INSERT OR REPLACE INTO cached_categories (id, tenant_id, name, slug, parent_id, position, description, default_normal_price, default_wholesale_price, default_pieces_per_pack, image_url, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          category.id,
+          tenantId,
+          category.name,
+          category.slug,
+          category.parent_id ?? null,
+          0,
+          category.description ?? null,
+          category.default_normal_price ?? null,
+          category.default_wholesale_price ?? null,
+          category.default_pieces_per_pack ?? null,
+          category.image_url ?? null,
+          now,
+        ],
       );
     }
   } catch {
@@ -532,6 +868,8 @@ export function createLocalCategory(
     parent_id: data.parent_id ?? null,
     default_normal_price: data.default_normal_price ?? null,
     default_wholesale_price: data.default_wholesale_price ?? null,
+    default_pieces_per_pack: data.default_pieces_per_pack ?? null,
+    description: data.description ?? null,
   });
 
   return category;
@@ -545,6 +883,8 @@ export function updateLocalCategory(
     name?: string;
     default_normal_price?: string | null;
     default_wholesale_price?: string | null;
+    default_pieces_per_pack?: number | null;
+    description?: string | null;
     image_url?: string | null;
   },
 ): void {
@@ -557,6 +897,30 @@ export function updateLocalCategory(
           categoryId,
           tenantId,
         ]);
+      }
+      if (data.default_normal_price !== undefined) {
+        db.runSync(
+          "UPDATE cached_categories SET default_normal_price = ? WHERE id = ? AND tenant_id = ?",
+          [data.default_normal_price, categoryId, tenantId],
+        );
+      }
+      if (data.default_wholesale_price !== undefined) {
+        db.runSync(
+          "UPDATE cached_categories SET default_wholesale_price = ? WHERE id = ? AND tenant_id = ?",
+          [data.default_wholesale_price, categoryId, tenantId],
+        );
+      }
+      if (data.default_pieces_per_pack !== undefined) {
+        db.runSync(
+          "UPDATE cached_categories SET default_pieces_per_pack = ? WHERE id = ? AND tenant_id = ?",
+          [data.default_pieces_per_pack, categoryId, tenantId],
+        );
+      }
+      if (data.description !== undefined) {
+        db.runSync(
+          "UPDATE cached_categories SET description = ? WHERE id = ? AND tenant_id = ?",
+          [data.description, categoryId, tenantId],
+        );
       }
       if (data.image_url !== undefined) {
         db.runSync("UPDATE cached_categories SET image_url = ? WHERE id = ? AND tenant_id = ?", [
