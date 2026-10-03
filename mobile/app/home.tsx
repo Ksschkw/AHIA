@@ -27,6 +27,16 @@ import {
   cacheCategories,
   cacheCustomerLists,
   cacheProducts,
+  cacheProfile,
+  getCachedProfile,
+  cacheBusinessDetails,
+  getCachedBusinessDetails,
+  cacheDailyStats,
+  getCachedDailyStats,
+  cacheSales,
+  getCachedSales,
+  setAppSetting,
+  getAppSetting,
   clearLocalDatabase,
   createLocalCategory,
   createLocalProduct,
@@ -394,17 +404,95 @@ export default function Home() {
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
-  const [businesses, setBusinesses] = useState<TenantSummary[] | null>(null);
-  const [activeBusiness, setActiveBusiness] = useState<TenantSummary | null>(null);
-  const [businessDetails, setBusinessDetails] = useState<TenantDetails | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [businesses, setBusinesses] = useState<TenantSummary[] | null>(() => {
+    try {
+      const b = getCachedBusinesses();
+      return b.length > 0 ? b : null;
+    } catch {
+      return null;
+    }
+  });
+  const [activeBusiness, setActiveBusiness] = useState<TenantSummary | null>(() => {
+    try {
+      const lastActiveId = getAppSetting("last_active_tenant_id");
+      const b = getCachedBusinesses();
+      if (b.length > 0) {
+        return (lastActiveId ? b.find((x) => x.id === lastActiveId) : null) ?? b[0];
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  });
+  const [businessDetails, setBusinessDetails] = useState<TenantDetails | null>(() => {
+    try {
+      const lastActiveId = getAppSetting("last_active_tenant_id");
+      const b = getCachedBusinesses();
+      const target = (lastActiveId ? b.find((x) => x.id === lastActiveId) : null) ?? b[0];
+      return target ? getCachedBusinessDetails(target.id) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [profile, setProfile] = useState<UserProfile | null>(() => {
+    try {
+      return getCachedProfile();
+    } catch {
+      return null;
+    }
+  });
 
   // Data states
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [customerLists, setCustomerLists] = useState<CustomerList[]>([]);
-  const [sales, setSales] = useState<SaleSummary[]>([]);
-  const [dailyStats, setDailyStats] = useState<DailySalesSummary | null>(null);
+  const [products, setProducts] = useState<Product[]>(() => {
+    try {
+      const lastActiveId = getAppSetting("last_active_tenant_id");
+      const b = getCachedBusinesses();
+      const target = (lastActiveId ? b.find((x) => x.id === lastActiveId) : null) ?? b[0];
+      return target ? getCachedProducts(target.id) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [categories, setCategories] = useState<Category[]>(() => {
+    try {
+      const lastActiveId = getAppSetting("last_active_tenant_id");
+      const b = getCachedBusinesses();
+      const target = (lastActiveId ? b.find((x) => x.id === lastActiveId) : null) ?? b[0];
+      return target ? getCachedCategories(target.id) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [customerLists, setCustomerLists] = useState<CustomerList[]>(() => {
+    try {
+      const lastActiveId = getAppSetting("last_active_tenant_id");
+      const b = getCachedBusinesses();
+      const target = (lastActiveId ? b.find((x) => x.id === lastActiveId) : null) ?? b[0];
+      return target ? getCachedCustomerLists(target.id) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [sales, setSales] = useState<SaleSummary[]>(() => {
+    try {
+      const lastActiveId = getAppSetting("last_active_tenant_id");
+      const b = getCachedBusinesses();
+      const target = (lastActiveId ? b.find((x) => x.id === lastActiveId) : null) ?? b[0];
+      return target ? getCachedSales(target.id) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [dailyStats, setDailyStats] = useState<DailySalesSummary | null>(() => {
+    try {
+      const lastActiveId = getAppSetting("last_active_tenant_id");
+      const b = getCachedBusinesses();
+      const target = (lastActiveId ? b.find((x) => x.id === lastActiveId) : null) ?? b[0];
+      return target ? getCachedDailyStats(target.id) : null;
+    } catch {
+      return null;
+    }
+  });
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>(DEFAULT_EXPENSE_CATEGORIES);
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<MembershipInvitation[]>([]);
@@ -615,19 +703,25 @@ export default function Home() {
   });
 
   const loadData = useCallback(async (tenantId: string) => {
+    // 1. Immediately hydrate all available data from SQLite so nothing is a placeholder
     const cached = getCachedProducts(tenantId);
     const cachedCats = getCachedCategories(tenantId);
     const cachedLists = getCachedCustomerLists(tenantId);
-    if (cached.length > 0) {
-      setProducts(cached);
-      setLoading(false);
+    const cachedSales = getCachedSales(tenantId);
+    const cachedStats = getCachedDailyStats(tenantId);
+    const cachedDetails = getCachedBusinessDetails(tenantId);
+
+    setProducts(cached);
+    setCategories(cachedCats);
+    setCustomerLists(cachedLists);
+    setSales(cachedSales);
+    if (cachedStats) {
+      setDailyStats(cachedStats);
     }
-    if (cachedCats.length > 0) {
-      setCategories(cachedCats);
+    if (cachedDetails) {
+      setBusinessDetails(cachedDetails);
     }
-    if (cachedLists.length > 0) {
-      setCustomerLists(cachedLists);
-    }
+    setLoading(false);
 
     const pending = getPendingOutboxCount(tenantId);
     setPendingSyncCount(pending);
@@ -653,26 +747,47 @@ export default function Home() {
         listProducts(tenantId).catch(() => cached),
         listCustomerLists(tenantId).catch(() => cachedLists),
         listCategories(tenantId).catch(() => cachedCats),
-        listSales(tenantId).catch(() => []),
-        dailySales(tenantId).catch(() => null),
+        listSales(tenantId).catch(() => cachedSales),
+        dailySales(tenantId).catch(() => cachedStats),
         listExpenseCategories(tenantId).catch(() => ({ categories: [] })),
         listMembers(tenantId).catch(() => []),
         listInvitations(tenantId).catch(() => []),
         listMyInvitations().catch(() => []),
-        getBusiness(tenantId).catch(() => null),
+        getBusiness(tenantId).catch(() => cachedDetails),
         currentUser().catch(() => null),
         getStorefront(tenantId).catch(() => null),
         lowStock(tenantId).catch(() => []),
       ]);
 
-      setProducts(freshProducts);
-      cacheProducts(tenantId, freshProducts);
-      setCustomerLists(freshLists);
-      cacheCustomerLists(tenantId, freshLists);
-      setCategories(freshCategories);
-      cacheCategories(tenantId, freshCategories);
-      setSales(freshSales);
-      setDailyStats(freshDaily);
+      if (freshProducts.length > 0 || cached.length === 0) {
+        setProducts(freshProducts);
+        cacheProducts(tenantId, freshProducts);
+      }
+      if (freshLists.length > 0 || cachedLists.length === 0) {
+        setCustomerLists(freshLists);
+        cacheCustomerLists(tenantId, freshLists);
+      }
+      if (freshCategories.length > 0 || cachedCats.length === 0) {
+        setCategories(freshCategories);
+        cacheCategories(tenantId, freshCategories);
+      }
+      if (freshSales.length > 0 || cachedSales.length === 0) {
+        setSales(freshSales);
+        cacheSales(tenantId, freshSales);
+      }
+      if (freshDaily) {
+        setDailyStats(freshDaily);
+        cacheDailyStats(tenantId, freshDaily);
+      }
+      if (bDetails) {
+        setBusinessDetails(bDetails);
+        cacheBusinessDetails(tenantId, bDetails);
+      }
+      if (uProfile) {
+        setProfile(uProfile);
+        cacheProfile(uProfile);
+      }
+
       setRunningOut(freshLowStock);
       const loadedExpCats = freshExpCats?.categories?.length ? freshExpCats.categories : DEFAULT_EXPENSE_CATEGORIES;
       setExpenseCategories(loadedExpCats);
@@ -682,8 +797,6 @@ export default function Home() {
       setMembers(freshMembers);
       setInvitations(freshInvs);
       setMyInvitations(myInvs);
-      setBusinessDetails(bDetails);
-      setProfile(uProfile);
       setStorefrontDetails(sDetails);
       if (sDetails) {
         setStorefrontHeadline(sDetails.headline ?? "");
@@ -702,27 +815,54 @@ export default function Home() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [expenseCategoryId]);
+  }, []);
 
   useEffect(() => {
-    // 1. Immediately hydrate from local SQLite so the UI is never blank or placeholder
+    // 1. Immediately hydrate from local SQLite so the UI is NEVER blank or placeholder
+    const lastActiveId = getAppSetting("last_active_tenant_id");
     const cachedBiz = getCachedBusinesses();
+    const cachedProf = getCachedProfile();
+    if (cachedProf) {
+      setProfile(cachedProf);
+    }
+
     if (cachedBiz.length > 0) {
       setBusinesses(cachedBiz);
-      const initial = cachedBiz[0];
+      const initial = (lastActiveId ? cachedBiz.find((b) => b.id === lastActiveId) : null) ?? cachedBiz[0];
       setActiveBusiness(initial);
+
+      const cachedDetails = getCachedBusinessDetails(initial.id);
+      if (cachedDetails) {
+        setBusinessDetails(cachedDetails);
+      }
+      const cachedStats = getCachedDailyStats(initial.id);
+      if (cachedStats) {
+        setDailyStats(cachedStats);
+      }
+
       void loadData(initial.id);
     }
 
-    // 2. Refresh from network in background
+    // 2. Refresh from network in background (if online)
     void (async () => {
       try {
-        const found = await listBusinesses();
-        setBusinesses(found);
-        cacheBusinesses(found);
-        if (found.length > 0) {
-          const initial = found.find((b) => b.id === (activeBusiness?.id ?? cachedBiz[0]?.id)) ?? found[0];
+        const [found, freshProfile] = await Promise.all([
+          listBusinesses().catch(() => null),
+          currentUser().catch(() => null),
+        ]);
+
+        if (freshProfile) {
+          setProfile(freshProfile);
+          cacheProfile(freshProfile);
+        }
+
+        if (found && found.length > 0) {
+          setBusinesses(found);
+          cacheBusinesses(found);
+          const currentId = activeBusiness?.id ?? lastActiveId ?? cachedBiz[0]?.id;
+          const initial = found.find((b) => b.id === currentId) ?? found[0];
           setActiveBusiness(initial);
+          setAppSetting("last_active_tenant_id", initial.id);
           await loadData(initial.id);
         } else {
           setLoading(false);
@@ -5831,6 +5971,7 @@ export default function Home() {
                 onPress={() => {
                   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setActiveBusiness(b);
+                  setAppSetting("last_active_tenant_id", b.id);
                   setShowShopModal(false);
                   void loadData(b.id);
                 }}
