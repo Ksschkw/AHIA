@@ -143,6 +143,8 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
   const [name, setName] = useState(
     typeof window === "undefined" ? "" : window.localStorage.getItem(NAME_KEY) ?? "",
   );
+  const [fulfillment, setFulfillment] = useState<"pickup" | "waybill">("pickup");
+  const [deliveryCity, setDeliveryCity] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   interface SentInfo {
@@ -773,12 +775,17 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
         };
       });
 
+      const fulfillmentText = fulfillment === "waybill"
+        ? `[Waybill / Delivery] Destination: ${deliveryCity.trim() || "To be arranged"}`
+        : `[In-Shop Pickup]`;
+
       const response = await fetch(`/shop/${shop.tenant_slug}/requests`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customer_phone: phone.trim(),
           customer_name: name.trim() || null,
+          note: fulfillmentText,
           lines: payload,
         }),
       });
@@ -1701,6 +1708,58 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
               aria-label="Your name"
               onChange={(event) => setName(event.target.value)}
             />
+
+            <div style={{ marginTop: "12px" }}>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#334155", marginBottom: "6px" }}>
+                How do you want to collect your items?
+              </label>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  style={{
+                    flex: "1 1 120px",
+                    padding: "8px 12px",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    borderRadius: "6px",
+                    border: fulfillment === "pickup" ? "2px solid #084a2f" : "1px solid #cbd5e1",
+                    backgroundColor: fulfillment === "pickup" ? "#f0fdf4" : "#ffffff",
+                    color: fulfillment === "pickup" ? "#084a2f" : "#475569",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => setFulfillment("pickup")}
+                >
+                  In-Shop Pickup
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    flex: "1 1 120px",
+                    padding: "8px 12px",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    borderRadius: "6px",
+                    border: fulfillment === "waybill" ? "2px solid #084a2f" : "1px solid #cbd5e1",
+                    backgroundColor: fulfillment === "waybill" ? "#f0fdf4" : "#ffffff",
+                    color: fulfillment === "waybill" ? "#084a2f" : "#475569",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => setFulfillment("waybill")}
+                >
+                  Waybill / Delivery
+                </button>
+              </div>
+              {fulfillment === "waybill" ? (
+                <input
+                  className={styles.search}
+                  style={{ marginTop: "8px" }}
+                  value={deliveryCity}
+                  placeholder="Delivery destination (e.g. Onitsha, Aba, Lagos, Kano park)"
+                  aria-label="Delivery destination"
+                  onChange={(event) => setDeliveryCity(event.target.value)}
+                />
+              ) : null}
+            </div>
           </div>
         </section>
       ) : null}

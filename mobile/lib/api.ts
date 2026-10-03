@@ -451,6 +451,20 @@ export function listExpenseCategories(tenantId: string): Promise<{ categories: E
   return request<{ categories: ExpenseCategory[] }>(`/api/v1/tenants/${tenantId}/expenses/categories`);
 }
 
+export interface ExpenseItem {
+  id: string;
+  category: string;
+  amount: string;
+  payment_method: string;
+  description: string | null;
+  incurred_at: string;
+  is_reversed?: boolean;
+}
+
+export function listExpenses(tenantId: string): Promise<ExpenseItem[]> {
+  return request<ExpenseItem[]>(`/api/v1/tenants/${tenantId}/expenses`);
+}
+
 export function recordExpense(
   tenantId: string,
   data: {

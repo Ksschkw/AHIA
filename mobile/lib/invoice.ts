@@ -5,8 +5,8 @@ import { type CustomerList, type TenantDetails } from "@/lib/api";
 function formatMoney(amount: string | null | undefined): string {
   if (!amount) return "Price on request";
   const num = Number(amount);
-  if (!Number.isFinite(num)) return `NGN ${amount}`;
-  return `NGN ${num.toLocaleString("en-NG", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  if (!Number.isFinite(num)) return `\u20A6${amount}`;
+  return `\u20A6${num.toLocaleString("en-NG", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 
 export function buildInvoiceHtml(
@@ -69,7 +69,9 @@ export function buildInvoiceHtml(
   const dispatchFee = list.dispatch_cost ? formatMoney(list.dispatch_cost) : null;
 
   const totalNum = (Number(list.priced_total) || computedSubtotal) + (Number(list.dispatch_cost) || 0);
-  const amountPaidNum = Number(list.amount_paid ?? list.advance_payment ?? "0");
+  const amountPaidNum = (list.payments && list.payments.length > 0)
+    ? list.payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+    : Number(list.amount_paid ?? list.advance_payment ?? "0");
   const balanceRemaining = Math.max(0, totalNum - amountPaidNum);
 
   const waybillSection = list.waybill_number

@@ -35,6 +35,8 @@ import {
   getCachedDailyStats,
   cacheSales,
   getCachedSales,
+  cacheExpenses,
+  getCachedExpenses,
   setAppSetting,
   getAppSetting,
   clearLocalDatabase,
@@ -121,6 +123,7 @@ import {
   listCategories,
   listCustomerLists,
   listExpenseCategories,
+  listExpenses,
   listInvitations,
   listMembers,
   listMyInvitations,
@@ -153,6 +156,7 @@ import {
   type CustomerListLine,
   type DailySalesSummary,
   type ExpenseCategory,
+  type ExpenseItem,
   type LowStockProduct,
   type Member,
   type MemberRole,
@@ -186,8 +190,15 @@ const DEFAULT_EXPENSE_CATEGORIES: ExpenseCategory[] = [
 function formatMoney(amount: string | null | undefined): string {
   if (!amount) return "Price on request";
   const num = Number(amount);
-  if (!Number.isFinite(num)) return `NGN ${amount}`;
-  return `NGN ${num.toLocaleString("en-NG", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  if (!Number.isFinite(num)) return `\u20A6${amount}`;
+  return `\u20A6${num.toLocaleString("en-NG", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+}
+
+function computeCustomerListPaid(list: CustomerList): number {
+  if (list.payments && list.payments.length > 0) {
+    return list.payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+  }
+  return Number(list.amount_paid ?? list.advance_payment ?? 0);
 }
 
 function formatWaNumber(rawPhone: string | null | undefined): string | null {
@@ -649,6 +660,7 @@ export default function Home() {
   const [expensePaymentMethod, setExpensePaymentMethod] = useState("cash");
   const [expenseError, setExpenseError] = useState<string | null>(null);
   const [savingExpense, setSavingExpense] = useState(false);
+  const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
 
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [invitePhone, setInvitePhone] = useState("");
@@ -745,11 +757,13 @@ export default function Home() {
     const cachedSales = getCachedSales(tenantId);
     const cachedStats = getCachedDailyStats(tenantId);
     const cachedDetails = getCachedBusinessDetails(tenantId);
+    const cachedExpenses = getCachedExpenses(tenantId);
 
     setProducts(cached);
     setCategories(cachedCats);
     setCustomerLists(cachedLists);
     setSales(cachedSales);
+    setExpenses(cachedExpenses);
     if (cachedStats) {
       setDailyStats(cachedStats);
     }
@@ -771,6 +785,7 @@ export default function Home() {
         freshSales,
         freshDaily,
         freshExpCats,
+        freshExpenses,
         freshMembers,
         freshInvs,
         myInvs,
@@ -785,6 +800,7 @@ export default function Home() {
         listSales(tenantId).catch(() => cachedSales),
         dailySales(tenantId).catch(() => cachedStats),
         listExpenseCategories(tenantId).catch(() => ({ categories: [] })),
+        listExpenses(tenantId).catch(() => cachedExpenses),
         listMembers(tenantId).catch(() => []),
         listInvitations(tenantId).catch(() => []),
         listMyInvitations().catch(() => []),
@@ -799,8 +815,19 @@ export default function Home() {
         cacheProducts(tenantId, freshProducts);
       }
       if (freshLists.length > 0 || cachedLists.length === 0) {
-        setCustomerLists(freshLists);
-        cacheCustomerLists(tenantId, freshLists);
+        const cachedMap = new Map(cachedLists.map((l) => [l.id, l]));
+        const mergedLists = freshLists.map((fl) => {
+          const prev = cachedMap.get(fl.id);
+          return {
+            ...fl,
+            fulfillment_type: fl.fulfillment_type ?? prev?.fulfillment_type,
+            payments: (fl.payments && fl.payments.length > 0) ? fl.payments : (prev?.payments ?? []),
+            amount_paid: fl.amount_paid ?? prev?.amount_paid,
+            advance_payment: fl.advance_payment ?? prev?.advance_payment,
+          };
+        });
+        setCustomerLists(mergedLists);
+        cacheCustomerLists(tenantId, mergedLists);
       }
       if (freshCategories.length > 0 || cachedCats.length === 0) {
         setCategories(freshCategories);
@@ -811,8 +838,21 @@ export default function Home() {
         cacheSales(tenantId, freshSales);
       }
       if (freshDaily) {
-        setDailyStats(freshDaily);
-        cacheDailyStats(tenantId, freshDaily);
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const allKnownSales = freshSales.length > 0 ? freshSales : cachedSales;
+        const localTodaySum = allKnownSales
+          .filter((s) => s.created_at.startsWith(todayStr) && s.payment_status !== "cancelled")
+          .reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
+        const resolvedDaily = {
+          ...freshDaily,
+          total_revenue: Math.max(Number(freshDaily.total_revenue || 0), localTodaySum).toFixed(2),
+        };
+        setDailyStats(resolvedDaily);
+        cacheDailyStats(tenantId, resolvedDaily);
+      }
+      if (freshExpenses.length > 0 || cachedExpenses.length === 0) {
+        setExpenses(freshExpenses);
+        cacheExpenses(tenantId, freshExpenses);
       }
       if (bDetails) {
         setBusinessDetails(bDetails);
@@ -982,7 +1022,7 @@ export default function Home() {
       if (res.sales > 0 || res.mutations > 0) {
         showToast(`Synced ${res.sales} sales & ${res.mutations} updates!`);
       } else if (remaining === 0) {
-        showToast("Everything is up to date.");
+        showToast("Shop data refreshed & up to date.");
       } else {
         showToast("Saved safely on device. Will sync once connected.");
       }
@@ -992,6 +1032,22 @@ export default function Home() {
       setIsSyncing(false);
     }
   };
+
+  useEffect(() => {
+    if (!activeBusiness) return;
+    const interval = setInterval(() => {
+      const pending = getPendingOutboxCount(activeBusiness.id);
+      if (pending > 0 && !isSyncing) {
+        void flushSyncOutbox(activeBusiness.id).then((res) => {
+          if (res.sales > 0 || res.mutations > 0) {
+            setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
+            void loadData(activeBusiness.id);
+          }
+        });
+      }
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [activeBusiness, isSyncing, loadData]);
 
   const handleSellOne = async (product: Product) => {
     if (!activeBusiness) return;
@@ -1477,12 +1533,23 @@ export default function Home() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSavingExpense(true);
     try {
-      await recordExpense(activeBusiness.id, {
+      const res = await recordExpense(activeBusiness.id, {
         amount: cleanAmount,
         category: targetCat,
         description: expenseDescription.trim() || null,
         payment_method: (expensePaymentMethod || "CASH").toUpperCase(),
       });
+      const newExp: ExpenseItem = {
+        id: res?.id || `exp-${Date.now()}`,
+        category: targetCat,
+        amount: cleanAmount,
+        payment_method: (expensePaymentMethod || "CASH").toUpperCase(),
+        description: expenseDescription.trim() || null,
+        incurred_at: new Date().toISOString(),
+      };
+      setExpenses((prev) => [newExp, ...prev]);
+      cacheExpenses(activeBusiness.id, [newExp, ...expenses]);
+
       setExpenseAmount("");
       setExpenseDescription("");
       setShowExpenseModal(false);
@@ -1714,7 +1781,19 @@ export default function Home() {
         payment_method: paymentMethod,
       };
 
-      const existingPayments = paymentModalList.payments ?? [];
+      const priorAdvance = Number(paymentModalList.amount_paid ?? paymentModalList.advance_payment ?? 0);
+      const existingPayments = (paymentModalList.payments && paymentModalList.payments.length > 0)
+        ? paymentModalList.payments
+        : (priorAdvance > 0
+            ? [{
+                id: `pay-advance-${paymentModalList.id}`,
+                amount: priorAdvance.toString(),
+                date: paymentModalList.created_at || new Date().toISOString(),
+                note: "Advance Deposit",
+                payment_method: "cash" as const,
+              }]
+            : []);
+
       const updatedPayments = [...existingPayments, paymentRecord];
       const newTotalPaid = updatedPayments.reduce(
         (sum, p) => sum + (Number(p.amount) || 0),
@@ -1746,18 +1825,22 @@ export default function Home() {
       setDailyStats((prev) => {
         const todayStr = new Date().toISOString().slice(0, 10);
         if (!prev) {
-          return {
+          const stats = {
             date: todayStr,
             total_revenue: amt.toFixed(2),
             total_sales: 1,
           };
+          cacheDailyStats(activeBusiness.id, stats);
+          return stats;
         }
         const updatedTotal = (Number(prev.total_revenue || "0") + amt).toFixed(2);
-        return {
+        const stats = {
           ...prev,
           total_revenue: updatedTotal,
           total_sales: prev.total_sales + 1,
         };
+        cacheDailyStats(activeBusiness.id, stats);
+        return stats;
       });
 
       showToast(`Recorded payment of ${formatMoney(amt.toString())}!`);
@@ -3012,15 +3095,14 @@ export default function Home() {
               const isConfirmed = item.status === "confirmed";
               const isExpanded = expandedListIds.has(item.id);
               const unpricedCount = item.lines.filter((l) => !l.shop_price && l.note !== "heading").length;
-              const totalPaid = (item.payments ?? []).reduce(
-                (acc, p) => acc + (Number(p.amount) || 0),
-                Number(item.amount_paid ?? item.advance_payment ?? 0)
-              );
+              const totalPaid = computeCustomerListPaid(item);
               const grandTotalNum = (Number(item.priced_total) || 0) + (Number(item.dispatch_cost) || 0);
               const remainingBal = Math.max(0, grandTotalNum - totalPaid);
               const isFullyPaid = grandTotalNum > 0 && totalPaid >= grandTotalNum;
               const isPartPaid = totalPaid > 0 && totalPaid < grandTotalNum;
-              const fulfillmentMode = item.fulfillment_type ?? (item.waybill_number ? "waybill" : "pickup");
+              const fulfillmentMode = item.fulfillment_type ?? (
+                item.note?.toLowerCase().includes("waybill") || item.waybill_number ? "waybill" : "pickup"
+              );
 
               return (
                 <View style={styles.listCard}>
@@ -3590,9 +3672,22 @@ export default function Home() {
                           {!isCancelled && (
                             <Pressable
                               style={styles.voidBtn}
-                              onPress={() => handleCancelSale(s)}
+                              onPress={() => {
+                                Alert.alert(
+                                  "Void Sale",
+                                  `Are you sure you want to void ${s.receipt_number || "this sale"} of ${formatMoney(s.total_amount)}?`,
+                                  [
+                                    { text: "Keep Sale", style: "cancel" },
+                                    {
+                                      text: "Void Sale",
+                                      style: "destructive",
+                                      onPress: () => void handleCancelSale(s),
+                                    },
+                                  ]
+                                );
+                              }}
                             >
-                              <Text style={styles.voidBtnText}>Void</Text>
+                              <Text style={styles.voidBtnText}>Void Sale</Text>
                             </Pressable>
                           )}
                         </View>
@@ -3604,16 +3699,80 @@ export default function Home() {
             ) : (
               /* Expenses Sub-tab */
               <View>
-                <Text style={styles.subHeading}>Market Expenses Categories</Text>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <Text style={styles.subHeading}>Logged Business Expenses</Text>
+                  <Pressable
+                    style={styles.logExpenseTopBtn}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setShowExpenseModal(true);
+                    }}
+                  >
+                    <Text style={styles.logExpenseTopBtnText}>+ Log Expense</Text>
+                  </Pressable>
+                </View>
+
+                {expenses.length === 0 ? (
+                  <View style={styles.emptyBox}>
+                    <Text style={styles.emptyTitle}>No Expenses Recorded Yet</Text>
+                    <Text style={styles.emptySubtitle}>
+                      Track stall rent, transport, generator fuel, or market levies.
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={{ gap: 8, marginBottom: 20 }}>
+                    {expenses.map((e) => {
+                      const catDef = expenseCategories.find(
+                        (c) => (c.value || c.id || "").toUpperCase() === e.category.toUpperCase()
+                      );
+                      const catTitle = catDef?.label || catDef?.name || e.category;
+                      return (
+                        <View key={e.id} style={styles.expenseCard}>
+                          <View style={{ flex: 1, paddingRight: 8 }}>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                              <View style={styles.expenseCatBadge}>
+                                <Text style={styles.expenseCatBadgeText}>{catTitle}</Text>
+                              </View>
+                              <Text style={styles.expenseMethod}>{e.payment_method.toUpperCase()}</Text>
+                            </View>
+                            <Text style={styles.expenseDesc}>
+                              {e.description || "General stall expense"}
+                            </Text>
+                            <Text style={styles.expenseDate}>
+                              {new Date(e.incurred_at).toLocaleString([], {
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </Text>
+                          </View>
+                          <Text style={styles.expenseAmount}>
+                            {formatMoney(e.amount)}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
+                <Text style={[styles.subHeading, { marginTop: 12 }]}>Market Expenses Categories</Text>
                 <View style={styles.actionGrid}>
                   {expenseCategories.map((c) => {
                     const key = c.value || c.id || "OTHER";
                     const title = c.label || c.name || "Expense";
                     return (
-                      <View key={key} style={styles.actionTile}>
+                      <Pressable
+                        key={key}
+                        style={styles.actionTile}
+                        onPress={() => {
+                          setExpenseCategoryId(key);
+                          setShowExpenseModal(true);
+                        }}
+                      >
                         <Text style={styles.actionTileTitle}>{title}</Text>
                         <Text style={styles.actionTileDesc}>{c.description || (c.is_known_spending ? "Standard business expense" : "General expense")}</Text>
-                      </View>
+                      </Pressable>
                     );
                   })}
                 </View>
@@ -5265,7 +5424,7 @@ export default function Home() {
 
             <TextInput
               style={styles.modalInput}
-              placeholder="Amount (NGN)"
+              placeholder="Amount (\u20A6)"
               placeholderTextColor="#8a928e"
               keyboardType="numeric"
               value={paymentAmount}
@@ -5274,10 +5433,7 @@ export default function Home() {
 
             {/* Quick chips */}
             {paymentModalList && (() => {
-              const curTotalPaid = (paymentModalList.payments ?? []).reduce(
-                (acc, p) => acc + (Number(p.amount) || 0),
-                Number(paymentModalList.amount_paid ?? paymentModalList.advance_payment ?? 0)
-              );
+              const curTotalPaid = computeCustomerListPaid(paymentModalList);
               const curGrand = (Number(paymentModalList.priced_total) || 0) + (Number(paymentModalList.dispatch_cost) || 0);
               const curRem = Math.max(0, curGrand - curTotalPaid);
               return curRem > 0 ? (
@@ -7953,11 +8109,65 @@ const createStyles = (theme: ThemePalette) => StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "#ef444433",
   },
   voidBtnText: {
-    color: "#f87171",
+    color: "#ef4444",
     fontSize: 11,
     fontWeight: "600",
+  },
+  expenseCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: theme.card,
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  expenseCatBadge: {
+    backgroundColor: "#fef3c7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  expenseCatBadgeText: {
+    color: "#b45309",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  expenseMethod: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: theme.textMuted,
+  },
+  expenseDesc: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: theme.text,
+    marginBottom: 2,
+  },
+  expenseDate: {
+    fontSize: 11,
+    color: theme.textMuted,
+  },
+  expenseAmount: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#ef4444",
+  },
+  logExpenseTopBtn: {
+    backgroundColor: "#084a2f",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  logExpenseTopBtnText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "700",
   },
   productPickRow: {
     flexDirection: "row",

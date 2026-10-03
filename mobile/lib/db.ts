@@ -9,6 +9,7 @@ import {
   type TenantDetails,
   type DailySalesSummary,
   type SaleSummary,
+  type ExpenseItem,
   ApiError,
   recordSale,
   createCategory,
@@ -117,6 +118,18 @@ function runMigrations(db: SQLite.SQLiteDatabase): void {
       tenant_id TEXT NOT NULL,
       data_json TEXT NOT NULL,
       created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS cached_expenses (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      category TEXT NOT NULL,
+      amount TEXT NOT NULL,
+      payment_method TEXT NOT NULL,
+      description TEXT,
+      incurred_at TEXT NOT NULL,
+      is_reversed INTEGER NOT NULL DEFAULT 0,
+      data_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS app_settings (
       key TEXT PRIMARY KEY,
@@ -388,19 +401,30 @@ export function cacheCustomerLists(tenantId: string, lists: CustomerList[]): voi
     const db = getDb();
     if (!db) return;
     const now = new Date().toISOString();
+    const existing = getCachedCustomerLists(tenantId);
+    const existingMap = new Map(existing.map((l) => [l.id, l]));
+
     db.withTransactionSync(() => {
       for (const l of lists) {
+        const prev = existingMap.get(l.id);
+        const merged: CustomerList = {
+          ...l,
+          fulfillment_type: l.fulfillment_type ?? prev?.fulfillment_type,
+          payments: (l.payments && l.payments.length > 0) ? l.payments : (prev?.payments ?? []),
+          amount_paid: l.amount_paid ?? prev?.amount_paid,
+          advance_payment: l.advance_payment ?? prev?.advance_payment,
+        };
         db.runSync(
           `INSERT OR REPLACE INTO cached_customer_lists (id, tenant_id, customer_name, customer_phone, status, priced_total, data_json, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [
-            l.id,
+            merged.id,
             tenantId,
-            l.customer_name ?? null,
-            l.customer_phone ?? null,
-            l.status,
-            l.priced_total ?? null,
-            JSON.stringify(l),
+            merged.customer_name ?? null,
+            merged.customer_phone ?? null,
+            merged.status,
+            merged.priced_total ?? null,
+            JSON.stringify(merged),
             now,
           ],
         );
@@ -695,6 +719,51 @@ export function getCachedSales(tenantId: string): SaleSummary[] {
       [tenantId],
     );
     return rows.map((r) => JSON.parse(r.data_json) as SaleSummary);
+  } catch {
+    return [];
+  }
+}
+
+/** Cache recent expenses for offline viewing. */
+export function cacheExpenses(tenantId: string, expenses: ExpenseItem[]): void {
+  try {
+    const db = getDb();
+    if (!db) return;
+    const now = new Date().toISOString();
+    db.withTransactionSync(() => {
+      for (const e of expenses) {
+        db.runSync(
+          `INSERT OR REPLACE INTO cached_expenses (id, tenant_id, category, amount, payment_method, description, incurred_at, is_reversed, data_json, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            e.id,
+            tenantId,
+            e.category,
+            e.amount,
+            e.payment_method,
+            e.description ?? null,
+            e.incurred_at,
+            e.is_reversed ? 1 : 0,
+            JSON.stringify(e),
+            now,
+          ],
+        );
+      }
+    });
+  } catch {
+    // Non-fatal
+  }
+}
+
+export function getCachedExpenses(tenantId: string): ExpenseItem[] {
+  try {
+    const db = getDb();
+    if (!db) return [];
+    const rows = db.getAllSync<{ data_json: string }>(
+      "SELECT data_json FROM cached_expenses WHERE tenant_id = ? ORDER BY incurred_at DESC LIMIT 100",
+      [tenantId],
+    );
+    return rows.map((r) => JSON.parse(r.data_json) as ExpenseItem);
   } catch {
     return [];
   }
