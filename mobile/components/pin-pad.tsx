@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import * as Haptics from "expo-haptics";
 import { BackspaceIcon } from "@/components/icons";
 
@@ -8,13 +8,30 @@ interface PinPadProps {
   onComplete: (pin: string) => void;
   error?: string | null;
   disabled?: boolean;
+  loading?: boolean;
+  loadingMessage?: string;
+  onClear?: () => void;
 }
 
-export function PinPad({ length = 4, onComplete, error, disabled = false }: PinPadProps) {
+export function PinPad({
+  length = 4,
+  onComplete,
+  error,
+  disabled = false,
+  loading = false,
+  loadingMessage = "Verifying...",
+  onClear,
+}: PinPadProps) {
   const [pin, setPin] = useState("");
 
+  useEffect(() => {
+    if (error) {
+      setPin("");
+    }
+  }, [error]);
+
   const handleDigit = (digit: string) => {
-    if (disabled || pin.length >= length) return;
+    if (disabled || loading || pin.length >= length) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const nextPin = pin + digit;
     setPin(nextPin);
@@ -24,15 +41,16 @@ export function PinPad({ length = 4, onComplete, error, disabled = false }: PinP
   };
 
   const handleBackspace = () => {
-    if (disabled || pin.length === 0) return;
+    if (disabled || loading || pin.length === 0) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setPin((curr) => curr.slice(0, -1));
   };
 
   const handleClear = () => {
-    if (disabled || pin.length === 0) return;
+    if (disabled || loading || pin.length === 0) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setPin("");
+    onClear?.();
   };
 
   return (
@@ -54,7 +72,14 @@ export function PinPad({ length = 4, onComplete, error, disabled = false }: PinP
         })}
       </View>
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {loading ? (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator size="small" color="#4ade80" />
+          <Text style={styles.loadingText}>{loadingMessage}</Text>
+        </View>
+      ) : error ? (
+        <Text style={styles.errorText}>{error}</Text>
+      ) : null}
 
       {/* Numeric Keypad Grid */}
       <View style={styles.keypadGrid}>
@@ -62,9 +87,13 @@ export function PinPad({ length = 4, onComplete, error, disabled = false }: PinP
           {["1", "2", "3"].map((num) => (
             <Pressable
               key={num}
-              style={({ pressed }) => [styles.keyBtn, pressed && styles.keyBtnPressed]}
+              style={({ pressed }) => [
+                styles.keyBtn,
+                (disabled || loading) && styles.keyBtnDisabled,
+                pressed && styles.keyBtnPressed,
+              ]}
               onPress={() => handleDigit(num)}
-              disabled={disabled}
+              disabled={disabled || loading}
             >
               <Text style={styles.keyBtnText}>{num}</Text>
             </Pressable>
@@ -75,9 +104,13 @@ export function PinPad({ length = 4, onComplete, error, disabled = false }: PinP
           {["4", "5", "6"].map((num) => (
             <Pressable
               key={num}
-              style={({ pressed }) => [styles.keyBtn, pressed && styles.keyBtnPressed]}
+              style={({ pressed }) => [
+                styles.keyBtn,
+                (disabled || loading) && styles.keyBtnDisabled,
+                pressed && styles.keyBtnPressed,
+              ]}
               onPress={() => handleDigit(num)}
-              disabled={disabled}
+              disabled={disabled || loading}
             >
               <Text style={styles.keyBtnText}>{num}</Text>
             </Pressable>
@@ -88,9 +121,13 @@ export function PinPad({ length = 4, onComplete, error, disabled = false }: PinP
           {["7", "8", "9"].map((num) => (
             <Pressable
               key={num}
-              style={({ pressed }) => [styles.keyBtn, pressed && styles.keyBtnPressed]}
+              style={({ pressed }) => [
+                styles.keyBtn,
+                (disabled || loading) && styles.keyBtnDisabled,
+                pressed && styles.keyBtnPressed,
+              ]}
               onPress={() => handleDigit(num)}
-              disabled={disabled}
+              disabled={disabled || loading}
             >
               <Text style={styles.keyBtnText}>{num}</Text>
             </Pressable>
@@ -99,25 +136,37 @@ export function PinPad({ length = 4, onComplete, error, disabled = false }: PinP
 
         <View style={styles.keypadRow}>
           <Pressable
-            style={({ pressed }) => [styles.keyBtn, styles.actionKeyBtn, pressed && styles.keyBtnPressed]}
+            style={({ pressed }) => [
+              styles.keyBtn,
+              styles.actionKeyBtn,
+              pressed && styles.keyBtnPressed,
+            ]}
             onPress={handleClear}
-            disabled={disabled || pin.length === 0}
+            disabled={disabled || loading || pin.length === 0}
           >
             <Text style={styles.actionKeyText}>Clear</Text>
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [styles.keyBtn, pressed && styles.keyBtnPressed]}
+            style={({ pressed }) => [
+              styles.keyBtn,
+              (disabled || loading) && styles.keyBtnDisabled,
+              pressed && styles.keyBtnPressed,
+            ]}
             onPress={() => handleDigit("0")}
-            disabled={disabled}
+            disabled={disabled || loading}
           >
             <Text style={styles.keyBtnText}>0</Text>
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [styles.keyBtn, styles.actionKeyBtn, pressed && styles.keyBtnPressed]}
+            style={({ pressed }) => [
+              styles.keyBtn,
+              styles.actionKeyBtn,
+              pressed && styles.keyBtnPressed,
+            ]}
             onPress={handleBackspace}
-            disabled={disabled || pin.length === 0}
+            disabled={disabled || loading || pin.length === 0}
           >
             <BackspaceIcon size={22} color="#94a3b8" />
           </Pressable>
@@ -154,6 +203,21 @@ const styles = StyleSheet.create({
     borderColor: "#f87171",
     backgroundColor: "rgba(248, 113, 113, 0.2)",
   },
+  loadingBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: "rgba(74, 222, 128, 0.1)",
+  },
+  loadingText: {
+    color: "#4ade80",
+    fontSize: 13,
+    fontWeight: "600",
+  },
   errorText: {
     color: "#f87171",
     fontSize: 13,
@@ -180,6 +244,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
     borderColor: "#334155",
+  },
+  keyBtnDisabled: {
+    opacity: 0.5,
   },
   keyBtnPressed: {
     backgroundColor: "#334155",

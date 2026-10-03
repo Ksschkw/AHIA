@@ -9,6 +9,7 @@ import {
   type TenantDetails,
   type DailySalesSummary,
   type SaleSummary,
+  ApiError,
   recordSale,
   createCategory,
   updateCategory,
@@ -424,6 +425,30 @@ export function getCachedCustomerLists(tenantId: string): CustomerList[] {
   }
 }
 
+export function updateCachedCustomerList(tenantId: string, list: CustomerList): void {
+  try {
+    const db = getDb();
+    if (!db) return;
+    const now = new Date().toISOString();
+    db.runSync(
+      `INSERT OR REPLACE INTO cached_customer_lists (id, tenant_id, customer_name, customer_phone, status, priced_total, data_json, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        list.id,
+        tenantId,
+        list.customer_name ?? null,
+        list.customer_phone ?? null,
+        list.status,
+        list.priced_total ?? null,
+        JSON.stringify(list),
+        now,
+      ],
+    );
+  } catch {
+    // Non-fatal
+  }
+}
+
 export function cacheBusinesses(businesses: Array<BusinessMembership | TenantSummary>): void {
   try {
     const db = getDb();
@@ -753,8 +778,14 @@ export async function flushOutbox(tenantId: string): Promise<number> {
         });
         db.runSync("UPDATE sale_outbox SET status = 'synced' WHERE id = ?", [item.id]);
         synced++;
-      } catch {
-        // Stays pending if network fails
+      } catch (err: any) {
+        if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+          // Unrecoverable client error (e.g. 400 Bad Request, 404 Not Found, 422 Invalid value)
+          // Mark as failed so it does not block the sync queue forever
+          db.runSync("UPDATE sale_outbox SET status = 'failed' WHERE id = ?", [item.id]);
+          continue;
+        }
+        // Stays pending if network stalls / 5xx
         break;
       }
     }
@@ -1157,7 +1188,12 @@ export async function flushSyncOutbox(tenantId: string): Promise<{ sales: number
 
         db.runSync("UPDATE sync_outbox SET status = 'synced' WHERE id = ?", [item.id]);
         mutationsCount++;
-      } catch {
+      } catch (err: any) {
+        if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+          // Unrecoverable client error - mark as failed so it does not block the sync queue forever
+          db.runSync("UPDATE sync_outbox SET status = 'failed' WHERE id = ?", [item.id]);
+          continue;
+        }
         // Stop on first failure (network stall / offline) - remaining mutations stay pending
         break;
       }

@@ -187,6 +187,14 @@ export interface CustomerListLine {
   state: "somewhere" | "have_it" | "buy_it" | "cannot_get";
 }
 
+export interface ListPayment {
+  id: string;
+  amount: string;
+  date: string;
+  note?: string | null;
+  payment_method: string;
+}
+
 export interface CustomerList {
   id: string;
   tenant_id: string;
@@ -203,6 +211,10 @@ export interface CustomerList {
   dispatch_cost?: string | null;
   tracking_url?: string | null;
   dispatched_at?: string | null;
+  fulfillment_type?: "pickup" | "waybill";
+  advance_payment?: string | null;
+  amount_paid?: string | null;
+  payments?: ListPayment[];
   lines: CustomerListLine[];
 }
 

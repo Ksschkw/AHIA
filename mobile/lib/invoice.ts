@@ -9,11 +9,11 @@ function formatMoney(amount: string | null | undefined): string {
   return `NGN ${num.toLocaleString("en-NG", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 
-export async function generateAndSharePdfInvoice(
+export function buildInvoiceHtml(
   business: { name: string; slug?: string },
   details: TenantDetails | null,
   list: CustomerList
-): Promise<void> {
+): string {
   const dateStr = new Date(list.created_at).toLocaleDateString("en-NG", {
     day: "numeric",
     month: "short",
@@ -24,6 +24,7 @@ export async function generateAndSharePdfInvoice(
   const customerName = list.customer_name || "Valued Customer";
   const customerPhone = list.customer_phone || "N/A";
   const businessPhone = details?.phone || "";
+  const fulfillmentLabel = list.fulfillment_type === "waybill" ? "Waybill / Delivery" : "In-Shop Pickup";
 
   let computedSubtotal = 0;
   const rowsHtml = list.lines
@@ -67,6 +68,10 @@ export async function generateAndSharePdfInvoice(
   const grandTotal = list.priced_total ? formatMoney(list.priced_total) : formatMoney(computedSubtotal.toString());
   const dispatchFee = list.dispatch_cost ? formatMoney(list.dispatch_cost) : null;
 
+  const totalNum = (Number(list.priced_total) || computedSubtotal) + (Number(list.dispatch_cost) || 0);
+  const amountPaidNum = Number(list.amount_paid ?? list.advance_payment ?? "0");
+  const balanceRemaining = Math.max(0, totalNum - amountPaidNum);
+
   const waybillSection = list.waybill_number
     ? `
       <div style="margin-top: 24px; padding: 16px; background: #f8fafc; border-radius: 8px; border: 1px dashed #cbd5e1;">
@@ -83,7 +88,7 @@ export async function generateAndSharePdfInvoice(
     `
     : "";
 
-  const html = `
+  return `
     <!DOCTYPE html>
     <html>
       <head>
@@ -137,12 +142,13 @@ export async function generateAndSharePdfInvoice(
             margin-bottom: 24px;
             display: flex;
             justify-content: space-between;
+            align-items: center;
           }
           .client-label {
             font-size: 11px;
             font-weight: 700;
-            color: #64748b;
             text-transform: uppercase;
+            color: #94a3b8;
             letter-spacing: 0.5px;
           }
           .client-name {
@@ -176,7 +182,7 @@ export async function generateAndSharePdfInvoice(
             margin-top: 16px;
           }
           .totals-table {
-            width: 280px;
+            width: 320px;
             border-collapse: collapse;
           }
           .totals-table td {
@@ -189,6 +195,16 @@ export async function generateAndSharePdfInvoice(
             color: #084a2f;
             border-top: 2px solid #084a2f;
             padding-top: 10px !important;
+          }
+          .paid-row {
+            color: #15803d;
+            font-weight: 700;
+          }
+          .balance-row {
+            color: #b91c1c;
+            font-weight: 800;
+            border-top: 1px dashed #cbd5e1;
+            padding-top: 8px !important;
           }
           .footer {
             margin-top: 40px;
@@ -220,9 +236,12 @@ export async function generateAndSharePdfInvoice(
             <div class="client-contact">Phone: ${customerPhone}</div>
           </div>
           <div style="text-align: right;">
-            <div class="client-label">Order Status</div>
+            <div class="client-label">Fulfillment & Status</div>
             <div style="margin-top: 4px;">
-              <span style="background: ${list.status === "confirmed" ? "#dcfce7" : "#fef9c3"}; color: ${list.status === "confirmed" ? "#15803d" : "#a16207"}; padding: 4px 10px; border-radius: 4px; font-weight: 700; font-size: 12px; text-transform: uppercase;">
+              <span style="background: #e0f2fe; color: #0369a1; padding: 4px 10px; border-radius: 4px; font-weight: 700; font-size: 11px; text-transform: uppercase; margin-right: 4px;">
+                ${fulfillmentLabel}
+              </span>
+              <span style="background: ${list.status === "confirmed" ? "#dcfce7" : "#fef9c3"}; color: ${list.status === "confirmed" ? "#15803d" : "#a16207"}; padding: 4px 10px; border-radius: 4px; font-weight: 700; font-size: 11px; text-transform: uppercase;">
                 ${list.status}
               </span>
             </div>
@@ -260,9 +279,23 @@ export async function generateAndSharePdfInvoice(
                 : ""
             }
             <tr>
-              <td class="grand-total">Total Due</td>
+              <td class="grand-total">Total Order</td>
               <td class="grand-total" style="text-align: right;">${grandTotal}</td>
             </tr>
+            ${
+              amountPaidNum > 0
+                ? `
+                <tr>
+                  <td class="paid-row">Paid / Advance Deposit</td>
+                  <td class="paid-row" style="text-align: right;">- ${formatMoney(amountPaidNum.toString())}</td>
+                </tr>
+                <tr>
+                  <td class="balance-row">Balance Due</td>
+                  <td class="balance-row" style="text-align: right;">${formatMoney(balanceRemaining.toString())}</td>
+                </tr>
+                `
+                : ""
+            }
           </table>
         </div>
 
@@ -275,6 +308,15 @@ export async function generateAndSharePdfInvoice(
       </body>
     </html>
   `;
+}
+
+export async function generateAndSharePdfInvoice(
+  business: { name: string; slug?: string },
+  details: TenantDetails | null,
+  list: CustomerList
+): Promise<void> {
+  const html = buildInvoiceHtml(business, details, list);
+  const customerName = list.customer_name || "Customer";
 
   const { uri } = await Print.printToFileAsync({
     html,
@@ -288,5 +330,16 @@ export async function generateAndSharePdfInvoice(
       mimeType: "application/pdf",
       dialogTitle: `Share Invoice - ${customerName}`,
     });
+  } else {
+    await Print.printAsync({ html });
   }
+}
+
+export async function printInvoice(
+  business: { name: string; slug?: string },
+  details: TenantDetails | null,
+  list: CustomerList
+): Promise<void> {
+  const html = buildInvoiceHtml(business, details, list);
+  await Print.printAsync({ html });
 }

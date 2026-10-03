@@ -50,6 +50,7 @@ import {
   getCachedCustomerLists,
   getCachedProducts,
   getPendingOutboxCount,
+  updateCachedCustomerList,
   updateLocalCategory,
   updateLocalProduct,
 } from "@/lib/db";
@@ -94,8 +95,9 @@ import {
   TruckIcon,
 } from "@/components/icons";
 import { PinPad } from "@/components/pin-pad";
-import { generateAndSharePdfInvoice } from "@/lib/invoice";
+import { generateAndSharePdfInvoice, printInvoice } from "@/lib/invoice";
 import {
+  type ListPayment,
   ApiError,
   acceptInvitation,
   cancelSale,
@@ -572,6 +574,24 @@ export default function Home() {
   const [savingPrice, setSavingPrice] = useState(false);
   const [autoPricingListId, setAutoPricingListId] = useState<string | null>(null);
 
+  const pricingLineCategoryName = useMemo(() => {
+    if (!pricingLine) return null;
+    const targetList = customerLists.find((l) => l.id === pricingLine.listId);
+    const line = targetList?.lines.find((ln) => ln.id === pricingLine.lineId);
+    if (!line) return null;
+    if (line.group_name && line.group_name.trim()) {
+      return line.group_name.trim();
+    }
+    if (line.product_id) {
+      const prod = products.find((p) => p.id === line.product_id);
+      if (prod?.category_id) {
+        const cat = categories.find((c) => c.id === prod.category_id);
+        if (cat) return cat.name;
+      }
+    }
+    return null;
+  }, [pricingLine, customerLists, products, categories]);
+
   // Official Invoice modal state
   const [invoiceModalList, setInvoiceModalList] = useState<CustomerList | null>(null);
   const [exportingPdf, setExportingPdf] = useState(false);
@@ -596,6 +616,21 @@ export default function Home() {
   const [quickPasteName, setQuickPasteName] = useState("");
   const [quickPasteText, setQuickPasteText] = useState("");
   const [savingQuickPaste, setSavingQuickPaste] = useState(false);
+
+  // Collapsible list cards
+  const [expandedListIds, setExpandedListIds] = useState<Set<string>>(() => new Set());
+
+  // Customer List Part Payment / Advance Payment modal state
+  const [paymentModalList, setPaymentModalList] = useState<CustomerList | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("transfer");
+  const [paymentNote, setPaymentNote] = useState("");
+  const [savingPayment, setSavingPayment] = useState(false);
+
+  // Stall Security PIN Setup states (with PinPad)
+  const [pinSetupStep, setPinSetupStep] = useState<1 | 2>(1);
+  const [pinSetupFirst, setPinSetupFirst] = useState("");
+  const [pinSetupError, setPinSetupError] = useState<string | null>(null);
 
   // Trading Ledger states
   const [tradingSubTab, setTradingSubTab] = useState<"sales" | "expenses">("sales");
@@ -949,10 +984,10 @@ export default function Home() {
       } else if (remaining === 0) {
         showToast("Everything is up to date.");
       } else {
-        showToast("Offline. Changes queued safely in device SQLite.");
+        showToast("Saved safely on device. Will sync once connected.");
       }
     } catch {
-      showToast("Sync deferred. Offline changes safe.");
+      showToast("Saved safely on device. Will sync once connected.");
     } finally {
       setIsSyncing(false);
     }
@@ -1644,10 +1679,95 @@ export default function Home() {
     try {
       await generateAndSharePdfInvoice(activeBusiness, businessDetails, item);
       showToast("Invoice PDF generated and shared!");
-    } catch {
-      showToast("Could not export PDF. Please check device permissions.");
+    } catch (err: any) {
+      showToast(err?.message || "Could not export PDF.");
     } finally {
       setExportingPdf(false);
+    }
+  };
+
+  const handlePrintPdfInvoice = async (item: CustomerList) => {
+    if (!activeBusiness) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await printInvoice(activeBusiness, businessDetails, item);
+    } catch (err: any) {
+      showToast(err?.message || "Could not open print/save dialog.");
+    }
+  };
+
+  const handleRecordPayment = async () => {
+    if (!activeBusiness || !paymentModalList) return;
+    const amt = Number(paymentAmount.trim());
+    if (!Number.isFinite(amt) || amt <= 0) {
+      showToast("Please enter a valid payment amount.");
+      return;
+    }
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSavingPayment(true);
+    try {
+      const paymentRecord: ListPayment = {
+        id: `pay-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        amount: amt.toString(),
+        date: new Date().toISOString(),
+        note: paymentNote.trim() || "Order Payment",
+        payment_method: paymentMethod,
+      };
+
+      const existingPayments = paymentModalList.payments ?? [];
+      const updatedPayments = [...existingPayments, paymentRecord];
+      const newTotalPaid = updatedPayments.reduce(
+        (sum, p) => sum + (Number(p.amount) || 0),
+        0
+      );
+
+      const updatedList: CustomerList = {
+        ...paymentModalList,
+        payments: updatedPayments,
+        amount_paid: newTotalPaid.toString(),
+      };
+
+      setCustomerLists((curr) => curr.map((l) => (l.id === updatedList.id ? updatedList : l)));
+      updateCachedCustomerList(activeBusiness.id, updatedList);
+
+      const customerName = paymentModalList.customer_name || paymentModalList.customer_phone;
+      const paymentSale: SaleSummary = {
+        id: `sale-${paymentRecord.id}`,
+        receipt_number: `PAY-${Date.now().toString().slice(-6)}`,
+        created_at: paymentRecord.date,
+        total_amount: amt.toFixed(2),
+        payment_method: paymentMethod,
+        payment_status: "paid",
+      };
+
+      setSales((prev) => [paymentSale, ...prev]);
+      cacheSales(activeBusiness.id, [paymentSale, ...sales]);
+
+      setDailyStats((prev) => {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        if (!prev) {
+          return {
+            date: todayStr,
+            total_revenue: amt.toFixed(2),
+            total_sales: 1,
+          };
+        }
+        const updatedTotal = (Number(prev.total_revenue || "0") + amt).toFixed(2);
+        return {
+          ...prev,
+          total_revenue: updatedTotal,
+          total_sales: prev.total_sales + 1,
+        };
+      });
+
+      showToast(`Recorded payment of ${formatMoney(amt.toString())}!`);
+      setPaymentModalList(null);
+      setPaymentAmount("");
+      setPaymentNote("");
+    } catch {
+      showToast("Could not record payment.");
+    } finally {
+      setSavingPayment(false);
     }
   };
 
@@ -1779,9 +1899,31 @@ export default function Home() {
       if (applyPriceToAll && cleanShopPrice) {
         const targetList = customerLists.find((l) => l.id === pricingLine.listId);
         if (targetList) {
-          const otherUnpriced = targetList.lines.filter(
-            (l) => l.id !== pricingLine.lineId && !l.shop_price && l.note !== "heading"
-          );
+          const currentLine = targetList.lines.find((l) => l.id === pricingLine.lineId);
+          const currentGroup = currentLine?.group_name?.trim();
+          let currentCatId: string | null = null;
+          if (currentLine?.product_id) {
+            currentCatId = products.find((p) => p.id === currentLine.product_id)?.category_id ?? null;
+          }
+
+          const otherUnpriced = targetList.lines.filter((l) => {
+            if (l.id === pricingLine.lineId || l.shop_price || l.note === "heading") {
+              return false;
+            }
+            if (currentGroup && l.group_name && l.group_name.trim() === currentGroup) {
+              return true;
+            }
+            if (currentCatId && l.product_id) {
+              const otherProdCat = products.find((p) => p.id === l.product_id)?.category_id ?? null;
+              if (otherProdCat === currentCatId) return true;
+            }
+            if (!currentGroup && !currentCatId) {
+              const otherProdCat = l.product_id ? products.find((p) => p.id === l.product_id)?.category_id : null;
+              return !l.group_name && !otherProdCat;
+            }
+            return false;
+          });
+
           for (const otherLine of otherUnpriced) {
             try {
               updatedList = await workListLine(activeBusiness.id, pricingLine.listId, otherLine.id, {
@@ -1800,7 +1942,11 @@ export default function Home() {
       setPriceInput("");
       setCostInput("");
       setApplyPriceToAll(false);
-      showToast(applyPriceToAll ? "Applied prices to all list items!" : "Line prices & cost updated!");
+      showToast(
+        applyPriceToAll
+          ? `Applied prices to other unpriced items in ${pricingLineCategoryName ?? "category"}!`
+          : "Line prices & cost updated!"
+      );
     } catch {
       showToast("Could not update price.");
     } finally {
@@ -1940,6 +2086,8 @@ export default function Home() {
 
   const handleExecutePinConfirm = async (providedPin?: string) => {
     if (!activeBusiness || !pinConfirmList) return;
+    setSavingConfirm(true);
+    setConfirmError(null);
 
     // Retrieve fresh list reference to prevent stale line checks
     const currentList = customerLists.find((l) => l.id === pinConfirmList.id) || pinConfirmList;
@@ -1947,6 +2095,7 @@ export default function Home() {
     // Check if any product line is unpriced (excluding headings)
     const unpricedLines = currentList.lines.filter((l) => !l.shop_price && l.note !== "heading");
     if (unpricedLines.length > 0) {
+      setSavingConfirm(false);
       const sampleItem = unpricedLines[0].product_name || unpricedLines[0].free_text || "Item";
       setConfirmError(
         `Cannot confirm order: ${unpricedLines.length} item(s) (including "${sampleItem}") are unpriced.`
@@ -1959,19 +2108,19 @@ export default function Home() {
     if (hasPin) {
       const pinToCheck = providedPin || pinValue;
       if (!pinToCheck || pinToCheck.length < 4) {
+        setSavingConfirm(false);
         setConfirmError("Enter your 4-digit security PIN");
         return;
       }
       const isValid = await verifyBusinessPin(activeBusiness.id, pinToCheck);
       if (!isValid) {
+        setSavingConfirm(false);
         setConfirmError("Incorrect business security PIN. Please try again.");
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         return;
       }
     }
 
-    setConfirmError(null);
-    setSavingConfirm(true);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     try {
       const confirmed = await confirmCustomerList(activeBusiness.id, currentList.id);
@@ -2861,24 +3010,197 @@ export default function Home() {
             renderItem={({ item }) => {
               const sections = groupCustomerListLines(item.lines);
               const isConfirmed = item.status === "confirmed";
+              const isExpanded = expandedListIds.has(item.id);
+              const unpricedCount = item.lines.filter((l) => !l.shop_price && l.note !== "heading").length;
+              const totalPaid = (item.payments ?? []).reduce(
+                (acc, p) => acc + (Number(p.amount) || 0),
+                Number(item.amount_paid ?? item.advance_payment ?? 0)
+              );
+              const grandTotalNum = (Number(item.priced_total) || 0) + (Number(item.dispatch_cost) || 0);
+              const remainingBal = Math.max(0, grandTotalNum - totalPaid);
+              const isFullyPaid = grandTotalNum > 0 && totalPaid >= grandTotalNum;
+              const isPartPaid = totalPaid > 0 && totalPaid < grandTotalNum;
+              const fulfillmentMode = item.fulfillment_type ?? (item.waybill_number ? "waybill" : "pickup");
+
               return (
                 <View style={styles.listCard}>
-                  <View style={styles.listCardHeader}>
-                    <View>
-                      <Text style={styles.listCustomerName}>
-                        {item.customer_name || item.customer_phone}
+                  <Pressable
+                    style={styles.listCardHeader}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setExpandedListIds((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(item.id)) {
+                          next.delete(item.id);
+                        } else {
+                          next.add(item.id);
+                        }
+                        return next;
+                      });
+                    }}
+                  >
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
+                        <Text style={styles.listCustomerName}>
+                          {item.customer_name || item.customer_phone}
+                        </Text>
+                        <View
+                          style={[
+                            styles.badgeSmall,
+                            fulfillmentMode === "waybill" ? styles.badgeWaybill : styles.badgePickup,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.badgeSmallText,
+                              { color: fulfillmentMode === "waybill" ? "#f59e0b" : "#38bdf8" },
+                            ]}
+                          >
+                            {fulfillmentMode === "waybill" ? "Waybill" : "Pickup"}
+                          </Text>
+                        </View>
+                        <View
+                          style={[
+                            styles.badgeSmall,
+                            isFullyPaid
+                              ? styles.badgePaid
+                              : isPartPaid
+                              ? styles.badgePartPaid
+                              : styles.badgeUnpaid,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.badgeSmallText,
+                              {
+                                color: isFullyPaid
+                                  ? "#4ade80"
+                                  : isPartPaid
+                                  ? "#fb923c"
+                                  : "#94a3b8",
+                              },
+                            ]}
+                          >
+                            {isFullyPaid
+                              ? "Paid Full"
+                              : isPartPaid
+                              ? `Part Paid (-${formatMoney(remainingBal.toString())})`
+                              : "Unpaid"}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.listDate}>
+                        {item.lines.length} items | {item.priced_total ? formatMoney(item.priced_total) : "Unpriced"}
+                        {unpricedCount > 0 ? ` | ${unpricedCount} unpriced` : ""}
                       </Text>
-                      <Text style={styles.listDate}>{item.lines.length} items requested</Text>
                     </View>
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        isConfirmed ? styles.statusConfirmed : styles.statusPending,
-                      ]}
-                    >
-                      <Text style={styles.statusBadgeText}>{item.status.toUpperCase()}</Text>
+
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          isConfirmed ? styles.statusConfirmed : styles.statusPending,
+                        ]}
+                      >
+                        <Text style={styles.statusBadgeText}>{item.status.toUpperCase()}</Text>
+                      </View>
+                      <View style={{ transform: [{ rotate: isExpanded ? "180deg" : "0deg" }] }}>
+                        <ChevronDownIcon size={16} color="#8a928e" />
+                      </View>
                     </View>
-                  </View>
+                  </Pressable>
+
+                  {isExpanded && (
+                    <>
+                      {/* Fulfillment Type Bar */}
+                      <View style={styles.fulfillmentRow}>
+                        <Text style={styles.fulfillmentLabel}>Fulfillment Mode:</Text>
+                        <View style={styles.fulfillmentToggleBox}>
+                          <Pressable
+                            style={[
+                              styles.fulfillmentOption,
+                              fulfillmentMode === "pickup" && styles.fulfillmentOptionActive,
+                            ]}
+                            onPress={() => {
+                              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              const updated: CustomerList = { ...item, fulfillment_type: "pickup" };
+                              setCustomerLists((curr) => curr.map((l) => (l.id === item.id ? updated : l)));
+                              if (activeBusiness?.id) {
+                                updateCachedCustomerList(activeBusiness.id, updated);
+                              }
+                            }}
+                          >
+                            <Text
+                              style={[
+                                styles.fulfillmentOptionText,
+                                fulfillmentMode === "pickup" && styles.fulfillmentOptionTextActive,
+                              ]}
+                            >
+                              In-Shop Pickup
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            style={[
+                              styles.fulfillmentOption,
+                              fulfillmentMode === "waybill" && styles.fulfillmentOptionActive,
+                            ]}
+                            onPress={() => {
+                              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              const updated: CustomerList = { ...item, fulfillment_type: "waybill" };
+                              setCustomerLists((curr) => curr.map((l) => (l.id === item.id ? updated : l)));
+                              if (activeBusiness?.id) {
+                                updateCachedCustomerList(activeBusiness.id, updated);
+                              }
+                            }}
+                          >
+                            <Text
+                              style={[
+                                styles.fulfillmentOptionText,
+                                fulfillmentMode === "waybill" && styles.fulfillmentOptionTextActive,
+                              ]}
+                            >
+                              Waybill / Delivery
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </View>
+
+                      {/* Payment & Ledger Tracker Card */}
+                      <View style={styles.paymentSummaryCard}>
+                        <View style={styles.paymentSummaryRow}>
+                          <View>
+                            <Text style={styles.paymentLabel}>TOTAL ORDER</Text>
+                            <Text style={styles.paymentVal}>{formatMoney(grandTotalNum.toString())}</Text>
+                          </View>
+                          <View>
+                            <Text style={styles.paymentLabel}>PAID SO FAR</Text>
+                            <Text style={[styles.paymentVal, { color: "#4ade80" }]}>
+                              {formatMoney(totalPaid.toString())}
+                            </Text>
+                          </View>
+                          <View>
+                            <Text style={styles.paymentLabel}>BALANCE DUE</Text>
+                            <Text style={[styles.paymentVal, { color: remainingBal > 0 ? "#f87171" : "#4ade80" }]}>
+                              {formatMoney(remainingBal.toString())}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <Pressable
+                          style={styles.recordPaymentBtn}
+                          onPress={() => {
+                            setPaymentModalList(item);
+                            setPaymentAmount(remainingBal > 0 ? remainingBal.toString() : "");
+                            setPaymentNote("");
+                          }}
+                        >
+                          <ReceiptIcon size={14} color="#084a2f" />
+                          <Text style={styles.recordPaymentBtnText}>
+                            {totalPaid === 0 ? "Record Advance Deposit / Payment" : "Add Part Payment"}
+                          </Text>
+                        </Pressable>
+                      </View>
 
                   {/* Hierarchical Groupings */}
                   {sections.map((sec, idx) => (
@@ -3118,8 +3440,10 @@ export default function Home() {
                       </Pressable>
                     </View>
                   </View>
-                </View>
-              );
+                </>
+              )}
+            </View>
+          );
             }}
           />
         )}
@@ -4523,7 +4847,9 @@ export default function Home() {
                   {applyPriceToAll && <CheckMarkIcon size={12} color="#ffffff" />}
                 </View>
                 <Text style={styles.applyAllCheckboxLabel}>
-                  Apply these prices to all other unpriced items in this list
+                  {pricingLineCategoryName
+                    ? `Apply these prices to other unpriced items in "${pricingLineCategoryName}" in this list`
+                    : "Apply these prices to other unpriced items in this list"}
                 </Text>
               </Pressable>
 
@@ -4642,6 +4968,8 @@ export default function Home() {
 
                 <PinPad
                   length={4}
+                  loading={savingConfirm}
+                  loadingMessage="Verifying PIN & confirming order..."
                   onComplete={(pin) => {
                     setPinValue(pin);
                     void handleExecutePinConfirm(pin);
@@ -4903,24 +5231,126 @@ export default function Home() {
                       <ActivityIndicator color="#ffffff" size="small" />
                     ) : (
                       <>
-                        <ReceiptIcon size={16} color="#ffffff" />
-                        <Text style={styles.invoiceExportPdfText}>Export PDF</Text>
+                        <ShareIcon size={16} color="#ffffff" />
+                        <Text style={styles.invoiceExportPdfText}>Share Invoice (PDF)</Text>
                       </>
                     )}
                   </Pressable>
 
                   <Pressable
                     style={styles.invoiceShareWaBtn}
-                    onPress={() => handleShareReceiptText(invoiceModalList)}
+                    onPress={() => handlePrintPdfInvoice(invoiceModalList)}
                   >
-                    <ShareIcon size={16} color="#ffffff" />
-                    <Text style={styles.invoiceShareWaText}>Share via WhatsApp</Text>
+                    <ReceiptIcon size={16} color="#ffffff" />
+                    <Text style={styles.invoiceShareWaText}>Print / Save PDF</Text>
                   </Pressable>
                 </View>
               </ScrollView>
             )}
           </View>
         </View>
+      </Modal>
+
+      {/* Record Order Payment / Advance Deposit Modal */}
+      <Modal statusBarTranslucent visible={paymentModalList !== null} transparent animationType="slide">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Record Order Payment</Text>
+            <Text style={styles.modalSubtitle}>
+              Customer: {paymentModalList?.customer_name || paymentModalList?.customer_phone}
+            </Text>
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Amount (NGN)"
+              placeholderTextColor="#8a928e"
+              keyboardType="numeric"
+              value={paymentAmount}
+              onChangeText={setPaymentAmount}
+            />
+
+            {/* Quick chips */}
+            {paymentModalList && (() => {
+              const curTotalPaid = (paymentModalList.payments ?? []).reduce(
+                (acc, p) => acc + (Number(p.amount) || 0),
+                Number(paymentModalList.amount_paid ?? paymentModalList.advance_payment ?? 0)
+              );
+              const curGrand = (Number(paymentModalList.priced_total) || 0) + (Number(paymentModalList.dispatch_cost) || 0);
+              const curRem = Math.max(0, curGrand - curTotalPaid);
+              return curRem > 0 ? (
+                <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+                  <Pressable
+                    style={styles.quickChip}
+                    onPress={() => setPaymentAmount(curRem.toString())}
+                  >
+                    <Text style={styles.quickChipText}>Full Balance ({formatMoney(curRem.toString())})</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.quickChip}
+                    onPress={() => setPaymentAmount(Math.round(curRem / 2).toString())}
+                  >
+                    <Text style={styles.quickChipText}>50% Part</Text>
+                  </Pressable>
+                </View>
+              ) : null;
+            })()}
+
+            {/* Payment Method Selector */}
+            <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+              {["transfer", "cash", "pos"].map((m) => (
+                <Pressable
+                  key={m}
+                  style={[
+                    styles.methodChip,
+                    paymentMethod === m && styles.methodChipActive,
+                  ]}
+                  onPress={() => setPaymentMethod(m)}
+                >
+                  <Text
+                    style={[
+                      styles.methodChipText,
+                      paymentMethod === m && styles.methodChipTextActive,
+                    ]}
+                  >
+                    {m.toUpperCase()}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Note (e.g. Advance deposit before dispatch, Part payment)"
+              placeholderTextColor="#8a928e"
+              value={paymentNote}
+              onChangeText={setPaymentNote}
+            />
+
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={styles.modalCancelBtn}
+                onPress={() => setPaymentModalList(null)}
+                disabled={savingPayment}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={styles.modalSaveBtn}
+                onPress={handleRecordPayment}
+                disabled={savingPayment}
+              >
+                {savingPayment ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Save Payment</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Quick-Paste Order Modal */}
@@ -5800,43 +6230,80 @@ export default function Home() {
                       {hasPin ? "Stall Security PIN is Active" : "No PIN Set for this Stall"}
                     </Text>
                   </View>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="New 4-6 Digit Security PIN"
-                    placeholderTextColor="#8a928e"
-                    keyboardType="numeric"
-                    maxLength={6}
-                    secureTextEntry
-                    value={businessPinInput}
-                    onChangeText={setBusinessPinInput}
-                  />
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="Confirm Security PIN"
-                    placeholderTextColor="#8a928e"
-                    keyboardType="numeric"
-                    maxLength={6}
-                    secureTextEntry
-                    value={businessPinConfirm}
-                    onChangeText={setBusinessPinConfirm}
-                  />
-                  <View style={styles.modalButtons}>
+                  {pinSetupStep === 1 ? (
+                    <View style={{ alignItems: "center", marginTop: 8 }}>
+                      <Text style={styles.pinStepTitle}>Choose a 4-digit Stall Security PIN</Text>
+                      <PinPad
+                        length={4}
+                        error={pinSetupError}
+                        loading={savingPin}
+                        onComplete={(pin) => {
+                          setPinSetupFirst(pin);
+                          setPinSetupStep(2);
+                          setPinSetupError(null);
+                        }}
+                      />
+                    </View>
+                  ) : (
+                    <View style={{ alignItems: "center", marginTop: 8 }}>
+                      <Text style={styles.pinStepTitle}>Re-enter your 4-digit PIN to confirm</Text>
+                      <PinPad
+                        length={4}
+                        error={pinSetupError}
+                        loading={savingPin}
+                        loadingMessage="Saving Security PIN..."
+                        onComplete={async (confirmedPin) => {
+                          if (!activeBusiness) {
+                            setPinSetupError("No active business selected.");
+                            return;
+                          }
+                          if (confirmedPin !== pinSetupFirst) {
+                            setPinSetupError("PINs do not match. Please try again.");
+                            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                            setPinSetupStep(1);
+                            setPinSetupFirst("");
+                            return;
+                          }
+                          setSavingPin(true);
+                          setPinSetupError(null);
+                          try {
+                            await setBusinessPin(activeBusiness.id, confirmedPin);
+                            setHasPin(true);
+                            setPinSetupStep(1);
+                            setPinSetupFirst("");
+                            showToast("Stall Security PIN set successfully!");
+                            setShowPasswordModal(false);
+                          } catch {
+                            setPinSetupError("Could not save Security PIN.");
+                          } finally {
+                            setSavingPin(false);
+                          }
+                        }}
+                      />
+                      <Pressable
+                        style={{ marginTop: 8, padding: 6 }}
+                        onPress={() => {
+                          setPinSetupStep(1);
+                          setPinSetupFirst("");
+                          setPinSetupError(null);
+                        }}
+                      >
+                        <Text style={{ color: "#38bdf8", fontSize: 13, fontWeight: "600" }}>Start over</Text>
+                      </Pressable>
+                    </View>
+                  )}
+
+                  <View style={[styles.modalButtons, { marginTop: 12 }]}>
                     <Pressable
-                      style={styles.modalCancelBtn}
-                      onPress={() => setShowPasswordModal(false)}
+                      style={[styles.modalCancelBtn, { width: "100%" }]}
+                      onPress={() => {
+                        setShowPasswordModal(false);
+                        setPinSetupStep(1);
+                        setPinSetupFirst("");
+                        setPinSetupError(null);
+                      }}
                     >
                       <Text style={styles.modalCancelText}>Cancel</Text>
-                    </Pressable>
-                    <Pressable
-                      style={styles.modalSaveBtn}
-                      onPress={handleSaveBusinessPin}
-                      disabled={savingPin}
-                    >
-                      {savingPin ? (
-                        <ActivityIndicator color="#ffffff" size="small" />
-                      ) : (
-                        <Text style={styles.modalSaveText}>Save Stall PIN</Text>
-                      )}
                     </Pressable>
                   </View>
                 </View>
@@ -6689,6 +7156,150 @@ const createStyles = (theme: ThemePalette) => StyleSheet.create({
     color: "#ffffff",
     fontSize: 10,
     fontWeight: "800",
+  },
+  badgeSmall: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  badgeSmallText: {
+    fontSize: 10,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  badgeWaybill: {
+    backgroundColor: "rgba(245, 158, 11, 0.15)",
+  },
+  badgePickup: {
+    backgroundColor: "rgba(56, 189, 248, 0.15)",
+  },
+  badgePaid: {
+    backgroundColor: "rgba(74, 222, 128, 0.15)",
+  },
+  badgePartPaid: {
+    backgroundColor: "rgba(251, 146, 60, 0.15)",
+  },
+  badgeUnpaid: {
+    backgroundColor: "rgba(148, 163, 184, 0.15)",
+  },
+  fulfillmentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  fulfillmentLabel: {
+    color: theme.textSecondary,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  fulfillmentToggleBox: {
+    flexDirection: "row",
+    backgroundColor: theme.bg,
+    borderRadius: 8,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  fulfillmentOption: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  fulfillmentOptionActive: {
+    backgroundColor: "#084a2f",
+  },
+  fulfillmentOptionText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: theme.textSecondary,
+  },
+  fulfillmentOptionTextActive: {
+    color: "#ffffff",
+    fontWeight: "700",
+  },
+  paymentSummaryCard: {
+    backgroundColor: theme.bg,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  paymentSummaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  paymentLabel: {
+    color: theme.textSecondary,
+    fontSize: 10,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    marginBottom: 2,
+  },
+  paymentVal: {
+    color: theme.text,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  recordPaymentBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#4ade80",
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  recordPaymentBtnText: {
+    color: "#084a2f",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  quickChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: "#1e293b",
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+  quickChipText: {
+    color: "#4ade80",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  methodChip: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: "#1e293b",
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+  methodChipActive: {
+    backgroundColor: "#084a2f",
+    borderColor: "#4ade80",
+  },
+  methodChipText: {
+    color: "#94a3b8",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  methodChipTextActive: {
+    color: "#ffffff",
+  },
+  pinStepTitle: {
+    color: theme.text,
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 8,
+    textAlign: "center",
   },
   sectionBox: {
     backgroundColor: theme.bg,
