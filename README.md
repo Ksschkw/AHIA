@@ -14,6 +14,16 @@ documents are the specification of record. This README is the map.
 
 ---
 
+## Live
+
+| Surface | Address |
+|---|---|
+| Web application | https://useahia-hazel.vercel.app |
+| Android build | https://github.com/Ksschkw/AHIA/releases/latest |
+| API | https://p01--ahia-api--qw5xhkblp8hy.code.run |
+
+---
+
 ## Repository layout
 
 ```text
@@ -24,12 +34,14 @@ AHIA/
     PREREQUISITES.md            toolchain, accounts, environment variables
     ARCHITECTURE.md             layer rules, invariants and the decision log
   backend/                      Python 3.12 + FastAPI + SQLAlchemy 2 + Alembic
-  web/                          Next.js + TypeScript          (milestone M19)
-  mobile/                       React Native + Expo + TS      (milestone M20)
+  web/                          Next.js + TypeScript, server-rendered storefront and app
+  mobile/                       React Native + Expo, offline-first Android client
 ```
 
-The backend is the only implemented workspace so far. `web/` and `mobile/` are
-created by their own milestones; nothing is stubbed in advance.
+All three workspaces are implemented and deployed. The backend owns the domain
+and the data. The web and mobile clients are both consumers of the same API, and
+neither restates a business rule: a rule lives in one service and both clients
+obey it.
 
 ---
 
@@ -97,7 +109,7 @@ with one command.
 | `docs/HARDENING.md` | rate limiting, metrics, Row-Level Security and the error-reporting split, plus what is not in place |
 | `docs/RLS_ROLLOUT.md` | what Row-Level Security enforces, where the scope is bound, and what was verified - and what was not |
 | `docs/LOAD_SMOKE.md` | the recorded load smoke test on the sale endpoint: the numbers, the environment, and what they do and do not say |
-| `TASKS.md` | 21 milestones broken into sub-milestones and micro-milestones, with status |
+| `TASKS.md` | 27 milestones broken into sub-milestones and micro-milestones, with status |
 | `PRODUCT_INITIAL_DEFINITION/AHIA_PROJECT_SPECIFICATION.md` | product definition and journeys |
 | `PRODUCT_INITIAL_DEFINITION/AHIA_DATABASE_AND_DOMAIN_SPEC.md` | entities, constraints, indexes, sync semantics |
 | `PRODUCT_INITIAL_DEFINITION/AHIA_BACKEND_SCAFFOLD_SPEC.md` | backend conventions and scaffold contract |
@@ -122,53 +134,72 @@ with one command.
 
 ## Current status
 
-Milestones M0 through M8 are complete and committed: repository and tooling, core
-cross-cutting infrastructure, the User vertical slice, authentication and sessions,
-tenants, staff administration, the permission model as data, devices, and the versioned
-migration baseline, M9 the catalogue is complete - categories, products and product
-images end to end, validated, optimized, charged against the tenant's quota, stored under
-a server-built key, and resolvable through whichever provider holds the bytes - and M10
-the inventory ledger is complete - an append-only movement history, a stock projection
-derived from it, and a per-business rule about stock going negative - and M11 customers is
-complete: consent that is opt-in, duplicate detection that reports rather than refuses, and
-a version that makes two offline edits a conflict instead of a lost one. M12 sales is
-complete: a sale, its lines, its payments, the stock it moved and its ledger entry are
-written in one transaction or none of them are, a replayed offline operation returns the
-receipt it already produced, and cancelling reverses the goods and the money without
-deleting the record of either. M13 expenses is complete: recording what a business spent
-writes the expense and the ledger entry that accounts for it in one transaction, a mistake is
-reversed with a reason and a compensating entry rather than deleted, and the categories
-spending reports group by are a declared closed set published to clients. M14 the audit trail is complete: every mutating use case from the catalogue, the stock ledger, the counter, the expenses and the staff administration writes an event in its own transaction, the table is append-only by database trigger, and the trail is readable by the owner and by nobody else. M15 offline synchronization is complete: a device pushes a queue of operations that run through the same use cases as online requests and are applied exactly once, pulls a server-ordered change feed filtered by what it may read, and holds a cursor that only moves forward - all behind `FEATURE_OFFLINE_SYNC`, off by default. M16 the public surface is complete: a business opens a shop at `/shop/{slug}`, strangers read an allowlisted projection of it with no account, invoices are shared through revocable tokens that are never stored, and a product can be shared as a WhatsApp link or a QR code. M17 the reporting surface is complete: daily sales, what sells and what is running out, a CSV export stored in object storage behind a revocable link, in-app notifications addressed to one person, and a scheduled low-stock evaluation that reuses the report rule rather than restating it. 1979 tests pass, all nine gates green,
-the nine-stage build gate is green, and the service serves a real flow:
-create an account, sign in, create a business, invite a worker, have that worker accept
-the invitation with the role they were given, inspect what that role can do, group the
-catalogue into categories, add a product, upload its pictures, publish it at an address
-a customer can share, and revoke a lost phone - which ends the sessions bound to it.
+M0 through M26 are complete: 27 milestones, each broken into sub-milestones that
+landed as individual commits behind one green gate.
 
-Cross-tenant integrity is enforced by the database, not only by services: `products`
-references `categories(id, tenant_id)` as a composite key, so a product in one business
-cannot point at another business's category even if a service forgets to check; product
-images reference `products(id, tenant_id)` the same way. The anchor on
-`products(id, tenant_id)` is what the sales tables will reference.
+**Backend.** The five layers with their enforced import contracts; typed
+configuration and the feature flag register; an error hierarchy with correlation
+IDs and an external envelope that leaks nothing; structured logging with
+infrastructure-level redaction; timeout, breaker, bulkhead, bounded retry and a
+typed fallback on every outbound dependency; authentication with rotating refresh
+tokens, constant-time failure behaviour and errors that do not disclose whether an
+account exists; tenants, memberships, permissions as data, and devices; the
+catalogue with categories, products and provider-neutral image storage; the
+inventory ledger and the projection derived from it; sales, payments and expenses
+written in a single transaction; an audit trail that is append-only by database
+trigger; offline synchronisation with idempotent operations and a cursor-based
+change feed; the public storefront, revocable share links and WhatsApp handover;
+reports, low-stock alerts and notifications; Row-Level Security on every
+business-owned table; and the metrics, rate limiting and deployment pipeline that
+carry it.
 
-Object storage is provider-neutral in the schema as well as in the code: an image row
-records `storage_provider` and `storage_key` rather than a column named after a vendor,
-so switching providers is a configuration change and an architecture test fails the
-build if a provider's name appears in a column or outside the storage boundary.
+**Web.** A server-rendered storefront, so a customer on a market connection reads
+the shop rather than watching a spinner fill in a page already paid for, and an
+authenticated application shell with a bottom bar on a phone and a side rail on a
+desk. The trader's screens cover the shelf, sales, the catalogue as a nested
+family tree, the price book, the list workbench, dispatch and a storefront studio.
+
+**Mobile.** An offline-first Android client that installs from a GitHub release. A
+local store mirrors the catalogue for instant first paint, and a sale made with no
+signal queues in a durable outbox that drains when the connection returns without
+booking the same sale twice.
+
+The suite runs past two thousand tests, of which the storage, quota, database and
+migration suites run against real PostgreSQL.
+
+Cross-tenant integrity is enforced by the database, not only by services:
+`products` references `categories(id, tenant_id)` as a composite key, so a product
+in one business cannot point at another business's category even if a service
+forgets to check; product images reference `products(id, tenant_id)` the same way.
+The anchor on `products(id, tenant_id)` is what the sales tables reference.
+
+Object storage is provider-neutral in the schema as well as in the code: an image
+row records `storage_provider` and `storage_key` rather than a column named after
+a vendor, so switching providers is a configuration change, and an architecture
+test fails the build if a provider's name appears in a column or outside the
+storage boundary.
 
 The schema is versioned: `alembic upgrade head` builds every table from an empty
 database, `alembic downgrade base` takes it back, and a test asserts that an
-autogenerate run afterwards finds no difference between the migrations and the models
-- so a model changed without a migration fails the build rather than a deployment.
-Each new table arrives with its own revision. The migration URL comes from the
-environment, never from `alembic.ini`.
+autogenerate run afterwards finds no difference between the migrations and the
+models, so a model changed without a migration fails the build rather than a
+deployment. Each new table arrives with its own revision, and the migration URL
+comes from the environment rather than from `alembic.ini`.
 
-Delivered beyond the core: a provider-neutral storage capability with both
-Cloudflare R2 and Cloudinary adapters selectable by configuration, mandatory
-server-side image validation and optimization, per-tenant storage quota accounting
-that is safe under concurrent uploads, and authentication whose failures are
-indistinguishable across an unknown account, a wrong password and a deactivated
-account.
+Deferred by design, not forgotten: AI forecasting, a community module, a supplier
+marketplace, fleet tracking, automated bank integrations, the full WhatsApp
+Business API, and a native desktop shell.
 
-Next: M13, expenses - the other side of the ledger, where money leaves the business and the
-same discipline applies. Progress is tracked in `TASKS.md`.
+---
+
+## License
+
+Source-available under the [Elastic License 2.0](LICENSE).
+
+You may read this code, run it, copy it, modify it and share it. You may not offer
+it to third parties as a hosted or managed service, and you may not remove the
+license or copyright notices. The exact terms are in `LICENSE`.
+
+This is deliberately not an open-source license. The web and mobile applications
+are separate works under the same terms, and the Android build published on the
+releases page is distributable as-is.
