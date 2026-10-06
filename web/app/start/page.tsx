@@ -239,7 +239,7 @@ function AuthScreen() {
                 inputMode="tel"
                 autoComplete="tel"
                 placeholder="0803 123 4567"
-                hint="How you sign in, and how customers reach you. Any form works: 0901..., 0803 123 4567, +234901..."
+                hint="How you sign in, and how customers reach you. Any form works: 0803..., 0803 123 4567, +234803..."
                 error={errors.phone}
               />
               <Field

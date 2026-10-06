@@ -3518,7 +3518,7 @@ that happens, because a foundation that does not run is not a foundation.
 
 It was in three source files and the task log: the phone-number entity's comments, two test files that
 canonicalise numbers, and a progress note here. **Seventeen occurrences, including the spaced forms** - my first
-pass replaced the unspaced ones and left `+234 803 123 4567` and `0803 123 4567` behind, which the tests caught
+pass replaced the unspaced ones and left the spaced and country-code forms behind, which the tests caught
 immediately, because that test exists to prove every way of writing one number is one number.
 
 Replaced with `08031234567` - **the example this codebase's own docstrings already use** - so there is one
