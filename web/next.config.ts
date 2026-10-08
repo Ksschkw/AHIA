@@ -31,8 +31,10 @@ const DEPLOYED_API = "https://p01--ahia-api--qw5xhkblp8hy.code.run";
 function withScheme(target: string): string {
   const trimmed = target.trim().replace(/\/+$/, "");
   if (trimmed === "") {
-    // On Vercel, the API is remote. Locally, it is on this machine.
-    return process.env.VERCEL ? DEPLOYED_API : "http://127.0.0.1:8000";
+    // In production or when remote, use DEPLOYED_API. Only use localhost when explicitly in LOCAL_DEV.
+    return process.env.NODE_ENV === "production" || process.env.VERCEL || !process.env.LOCAL_DEV
+      ? DEPLOYED_API
+      : "http://127.0.0.1:8000";
   }
   // Anything that is not already a scheme is treated as a hostname, and a deployed hostname is TLS: the API
   // refuses plaintext and the platform refuses to proxy it.

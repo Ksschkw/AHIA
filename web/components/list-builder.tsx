@@ -750,8 +750,12 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     try {
       window.localStorage.setItem(PHONE_KEY, phone.trim());
       if (name.trim()) window.localStorage.setItem(NAME_KEY, name.trim());
-      const drawn = await drawList();
-      if (drawn) setPicture(URL.createObjectURL(drawn));
+      try {
+        const drawn = await drawList();
+        if (drawn) setPicture(URL.createObjectURL(drawn));
+      } catch {
+        // Progressive enhancement canvas rendering; non-fatal
+      }
 
       // **Positions, not keys.** The API addresses a parent by where it sits in this submission, because the
       // lines do not exist yet. So the order is worked out once, and every parent is a number in it.
@@ -1799,7 +1803,18 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
         >
           {busy ? "Sending..." : "Send my list"}
         </button>
-        {problem ? <p className={styles.problem}>{problem}</p> : null}
+        {problem ? (
+          <div className={styles.problemBox}>
+            <p className={styles.problemText}>{problem}</p>
+            <button
+              type="button"
+              className={styles.waFallbackBtn}
+              onClick={shareOnWhatsApp}
+            >
+              Send directly on WhatsApp
+            </button>
+          </div>
+        ) : null}
       </div>
     </main>
   );

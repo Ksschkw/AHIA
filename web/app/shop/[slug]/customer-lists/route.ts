@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { resolveApiBaseUrl } from "@/lib/server-api";
+import { resolveApiBaseUrl, DEPLOYED_API } from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +18,10 @@ export async function GET(
   const url = new URL(request.url);
   const phone = url.searchParams.get("phone") ?? "";
 
+  let upstream: Response | null = null;
+
   try {
-    const upstream = await fetch(
+    upstream = await fetch(
       `${baseUrl}/shop/${encodeURIComponent(slug)}/customer-lists?phone=${encodeURIComponent(phone)}`,
       {
         headers: {
@@ -27,10 +29,27 @@ export async function GET(
         },
       },
     );
-
-    const data = await upstream.json().catch(() => null);
-    return NextResponse.json(data ?? [], { status: upstream.status });
   } catch {
+    if (baseUrl !== DEPLOYED_API) {
+      try {
+        upstream = await fetch(
+          `${DEPLOYED_API}/shop/${encodeURIComponent(slug)}/customer-lists?phone=${encodeURIComponent(phone)}`,
+          {
+            headers: {
+              Accept: "application/json",
+            },
+          },
+        );
+      } catch {
+        // Fallback also failed
+      }
+    }
+  }
+
+  if (!upstream) {
     return NextResponse.json([], { status: 502 });
   }
+
+  const data = await upstream.json().catch(() => null);
+  return NextResponse.json(data ?? [], { status: upstream.status });
 }

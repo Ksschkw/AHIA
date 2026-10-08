@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { resolveApiBaseUrl } from "@/lib/server-api";
+import { resolveApiBaseUrl, DEPLOYED_API } from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
 
@@ -15,24 +15,42 @@ export async function GET(
   const { slug, token } = await context.params;
   const baseUrl = resolveApiBaseUrl();
 
+  let upstream: Response | null = null;
+
   try {
-    const upstream = await fetch(
+    upstream = await fetch(
       `${baseUrl}/shop/${encodeURIComponent(slug)}/requests/${encodeURIComponent(token)}`,
       {
         headers: { Accept: "application/json" },
         cache: "no-store",
       },
     );
-
-    const data = await upstream.json().catch(() => null);
-    return NextResponse.json(
-      data ?? { error: { message: "List not found" } },
-      { status: upstream.status },
-    );
   } catch {
+    if (baseUrl !== DEPLOYED_API) {
+      try {
+        upstream = await fetch(
+          `${DEPLOYED_API}/shop/${encodeURIComponent(slug)}/requests/${encodeURIComponent(token)}`,
+          {
+            headers: { Accept: "application/json" },
+            cache: "no-store",
+          },
+        );
+      } catch {
+        // Fallback also failed
+      }
+    }
+  }
+
+  if (!upstream) {
     return NextResponse.json(
       { error: { message: "We could not reach the shop service." } },
       { status: 502 },
     );
   }
+
+  const data = await upstream.json().catch(() => null);
+  return NextResponse.json(
+    data ?? { error: { message: "List not found" } },
+    { status: upstream.status },
+  );
 }

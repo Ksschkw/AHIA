@@ -320,7 +320,9 @@ export function AppShell({
             key={destination.href}
             aria-current={isCurrent(pathname, destination.href) ? "page" : undefined}
           >
-            <Icon name={destination.icon} />
+            <span className={styles.bottombarIconWrap}>
+              <Icon name={destination.icon} />
+            </span>
             <span>{destination.short}</span>
           </Link>
         ))}
@@ -329,7 +331,9 @@ export function AppShell({
           onClick={() => setMoreOpen(true)}
           aria-expanded={moreOpen}
         >
-          <Icon name="more" />
+          <span className={styles.bottombarIconWrap}>
+            <Icon name="more" />
+          </span>
           <span>More</span>
         </button>
         <Link
@@ -341,7 +345,9 @@ export function AppShell({
           href="/app/profile"
           aria-current={isCurrent(pathname, "/app/profile") ? "page" : undefined}
         >
-          <Icon name="person" />
+          <span className={styles.bottombarIconWrap}>
+            <Icon name="person" />
+          </span>
           <span>You</span>
         </Link>
       </nav>

@@ -81,22 +81,38 @@ export function LiveList({
   const childrenOf = new Map<number | null, PublicList["lines"]>();
   for (const line of list.lines) {
     const under =
-      line.parent_position !== null && byPosition.has(line.parent_position)
+      line.parent_position !== null &&
+      line.parent_position !== line.position &&
+      byPosition.has(line.parent_position)
         ? line.parent_position
         : null;
     childrenOf.set(under, [...(childrenOf.get(under) ?? []), line]);
   }
 
-  /** A line and everything under it, in order. Recursion is safe because a parent is always earlier. */
-  function withChildren(line: PublicList["lines"][number], depth: number): { line: PublicList["lines"][number]; depth: number }[] {
-    const mine = childrenOf.get(line.position) ?? [];
+  const visited = new Set<number>();
+  function withChildren(
+    line: PublicList["lines"][number],
+    depth: number,
+  ): { line: PublicList["lines"][number]; depth: number }[] {
+    if (visited.has(line.position) || depth > 8) return [];
+    visited.add(line.position);
+    const mine = (childrenOf.get(line.position) ?? []).filter(
+      (child) => !visited.has(child.position) && child.position !== line.position,
+    );
     return [
       { line, depth },
       ...mine.flatMap((child) => withChildren(child, depth + 1)),
     ];
   }
 
-  const shaped = (childrenOf.get(null) ?? []).flatMap((line) => withChildren(line, 0));
+  const rootLines = childrenOf.get(null) ?? [];
+  const shaped = rootLines.flatMap((line) => withChildren(line, 0));
+  for (const line of list.lines) {
+    if (!visited.has(line.position)) {
+      shaped.push({ line, depth: 0 });
+      visited.add(line.position);
+    }
+  }
 
   return (
     <main className={styles.page}>

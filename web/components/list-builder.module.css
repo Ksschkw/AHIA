@@ -315,7 +315,7 @@
   justify-content: center;
   min-height: 52px;
   padding: 0 var(--space-5);
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   border: none;
   background: var(--leaf);
   color: #fff;
@@ -324,17 +324,65 @@
   text-decoration: none;
   font-family: inherit;
   cursor: pointer;
+  box-shadow: 0 8px 20px rgba(8, 74, 47, 0.25);
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.primary:hover,
+.send:hover:not(:disabled) {
+  background: var(--leaf-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(8, 74, 47, 0.32);
 }
 
 .send:disabled {
   background: var(--ink-3);
   cursor: progress;
+  box-shadow: none;
 }
 
 .problem {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--danger);
+}
+
+.problemBox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--danger-soft, #fbe4e3);
+  border: 1px solid var(--danger, #a3231f);
+}
+
+.problemText {
+  font-size: var(--text-sm);
+  font-weight: 650;
+  color: var(--danger, #a3231f);
+  margin: 0;
+}
+
+.waFallbackBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: #25d366;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 13px;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(37, 211, 102, 0.3);
+}
+
+.waFallbackBtn:hover {
+  background: #128c7e;
 }
 
 .done {
@@ -735,12 +783,17 @@
 /* The bar that never leaves the screen. */
 .bar {
   position: sticky;
-  bottom: 0;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-2);
-  padding: var(--space-3) 0 var(--space-4);
-  background: linear-gradient(to top, var(--sand) 70%, transparent);
+  bottom: 12px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--card);
+  border: 1.5px solid var(--line-strong);
+  border-radius: 24px;
+  box-shadow: 0 16px 36px rgba(8, 74, 47, 0.18);
+  margin-top: auto;
 }
 
 .barList {
@@ -748,14 +801,20 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  min-height: 52px;
+  min-height: 48px;
   padding: 0 var(--space-4);
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   border: 1.5px solid var(--leaf);
-  background: var(--card);
+  background: var(--leaf-soft);
   font-family: inherit;
   cursor: pointer;
   text-align: left;
+  transition: all 0.15s ease;
+}
+
+.barList:hover {
+  transform: translateY(-1px);
+  background: #d4ebd9;
 }
 
 .barCount {

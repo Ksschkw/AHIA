@@ -4452,3 +4452,21 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
    - Replaced remaining `NGN` text in mobile pricing inputs, category quick-fill pills, and PIN gate bypass with `\u20A6`.
 5. **Mobile Release Version Bump to v0.4.3 (`mobile/app.json`, `mobile/package.json`)** `[x]`:
    - Incremented version to `0.4.3` and Android versionCode to `8`.
+
+### 17.18 Customer Error Boundary Isolation, Deployed API Fallback & Mobile-Web Visual Parity `[x]`
+1. **Storefront & Order Builder Error Boundary Isolation (`web/app/error.tsx`, `web/app/shop/[slug]/error.tsx`, `web/app/list/[slug]/error.tsx`)** `[x]`:
+   - Fixed root error boundary displaying "Go to Trader Dashboard" to external storefront customers when submitting an order or experiencing a connection glitch.
+   - Root error boundary now inspects pathname: storefront visitors (`/shop/*` and `/list/*`) are presented with a customer-friendly connection notice with "Try Again / Retry", "Back to Order List", and "Return to Stall Catalog" actions. "Go to Trader Dashboard" is strictly restricted to authenticated merchant routes (`/app/*`).
+   - Created dedicated segment error boundaries in `web/app/shop/[slug]/error.tsx` and `web/app/list/[slug]/error.tsx` so errors never bubble to internal trader dashboard links.
+2. **Deployed API Automatic Fallback Resilience (`web/lib/server-api.ts`, `web/next.config.ts`, `web/app/shop/[slug]/requests/route.ts`, `web/app/shop/[slug]/requests/[token]/route.ts`, `web/app/shop/[slug]/customer-lists/route.ts`)** `[x]`:
+   - Configured `DEFAULT_API_BASE_URL` in Next.js server runtime to automatically fall back to production deployed backend (`https://p01--ahia-api--qw5xhkblp8hy.code.run`) when `NEXT_PUBLIC_API_BASE_URL` is unset and the runtime is not local development, eliminating 502 connection crashes on container/web deployments.
+   - Added automatic secondary fallback fetch to `DEPLOYED_API` across storefront API proxy routes if the primary target fails with network or 502 errors.
+3. **LiveList Cycle & Recursion Safety Guard (`web/components/live-list.tsx`)** `[x]`:
+   - Added cycle-detection with a `visited` Set and depth cap (`depth > 8`) inside `withChildren` recursive tree builder, preventing call-stack overflow crashes from circular item positions.
+4. **List Builder Direct WhatsApp Emergency Fallback (`web/components/list-builder.tsx`, `web/components/list-builder.module.css`)** `[x]`:
+   - Wrapped `drawList` canvas operations safely in try-catch blocks.
+   - Added dedicated emergency box with "Send directly on WhatsApp" button if backend submission encounters an error, ensuring customer orders are never lost or blocked.
+5. **Mobile Design Parity on Web (`web/components/list-builder.module.css`, `web/components/app-shell.module.css`, `web/app/app/dashboard.module.css`)** `[x]`:
+   - Upgraded web list builder review dock with mobile-style rounded corners (`border-radius: 24px`), glassmorphism backdrop blur, and pill buttons (`border-radius: 999px`).
+   - Redesigned mobile web bottom navigation bar with active emerald pill indicators matching native Expo app tabs.
+   - Upgraded dashboard tiles with tactile drop shadows, rounded corners (`20px`), and mobile-grade glyph bubbles.

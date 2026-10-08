@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { resolveApiBaseUrl } from "@/lib/server-api";
+import { resolveApiBaseUrl, DEPLOYED_API } from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +18,10 @@ export async function POST(
   const baseUrl = resolveApiBaseUrl();
   const bodyText = await request.text();
 
+  let upstream: Response | null = null;
+
   try {
-    const upstream = await fetch(
+    upstream = await fetch(
       `${baseUrl}/shop/${encodeURIComponent(slug)}/requests`,
       {
         method: "POST",
@@ -30,16 +32,37 @@ export async function POST(
         body: bodyText,
       },
     );
+  } catch {
+    // If local/proxy base failed and it wasn't already DEPLOYED_API, attempt fallback
+    if (baseUrl !== DEPLOYED_API) {
+      try {
+        upstream = await fetch(
+          `${DEPLOYED_API}/shop/${encodeURIComponent(slug)}/requests`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: bodyText,
+          },
+        );
+      } catch {
+        // Fallback also failed
+      }
+    }
+  }
 
-    const data = await upstream.json().catch(() => null);
-    return NextResponse.json(
-      data ?? { error: { message: "Invalid response from shop service" } },
-      { status: upstream.status },
-    );
-  } catch (error) {
+  if (!upstream) {
     return NextResponse.json(
       { error: { message: "We could not reach the shop service. Try again." } },
       { status: 502 },
     );
   }
+
+  const data = await upstream.json().catch(() => null);
+  return NextResponse.json(
+    data ?? { error: { message: "Invalid response from shop service" } },
+    { status: upstream.status },
+  );
 }
