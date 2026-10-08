@@ -4398,3 +4398,38 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
    - Filtered out the "Team" destination from the side navigation and bottom navigation bar for non-managerial staff.
 4. **Canonical Shop URL Path Resolution (`web/app/app/profile/page.tsx`)** `[x]`:
    - Fixed redundant `/shop/` prefix on the profile business list where `candidate.public_path` (already containing `/shop/[slug]`) was producing `/shop//shop/[slug]`.
+
+### 17.16 Offline Durability, Customer Order Ledger & Part Payments, Scoped Pricing & Expense Suite `[x]`
+1. **Scoped Category Pricing & Safe Price Application on Native Mobile App (`mobile/app/home.tsx`)** `[x]`:
+   - Updated customer order pricing modal to scope price application strictly to unpriced items within the same category / subcategory folder, rather than applying across the entire order.
+   - Added dynamic button label identifying the active folder: "Apply this pricing to all unpriced '[Category Name]' items in this list".
+2. **Customer Lists Collapsible Accordion UI (`mobile/app/home.tsx`)** `[x]`:
+   - Replaced endlessly expanded customer order lines with clean collapsible accordion cards showing customer name, date, item count, total price, fulfillment badge, payment status, and an expand/collapse toggle.
+   - Tapping an order card opens only that specific order.
+3. **In-Shop Pickup vs. Waybill / Delivery Differentiation & Storefront Integration (`web/components/list-builder.tsx`, `mobile/app/home.tsx`, `mobile/lib/invoice.ts`)** `[x]`:
+   - Storefront customers can now choose their fulfillment preference ("In-Shop Pickup" or "Waybill / Delivery" with destination city/park) when submitting an order.
+   - Mobile app auto-detects fulfillment mode and provides a one-tap toggle ("In-Shop Pickup" vs "Waybill / Delivery") on each order card.
+   - Invoice PDF generation reflects the chosen fulfillment mode and logistics details.
+4. **Order Ledger, Advance Deposits & Partial Payments Without Doubling (`mobile/app/home.tsx`, `mobile/lib/db.ts`)** `[x]`:
+   - Added complete order ledger tracker to customer orders: Total Order, Amount Paid, and Balance Due.
+   - Added "Record Order Payment" modal for capturing advance deposits and part installments with payment method and note.
+   - Fixed payment calculation bug where accumulator initialization doubled recorded amounts (e.g. 438,000 on a 439,900 order showing 1,900 left).
+   - Created single-source-of-truth `computeCustomerListPaid()` helper.
+5. **Durable SQLite Customer List & Daily Stats Merging Across App Restarts (`mobile/lib/db.ts`, `mobile/app/home.tsx`)** `[x]`:
+   - Fixed customer list cache overwrites: `cacheCustomerLists` and `loadData` now merge incoming server data with local SQLite cache, preserving recorded payments, fulfillment modes, and advance deposits across app restarts.
+   - Reconciled `dailyStats.total_revenue` with today's recorded transaction sums so gross sales never resets to 0 when restarting offline.
+6. **PDF Invoice Native Sharing & Printing Dialog (`mobile/lib/invoice.ts`, `mobile/app/home.tsx`)** `[x]`:
+   - Replaced raw plaintext WhatsApp string with native PDF document generation and device sharing (`Sharing.shareAsync`).
+   - Added direct "Print / Save PDF" via `Print.printAsync` to bypass device permission prompts.
+7. **Secure PinPad Feedback & PIN Setup (`mobile/components/pin-pad.tsx`, `mobile/app/home.tsx`)** `[x]`:
+   - Converted Stall Security PIN setup to step-by-step numeric `PinPad`.
+   - Added immediate visual spinner and activity message ("Saving Security PIN..." / "Confirming order...") upon entering the 4th digit.
+8. **Logged Business Expenses Suite & SQLite Cache (`mobile/lib/api.ts`, `mobile/lib/db.ts`, `mobile/app/home.tsx`)** `[x]`:
+   - Added `listExpenses()` API and SQLite `cached_expenses` persistence (`cacheExpenses` / `getCachedExpenses`).
+   - Added "Logged Business Expenses" ledger to Trading > Expenses tab displaying category badges, descriptions, payment methods, date/time, and formatted amounts.
+9. **Currency Symbol Uniformity (Naira) & ASCII Compliance (`mobile/app/home.tsx`, `mobile/lib/invoice.ts`)** `[x]`:
+   - Replaced `NGN` with the Nigerian Naira symbol (\u20A6) across all mobile screens and invoices while keeping repository source files 100% strict ASCII.
+10. **Background Auto-Sync & Lifecycle Resume Hook (`mobile/app/home.tsx`)** `[x]`:
+    - Added 15-second automatic background sync timer for pending offline outbox changes.
+    - Connected `useAppLifecycle` to auto-flush the outbox immediately when the app returns to the foreground (`onResume`).
+    - Clarified "Void Sale" action button with confirmation alert so it is not confused with a status badge.
