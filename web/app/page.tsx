@@ -1,6 +1,8 @@
 import Link from "next/link";
 
 import { BrandMark, Wordmark } from "@/components/brand";
+import { AndroidIcon } from "@/components/icons";
+import { TraderHeroArt } from "@/components/trader-hero-art";
 import styles from "./page.module.css";
 
 /**
@@ -41,38 +43,12 @@ const CAPABILITIES = [
 export default function Landing() {
   return (
     <main className={styles.page}>
-      <aside className={styles.appBanner}>
-        <div className={styles.appBannerContent}>
-          <span className={styles.appBannerBadge}>NEW MOBILE APP</span>
-          <span className={styles.appBannerText}>
-            AHIA for Android is live! Direct APK download (v0.4.2)
-          </span>
-          <span className={styles.appBannerSub}>Google Play &amp; App Store coming soon</span>
-          <a
-            className={styles.appBannerBtn}
-            href="https://github.com/Ksschkw/AHIA/releases/download/v0.4.2/AHIA-v0.4.2-android.apk"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Download APK (43MB)
-          </a>
-        </div>
-      </aside>
-
       <header className={styles.topbar}>
         <span className={styles.brand}>
           <BrandMark size={34} />
           <Wordmark />
         </span>
         <nav className={styles.nav}>
-          <a
-            className={styles.navApk}
-            href="https://github.com/Ksschkw/AHIA/releases/download/v0.4.2/AHIA-v0.4.2-android.apk"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Get App (APK)
-          </a>
           <Link className={styles.navLink} href="/start">
             Sign in
           </Link>
@@ -102,12 +78,13 @@ export default function Landing() {
               Open your shop
             </Link>
             <a
-              className={styles.apkCta}
-              href="https://github.com/Ksschkw/AHIA/releases/download/v0.4.2/AHIA-v0.4.2-android.apk"
+              className={styles.androidCta}
+              href="https://github.com/Ksschkw/AHIA/releases/latest"
               target="_blank"
               rel="noopener noreferrer"
             >
-              Download Android APK
+              <AndroidIcon size={20} />
+              <span>Install for Android</span>
             </a>
             <Link className={styles.quietCta} href="/start">
               I already have an account
@@ -122,32 +99,7 @@ export default function Landing() {
           </ul>
         </div>
 
-        <div className={styles.heroArt} aria-hidden>
-          <div className={styles.receipt}>
-            <div className={styles.receiptHead}>
-              <span className={styles.receiptShop}>Obi Electronics</span>
-              <span className={styles.receiptNumber}>OBI-000042</span>
-            </div>
-            <div className={styles.receiptLine}>
-              <span>Rice 50kg x 2</span>
-              <span className={styles.receiptAmount}>90,000.00</span>
-            </div>
-            <div className={styles.receiptLine}>
-              <span>Extension lead</span>
-              <span className={styles.receiptAmount}>6,500.00</span>
-            </div>
-            <div className={styles.receiptTotal}>
-              <span>Paid, cash</span>
-              <span className={styles.receiptAmount}>96,500.00</span>
-            </div>
-            <div className={styles.receiptFoot}>Sent on WhatsApp</div>
-          </div>
-          <div className={styles.stockCard}>
-            <span className={styles.stockLabel}>On the shelf</span>
-            <span className={styles.stockValue}>184</span>
-            <span className={styles.stockWarn}>3 running out</span>
-          </div>
-        </div>
+        <TraderHeroArt />
       </section>
 
       <section className={styles.capabilities}>

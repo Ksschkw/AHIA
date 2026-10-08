@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { BrandMark, Wordmark } from "@/components/brand";
 import { ShopCatalog } from "@/components/shop-catalog";
+import { StorefrontThemeToggle } from "@/components/storefront-theme-toggle";
 import { fetchPublicShop, whatsAppLink } from "@/lib/server-api";
 import { formatMoneyOrOnRequest } from "@/lib/format";
 import styles from "./shop.module.css";
@@ -147,7 +148,7 @@ export default async function ShopPage({ params }: Params) {
     >
       <script
         dangerouslySetInnerHTML={{
-          __html: `(function(){try{var s=window.localStorage.getItem('ahia.theme.${shop.tenant_slug}');if(s){var d=JSON.parse(s);var el=document.getElementById('shop_root');if(el){if(d.color)el.style.setProperty('--shop-theme-color',d.color);if(d.bg)el.style.setProperty('--shop-theme-bg',d.bg);if(d.bgImage)el.style.setProperty('--shop-theme-bg-image','url('+d.bgImage+')');}}}catch(e){}})();`,
+          __html: `(function(){try{var v=window.localStorage.getItem('ahia.visitor_theme');if(v){document.documentElement.setAttribute('data-theme',v);}var s=window.localStorage.getItem('ahia.theme.${shop.tenant_slug}');if(s){var d=JSON.parse(s);var el=document.getElementById('shop_root');if(el){if(d.color)el.style.setProperty('--shop-theme-color',d.color);if(d.bg)el.style.setProperty('--shop-theme-bg',d.bg);if(d.bgImage)el.style.setProperty('--shop-theme-bg-image','url('+d.bgImage+')');}}}catch(e){}})();`,
         }}
       />
       <header className={styles.header}>
@@ -162,6 +163,7 @@ export default async function ShopPage({ params }: Params) {
             </div>
           </div>
           <div className={styles.headerRight}>
+            <StorefrontThemeToggle />
             <Link className={styles.listShortcutBtn} href={`/list/${shop.tenant_slug}`}>
               Build your list
             </Link>

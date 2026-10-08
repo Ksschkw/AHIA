@@ -4433,3 +4433,22 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
     - Added 15-second automatic background sync timer for pending offline outbox changes.
     - Connected `useAppLifecycle` to auto-flush the outbox immediately when the app returns to the foreground (`onResume`).
     - Clarified "Void Sale" action button with confirmation alert so it is not confused with a status badge.
+
+### 17.17 Web Landing Redesign, Single Hero Android Install CTA, Trader Vector Art & Storefront Visitor Light/Dark Mode `[x]`
+1. **Consolidated Single Hero Android Install CTA (`web/app/page.tsx`, `web/app/page.module.css`)** `[x]`:
+   - Removed intrusive top banner (`.appBanner`) and redundant topbar APK link (`.navApk`), eliminating mobile layout clutter and repetitive APK text.
+   - Positioned the Android installation action exclusively in the Hero section ("hero kini"), labelled "Install for Android" with a clean Android robot icon, linking to `https://github.com/Ksschkw/AHIA/releases/latest`.
+2. **Adobe Illustrator-Grade Market Trader Vector Art & Keyframe Physics (`web/components/trader-hero-art.tsx`, `web/components/trader-hero-art.module.css`)** `[x]`:
+   - Designed interactive 3D isometric vector art tailored directly to Nigerian market traders (Alaba International Market Line 4 / Shop B12 stall badge, green & gold striped canopy roof, terminal display).
+   - Added floating 3D gold Naira coin with keyframe bobbing animation.
+   - Built physical Waybill Bus Park dispatch slip with route (Lagos to Onitsha Upper Iweka), night express carrier, and red rubber stamp ("WAYBILLED").
+   - Integrated live WhatsApp buyer order confirmation bubble with items received and double checkmarks.
+   - Included floating offline SQLite ledger card displaying today's gross collections with real-time status beacon.
+3. **Storefront Visitor Light/Dark Mode Toggle (`web/components/storefront-theme-toggle.tsx`, `web/app/shop/[slug]/page.tsx`, `web/components/list-builder.tsx`)** `[x]`:
+   - Added client theme toggle button with Sun and Moon icons to the header of both the public catalog (`/shop/[slug]`) and the interactive order list builder (`/list/[slug]`).
+   - Persists visitor theme preference in `localStorage` (`ahia.visitor_theme`) with early inline script execution for zero flash of unstyled content.
+   - Dynamic CSS variable overrides adapt surface backgrounds and card elevations for both dark mode (`#0b120e`, `#151d18`) and light mode (`#fbf7f0`, `#ffffff`) while maintaining merchant brand accent colors.
+4. **Mobile & Web Visual Parity & Currency Uniformity (`mobile/app/home.tsx`)** `[x]`:
+   - Replaced remaining `NGN` text in mobile pricing inputs, category quick-fill pills, and PIN gate bypass with `\u20A6`.
+5. **Mobile Release Version Bump to v0.4.3 (`mobile/app.json`, `mobile/package.json`)** `[x]`:
+   - Incremented version to `0.4.3` and Android versionCode to `8`.

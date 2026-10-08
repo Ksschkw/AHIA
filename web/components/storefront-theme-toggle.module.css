@@ -1,0 +1,48 @@
+.toggleBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong, rgba(0, 0, 0, 0.15));
+  background: var(--card, rgba(255, 255, 255, 0.85));
+  color: var(--ink, #0f172a);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  user-select: none;
+}
+
+.toggleBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
+  border-color: var(--shop-accent, #084a2f);
+}
+
+.toggleBtn:active {
+  transform: translateY(0);
+}
+
+.iconWrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--shop-accent, #084a2f);
+}
+
+.toggleLabel {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: capitalize;
+}
+
+@media (max-width: 480px) {
+  .toggleLabel {
+    display: none;
+  }
+  .toggleBtn {
+    padding: 6px 8px;
+  }
+}

@@ -39,6 +39,7 @@ import { EmptyBasketIllustration } from "@/components/illustrations";
 import { getCustomerPastLists, type CustomerListSummary } from "@/lib/api";
 import { formatMoneyOrOnRequest } from "@/lib/format";
 import { downloadWaybillPdf, type WaybillDocument, type WaybillSection } from "@/lib/waybill-pdf";
+import { StorefrontThemeToggle } from "@/components/storefront-theme-toggle";
 import styles from "./list-builder.module.css";
 
 export interface ListShopProduct {
@@ -973,8 +974,13 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
   return (
     <main className={styles.page}>
       <header className={styles.header}>
-        <p className={styles.kicker}>Sending a list to</p>
-        <h1 className={styles.shopName}>{shop.business_name}</h1>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
+          <div>
+            <p className={styles.kicker}>Sending a list to</p>
+            <h1 className={styles.shopName}>{shop.business_name}</h1>
+          </div>
+          <StorefrontThemeToggle />
+        </div>
         <nav className={styles.crumbs} aria-label="Where you are">
           {groupTrail.length === 0 ? (
             <span className={styles.crumbNow}>All of the shop</span>

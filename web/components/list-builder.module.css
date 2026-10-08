@@ -11,6 +11,35 @@
   flex-direction: column;
   gap: var(--space-5);
   background: var(--sand);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+:global([data-theme="dark"]) .page {
+  background: #0b120e;
+  --card: #151d18;
+  --card-hover: #1c2620;
+  --sand: #0b120e;
+  --sand-2: #121c16;
+  --ink: #f8fafc;
+  --ink-2: #cbd5e1;
+  --ink-3: #94a3b8;
+  --line: #223227;
+  --line-strong: #344c3c;
+  color: #f8fafc;
+}
+
+:global([data-theme="light"]) .page {
+  background: var(--sand);
+  --card: #ffffff;
+  --card-hover: #f8fafc;
+  --sand: #fbf7f0;
+  --sand-2: #f1ede4;
+  --ink: #0f172a;
+  --ink-2: #334155;
+  --ink-3: #64748b;
+  --line: #e2dcd2;
+  --line-strong: #cbbfaf;
+  color: #0f172a;
 }
 
 .header {

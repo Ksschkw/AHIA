@@ -1,0 +1,389 @@
+.artContainer {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  min-height: 440px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  perspective: 1000px;
+}
+
+/* Floor Ambient Shadow */
+.ambientShadow {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80%;
+  height: 36px;
+  background: radial-gradient(ellipse at center, rgba(11, 93, 59, 0.22) 0%, rgba(0, 0, 0, 0) 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Market Stall Main Isometric Card */
+.stallCard {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  background: linear-gradient(145deg, #ffffff 0%, #f7f3ec 100%);
+  border: 1.5px solid var(--line-strong, #cbbfaf);
+  border-radius: 24px;
+  padding: 20px 22px 24px;
+  box-shadow:
+    0 20px 40px -15px rgba(11, 93, 59, 0.15),
+    0 10px 20px -10px rgba(0, 0, 0, 0.08);
+  animation: floatStall 4.8s ease-in-out infinite alternate;
+}
+
+@keyframes floatStall {
+  0% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  100% {
+    transform: translateY(-8px) rotate(-0.5deg);
+  }
+}
+
+.stallHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed var(--line-strong, #cbbfaf);
+}
+
+.stallInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stallMarket {
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--clay, #c2571f);
+}
+
+.stallName {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--ink, #0f172a);
+  letter-spacing: -0.01em;
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  font-size: 11px;
+  font-weight: 700;
+  color: #047857;
+  white-space: nowrap;
+}
+
+.statusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: pulseDot 2s ease-in-out infinite;
+}
+
+@keyframes pulseDot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.85);
+  }
+}
+
+/* 3D Stall Vector Art Center */
+.vectorStage {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 14px 0 8px;
+}
+
+.vectorSvg {
+  width: 100%;
+  max-width: 240px;
+  height: auto;
+  filter: drop-shadow(0 12px 20px rgba(0, 0, 0, 0.08));
+}
+
+.floatingCoin {
+  position: absolute;
+  top: 10px;
+  right: 18px;
+  animation: floatCoin 3.2s ease-in-out infinite alternate;
+  filter: drop-shadow(0 6px 12px rgba(217, 119, 6, 0.35));
+}
+
+@keyframes floatCoin {
+  0% {
+    transform: translateY(0px) rotate(-8deg);
+  }
+  100% {
+    transform: translateY(-12px) rotate(6deg);
+  }
+}
+
+/* Items Grid inside Stall */
+.itemsRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.itemChip {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--line, #e2dcd2);
+  border-radius: 10px;
+}
+
+.itemTitle {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--ink-2, #334155);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemPrice {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--leaf-dark, #084a2f);
+}
+
+/* Physical Waybill Dispatch Slip */
+.waybillCard {
+  position: absolute;
+  bottom: -24px;
+  left: -20px;
+  z-index: 3;
+  width: 240px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
+  transform: rotate(-3deg);
+  animation: floatWaybill 4.2s ease-in-out infinite alternate;
+}
+
+@keyframes floatWaybill {
+  0% {
+    transform: translateY(0px) rotate(-3deg);
+  }
+  100% {
+    transform: translateY(6px) rotate(-1.5deg);
+  }
+}
+
+.waybillKicker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #64748b;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.waybillRoute {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.waybillCarrier {
+  font-size: 10px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.waybillItems {
+  font-size: 10px;
+  font-weight: 600;
+  color: #047857;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed #cbd5e1;
+}
+
+.waybillStamp {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  border: 1.5px solid #dc2626;
+  color: #dc2626;
+  font-size: 8px;
+  font-weight: 900;
+  padding: 2px 5px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  transform: rotate(-8deg);
+  letter-spacing: 0.05em;
+  opacity: 0.85;
+}
+
+/* WhatsApp Floating Order Bubble */
+.whatsappCard {
+  position: absolute;
+  top: -18px;
+  right: -16px;
+  z-index: 3;
+  width: 250px;
+  background: #ffffff;
+  border: 1px solid #25d366;
+  border-radius: 16px;
+  padding: 10px 14px;
+  box-shadow: 0 16px 36px rgba(18, 140, 126, 0.2);
+  transform: rotate(2.5deg);
+  animation: floatWhatsApp 3.8s ease-in-out infinite alternate;
+}
+
+@keyframes floatWhatsApp {
+  0% {
+    transform: translateY(0px) rotate(2.5deg);
+  }
+  100% {
+    transform: translateY(-8px) rotate(1deg);
+  }
+}
+
+.whatsappHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.whatsappIconCircle {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #25d366;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 10px;
+}
+
+.whatsappSender {
+  font-size: 11px;
+  font-weight: 750;
+  color: #128c7e;
+}
+
+.whatsappText {
+  font-size: 11px;
+  color: #1f2937;
+  line-height: 1.35;
+}
+
+.whatsappMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #047857;
+}
+
+.whatsappTicks {
+  color: #2563eb;
+  font-weight: 800;
+}
+
+/* Offline Ledger Floating Pill */
+.ledgerPill {
+  position: absolute;
+  bottom: -32px;
+  right: 12px;
+  z-index: 4;
+  background: #0f172a;
+  color: #f8fafc;
+  padding: 8px 14px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.ledgerLabel {
+  font-size: 10px;
+  opacity: 0.75;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ledgerAmount {
+  font-size: 13px;
+  font-weight: 800;
+  color: #34d399;
+}
+
+@media (max-width: 600px) {
+  .artContainer {
+    max-width: 360px;
+    min-height: 480px;
+    padding-bottom: 30px;
+  }
+  .waybillCard {
+    position: relative;
+    bottom: auto;
+    left: auto;
+    width: 100%;
+    margin-top: 14px;
+    transform: none;
+    animation: none;
+  }
+  .whatsappCard {
+    position: relative;
+    top: auto;
+    right: auto;
+    width: 100%;
+    margin-bottom: 14px;
+    transform: none;
+    animation: none;
+  }
+  .ledgerPill {
+    position: relative;
+    bottom: auto;
+    right: auto;
+    width: 100%;
+    justify-content: center;
+    margin-top: 10px;
+  }
+}

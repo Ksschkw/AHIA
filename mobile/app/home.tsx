@@ -4489,7 +4489,7 @@ export default function Home() {
                       placeholder={
                         inherited.normal
                           ? `Selling Price (inherits ${formatMoney(inherited.normal)})`
-                          : "Selling Price (NGN, optional)"
+                          : "Selling Price (\u20A6, optional)"
                       }
                       placeholderTextColor="#8a928e"
                       keyboardType="numeric"
@@ -4925,7 +4925,7 @@ export default function Home() {
                 Write what it costs you in the market and what you charge the customer.
               </Text>
 
-              <Text style={styles.modalFieldLabel}>Customer Selling Price (NGN)</Text>
+              <Text style={styles.modalFieldLabel}>Customer Selling Price (\u20A6)</Text>
               <TextInput
                 style={styles.modalInput}
                 placeholder="Selling Price (e.g. 15000)"
@@ -4936,7 +4936,7 @@ export default function Home() {
                 autoFocus
               />
 
-              <Text style={styles.modalFieldLabel}>Market Cost Price (NGN)</Text>
+              <Text style={styles.modalFieldLabel}>Market Cost Price (\u20A6)</Text>
               <TextInput
                 style={styles.modalInput}
                 placeholder="Cost Price (e.g. 12000)"
@@ -4972,9 +4972,9 @@ export default function Home() {
                           >
                             <Text style={styles.categoryPricePillName}>{cat.name}</Text>
                             <Text style={styles.categoryPricePillPrices}>
-                              {prices.normal ? `Sell: NGN ${prices.normal}` : ""}
+                              {prices.normal ? `Sell: \u20A6${prices.normal}` : ""}
                               {prices.normal && prices.wholesale ? " | " : ""}
-                              {prices.wholesale ? `Cost: NGN ${prices.wholesale}` : ""}
+                              {prices.wholesale ? `Cost: \u20A6${prices.wholesale}` : ""}
                             </Text>
                           </Pressable>
                         );
@@ -5077,7 +5077,7 @@ export default function Home() {
 
               <TextInput
                 style={styles.modalInput}
-                placeholder="Dispatch Cost (NGN, optional)"
+                placeholder="Dispatch Cost (\u20A6, optional)"
                 placeholderTextColor="#8a928e"
                 keyboardType="numeric"
                 value={dispatchCost}
@@ -5145,7 +5145,7 @@ export default function Home() {
                       disabled={savingConfirm}
                     >
                       <Text style={styles.zeroPriceBypassText}>
-                        Price Remaining Items as NGN 0 & Confirm
+                        Price Remaining Items as \u20A60 & Confirm
                       </Text>
                     </Pressable>
                   </View>
@@ -5182,7 +5182,7 @@ export default function Home() {
                       disabled={savingConfirm}
                     >
                       <Text style={styles.zeroPriceBypassText}>
-                        Price Remaining Items as NGN 0 & Confirm
+                        Price Remaining Items as \u20A60 & Confirm
                       </Text>
                     </Pressable>
                   </View>
@@ -5681,7 +5681,7 @@ export default function Home() {
                 />
               </View>
               <View style={{ flex: 2 }}>
-                <Text style={styles.modalFieldLabel}>Unit Price (NGN)</Text>
+                <Text style={styles.modalFieldLabel}>Unit Price (\u20A6)</Text>
                 <TextInput
                   style={styles.modalInput}
                   placeholder="e.g. 5000"
