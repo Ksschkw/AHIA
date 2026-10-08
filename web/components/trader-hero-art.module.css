@@ -320,8 +320,11 @@
 }
 
 .whatsappTicks {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: #2563eb;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 /* Offline Ledger Floating Pill */

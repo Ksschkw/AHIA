@@ -4470,3 +4470,8 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
    - Upgraded web list builder review dock with mobile-style rounded corners (`border-radius: 24px`), glassmorphism backdrop blur, and pill buttons (`border-radius: 999px`).
    - Redesigned mobile web bottom navigation bar with active emerald pill indicators matching native Expo app tabs.
    - Upgraded dashboard tiles with tactile drop shadows, rounded corners (`20px`), and mobile-grade glyph bubbles.
+6. **Direct APK Asset Auto-Download (`web/app/page.tsx`)** `[x]`:
+   - Updated the "Install for Android" hero CTA link to target the direct release asset download endpoint (`https://github.com/Ksschkw/AHIA/releases/latest/download/AHIA-latest.apk`) with the HTML `download` attribute so clicking automatically initiates the direct APK download on Android devices rather than landing on the GitHub release page.
+7. **Vector WhatsApp Double Checkmark Glyphs (`web/components/icons.tsx`, `web/components/trader-hero-art.tsx`, `web/components/trader-hero-art.module.css`)** `[x]`:
+   - Replaced unrendered raw HTML entity text (`&check;&check;`) in the landing hero artwork with a dedicated SVG `DoubleCheckIcon` component.
+   - Styled double checkmarks with WhatsApp blue (`#2563eb`), inline flex alignment, and crisp vector rendering across all viewports.

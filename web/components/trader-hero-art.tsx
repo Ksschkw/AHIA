@@ -1,3 +1,4 @@
+import { DoubleCheckIcon } from "./icons";
 import styles from "./trader-hero-art.module.css";
 
 const NAIRA = "\u20A6";
@@ -19,7 +20,10 @@ export function TraderHeroArt() {
         </p>
         <div className={styles.whatsappMeta}>
           <span>PAID: {NAIRA}96,500.00</span>
-          <span className={styles.whatsappTicks}>&check;&check; 10:42 AM</span>
+          <span className={styles.whatsappTicks}>
+            <DoubleCheckIcon size={14} />
+            <span>10:42 AM</span>
+          </span>
         </div>
       </div>
 

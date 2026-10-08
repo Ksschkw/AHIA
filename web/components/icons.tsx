@@ -392,3 +392,24 @@ export function MoonIcon(props: IconProps) {
     </Frame>
   );
 }
+
+/** WhatsApp double check mark ticks. */
+export function DoubleCheckIcon(props: IconProps) {
+  return (
+    <svg
+      width={props.size ?? 16}
+      height={props.size ?? 11}
+      viewBox="0 0 16 11"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      {...props}
+    >
+      <path d="M1 6.2L4.2 9.4L11.5 2" />
+      <path d="M5.5 6.2L8.7 9.4L15.5 2" />
+    </svg>
+  );
+}

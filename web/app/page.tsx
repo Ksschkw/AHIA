@@ -79,8 +79,8 @@ export default function Landing() {
             </Link>
             <a
               className={styles.androidCta}
-              href="https://github.com/Ksschkw/AHIA/releases/latest"
-              target="_blank"
+              href="https://github.com/Ksschkw/AHIA/releases/latest/download/AHIA-latest.apk"
+              download="AHIA-latest.apk"
               rel="noopener noreferrer"
             >
               <AndroidIcon size={20} />
