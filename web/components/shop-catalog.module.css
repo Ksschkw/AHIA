@@ -14,9 +14,41 @@
   gap: 12px;
 }
 
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .searchWrap {
   position: relative;
-  width: 100%;
+  flex: 1;
+}
+
+.trackOrdersPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-strong);
+  background: var(--sand-2);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  flex: none;
+}
+
+.trackOrdersPill:hover {
+  background: var(--card);
+  border-color: var(--leaf);
+  color: var(--leaf);
 }
 
 .searchInput {

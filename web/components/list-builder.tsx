@@ -35,7 +35,11 @@ import {
   SparklesIcon,
   TrashIcon,
 } from "@/components/icons";
-import { EmptyBasketIllustration } from "@/components/illustrations";
+import {
+  EmptyBasketIllustration,
+  DirectionPointerDownIllustration,
+} from "@/components/illustrations";
+import { CustomerOrdersSheet } from "@/components/customer-orders-sheet";
 import { getCustomerPastLists, type CustomerListSummary } from "@/lib/api";
 import { formatMoneyOrOnRequest } from "@/lib/format";
 import { downloadWaybillPdf, type WaybillDocument, type WaybillSection } from "@/lib/waybill-pdf";
@@ -163,6 +167,33 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
   const [quickPaste, setQuickPaste] = useState(false);
   const [quickPasteText, setQuickPasteText] = useState("");
   const [includePrices, setIncludePrices] = useState(false);
+  const [showOrdersSheet, setShowOrdersSheet] = useState(false);
+
+  function handleReorderLines(
+    lines: Array<{
+      text: string;
+      quantity: string;
+      unit: string;
+      product_slug?: string;
+      group?: string | null;
+      shop_price?: string | null;
+    }>,
+  ) {
+    const loadedLines: ChosenLine[] = lines.map((l, index) => ({
+      key: `reorder-${Date.now()}-${index}`,
+      productSlug: l.product_slug ?? null,
+      text: l.text,
+      quantity: Number(l.quantity) || 1,
+      price: l.shop_price ?? null,
+      groupName: l.group ?? null,
+      underKey: null,
+      isHeading: false,
+      note: "",
+    }));
+    setChosen(loadedLines);
+    setShowingList(true);
+    setProblem(null);
+  }
 
   const headings = chosen.filter((line) => line.isHeading);
   const items = chosen.filter((line) => !line.isHeading);
@@ -803,15 +834,23 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
       }
       if (typeof window !== "undefined") {
         window.localStorage.removeItem(draftKey);
+        if (phone.trim()) {
+          window.localStorage.setItem("ahia.customer_phone", phone.trim());
+          window.localStorage.setItem(PHONE_KEY, phone.trim());
+        }
+        if (name.trim()) {
+          window.localStorage.setItem(NAME_KEY, name.trim());
+        }
         try {
           const past = JSON.parse(window.localStorage.getItem(historyKey) ?? "[]");
           const record = {
+            id: body?.request_id ?? null,
             date: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
             count: items.length,
             lines: ordered,
             listPath: body?.list_path ?? null,
           };
-          const updated = [record, ...(Array.isArray(past) ? past.slice(0, 4) : [])];
+          const updated = [record, ...(Array.isArray(past) ? past.slice(0, 8) : [])];
           window.localStorage.setItem(historyKey, JSON.stringify(updated));
         } catch {
           // ignore error saving local history
@@ -889,6 +928,14 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
 
     return (
       <main className={styles.page}>
+        <CustomerOrdersSheet
+          isOpen={showOrdersSheet}
+          onClose={() => setShowOrdersSheet(false)}
+          tenantSlug={shop.tenant_slug}
+          businessName={shop.business_name}
+          initialPhone={phone}
+          onReorderLines={handleReorderLines}
+        />
         <section className={styles.done}>
           <h1 className={styles.doneTitle}>Your list has reached {shop.business_name}</h1>
           <p className={styles.doneText}>
@@ -920,6 +967,14 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
                   Open Live Order Tracker
                 </Link>
               ) : null}
+              <button
+                type="button"
+                className={styles.referenceCopyBtn}
+                style={{ background: "var(--card)" }}
+                onClick={() => setShowOrdersSheet(true)}
+              >
+                Track All My Orders
+              </button>
               <button
                 type="button"
                 className={styles.referenceReorderBtn}
@@ -977,13 +1032,48 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
 
   return (
     <main className={styles.page}>
+      <CustomerOrdersSheet
+        isOpen={showOrdersSheet}
+        onClose={() => setShowOrdersSheet(false)}
+        tenantSlug={shop.tenant_slug}
+        businessName={shop.business_name}
+        initialPhone={phone}
+        onReorderLines={handleReorderLines}
+      />
       <header className={styles.header}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
           <div>
             <p className={styles.kicker}>Sending a list to</p>
             <h1 className={styles.shopName}>{shop.business_name}</h1>
           </div>
-          <StorefrontThemeToggle />
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <button
+              type="button"
+              className={styles.headerTrackBtn}
+              onClick={() => setShowOrdersSheet(true)}
+              aria-label="Track past orders by phone"
+            >
+              <PhoneIcon size={14} />
+              <span>Past Orders</span>
+            </button>
+            <StorefrontThemeToggle />
+          </div>
+        </div>
+        <div className={styles.hudStepper} aria-label="Order steps">
+          <div className={`${styles.hudStep} ${!showingList ? styles.hudStepActive : styles.hudStepDone}`}>
+            <span className={styles.hudStepNum}>1</span>
+            <span className={styles.hudStepLabel}>Pick Goods</span>
+          </div>
+          <div className={styles.hudStepDivider} />
+          <div className={`${styles.hudStep} ${showingList ? styles.hudStepActive : ""}`}>
+            <span className={styles.hudStepNum}>2</span>
+            <span className={styles.hudStepLabel}>Review ({items.length})</span>
+          </div>
+          <div className={styles.hudStepDivider} />
+          <div className={styles.hudStep}>
+            <span className={styles.hudStepNum}>3</span>
+            <span className={styles.hudStepLabel}>Send to Trader</span>
+          </div>
         </div>
         <nav className={styles.crumbs} aria-label="Where you are">
           {groupTrail.length === 0 ? (
@@ -1070,6 +1160,18 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
           >
             Load previous list
           </button>
+        </div>
+      ) : null}
+
+      {chosen.length === 0 && !showingList && !restoredDraft && (!lastList || lastList.length === 0) ? (
+        <div className={styles.hudGuideBox}>
+          <h2 className={styles.hudGuideTitle}>Build your order list in seconds</h2>
+          <p className={styles.hudGuideText}>
+            Search goods or tap any category below to add items to your order.
+          </p>
+          <div className={styles.hudGuideArrow}>
+            <DirectionPointerDownIllustration size={36} />
+          </div>
         </div>
       ) : null}
 
@@ -1625,17 +1727,17 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
           )}
 
           {chosen.length > 0 ? (
-            <div className={styles.trustModeCard}>
-              <div className={styles.trustModeHeader}>
-                <span className={styles.trustModeBadge}>
-                  {includePrices ? "Catalog Prices Included" : "Quantities Only"}
+            <div className={styles.pricingModeCard}>
+              <div className={styles.pricingModeHeader}>
+                <span className={styles.pricingModeBadge}>
+                  {includePrices ? "Catalog Prices Included" : "Item Quantities Only"}
                 </span>
                 <button
                   type="button"
-                  className={styles.trustModeToggleBtn}
+                  className={styles.pricingModeToggleBtn}
                   onClick={() => setIncludePrices((p) => !p)}
                 >
-                  {includePrices ? "Show Quantities Only" : "Show Catalog Prices"}
+                  {includePrices ? "Show Quantities Only" : "Include Estimated Prices"}
                 </button>
               </div>
               <div className={styles.waybillDownloadRow} style={{ marginTop: "10px" }}>
@@ -1651,65 +1753,27 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
           ) : null}
 
           <div className={styles.who}>
-            <input
-              className={styles.search}
-              id="list_phone"
-              value={phone}
-              placeholder="Your phone number"
-              inputMode="tel"
-              aria-label="Your phone number"
-              onChange={(event) => setPhone(event.target.value)}
-            />
-            <button
-              type="button"
-              className={styles.historyAction}
-              style={{ marginTop: "4px", display: "inline-flex", alignItems: "center", gap: "6px" }}
-              disabled={loadingPast || phone.trim().length < 7}
-              onClick={() => void loadPastListsForCustomer()}
-            >
-              <PhoneIcon size={14} />
-              <span>{loadingPast ? "Finding your past lists..." : "Find past lists for this phone number"}</span>
-            </button>
-            {pastError ? <p className={styles.problem}>{pastError}</p> : null}
-            {pastLists && pastLists.length > 0 ? (
-              <div className={styles.pastListsSection}>
-                <span className={styles.onlyThese}>Your previous orders with {shop.business_name}:</span>
-                <div className={styles.pastListsGrid}>
-                  {pastLists.map((past) => (
-                    <div key={past.id} className={styles.pastListCard}>
-                      <div className={styles.pastListRow}>
-                        <span className={styles.pastListDate}>
-                          {new Date(past.created_at).toLocaleDateString("en-GB", {
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric",
-                          })}
-                        </span>
-                        <span className={styles.pastListStatus}>{past.status}</span>
-                      </div>
-                      <div className={styles.pastListPreview}>
-                        {past.lines.length} {past.lines.length === 1 ? "item" : "items"}:{" "}
-                        {past.lines
-                          .slice(0, 4)
-                          .map((l) => `${Number(l.quantity)}x ${l.text}`)
-                          .join(", ")}
-                        {past.lines.length > 4 ? "..." : ""}
-                      </div>
-                      <button
-                        type="button"
-                        className={styles.pastListLoadBtn}
-                        onClick={() => loadFromPastList(past)}
-                      >
-                        Load this list
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            <p className={styles.nothing}>
-              So the shop knows whose list this is, and so you do not type it all again next time.
-            </p>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <input
+                className={styles.search}
+                id="list_phone"
+                value={phone}
+                placeholder="Your phone number"
+                inputMode="tel"
+                aria-label="Your phone number"
+                onChange={(event) => setPhone(event.target.value)}
+              />
+              <button
+                type="button"
+                className={styles.headerTrackBtn}
+                style={{ height: "46px", flex: "none" }}
+                onClick={() => setShowOrdersSheet(true)}
+                aria-label="Track previous orders by phone"
+              >
+                <PhoneIcon size={14} />
+                <span>Past Orders</span>
+              </button>
+            </div>
             <input
               className={styles.search}
               id="list_name"
@@ -1720,40 +1784,20 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
             />
 
             <div style={{ marginTop: "12px" }}>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#334155", marginBottom: "6px" }}>
-                How do you want to collect your items?
+              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "var(--ink)", marginBottom: "6px" }}>
+                Collection Method
               </label>
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <div className={styles.fulfillmentRow}>
                 <button
                   type="button"
-                  style={{
-                    flex: "1 1 120px",
-                    padding: "8px 12px",
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    borderRadius: "6px",
-                    border: fulfillment === "pickup" ? "2px solid #084a2f" : "1px solid #cbd5e1",
-                    backgroundColor: fulfillment === "pickup" ? "#f0fdf4" : "#ffffff",
-                    color: fulfillment === "pickup" ? "#084a2f" : "#475569",
-                    cursor: "pointer",
-                  }}
+                  className={`${styles.fulfillmentBtn} ${fulfillment === "pickup" ? styles.fulfillmentBtnActive : ""}`}
                   onClick={() => setFulfillment("pickup")}
                 >
                   In-Shop Pickup
                 </button>
                 <button
                   type="button"
-                  style={{
-                    flex: "1 1 120px",
-                    padding: "8px 12px",
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    borderRadius: "6px",
-                    border: fulfillment === "waybill" ? "2px solid #084a2f" : "1px solid #cbd5e1",
-                    backgroundColor: fulfillment === "waybill" ? "#f0fdf4" : "#ffffff",
-                    color: fulfillment === "waybill" ? "#084a2f" : "#475569",
-                    cursor: "pointer",
-                  }}
+                  className={`${styles.fulfillmentBtn} ${fulfillment === "waybill" ? styles.fulfillmentBtnActive : ""}`}
                   onClick={() => setFulfillment("waybill")}
                 >
                   Waybill / Delivery
@@ -1790,7 +1834,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
               ? "Empty"
               : includePrices
                 ? `${formatMoneyOrOnRequest(total.toFixed(2))}${toBePriced > 0 ? ` + ${toBePriced} to price` : ""}`
-                : "Trust Mode (Quantities only)"}
+                : `${items.length} ${items.length === 1 ? "item" : "items"} (Quantities only)`}
           </span>
           <span className={styles.barAction}>{showingList ? "Hide" : "Review"}</span>
         </button>

@@ -4475,3 +4475,25 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
 7. **Vector WhatsApp Double Checkmark Glyphs (`web/components/icons.tsx`, `web/components/trader-hero-art.tsx`, `web/components/trader-hero-art.module.css`)** `[x]`:
    - Replaced unrendered raw HTML entity text (`&check;&check;`) in the landing hero artwork with a dedicated SVG `DoubleCheckIcon` component.
    - Styled double checkmarks with WhatsApp blue (`#2563eb`), inline flex alignment, and crisp vector rendering across all viewports.
+
+### 17.19 Storefront Customer Order Tracking, HUD Stepper & Guidance, Elimination of "Trust Mode" Copy & Error Boundary Hardening `[x]`
+1. **Dedicated Customer Order Tracking Sheet & Modal (`web/components/customer-orders-sheet.tsx`, `web/components/customer-orders-sheet.module.css`)** `[x]`:
+   - Built interactive `CustomerOrdersSheet` modal/bottom-sheet accessible directly on both the storefront catalog (`/shop/[slug]`) and the list builder (`/list/[slug]`).
+   - Customers can look up all orders tagged to their phone number via `/shop/{slug}/customer-lists?phone=...` with auto-restore of remembered phone numbers.
+   - Order history cards display live order status badges (Submitted/Pending, Quoted, Confirmed, Completed, Cancelled), formatted dates, priced totals (\u20A6), and item preview chips.
+   - Added 1-tap "Reorder into List" action that immediately loads past order items into the list builder draft, and "Live Status" links to tracked order pages.
+2. **Order Tracker Segment Error Boundary & Server API Hardening (`web/app/list/[slug]/[token]/error.tsx`, `web/app/list/[slug]/[token]/page.tsx`, `web/lib/server-api.ts`)** `[x]`:
+   - Created dedicated segment error boundary `web/app/list/[slug]/[token]/error.tsx` preventing order tracking errors from bubbling up to root or exposing merchant dashboard links.
+   - Strengthened `getJson<T>` in `web/lib/server-api.ts` to automatically fall back to `DEPLOYED_API` if primary `API_BASE_URL` fails or is unreachable.
+   - Wrapped SSR metadata generation and data fetching in `web/app/list/[slug]/[token]/page.tsx` with try/catch fallback to ensure zero uncaught crashes.
+3. **Elimination of "Trust Mode" Copy & Cognitive Bloat (`web/components/list-builder.tsx`, `web/components/list-builder.module.css`)** `[x]`:
+   - Completely removed all instances of "Trust mode" copy across the codebase.
+   - Replaced with clean, self-explanatory pricing mode controls: "Catalog Prices Included" vs. "Item Quantities Only" with toggle button "Include Estimated Prices" / "Show Quantities Only".
+   - Replaced verbose phone explanation text and noisy inline past list containers with sleek, compact inputs and clean "Past Orders" triggers.
+4. **Interactive 3-Step HUD Stepper & Visual Directional Guidance (`web/components/list-builder.tsx`, `web/components/list-builder.module.css`, `web/components/illustrations.tsx`)** `[x]`:
+   - Added visual 3-step HUD stepper at the top of the list builder: `1. Pick Goods` -> `2. Review List` -> `3. Send to Trader`, showing live step progress.
+   - Added handsome `DirectionPointerDownIllustration` empty-state guidance box for first-time visitors, clearly directing shoppers toward catalogue search and categories.
+   - Added `EmptyOrdersIllustration` vector graphics for clean empty order tracking states.
+5. **Mobile Design Parity for Collection & Review Controls (`web/components/list-builder.tsx`, `web/components/list-builder.module.css`)** `[x]`:
+   - Redesigned In-Shop Pickup vs. Waybill/Delivery buttons with mobile-style rounded pill geometry (`border-radius: 999px`) and emerald accents (`#084a2f`).
+   - Unified review bar totals and order submission persistence to save phone numbers and request IDs for instant reordering.

@@ -63,29 +63,37 @@ export async function fetchPublicList(
 }
 
 async function getJson<T>(path: string): Promise<T | null> {
+  const primaryUrl = `${API_BASE_URL}${path}`;
   try {
-    // **Cached at the edge, not fetched on every click.**
-    //
-    // This was `no-store`, and it is why opening a product took over a second: every navigation made a
-    // fresh round trip from the visitor to the web server to the API and back, for a page that changes
-    // when the trader edits his shop and not before. Sixty seconds is the compromise - a customer's
-    // second click is instant, a price he changed a minute ago is already live, and the shop stays
-    // readable even while the API is briefly unwell.
-    const response = await fetch(`${API_BASE_URL}${path}`, {
+    const response = await fetch(primaryUrl, {
       cache: "no-store",
       headers: { Accept: "application/json" },
     });
-    if (!response.ok) {
-      // A shop that is closed, or a product that is not published, answers 404 - which is a state the
-      // page renders rather than an error a customer should see.
+    if (response.ok) {
+      return (await response.json()) as T;
+    }
+    if (response.status === 404 && API_BASE_URL === DEPLOYED_API) {
       return null;
     }
-    return (await response.json()) as T;
   } catch {
-    // The API being unreachable is not something a customer can act on, and a broken shop page says
-    // more about the shop than about the network.
-    return null;
+    // Primary fetch failed; attempt fallback below
   }
+
+  if (API_BASE_URL !== DEPLOYED_API) {
+    try {
+      const fallbackResponse = await fetch(`${DEPLOYED_API}${path}`, {
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      });
+      if (fallbackResponse.ok) {
+        return (await fallbackResponse.json()) as T;
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
 }
 
 /** The address a customer can open, built from the shop's own slug. */

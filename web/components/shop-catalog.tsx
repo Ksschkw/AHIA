@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { SearchIcon } from "@/components/icons";
+import { CustomerOrdersSheet } from "@/components/customer-orders-sheet";
 import { formatMoneyOrOnRequest } from "@/lib/format";
 import type { PublicGroup, PublicProduct } from "@/lib/server-api";
 import styles from "./shop-catalog.module.css";
@@ -17,6 +18,7 @@ interface ShopCatalogProps {
 export function ShopCatalog({ products, groups, tenantSlug, businessName }: ShopCatalogProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [showOrdersSheet, setShowOrdersSheet] = useState(false);
 
   // Extract unique category names, counts, and primary thumbnails from products
   const categoryStats = useMemo(() => {
@@ -81,27 +83,43 @@ export function ShopCatalog({ products, groups, tenantSlug, businessName }: Shop
 
   return (
     <section className={styles.catalogSection} aria-label="Shop catalog">
+      <CustomerOrdersSheet
+        isOpen={showOrdersSheet}
+        onClose={() => setShowOrdersSheet(false)}
+        tenantSlug={tenantSlug}
+        businessName={businessName}
+      />
       <div className={styles.filterBar}>
-        <div className={styles.searchWrap}>
-          <SearchIcon size={18} className={styles.searchIcon} />
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={`Search ${businessName}'s catalog...`}
-            className={styles.searchInput}
-            aria-label="Search items"
-          />
-          {searchQuery ? (
-            <button
-              type="button"
-              className={styles.clearSearchBtn}
-              onClick={() => setSearchQuery("")}
-              aria-label="Clear search"
-            >
-              Clear
-            </button>
-          ) : null}
+        <div className={styles.searchRow}>
+          <div className={styles.searchWrap}>
+            <SearchIcon size={18} className={styles.searchIcon} />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={`Search ${businessName}'s catalog...`}
+              className={styles.searchInput}
+              aria-label="Search items"
+            />
+            {searchQuery ? (
+              <button
+                type="button"
+                className={styles.clearSearchBtn}
+                onClick={() => setSearchQuery("")}
+                aria-label="Clear search"
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className={styles.trackOrdersPill}
+            onClick={() => setShowOrdersSheet(true)}
+            aria-label="Track previous orders by phone"
+          >
+            Track Orders
+          </button>
         </div>
 
         {categoryStats.categories.length > 1 ? (

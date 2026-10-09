@@ -201,3 +201,56 @@ export function EmptyTeamIllustration({ size = 120, ...rest }: IllustrationProps
     </svg>
   );
 }
+
+/** Empty orders / tracking: package with radar pulse awaiting customer order history. */
+export function EmptyOrdersIllustration({ size = 120, ...rest }: IllustrationProps) {
+  return (
+    <svg
+      width={size}
+      height={Math.round((size * 5) / 6)}
+      viewBox="0 0 120 100"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      {...rest}
+    >
+      {/* Central box / order package */}
+      <polygon points="60 22 92 38 60 54 28 38" />
+      <polygon points="28 38 60 54 60 84 28 68" />
+      <polygon points="92 38 60 54 60 84 92 68" />
+      {/* Box tape mark */}
+      <line x1="60" y1="22" x2="60" y2="38" />
+      <line x1="44" y1="46" x2="76" y2="46" />
+      {/* Radar waves signaling tracking */}
+      <path d="M20 28A46 46 0 0 1 100 28" strokeDasharray="3 3" opacity="0.4" />
+      <path d="M12 20A58 58 0 0 1 108 20" strokeDasharray="3 3" opacity="0.25" />
+      {/* Ground shadow line */}
+      <ellipse cx="60" cy="88" rx="36" ry="6" opacity="0.15" />
+    </svg>
+  );
+}
+
+/** Directional pointer arrow down: guides first-time shoppers toward catalogue / search. */
+export function DirectionPointerDownIllustration({ size = 48, ...rest }: IllustrationProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 48 48"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      {...rest}
+    >
+      <circle cx="24" cy="24" r="20" opacity="0.1" fill="currentColor" />
+      <line x1="24" y1="12" x2="24" y2="34" />
+      <polyline points="16 26 24 34 32 26" />
+    </svg>
+  );
+}

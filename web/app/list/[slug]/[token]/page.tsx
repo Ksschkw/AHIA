@@ -16,27 +16,34 @@ import { fetchPublicList, fetchPublicShop } from "@/lib/server-api";
 type Params = { params: Promise<{ slug: string; token: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
-  const { slug, token } = await params;
-  const list = await fetchPublicList(slug, token);
-  if (!list) {
-    return { title: "Order List Not Found" };
+  try {
+    const { slug, token } = await params;
+    const list = await fetchPublicList(slug, token);
+    if (!list) {
+      return { title: "Order List Not Found" };
+    }
+    return {
+      title: `Your list for ${list.business_name}`,
+      description: `${list.lines.length} items, sent to ${list.business_name}.`,
+      robots: { index: false, follow: false },
+    };
+  } catch {
+    return { title: "Your Order List" };
   }
-  return {
-    title: `Your list for ${list.business_name}`,
-    description: `${list.lines.length} items, sent to ${list.business_name}.`,
-    // A customer's list is their own business: nothing here belongs in a search engine.
-    robots: { index: false, follow: false },
-  };
 }
 
 export const revalidate = 10;
 
 export default async function ListPage({ params }: Params) {
-  const { slug, token } = await params;
-  const list = await fetchPublicList(slug, token);
-  if (!list) {
-    const shop = await fetchPublicShop(slug).catch(() => null);
-    return <ListNotFound slug={slug} businessName={shop?.business_name} />;
+  try {
+    const { slug, token } = await params;
+    const list = await fetchPublicList(slug, token);
+    if (!list) {
+      const shop = await fetchPublicShop(slug).catch(() => null);
+      return <ListNotFound slug={slug} businessName={shop?.business_name} />;
+    }
+    return <LiveList initial={list} slug={slug} token={token} />;
+  } catch {
+    return <ListNotFound slug="" businessName="AHIA Shop" />;
   }
-  return <LiveList initial={list} slug={slug} token={token} />;
 }
