@@ -4497,3 +4497,24 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
 5. **Mobile Design Parity for Collection & Review Controls (`web/components/list-builder.tsx`, `web/components/list-builder.module.css`)** `[x]`:
    - Redesigned In-Shop Pickup vs. Waybill/Delivery buttons with mobile-style rounded pill geometry (`border-radius: 999px`) and emerald accents (`#084a2f`).
    - Unified review bar totals and order submission persistence to save phone numbers and request IDs for instant reordering.
+
+### 17.20 Separate Worked vs. Unworked Lists, Total Deletion from View, Keyboard Modal Fix & Standalone Android Release v0.4.4 `[x]`
+1. **Separation of Worked vs. Unworked Customer Lists (`mobile/app/home.tsx`, `web/app/app/lists/page.tsx`, `web/app/app/lists/lists.module.css`)** `[x]`:
+   - Separated customer lists into three distinct segmented tabs: `Unworked (N)`, `Worked (M)`, and `All (Total)`.
+   - Lists are categorized as "Worked" when they are confirmed/fulfilled or when every item line has a priced amount assigned; unworked/unpriced requests remain prominent in the default `Unworked` view.
+   - Dedicated contextual empty states for unworked, worked, and empty list views guiding the merchant.
+2. **Total Customer List Deletion from View (`mobile/app/home.tsx`, `web/app/app/lists/page.tsx`)** `[x]`:
+   - Allowed traders to delete any customer order (both unworked and confirmed/worked lists) totally from view to eliminate clutter.
+   - Deleted list IDs are persisted locally in `ahia_deleted_list_ids` (`localStorage` on Web, `app_settings` SQLite on Mobile) and asynchronously deleted on the backend.
+   - Added direct trash deletion button with confirmation modal on web and native alert on mobile.
+3. **Mobile & Web UI/UX Bar-for-Bar Parity (`web/app/app/lists/page.tsx`, `web/app/app/lists/lists.module.css`)** `[x]`:
+   - Styled web lists filter pills bar-for-bar with mobile (`#084a2f` dark emerald theme, rounded pill filters, active border highlights, dark mode support).
+4. **Mobile Standalone Keyboard Modal Fix (`mobile/app/home.tsx`)** `[x]`:
+   - Wrapped `paymentModalList` in `ScrollView` with `contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}` and `keyboardShouldPersistTaps="handled"`, resolving issue where Android software keyboard covered payment/amount inputs in standalone APK builds.
+5. **Direct Download Endpoint & Automatic APK Installation (`web/app/download/route.ts`, `web/app/page.tsx`)** `[x]`:
+   - Created `/download` Next.js endpoint performing a direct 302 redirect with download headers to GitHub's `AHIA-latest.apk` release asset.
+   - Updated "Install for Android" CTA to link directly to `/download` with the `download` attribute, preventing any intermediate release pages.
+6. **Mobile Release v0.4.4 Compilation & GitHub Release (`mobile/app.json`, `mobile/package.json`, `dist/AHIA-v0.4.4-android.apk`, `dist/AHIA-latest.apk`)** `[x]`:
+   - Bumped version to `0.4.4` (Android versionCode `9`).
+   - Cleanly assembled standalone Android release APK via Gradle (`./gradlew assembleRelease`).
+   - Published GitHub release `v0.4.4` with assets `AHIA-latest.apk` and `AHIA-v0.4.4-android.apk` marked as `latest`.

@@ -486,6 +486,42 @@ export default function Home() {
       return [];
     }
   });
+
+  const [listFilterTab, setListFilterTab] = useState<"unworked" | "worked" | "all">("unworked");
+  const [deletedListIds, setDeletedListIds] = useState<Set<string>>(() => {
+    try {
+      const raw = getAppSetting("ahia_deleted_list_ids");
+      return raw ? new Set<string>(JSON.parse(raw)) : new Set<string>();
+    } catch {
+      return new Set<string>();
+    }
+  });
+
+  const isListWorked = useCallback((item: CustomerList): boolean => {
+    if (item.status === "confirmed") return true;
+    const items = item.lines.filter((l) => l.note !== "heading");
+    if (items.length > 0 && items.every((l) => Boolean(l.shop_price))) return true;
+    return false;
+  }, []);
+
+  const visibleCustomerLists = useMemo(() => {
+    const nonDeleted = customerLists.filter((l) => !deletedListIds.has(l.id));
+    if (listFilterTab === "unworked") {
+      return nonDeleted.filter((l) => !isListWorked(l));
+    }
+    if (listFilterTab === "worked") {
+      return nonDeleted.filter((l) => isListWorked(l));
+    }
+    return nonDeleted;
+  }, [customerLists, deletedListIds, listFilterTab, isListWorked]);
+
+  const unworkedListsCount = useMemo(() => {
+    return customerLists.filter((l) => !deletedListIds.has(l.id) && !isListWorked(l)).length;
+  }, [customerLists, deletedListIds, isListWorked]);
+
+  const workedListsCount = useMemo(() => {
+    return customerLists.filter((l) => !deletedListIds.has(l.id) && isListWorked(l)).length;
+  }, [customerLists, deletedListIds, isListWorked]);
   const [sales, setSales] = useState<SaleSummary[]>(() => {
     try {
       const lastActiveId = getAppSetting("last_active_tenant_id");
@@ -2393,23 +2429,34 @@ export default function Home() {
   };
 
   const handleDeleteList = (list: CustomerList) => {
-    if (!activeBusiness) return;
     Alert.alert(
-      "Delete Customer List?",
-      `Are you sure you want to delete the list from ${list.customer_name ?? list.customer_phone}? This cannot be undone.`,
+      "Delete Order from View?",
+      `Are you sure you want to completely remove this order from your view?`,
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Delete",
+          text: "Delete from View",
           style: "destructive",
           onPress: async () => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            try {
-              await deleteCustomerList(activeBusiness.id, list.id);
-              setCustomerLists((current) => current.filter((l) => l.id !== list.id));
-              showToast("Customer list deleted");
-            } catch {
-              showToast("Could not delete list");
+            setDeletedListIds((prev) => {
+              const next = new Set(prev);
+              next.add(list.id);
+              try {
+                setAppSetting("ahia_deleted_list_ids", JSON.stringify(Array.from(next)));
+              } catch {
+                // ignore error saving
+              }
+              return next;
+            });
+            setCustomerLists((current) => current.filter((l) => l.id !== list.id));
+            showToast("Order removed from view");
+            if (activeBusiness) {
+              try {
+                await deleteCustomerList(activeBusiness.id, list.id);
+              } catch {
+                // Local deletion is preserved regardless
+              }
             }
           },
         },
@@ -3058,35 +3105,86 @@ export default function Home() {
         {/* Customer Lists / Waybills */}
         {activeTab === "lists" && (
           <FlatList
-            data={customerLists}
+            data={visibleCustomerLists}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listPadding}
             ListHeaderComponent={
               <View style={styles.listsHeaderWrap}>
-                <View>
-                  <Text style={styles.listsHeaderTitle}>Orders & Waybills</Text>
-                  <Text style={styles.listsHeaderSubtitle}>
-                    {customerLists.length} customer order{customerLists.length === 1 ? "" : "s"}
-                  </Text>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", width: "100%", marginBottom: 10 }}>
+                  <View>
+                    <Text style={styles.listsHeaderTitle}>Orders & Waybills</Text>
+                    <Text style={styles.listsHeaderSubtitle}>
+                      {visibleCustomerLists.length} {listFilterTab} order{visibleCustomerLists.length === 1 ? "" : "s"}
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={styles.quickPasteBtn}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setShowQuickPasteModal(true);
+                    }}
+                  >
+                    <PlusIcon size={12} color="#ffffff" />
+                    <Text style={styles.quickPasteBtnText}>Quick-Paste</Text>
+                  </Pressable>
                 </View>
-                <Pressable
-                  style={styles.quickPasteBtn}
-                  onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setShowQuickPasteModal(true);
-                  }}
-                >
-                  <PlusIcon size={12} color="#ffffff" />
-                  <Text style={styles.quickPasteBtnText}>Quick-Paste</Text>
-                </Pressable>
+
+                {/* Unworked vs Worked Segmented Pills */}
+                <View style={styles.listFilterPillsRow}>
+                  <Pressable
+                    style={[styles.listFilterPill, listFilterTab === "unworked" && styles.listFilterPillActive]}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setListFilterTab("unworked");
+                    }}
+                  >
+                    <Text style={[styles.listFilterPillText, listFilterTab === "unworked" && styles.listFilterPillTextActive]}>
+                      Unworked ({unworkedListsCount})
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={[styles.listFilterPill, listFilterTab === "worked" && styles.listFilterPillActive]}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setListFilterTab("worked");
+                    }}
+                  >
+                    <Text style={[styles.listFilterPillText, listFilterTab === "worked" && styles.listFilterPillTextActive]}>
+                      Worked ({workedListsCount})
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={[styles.listFilterPill, listFilterTab === "all" && styles.listFilterPillActive]}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setListFilterTab("all");
+                    }}
+                  >
+                    <Text style={[styles.listFilterPillText, listFilterTab === "all" && styles.listFilterPillTextActive]}>
+                      All ({customerLists.filter((l) => !deletedListIds.has(l.id)).length})
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
             }
             ListEmptyComponent={
               <View style={styles.emptyBox}>
                 <ListIcon size={32} color="#6e7681" />
-                <Text style={styles.emptyTitle}>No customer orders yet</Text>
+                <Text style={styles.emptyTitle}>
+                  {listFilterTab === "unworked"
+                    ? "No unworked orders"
+                    : listFilterTab === "worked"
+                    ? "No worked orders yet"
+                    : "No customer orders"}
+                </Text>
                 <Text style={styles.emptySubtitle}>
-                  Tap "Quick-Paste" above to paste a rough WhatsApp order note and generate an itemized quote.
+                  {listFilterTab === "unworked"
+                    ? "All customer orders have been worked and priced! New orders from your public shop will appear here."
+                    : listFilterTab === "worked"
+                    ? "Orders you have quoted or confirmed will be grouped here."
+                    : "Tap 'Quick-Paste' above to paste a rough WhatsApp order note and generate an itemized quote."}
                 </Text>
               </View>
             }
@@ -3178,6 +3276,16 @@ export default function Home() {
                     </View>
 
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <Pressable
+                        style={{ padding: 6 }}
+                        hitSlop={10}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleDeleteList(item);
+                        }}
+                      >
+                        <TrashIcon size={16} color="#f87171" />
+                      </Pressable>
                       <View
                         style={[
                           styles.statusBadge,
@@ -5413,99 +5521,105 @@ export default function Home() {
       {/* Record Order Payment / Advance Deposit Modal */}
       <Modal statusBarTranslucent visible={paymentModalList !== null} transparent animationType="slide">
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalBackdrop}
         >
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Record Order Payment</Text>
-            <Text style={styles.modalSubtitle}>
-              Customer: {paymentModalList?.customer_name || paymentModalList?.customer_phone}
-            </Text>
+          <ScrollView
+            style={{ width: "100%" }}
+            contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Record Order Payment</Text>
+              <Text style={styles.modalSubtitle}>
+                Customer: {paymentModalList?.customer_name || paymentModalList?.customer_phone}
+              </Text>
 
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Amount (\u20A6)"
-              placeholderTextColor="#8a928e"
-              keyboardType="numeric"
-              value={paymentAmount}
-              onChangeText={setPaymentAmount}
-            />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Amount (\u20A6)"
+                placeholderTextColor="#8a928e"
+                keyboardType="numeric"
+                value={paymentAmount}
+                onChangeText={setPaymentAmount}
+              />
 
-            {/* Quick chips */}
-            {paymentModalList && (() => {
-              const curTotalPaid = computeCustomerListPaid(paymentModalList);
-              const curGrand = (Number(paymentModalList.priced_total) || 0) + (Number(paymentModalList.dispatch_cost) || 0);
-              const curRem = Math.max(0, curGrand - curTotalPaid);
-              return curRem > 0 ? (
-                <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+              {/* Quick chips */}
+              {paymentModalList && (() => {
+                const curTotalPaid = computeCustomerListPaid(paymentModalList);
+                const curGrand = (Number(paymentModalList.priced_total) || 0) + (Number(paymentModalList.dispatch_cost) || 0);
+                const curRem = Math.max(0, curGrand - curTotalPaid);
+                return curRem > 0 ? (
+                  <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+                    <Pressable
+                      style={styles.quickChip}
+                      onPress={() => setPaymentAmount(curRem.toString())}
+                    >
+                      <Text style={styles.quickChipText}>Full Balance ({formatMoney(curRem.toString())})</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.quickChip}
+                      onPress={() => setPaymentAmount(Math.round(curRem / 2).toString())}
+                    >
+                      <Text style={styles.quickChipText}>50% Part</Text>
+                    </Pressable>
+                  </View>
+                ) : null;
+              })()}
+
+              {/* Payment Method Selector */}
+              <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+                {["transfer", "cash", "pos"].map((m) => (
                   <Pressable
-                    style={styles.quickChip}
-                    onPress={() => setPaymentAmount(curRem.toString())}
-                  >
-                    <Text style={styles.quickChipText}>Full Balance ({formatMoney(curRem.toString())})</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.quickChip}
-                    onPress={() => setPaymentAmount(Math.round(curRem / 2).toString())}
-                  >
-                    <Text style={styles.quickChipText}>50% Part</Text>
-                  </Pressable>
-                </View>
-              ) : null;
-            })()}
-
-            {/* Payment Method Selector */}
-            <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
-              {["transfer", "cash", "pos"].map((m) => (
-                <Pressable
-                  key={m}
-                  style={[
-                    styles.methodChip,
-                    paymentMethod === m && styles.methodChipActive,
-                  ]}
-                  onPress={() => setPaymentMethod(m)}
-                >
-                  <Text
+                    key={m}
                     style={[
-                      styles.methodChipText,
-                      paymentMethod === m && styles.methodChipTextActive,
+                      styles.methodChip,
+                      paymentMethod === m && styles.methodChipActive,
                     ]}
+                    onPress={() => setPaymentMethod(m)}
                   >
-                    {m.toUpperCase()}
-                  </Text>
+                    <Text
+                      style={[
+                        styles.methodChipText,
+                        paymentMethod === m && styles.methodChipTextActive,
+                      ]}
+                    >
+                      {m.toUpperCase()}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Note (e.g. Advance deposit before dispatch, Part payment)"
+                placeholderTextColor="#8a928e"
+                value={paymentNote}
+                onChangeText={setPaymentNote}
+              />
+
+              <View style={styles.modalButtons}>
+                <Pressable
+                  style={styles.modalCancelBtn}
+                  onPress={() => setPaymentModalList(null)}
+                  disabled={savingPayment}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
                 </Pressable>
-              ))}
+                <Pressable
+                  style={styles.modalSaveBtn}
+                  onPress={handleRecordPayment}
+                  disabled={savingPayment}
+                >
+                  {savingPayment ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text style={styles.modalSaveText}>Save Payment</Text>
+                  )}
+                </Pressable>
+              </View>
             </View>
-
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Note (e.g. Advance deposit before dispatch, Part payment)"
-              placeholderTextColor="#8a928e"
-              value={paymentNote}
-              onChangeText={setPaymentNote}
-            />
-
-            <View style={styles.modalButtons}>
-              <Pressable
-                style={styles.modalCancelBtn}
-                onPress={() => setPaymentModalList(null)}
-                disabled={savingPayment}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={styles.modalSaveBtn}
-                onPress={handleRecordPayment}
-                disabled={savingPayment}
-              >
-                {savingPayment ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.modalSaveText}>Save Payment</Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -7232,10 +7346,32 @@ const createStyles = (theme: ThemePalette) => StyleSheet.create({
     paddingBottom: 80,
   },
   listsHeaderWrap: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     marginBottom: 14,
+  },
+  listFilterPillsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+  },
+  listFilterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: theme.card,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  listFilterPillActive: {
+    backgroundColor: "rgba(74, 222, 128, 0.12)",
+    borderColor: "#4ade80",
+  },
+  listFilterPillText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: theme.textSecondary,
+  },
+  listFilterPillTextActive: {
+    color: "#4ade80",
   },
   listsHeaderTitle: {
     color: theme.text,

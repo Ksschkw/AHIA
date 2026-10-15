@@ -19,7 +19,7 @@
  */
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   CannotGetIcon,
@@ -99,6 +99,47 @@ export default function Lists() {
   const [adjustments, setAdjustments] = useState<Record<string, string>>({});
   const [listPendingDelete, setListPendingDelete] = useState<CustomerList | null>(null);
 
+  const [listFilterTab, setListFilterTab] = useState<"unworked" | "worked" | "all">("unworked");
+  const [deletedListIds, setDeletedListIds] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set<string>();
+    try {
+      const raw = window.localStorage.getItem("ahia_deleted_list_ids");
+      return raw ? new Set<string>(JSON.parse(raw)) : new Set<string>();
+    } catch {
+      return new Set<string>();
+    }
+  });
+
+  const isListWorked = useCallback((item: CustomerList): boolean => {
+    if (item.status === "confirmed") return true;
+    const items = item.lines.filter((l) => l.note !== "heading");
+    if (items.length > 0 && items.every((l) => Boolean(l.shop_price))) return true;
+    return false;
+  }, []);
+
+  const visibleCustomerLists = useMemo(() => {
+    const nonDeleted = lists.filter((l) => !deletedListIds.has(l.id));
+    if (listFilterTab === "unworked") {
+      return nonDeleted.filter((l) => !isListWorked(l));
+    }
+    if (listFilterTab === "worked") {
+      return nonDeleted.filter((l) => isListWorked(l));
+    }
+    return nonDeleted;
+  }, [lists, deletedListIds, listFilterTab, isListWorked]);
+
+  const unworkedListsCount = useMemo(() => {
+    return lists.filter((l) => !deletedListIds.has(l.id) && !isListWorked(l)).length;
+  }, [lists, deletedListIds, isListWorked]);
+
+  const workedListsCount = useMemo(() => {
+    return lists.filter((l) => !deletedListIds.has(l.id) && isListWorked(l)).length;
+  }, [lists, deletedListIds, isListWorked]);
+
+  const totalListsCount = useMemo(() => {
+    return lists.filter((l) => !deletedListIds.has(l.id)).length;
+  }, [lists, deletedListIds]);
+
   const run = useCallback(async (key: string, action: () => Promise<void>, skipGate = false) => {
     // **Confirming a list is confirming money.** It is the moment a total stops being a suggestion and becomes
     // what a customer owes, so it is the third of the three actions the objective names for the PIN - and in
@@ -168,11 +209,35 @@ export default function Lists() {
         <p className={styles.lede}>
           Review customer requests, set your prices, and confirm orders.
         </p>
+
+        <div className={styles.filterPillsRow}>
+          <button
+            type="button"
+            className={`${styles.filterPill} ${listFilterTab === "unworked" ? styles.filterPillActive : ""}`}
+            onClick={() => setListFilterTab("unworked")}
+          >
+            Unworked ({unworkedListsCount})
+          </button>
+          <button
+            type="button"
+            className={`${styles.filterPill} ${listFilterTab === "worked" ? styles.filterPillActive : ""}`}
+            onClick={() => setListFilterTab("worked")}
+          >
+            Worked ({workedListsCount})
+          </button>
+          <button
+            type="button"
+            className={`${styles.filterPill} ${listFilterTab === "all" ? styles.filterPillActive : ""}`}
+            onClick={() => setListFilterTab("all")}
+          >
+            All ({totalListsCount})
+          </button>
+        </div>
       </header>
 
       {state === "loading" ? <Loading label="Fetching the lists..." /> : null}
 
-      {state === "ready" && lists.length === 0 ? (
+      {state === "ready" && visibleCustomerLists.length === 0 ? (
         <Empty
           illustration={<EmptyRequestsIllustration size={110} />}
           action={
@@ -187,13 +252,29 @@ export default function Lists() {
             ) : null
           }
         >
-          No customer lists yet.
-          <br />
-          Share your shop link with customers on WhatsApp and their orders will arrive directly here.
+          {listFilterTab === "unworked" ? (
+            <>
+              No unworked orders.
+              <br />
+              All customer orders have been worked and priced! New orders from your public shop will appear here.
+            </>
+          ) : listFilterTab === "worked" ? (
+            <>
+              No worked orders yet.
+              <br />
+              Orders you have quoted or confirmed will be grouped here.
+            </>
+          ) : (
+            <>
+              No customer lists yet.
+              <br />
+              Share your shop link with customers on WhatsApp and their orders will arrive directly here.
+            </>
+          )}
         </Empty>
       ) : null}
 
-      {lists.map((list) => {
+      {visibleCustomerLists.map((list) => {
         const open = openId === list.id;
         const unpriced = list.unpriced_line_count;
         const adjustment = Number(adjustments[list.id] ?? "0");
@@ -234,17 +315,15 @@ export default function Lists() {
                 >
                   {open ? "Close" : "Work this list"}
                 </Button>
-                {list.status !== "confirmed" ? (
-                  <button
-                    type="button"
-                    className={styles.deleteListBtn}
-                    onClick={() => setListPendingDelete(list)}
-                    title="Delete this customer list"
-                  >
-                    <TrashIcon size={14} />
-                    <span>Delete</span>
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  className={styles.deleteListBtn}
+                  onClick={() => setListPendingDelete(list)}
+                  title="Delete this customer list"
+                >
+                  <TrashIcon size={14} />
+                  <span>Delete</span>
+                </button>
               </div>
               {!open ? (
                 <span className={styles.totalPreview}>
@@ -579,11 +658,25 @@ export default function Lists() {
                 disabled={busyAction === `delete-${listPendingDelete.id}`}
                 onClick={() =>
                   run(`delete-${listPendingDelete.id}`, async () => {
-                    await deleteCustomerList(business.id, listPendingDelete.id);
-                    setLists((curr) => curr.filter((l) => l.id !== listPendingDelete.id));
+                    const idToDelete = listPendingDelete.id;
+                    setDeletedListIds((prev) => {
+                      const next = new Set(prev);
+                      next.add(idToDelete);
+                      try {
+                        window.localStorage.setItem(
+                          "ahia_deleted_list_ids",
+                          JSON.stringify(Array.from(next)),
+                        );
+                      } catch {}
+                      return next;
+                    });
+                    try {
+                      await deleteCustomerList(business.id, idToDelete);
+                    } catch {}
+                    setLists((curr) => curr.filter((l) => l.id !== idToDelete));
                     setListPendingDelete(null);
                     setNotice({
-                      message: "Customer list deleted.",
+                      message: "Customer list deleted from view.",
                       tone: "good",
                     });
                   })
