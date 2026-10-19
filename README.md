@@ -120,8 +120,6 @@ with one command.
 
 - One micro-milestone is one commit. Nothing is committed that fails
   `make check`.
-- Every commit is authored by `Ksschkw <kookafor893@gmail.com>`. No co-author
-  trailers.
 - Engineering artifacts are ASCII only: source, comments, docstrings, log
   messages, error strings, test names, configuration, CLI output and commit
   messages. No emojis, no decorative symbols, no ASCII art. Runtime business
