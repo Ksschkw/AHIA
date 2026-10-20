@@ -1,5 +1,13 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, Pressable, StyleSheet, ActivityIndicator } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  ActivityIndicator,
+  TextInput,
+  Platform,
+} from "react-native";
 import * as Haptics from "expo-haptics";
 import { BackspaceIcon } from "@/components/icons";
 
@@ -23,6 +31,7 @@ export function PinPad({
   onClear,
 }: PinPadProps) {
   const [pin, setPin] = useState("");
+  const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (error) {
@@ -53,24 +62,59 @@ export function PinPad({
     onClear?.();
   };
 
+  const handleNativeTextChange = (text: string) => {
+    const cleaned = text.replace(/[^0-9]/g, "").slice(0, length);
+    setPin(cleaned);
+    if (cleaned.length === length) {
+      onComplete(cleaned);
+    }
+  };
+
   return (
     <View style={styles.container}>
-      {/* Visual PIN Dots */}
-      <View style={styles.dotsRow}>
+      {/* Hidden native input for hardware/software keyboard support */}
+      <TextInput
+        ref={inputRef}
+        value={pin}
+        onChangeText={handleNativeTextChange}
+        keyboardType="number-pad"
+        maxLength={length}
+        secureTextEntry
+        style={styles.hiddenInput}
+        editable={!disabled && !loading}
+      />
+
+      {/* Visual PIN digit boxes */}
+      <Pressable
+        style={styles.boxesRow}
+        onPress={() => inputRef.current?.focus()}
+        accessibilityLabel="Security PIN digits"
+        accessibilityRole="button"
+      >
         {Array.from({ length }).map((_, idx) => {
           const isFilled = idx < pin.length;
+          const isCurrent = idx === pin.length;
           return (
             <View
               key={idx}
               style={[
-                styles.dot,
-                isFilled && styles.dotFilled,
-                Boolean(error) && styles.dotError,
+                styles.box,
+                isFilled && styles.boxFilled,
+                isCurrent && styles.boxCurrent,
+                Boolean(error) && styles.boxError,
               ]}
-            />
+            >
+              {isFilled ? (
+                <View style={styles.dotFilled} />
+              ) : isCurrent ? (
+                <View style={styles.cursorBar} />
+              ) : null}
+            </View>
           );
         })}
-      </View>
+      </Pressable>
+
+      <Text style={styles.tapHint}>Tap boxes for device keyboard or use keypad below</Text>
 
       {loading ? (
         <View style={styles.loadingBox}>
@@ -179,34 +223,65 @@ export function PinPad({
 const styles = StyleSheet.create({
   container: {
     alignItems: "center",
-    paddingVertical: 12,
+    paddingVertical: 8,
+    width: "100%",
   },
-  dotsRow: {
+  hiddenInput: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    opacity: 0,
+  },
+  boxesRow: {
     flexDirection: "row",
-    gap: 16,
-    marginBottom: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  box: {
+    width: 48,
+    height: 52,
+    marginHorizontal: 6,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "#334155",
+    backgroundColor: "#0f172a",
+    alignItems: "center",
     justifyContent: "center",
   },
-  dot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: "#4b5563",
-    backgroundColor: "transparent",
+  boxCurrent: {
+    borderColor: "#4ade80",
+    backgroundColor: "#13231b",
+  },
+  boxFilled: {
+    borderColor: "#22c55e",
+    backgroundColor: "#0d281e",
+  },
+  boxError: {
+    borderColor: "#f87171",
+    backgroundColor: "rgba(248, 113, 113, 0.15)",
   },
   dotFilled: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     backgroundColor: "#4ade80",
-    borderColor: "#4ade80",
   },
-  dotError: {
-    borderColor: "#f87171",
-    backgroundColor: "rgba(248, 113, 113, 0.2)",
+  cursorBar: {
+    width: 2,
+    height: 20,
+    backgroundColor: "#4ade80",
+    borderRadius: 1,
+  },
+  tapHint: {
+    color: "#64748b",
+    fontSize: 11,
+    marginBottom: 12,
+    textAlign: "center",
   },
   loadingBox: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
     marginBottom: 12,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -217,6 +292,7 @@ const styles = StyleSheet.create({
     color: "#4ade80",
     fontSize: 13,
     fontWeight: "600",
+    marginLeft: 8,
   },
   errorText: {
     color: "#f87171",
@@ -227,18 +303,18 @@ const styles = StyleSheet.create({
   },
   keypadGrid: {
     width: "100%",
-    maxWidth: 280,
-    gap: 10,
+    maxWidth: 290,
   },
   keypadRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    gap: 12,
+    marginVertical: 4,
   },
   keyBtn: {
     flex: 1,
-    height: 54,
-    borderRadius: 27,
+    height: 52,
+    marginHorizontal: 5,
+    borderRadius: 12,
     backgroundColor: "#1e293b",
     alignItems: "center",
     justifyContent: "center",
@@ -246,7 +322,7 @@ const styles = StyleSheet.create({
     borderColor: "#334155",
   },
   keyBtnDisabled: {
-    opacity: 0.5,
+    opacity: 0.4,
   },
   keyBtnPressed: {
     backgroundColor: "#334155",
@@ -264,6 +340,6 @@ const styles = StyleSheet.create({
   actionKeyText: {
     color: "#94a3b8",
     fontSize: 13,
-    fontWeight: "600",
+    fontWeight: "700",
   },
 });

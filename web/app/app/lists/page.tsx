@@ -57,10 +57,10 @@ import styles from "./lists.module.css";
 type Notice = { message: string; tone: "good" | "bad"; hint?: string };
 
 const STATE_LABEL: Record<string, string> = {
-  somewhere: "Not looked at yet",
-  have_it: "On the shelf",
-  buy_it: "Going to the market",
-  cannot_get: "Cannot get it",
+  somewhere: "Not checked yet",
+  have_it: "In stock",
+  buy_it: "Getting it",
+  cannot_get: "Not available",
 };
 
 export default function Lists() {
@@ -378,12 +378,15 @@ export default function Lists() {
                               Customer saw {formatMoneyOrOnRequest(line.customer_price)}
                             </span>
                           ) : null}
+                          <span className={styles.lineMeta}>
+                            State: <strong>{STATE_LABEL[line.state] ?? "In stock"}</strong>
+                          </span>
                         </div>
 
                         <div className={styles.compactPriceRow}>
                           <div className={styles.compactPriceField}>
                             <Field
-                              label="Price"
+                              label="Wholesale Price"
                               id={`price_${line.id}`}
                               value={drafts[line.id]?.price ?? ""}
                               onChange={(value) =>
@@ -394,6 +397,22 @@ export default function Lists() {
                               }
                               inputMode="decimal"
                               placeholder={line.shop_price ?? "0.00"}
+                              optional
+                            />
+                          </div>
+                          <div className={styles.compactPriceField}>
+                            <Field
+                              label="Your Cost"
+                              id={`cost_${line.id}`}
+                              value={drafts[line.id]?.cost ?? ""}
+                              onChange={(value) =>
+                                setDrafts((current) => ({
+                                  ...current,
+                                  [line.id]: { cost: value, price: current[line.id]?.price ?? "" },
+                                }))
+                              }
+                              inputMode="decimal"
+                              placeholder={line.cost_price ?? "0.00"}
                               optional
                             />
                           </div>
@@ -411,6 +430,9 @@ export default function Lists() {
                                   {
                                     ...(typed.price.trim()
                                       ? { shop_price: typed.price.trim() }
+                                      : {}),
+                                    ...(typed.cost.trim()
+                                      ? { cost_price: typed.cost.trim() }
                                       : {}),
                                   },
                                 );

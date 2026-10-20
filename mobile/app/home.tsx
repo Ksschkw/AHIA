@@ -201,6 +201,17 @@ function computeCustomerListPaid(list: CustomerList): number {
   return Number(list.amount_paid ?? list.advance_payment ?? 0);
 }
 
+function mergePreservedListFields(fresh: CustomerList, existing?: CustomerList | null): CustomerList {
+  if (!existing) return fresh;
+  return {
+    ...fresh,
+    fulfillment_type: fresh.fulfillment_type ?? existing.fulfillment_type,
+    payments: (fresh.payments && fresh.payments.length > 0) ? fresh.payments : (existing.payments ?? []),
+    amount_paid: fresh.amount_paid ?? existing.amount_paid,
+    advance_payment: fresh.advance_payment ?? existing.advance_payment,
+  };
+}
+
 function formatWaNumber(rawPhone: string | null | undefined): string | null {
   if (!rawPhone) return null;
   const digits = rawPhone.replace(/[^\d]/g, "");
@@ -363,13 +374,36 @@ function parseQuickPaste(raw: string): Array<{ text: string; quantity: string }>
     });
 }
 
-function groupCustomerListLines(lines: CustomerListLine[]) {
+function buildCategoryPath(catId: string, allCategories: Category[]): string {
+  const cat = allCategories.find((c) => c.id === catId);
+  if (!cat) return "";
+  if (cat.parent_id) {
+    const parentPath = buildCategoryPath(cat.parent_id, allCategories);
+    return parentPath ? `${parentPath} > ${cat.name}` : cat.name;
+  }
+  return cat.name;
+}
+
+function groupCustomerListLines(
+  lines: CustomerListLine[],
+  allProducts: Product[] = [],
+  allCategories: Category[] = []
+) {
   const rootMap = new Map<string, Map<string, CustomerListLine[]>>();
 
   for (const line of lines) {
     if (line.note === "heading") continue;
 
-    const rawGroup = line.group_name?.trim();
+    let rawGroup = line.group_name?.trim();
+
+    // If line lacks group_name, resolve from linked product & category hierarchy
+    if (!rawGroup && line.product_id && allProducts.length > 0) {
+      const prod = allProducts.find((p) => p.id === line.product_id);
+      if (prod?.category_id && allCategories.length > 0) {
+        rawGroup = buildCategoryPath(prod.category_id, allCategories);
+      }
+    }
+
     let root = "General Items";
     let sub: string | null = null;
 
@@ -639,9 +673,57 @@ export default function Home() {
     return null;
   }, [pricingLine, customerLists, products, categories]);
 
+  const pricingLineMatchedCategory = useMemo(() => {
+    if (!pricingLine) return null;
+    const targetList = customerLists.find((l) => l.id === pricingLine.listId);
+    const line = targetList?.lines.find((ln) => ln.id === pricingLine.lineId);
+    if (!line) return null;
+    if (line.product_id) {
+      const prod = products.find((p) => p.id === line.product_id);
+      if (prod?.category_id) {
+        const cat = categories.find((c) => c.id === prod.category_id);
+        if (cat) return cat;
+      }
+    }
+    if (line.group_name && line.group_name.trim()) {
+      const g = line.group_name.trim().toLowerCase();
+      const cat = categories.find((c) => g.includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(g));
+      if (cat) return cat;
+    }
+    return null;
+  }, [pricingLine, customerLists, products, categories]);
+
+  // Section collapse state for grouped lists
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const toggleSectionCollapse = (key: string) => {
+    setCollapsedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
   // Official Invoice modal state
   const [invoiceModalList, setInvoiceModalList] = useState<CustomerList | null>(null);
   const [exportingPdf, setExportingPdf] = useState(false);
+
+  // Return / Cancel Sale modal state (replaces Android default alert & "void" button)
+  const [saleToReturn, setSaleToReturn] = useState<SaleSummary | null>(null);
+  const [cancellingSale, setCancellingSale] = useState(false);
+
+  // Real-time today's sales count and revenue (guarantees newly recorded sales update immediately)
+  const todaySalesCountAndRevenue = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const todaySales = sales.filter((s) => {
+      if (s.cancelled_at || s.payment_status === "cancelled") return false;
+      if (!s.created_at) return false;
+      return s.created_at.startsWith(todayStr) || s.created_at.slice(0, 10) === todayStr;
+    });
+    const localRevenue = todaySales.reduce((acc, s) => acc + (Number(s.total_amount) || 0), 0);
+    const serverRevenue = Number(dailyStats?.total_revenue || "0");
+    const bestRevenue = Math.max(localRevenue, serverRevenue).toFixed(2);
+    const bestCount = Math.max(todaySales.length, dailyStats?.total_sales ?? 0);
+    return {
+      revenue: bestRevenue,
+      count: bestCount,
+    };
+  }, [sales, dailyStats]);
 
   // Dispatch Waybill modal state
   const [dispatchModalList, setDispatchModalList] = useState<CustomerList | null>(null);
@@ -876,12 +958,17 @@ export default function Home() {
       if (freshDaily) {
         const todayStr = new Date().toISOString().slice(0, 10);
         const allKnownSales = freshSales.length > 0 ? freshSales : cachedSales;
-        const localTodaySum = allKnownSales
-          .filter((s) => s.created_at.startsWith(todayStr) && s.payment_status !== "cancelled")
-          .reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
+        const localTodaySales = allKnownSales.filter(
+          (s) =>
+            (s.created_at?.startsWith(todayStr) || s.created_at?.slice(0, 10) === todayStr) &&
+            s.payment_status !== "cancelled" &&
+            !s.cancelled_at
+        );
+        const localTodaySum = localTodaySales.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
         const resolvedDaily = {
           ...freshDaily,
           total_revenue: Math.max(Number(freshDaily.total_revenue || 0), localTodaySum).toFixed(2),
+          total_sales: Math.max(freshDaily.total_sales || 0, localTodaySales.length),
         };
         setDailyStats(resolvedDaily);
         cacheDailyStats(tenantId, resolvedDaily);
@@ -1836,6 +1923,13 @@ export default function Home() {
         0
       );
 
+      const grandTotalNum = (Number(paymentModalList.priced_total) || 0) + (Number(paymentModalList.dispatch_cost) || 0);
+      if (grandTotalNum > 0 && newTotalPaid > grandTotalNum) {
+        showToast(`Cannot record: payments (${formatMoney(newTotalPaid.toString())}) exceed order total (${formatMoney(grandTotalNum.toString())})!`);
+        setSavingPayment(false);
+        return;
+      }
+
       const updatedList: CustomerList = {
         ...paymentModalList,
         payments: updatedPayments,
@@ -2056,14 +2150,20 @@ export default function Home() {
         }
       }
 
-      setCustomerLists((curr) => curr.map((l) => (l.id === updatedList.id ? updatedList : l)));
+      setCustomerLists((curr) =>
+        curr.map((l) => (l.id === updatedList.id ? mergePreservedListFields(updatedList, l) : l))
+      );
+      if (activeBusiness?.id) {
+        const existing = customerLists.find((l) => l.id === updatedList.id);
+        updateCachedCustomerList(activeBusiness.id, mergePreservedListFields(updatedList, existing));
+      }
       setPricingLine(null);
       setPriceInput("");
       setCostInput("");
       setApplyPriceToAll(false);
       showToast(
         applyPriceToAll
-          ? `Applied prices to other unpriced items in ${pricingLineCategoryName ?? "category"}!`
+          ? `Applied wholesale prices to other unpriced items in ${pricingLineCategoryName ?? "category"}!`
           : "Line prices & cost updated!"
       );
     } catch {
@@ -2092,8 +2192,8 @@ export default function Home() {
         if (matched.normal || matched.wholesale) {
           try {
             updated = await workListLine(activeBusiness.id, list.id, line.id, {
-              shop_price: matched.normal,
-              cost_price: matched.wholesale,
+              shop_price: matched.wholesale || matched.normal,
+              cost_price: line.cost_price || undefined,
             });
             pricedCount++;
           } catch {
@@ -2103,7 +2203,13 @@ export default function Home() {
       }
 
       if (pricedCount > 0) {
-        setCustomerLists((curr) => curr.map((l) => (l.id === updated.id ? updated : l)));
+        setCustomerLists((curr) =>
+          curr.map((l) => (l.id === updated.id ? mergePreservedListFields(updated, l) : l))
+        );
+        if (activeBusiness?.id) {
+          const existing = customerLists.find((l) => l.id === updated.id);
+          updateCachedCustomerList(activeBusiness.id, mergePreservedListFields(updated, existing));
+        }
         showToast(`Auto-priced ${pricedCount} item(s) from catalogue & categories!`);
       } else {
         showToast("No catalogue matches found. Tap edit on any item to set prices.");
@@ -2145,19 +2251,23 @@ export default function Home() {
 
     const label =
       nextState === "have_it"
-        ? "Gotten (on shelf)"
+        ? "In Stock"
         : nextState === "buy_it"
-        ? "Buy in market"
+        ? "Getting It"
         : nextState === "cannot_get"
-        ? "Cannot get"
-        : "Unchecked";
+        ? "Not Available"
+        : "Not Checked";
     showToast(`Status: ${label}`);
 
     try {
       const updatedList = await workListLine(activeBusiness.id, listId, lineId, { state: nextState });
       setCustomerLists((current) =>
-        current.map((l) => (l.id === updatedList.id ? updatedList : l)),
+        current.map((l) => (l.id === updatedList.id ? mergePreservedListFields(updatedList, l) : l)),
       );
+      if (activeBusiness?.id) {
+        const existing = customerLists.find((l) => l.id === updatedList.id);
+        updateCachedCustomerList(activeBusiness.id, mergePreservedListFields(updatedList, existing));
+      }
     } catch {
       // Revert if network call failed
       setCustomerLists((current) =>
@@ -2188,7 +2298,13 @@ export default function Home() {
         dispatch_cost: dispatchCost.trim() || null,
         tracking_url: trackingUrl.trim() || null,
       });
-      setCustomerLists((curr) => curr.map((l) => (l.id === updated.id ? updated : l)));
+      setCustomerLists((curr) =>
+        curr.map((l) => (l.id === updated.id ? mergePreservedListFields(updated, l) : l))
+      );
+      if (activeBusiness?.id) {
+        const existing = customerLists.find((l) => l.id === updated.id);
+        updateCachedCustomerList(activeBusiness.id, mergePreservedListFields(updated, existing));
+      }
       setDispatchModalList(null);
       setTransporterName("");
       setTransporterPhone("");
@@ -2243,7 +2359,19 @@ export default function Home() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     try {
       const confirmed = await confirmCustomerList(activeBusiness.id, currentList.id);
-      setCustomerLists((curr) => curr.map((l) => (l.id === confirmed.id ? confirmed : l)));
+      setCustomerLists((curr) =>
+        curr.map((l) => (l.id === confirmed.id ? mergePreservedListFields(confirmed, l) : l))
+      );
+      if (activeBusiness?.id) {
+        const existing = customerLists.find((l) => l.id === confirmed.id);
+        updateCachedCustomerList(activeBusiness.id, mergePreservedListFields(confirmed, existing));
+        void listSales(activeBusiness.id).then((freshSales) => {
+          if (freshSales) setSales(freshSales);
+        }).catch(() => {});
+        void dailySales(activeBusiness.id).then((stats) => {
+          if (stats) setDailyStats(stats);
+        }).catch(() => {});
+      }
       setPinConfirmList(null);
       setPinValue("");
       showToast(`Order from ${confirmed.customer_name || confirmed.customer_phone} confirmed!`);
@@ -2276,7 +2404,19 @@ export default function Home() {
       setPinConfirmList(updated);
       setConfirmError(null);
       const confirmed = await confirmCustomerList(activeBusiness.id, updated.id);
-      setCustomerLists((curr) => curr.map((l) => (l.id === confirmed.id ? confirmed : l)));
+      setCustomerLists((curr) =>
+        curr.map((l) => (l.id === confirmed.id ? mergePreservedListFields(confirmed, l) : l))
+      );
+      if (activeBusiness?.id) {
+        const existing = customerLists.find((l) => l.id === confirmed.id);
+        updateCachedCustomerList(activeBusiness.id, mergePreservedListFields(confirmed, existing));
+        void listSales(activeBusiness.id).then((freshSales) => {
+          if (freshSales) setSales(freshSales);
+        }).catch(() => {});
+        void dailySales(activeBusiness.id).then((stats) => {
+          if (stats) setDailyStats(stats);
+        }).catch(() => {});
+      }
       setPinConfirmList(null);
       setPinValue("");
       showToast("Order confirmed successfully!");
@@ -2363,29 +2503,19 @@ export default function Home() {
     }
   };
 
-  const handleCancelSale = (sale: SaleSummary) => {
-    if (!activeBusiness) return;
-    Alert.alert(
-      "Cancel / Void Sale?",
-      `Are you sure you want to cancel receipt ${sale.receipt_number} (${formatMoney(sale.total_amount)})? This will restore inventory.`,
-      [
-        { text: "No", style: "cancel" },
-        {
-          text: "Cancel Sale",
-          style: "destructive",
-          onPress: async () => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            try {
-              await cancelSale(activeBusiness.id, sale.id, "Customer return / void");
-              showToast(`Sale ${sale.receipt_number} voided.`);
-              await loadData(activeBusiness.id);
-            } catch {
-              showToast("Could not cancel sale.");
-            }
-          },
-        },
-      ],
-    );
+  const handleConfirmReturnSale = async () => {
+    if (!activeBusiness || !saleToReturn) return;
+    setCancellingSale(true);
+    try {
+      await cancelSale(activeBusiness.id, saleToReturn.id, "Customer return");
+      showToast(`Sale ${saleToReturn.receipt_number || ""} marked as returned.`);
+      setSaleToReturn(null);
+      await loadData(activeBusiness.id);
+    } catch {
+      showToast("Could not return sale. Please try again.");
+    } finally {
+      setCancellingSale(false);
+    }
   };
 
   const handleShareQuoteOnWhatsApp = (list: CustomerList) => {
@@ -2393,7 +2523,7 @@ export default function Home() {
     const cleanNumber = formatWaNumber(rawNumber);
     const shopName = activeBusiness?.name ?? "Our Shop";
 
-    const sections = groupCustomerListLines(list.lines);
+    const sections = groupCustomerListLines(list.lines, products, categories);
     let itemsSummary = "";
     for (const sec of sections) {
       itemsSummary += `\n*${sec.root.toUpperCase()}*\n`;
@@ -2538,9 +2668,9 @@ export default function Home() {
                 <View style={[styles.kpiCard, styles.kpiCardHighlight]}>
                   <Text style={styles.kpiLabel}>Today's Sales</Text>
                   <Text style={styles.kpiValue}>
-                    {formatMoney(dailyStats?.total_revenue ?? "0")}
+                    {formatMoney(todaySalesCountAndRevenue.revenue)}
                   </Text>
-                  <Text style={styles.kpiMeta}>{dailyStats?.total_sales ?? 0} transaction(s)</Text>
+                  <Text style={styles.kpiMeta}>{todaySalesCountAndRevenue.count} transaction(s)</Text>
                 </View>
               ) : (
                 <View style={[styles.kpiCard, styles.kpiCardHighlight]}>
@@ -2892,7 +3022,7 @@ export default function Home() {
                             </Text>
                             {cat.default_normal_price && (
                               <Text style={styles.folderPrice}>
-                                Def: {formatMoney(cat.default_normal_price)}
+                                Default: {formatMoney(cat.default_normal_price)}
                               </Text>
                             )}
                           </Pressable>
@@ -3133,10 +3263,7 @@ export default function Home() {
                 <View style={styles.listFilterPillsRow}>
                   <Pressable
                     style={[styles.listFilterPill, listFilterTab === "unworked" && styles.listFilterPillActive]}
-                    onPress={() => {
-                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setListFilterTab("unworked");
-                    }}
+                    onPress={() => setListFilterTab("unworked")}
                   >
                     <Text style={[styles.listFilterPillText, listFilterTab === "unworked" && styles.listFilterPillTextActive]}>
                       Unworked ({unworkedListsCount})
@@ -3145,10 +3272,7 @@ export default function Home() {
 
                   <Pressable
                     style={[styles.listFilterPill, listFilterTab === "worked" && styles.listFilterPillActive]}
-                    onPress={() => {
-                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setListFilterTab("worked");
-                    }}
+                    onPress={() => setListFilterTab("worked")}
                   >
                     <Text style={[styles.listFilterPillText, listFilterTab === "worked" && styles.listFilterPillTextActive]}>
                       Worked ({workedListsCount})
@@ -3157,10 +3281,7 @@ export default function Home() {
 
                   <Pressable
                     style={[styles.listFilterPill, listFilterTab === "all" && styles.listFilterPillActive]}
-                    onPress={() => {
-                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setListFilterTab("all");
-                    }}
+                    onPress={() => setListFilterTab("all")}
                   >
                     <Text style={[styles.listFilterPillText, listFilterTab === "all" && styles.listFilterPillTextActive]}>
                       All ({customerLists.filter((l) => !deletedListIds.has(l.id)).length})
@@ -3189,7 +3310,7 @@ export default function Home() {
               </View>
             }
             renderItem={({ item }) => {
-              const sections = groupCustomerListLines(item.lines);
+              const sections = groupCustomerListLines(item.lines, products, categories);
               const isConfirmed = item.status === "confirmed";
               const isExpanded = expandedListIds.has(item.id);
               const unpricedCount = item.lines.filter((l) => !l.shop_price && l.note !== "heading").length;
@@ -3207,7 +3328,6 @@ export default function Home() {
                   <Pressable
                     style={styles.listCardHeader}
                     onPress={() => {
-                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setExpandedListIds((prev) => {
                         const next = new Set(prev);
                         if (next.has(item.id)) {
@@ -3302,57 +3422,24 @@ export default function Home() {
 
                   {isExpanded && (
                     <>
-                      {/* Fulfillment Type Bar */}
-                      <View style={styles.fulfillmentRow}>
-                        <Text style={styles.fulfillmentLabel}>Fulfillment Mode:</Text>
-                        <View style={styles.fulfillmentToggleBox}>
-                          <Pressable
+                      {/* Fulfillment Preference (Set by Customer - Read-Only) */}
+                      <View style={{ marginBottom: 10, paddingHorizontal: 4, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                        <Text style={styles.paymentLabel}>CUSTOMER FULFILLMENT</Text>
+                        <View
+                          style={[
+                            styles.badgeSmall,
+                            fulfillmentMode === "waybill" ? styles.badgeWaybill : styles.badgePickup,
+                            { paddingVertical: 4, paddingHorizontal: 10 },
+                          ]}
+                        >
+                          <Text
                             style={[
-                              styles.fulfillmentOption,
-                              fulfillmentMode === "pickup" && styles.fulfillmentOptionActive,
+                              styles.badgeSmallText,
+                              { color: fulfillmentMode === "waybill" ? "#f59e0b" : "#38bdf8", fontWeight: "700" },
                             ]}
-                            onPress={() => {
-                              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                              const updated: CustomerList = { ...item, fulfillment_type: "pickup" };
-                              setCustomerLists((curr) => curr.map((l) => (l.id === item.id ? updated : l)));
-                              if (activeBusiness?.id) {
-                                updateCachedCustomerList(activeBusiness.id, updated);
-                              }
-                            }}
                           >
-                            <Text
-                              style={[
-                                styles.fulfillmentOptionText,
-                                fulfillmentMode === "pickup" && styles.fulfillmentOptionTextActive,
-                              ]}
-                            >
-                              In-Shop Pickup
-                            </Text>
-                          </Pressable>
-
-                          <Pressable
-                            style={[
-                              styles.fulfillmentOption,
-                              fulfillmentMode === "waybill" && styles.fulfillmentOptionActive,
-                            ]}
-                            onPress={() => {
-                              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                              const updated: CustomerList = { ...item, fulfillment_type: "waybill" };
-                              setCustomerLists((curr) => curr.map((l) => (l.id === item.id ? updated : l)));
-                              if (activeBusiness?.id) {
-                                updateCachedCustomerList(activeBusiness.id, updated);
-                              }
-                            }}
-                          >
-                            <Text
-                              style={[
-                                styles.fulfillmentOptionText,
-                                fulfillmentMode === "waybill" && styles.fulfillmentOptionTextActive,
-                              ]}
-                            >
-                              Waybill / Delivery
-                            </Text>
-                          </Pressable>
+                            {fulfillmentMode === "waybill" ? "Waybill / Delivery (Customer Requested)" : "In-Shop Pickup (Customer will collect)"}
+                          </Text>
                         </View>
                       </View>
 
@@ -3377,6 +3464,42 @@ export default function Home() {
                           </View>
                         </View>
 
+                        {/* Itemized payment history so advance payments and deposits are directly visible */}
+                        {item.payments && item.payments.length > 0 ? (
+                          <View style={{ marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.08)" }}>
+                            <Text style={{ fontSize: 11, fontWeight: "700", color: "#8a928e", letterSpacing: 0.5, marginBottom: 6 }}>
+                              PAYMENT HISTORY ({item.payments.length})
+                            </Text>
+                            {item.payments.map((p, pIdx) => (
+                              <View key={p.id || pIdx} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 3 }}>
+                                <View style={{ flex: 1, paddingRight: 8 }}>
+                                  <Text style={{ color: "#d1d5db", fontSize: 12, fontWeight: "600" }}>
+                                    {p.note || (pIdx === 0 ? "Advance Deposit" : `Part Payment #${pIdx + 1}`)}
+                                  </Text>
+                                  <Text style={{ color: "#8a928e", fontSize: 11 }}>
+                                    {new Date(p.date).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} via {(p.payment_method || "transfer").toUpperCase()}
+                                  </Text>
+                                </View>
+                                <Text style={{ color: "#4ade80", fontSize: 13, fontWeight: "700" }}>
+                                  +{formatMoney(p.amount.toString())}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+                        ) : totalPaid > 0 ? (
+                          <View style={{ marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.08)" }}>
+                            <Text style={{ fontSize: 11, fontWeight: "700", color: "#8a928e", letterSpacing: 0.5, marginBottom: 4 }}>
+                              RECORDED ADVANCE DEPOSIT
+                            </Text>
+                            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                              <Text style={{ color: "#d1d5db", fontSize: 12 }}>Deposit on file</Text>
+                              <Text style={{ color: "#4ade80", fontSize: 13, fontWeight: "700" }}>
+                                +{formatMoney(totalPaid.toString())}
+                              </Text>
+                            </View>
+                          </View>
+                        ) : null}
+
                         <Pressable
                           style={styles.recordPaymentBtn}
                           onPress={() => {
@@ -3392,122 +3515,152 @@ export default function Home() {
                         </Pressable>
                       </View>
 
-                  {/* Hierarchical Groupings */}
-                  {sections.map((sec, idx) => (
-                    <View key={idx} style={styles.sectionBox}>
-                      <Text style={styles.sectionRootTitle}>{sec.root}</Text>
-                      {sec.subs.map((sub, sIdx) => (
-                        <View key={sIdx} style={styles.subSectionBox}>
-                          {sub.sub && <Text style={styles.subTitle}>&gt; {sub.sub}</Text>}
-                          {sub.lines.map((line) => {
-                            const costNum = Number(line.cost_price ?? "0");
-                            const shopNum = Number(line.shop_price ?? "0");
-                            const hasBoth = Boolean(line.cost_price && line.shop_price && Number.isFinite(costNum) && Number.isFinite(shopNum));
-                            const marginVal = shopNum - costNum;
-                            const isPositive = marginVal >= 0;
+                  {/* Hierarchical Groupings with Collapsible Sections */}
+                  {sections.map((sec, idx) => {
+                    const sectionKey = `${item.id}_${sec.root}`;
+                    const isCollapsed = Boolean(collapsedSections[sectionKey]);
+                    const secItemCount = sec.subs.reduce((acc, s) => acc + s.lines.length, 0);
 
-                            return (
-                              <View key={line.id} style={styles.lineItem}>
-                                <View style={styles.lineMain}>
-                                  <View style={styles.lineTitleRow}>
-                                    <Text style={styles.lineName}>
-                                      {line.quantity}x {line.product_name ?? line.free_text}
-                                    </Text>
-                                    <View
-                                      style={[
-                                        styles.lineStateBadge,
-                                        line.state === "have_it" && styles.lineStateHaveIt,
-                                        line.state === "buy_it" && styles.lineStateBuyIt,
-                                        line.state === "cannot_get" && styles.lineStateCannotGet,
-                                        line.state === "somewhere" && styles.lineStateSomewhere,
-                                      ]}
-                                    >
-                                      <Text style={styles.lineStateBadgeText}>
-                                        {line.state === "have_it"
-                                          ? "On Shelf"
-                                          : line.state === "buy_it"
-                                          ? "In Market"
-                                          : line.state === "cannot_get"
-                                          ? "Cannot Get"
-                                          : "Unchecked"}
+                    return (
+                      <View key={idx} style={styles.sectionBox}>
+                        <Pressable
+                          style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4 }}
+                          onPress={() => toggleSectionCollapse(sectionKey)}
+                        >
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                            <Text style={styles.sectionRootTitle}>{sec.root}</Text>
+                            <Text style={{ fontSize: 11, color: "#8a928e" }}>({secItemCount} item{secItemCount === 1 ? "" : "s"})</Text>
+                          </View>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                            <Text style={{ fontSize: 11, color: "#38bdf8", fontWeight: "600" }}>
+                              {isCollapsed ? "Tap to expand" : "Collapse"}
+                            </Text>
+                            <View style={{ transform: [{ rotate: isCollapsed ? "0deg" : "180deg" }] }}>
+                              <ChevronDownIcon size={14} color="#38bdf8" />
+                            </View>
+                          </View>
+                        </Pressable>
+
+                        {!isCollapsed && sec.subs.map((sub, sIdx) => (
+                          <View key={sIdx} style={styles.subSectionBox}>
+                            {sub.sub && <Text style={styles.subTitle}>&gt; {sub.sub}</Text>}
+                            {sub.lines.map((line) => {
+                              const costNum = Number(line.cost_price ?? "0");
+                              const shopNum = Number(line.shop_price ?? "0");
+                              const hasBoth = Boolean(line.cost_price && line.shop_price && Number.isFinite(costNum) && Number.isFinite(shopNum));
+                              const marginVal = shopNum - costNum;
+                              const isPositive = marginVal >= 0;
+
+                              return (
+                                <View key={line.id} style={styles.lineItem}>
+                                  <View style={styles.lineMain}>
+                                    <View style={styles.lineTitleRow}>
+                                      <Text style={styles.lineName}>
+                                        {line.quantity}x {line.product_name ?? line.free_text}
                                       </Text>
+                                      <View
+                                        style={[
+                                          styles.lineStateBadge,
+                                          line.state === "have_it" && styles.lineStateHaveIt,
+                                          line.state === "buy_it" && styles.lineStateBuyIt,
+                                          line.state === "cannot_get" && styles.lineStateCannotGet,
+                                          line.state === "somewhere" && styles.lineStateSomewhere,
+                                        ]}
+                                      >
+                                        <Text style={styles.lineStateBadgeText}>
+                                          {line.state === "have_it"
+                                            ? "In Stock"
+                                            : line.state === "buy_it"
+                                            ? "Getting It"
+                                            : line.state === "cannot_get"
+                                            ? "Not Available"
+                                            : "Not Checked"}
+                                        </Text>
+                                      </View>
+                                    </View>
+
+                                    {/* Display variant specification or note so duplicate models (e.g. Privacy vs 21D) are distinguishable */}
+                                    {line.note && line.note !== "heading" && (
+                                      <Text style={{ fontSize: 11, color: "#38bdf8", fontStyle: "italic", marginTop: 2, marginBottom: 2 }}>
+                                        Spec / Variant: {line.note}
+                                      </Text>
+                                    )}
+
+                                    <View style={styles.linePriceDetailRow}>
+                                      <Text style={styles.linePrice}>
+                                        Price: {line.shop_price ? formatMoney(line.shop_price) : "Set Price"}
+                                      </Text>
+                                      {line.cost_price && (
+                                        <Text style={styles.lineCost}>
+                                          Market Buy: {formatMoney(line.cost_price)}
+                                        </Text>
+                                      )}
+                                      {hasBoth && (
+                                        <Text
+                                          style={[
+                                            styles.lineMargin,
+                                            isPositive ? styles.marginPositive : styles.marginNegative,
+                                          ]}
+                                        >
+                                          Profit: {isPositive ? "+" : ""}{formatMoney(marginVal.toString())}
+                                        </Text>
+                                      )}
                                     </View>
                                   </View>
 
-                                  <View style={styles.linePriceDetailRow}>
-                                    <Text style={styles.linePrice}>
-                                      Price: {line.shop_price ? formatMoney(line.shop_price) : "Set Price"}
-                                    </Text>
-                                    {line.cost_price && (
-                                      <Text style={styles.lineCost}>
-                                        Market Buy: {formatMoney(line.cost_price)}
-                                      </Text>
-                                    )}
-                                    {hasBoth && (
-                                      <Text
-                                        style={[
-                                          styles.lineMargin,
-                                          isPositive ? styles.marginPositive : styles.marginNegative,
-                                        ]}
-                                      >
-                                        Profit: {isPositive ? "+" : ""}{formatMoney(marginVal.toString())}
-                                      </Text>
-                                    )}
+                                  <View style={styles.lineActions}>
+                                    <Pressable
+                                      style={[
+                                        styles.lineStatusCycleBtn,
+                                        line.state === "have_it" && styles.lineStatusBtnHaveIt,
+                                        line.state === "buy_it" && styles.lineStatusBtnBuyIt,
+                                        line.state === "cannot_get" && styles.lineStatusBtnUnavailable,
+                                        line.state === "somewhere" && styles.lineStatusBtnSomewhere,
+                                      ]}
+                                      onPress={() =>
+                                        handleCycleLineState(item.id, line.id, line.state)
+                                      }
+                                    >
+                                      {line.state === "have_it" ? (
+                                        <CheckMarkIcon size={14} color="#86efac" />
+                                      ) : line.state === "buy_it" ? (
+                                        <CartIcon size={14} color="#fde047" />
+                                      ) : line.state === "cannot_get" ? (
+                                        <CannotGetIcon size={14} color="#fca5a5" />
+                                      ) : (
+                                        <CheckMarkIcon size={14} color="#64748b" />
+                                      )}
+                                    </Pressable>
+
+                                    <Pressable
+                                      style={styles.linePriceBtn}
+                                      onPress={() => {
+                                        const best = findBestPricesForLine(line, products, categories);
+                                        const initialShop = line.shop_price ?? best.wholesale ?? best.normal ?? "";
+                                        const initialCost = line.cost_price ?? "";
+                                        setPricingLine({
+                                          listId: item.id,
+                                          lineId: line.id,
+                                          itemName: line.product_name ?? line.free_text ?? "Item",
+                                          currentShopPrice: line.shop_price ?? "",
+                                          currentCostPrice: line.cost_price ?? "",
+                                        });
+                                        setPriceInput(initialShop);
+                                        setCostInput(initialCost);
+                                        setApplyPriceToAll(false);
+                                      }}
+                                    >
+                                      <EditIcon size={14} color="#8a928e" />
+                                    </Pressable>
                                   </View>
                                 </View>
-
-                                <View style={styles.lineActions}>
-                                  <Pressable
-                                    style={[
-                                      styles.lineStatusCycleBtn,
-                                      line.state === "have_it" && styles.lineStatusBtnHaveIt,
-                                      line.state === "buy_it" && styles.lineStatusBtnBuyIt,
-                                      line.state === "cannot_get" && styles.lineStatusBtnUnavailable,
-                                      line.state === "somewhere" && styles.lineStatusBtnSomewhere,
-                                    ]}
-                                    onPress={() =>
-                                      handleCycleLineState(item.id, line.id, line.state)
-                                    }
-                                  >
-                                    {line.state === "have_it" ? (
-                                      <CheckMarkIcon size={14} color="#86efac" />
-                                    ) : line.state === "buy_it" ? (
-                                      <CartIcon size={14} color="#fde047" />
-                                    ) : line.state === "cannot_get" ? (
-                                      <CannotGetIcon size={14} color="#fca5a5" />
-                                    ) : (
-                                      <CheckMarkIcon size={14} color="#64748b" />
-                                    )}
-                                  </Pressable>
-
-                                  <Pressable
-                                    style={styles.linePriceBtn}
-                                    onPress={() => {
-                                      const best = findBestPricesForLine(line, products, categories);
-                                      const initialShop = line.shop_price ?? best.normal ?? "";
-                                      const initialCost = line.cost_price ?? best.wholesale ?? "";
-                                      setPricingLine({
-                                        listId: item.id,
-                                        lineId: line.id,
-                                        itemName: line.product_name ?? line.free_text ?? "Item",
-                                        currentShopPrice: line.shop_price ?? "",
-                                        currentCostPrice: line.cost_price ?? "",
-                                      });
-                                      setPriceInput(initialShop);
-                                      setCostInput(initialCost);
-                                      setApplyPriceToAll(false);
-                                    }}
-                                  >
-                                    <EditIcon size={14} color="#8a928e" />
-                                  </Pressable>
-                                </View>
-                              </View>
-                            );
-                          })}
-                        </View>
-                      ))}
-                    </View>
-                  ))}
+                              );
+                            })}
+                          </View>
+                        ))}
+                      </View>
+                    );
+                  })}
 
                   {/* Waybill Tracking Banner */}
                   {item.waybill_number && (
@@ -3645,10 +3798,10 @@ export default function Home() {
             <View style={styles.tradingSummaryCard}>
               <Text style={styles.tradingSummaryLabel}>Today's Gross Sales</Text>
               <Text style={styles.tradingSummaryAmount}>
-                {formatMoney(dailyStats?.total_revenue ?? "0")}
+                {formatMoney(todaySalesCountAndRevenue.revenue)}
               </Text>
               <Text style={styles.tradingSummaryMeta}>
-                {dailyStats?.total_sales ?? 0} transaction(s) recorded today
+                {todaySalesCountAndRevenue.count} transaction(s) recorded today
               </Text>
             </View>
 
@@ -3660,10 +3813,7 @@ export default function Home() {
                     styles.tradingPill,
                     tradingSubTab === "sales" && styles.tradingPillActive,
                   ]}
-                  onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setTradingSubTab("sales");
-                  }}
+                  onPress={() => setTradingSubTab("sales")}
                 >
                   <Text
                     style={[
@@ -3680,10 +3830,7 @@ export default function Home() {
                     styles.tradingPill,
                     tradingSubTab === "expenses" && styles.tradingPillActive,
                   ]}
-                  onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setTradingSubTab("expenses");
-                  }}
+                  onPress={() => setTradingSubTab("expenses")}
                 >
                   <Text
                     style={[
@@ -3752,7 +3899,7 @@ export default function Home() {
                                 ]}
                               >
                                 <Text style={styles.saleStatusText}>
-                                  {isCancelled ? "VOID" : s.payment_status.toUpperCase()}
+                                  {isCancelled ? "RETURNED" : s.payment_status.toUpperCase()}
                                 </Text>
                               </View>
                             </View>
@@ -3780,22 +3927,9 @@ export default function Home() {
                           {!isCancelled && (
                             <Pressable
                               style={styles.voidBtn}
-                              onPress={() => {
-                                Alert.alert(
-                                  "Void Sale",
-                                  `Are you sure you want to void ${s.receipt_number || "this sale"} of ${formatMoney(s.total_amount)}?`,
-                                  [
-                                    { text: "Keep Sale", style: "cancel" },
-                                    {
-                                      text: "Void Sale",
-                                      style: "destructive",
-                                      onPress: () => void handleCancelSale(s),
-                                    },
-                                  ]
-                                );
-                              }}
+                              onPress={() => setSaleToReturn(s)}
                             >
-                              <Text style={styles.voidBtnText}>Void Sale</Text>
+                              <Text style={styles.voidBtnText}>Return Sale</Text>
                             </Pressable>
                           )}
                         </View>
@@ -4506,10 +4640,7 @@ export default function Home() {
       <View style={styles.bottomNav}>
         <Pressable
           style={[styles.navItem, activeTab === "dashboard" && styles.navItemActive]}
-          onPress={() => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setActiveTab("dashboard");
-          }}
+          onPress={() => setActiveTab("dashboard")}
         >
           <ShopIcon size={22} color={activeTab === "dashboard" ? "#4ade80" : "#8b949e"} />
           <Text style={[styles.navText, activeTab === "dashboard" && styles.navTextActive]}>Shop</Text>
@@ -4518,7 +4649,6 @@ export default function Home() {
         <Pressable
           style={[styles.navItem, activeTab === "shelf" && styles.navItemActive]}
           onPress={() => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setActiveSubView(null);
             setActiveTab("shelf");
           }}
@@ -4530,7 +4660,6 @@ export default function Home() {
         <Pressable
           style={[styles.navItem, activeTab === "lists" && styles.navItemActive]}
           onPress={() => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setActiveSubView(null);
             setActiveTab("lists");
           }}
@@ -4547,7 +4676,6 @@ export default function Home() {
         <Pressable
           style={[styles.navItem, activeTab === "trading" && styles.navItemActive]}
           onPress={() => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setActiveSubView(null);
             setActiveTab("trading");
           }}
@@ -4558,10 +4686,7 @@ export default function Home() {
 
         <Pressable
           style={[styles.navItem, activeTab === "more" && styles.navItemActive]}
-          onPress={() => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setActiveTab("more");
-          }}
+          onPress={() => setActiveTab("more")}
         >
           <MoreIcon size={22} color={activeTab === "more" ? "#4ade80" : "#8b949e"} />
           <Text style={[styles.navText, activeTab === "more" && styles.navTextActive]}>More</Text>
@@ -5030,10 +5155,10 @@ export default function Home() {
             <View style={styles.modalCard}>
               <Text style={styles.modalTitle}>Price & Cost for {pricingLine?.itemName}</Text>
               <Text style={styles.modalSubtitle}>
-                Write what it costs you in the market and what you charge the customer.
+                {pricingLineCategoryName ? `Category: ${pricingLineCategoryName}` : "Set your wholesale price and what it cost you."}
               </Text>
 
-              <Text style={styles.modalFieldLabel}>Customer Selling Price (\u20A6)</Text>
+              <Text style={styles.modalFieldLabel}>Your Wholesale Price</Text>
               <TextInput
                 style={styles.modalInput}
                 placeholder="Selling Price (e.g. 15000)"
@@ -5044,7 +5169,7 @@ export default function Home() {
                 autoFocus
               />
 
-              <Text style={styles.modalFieldLabel}>Market Cost Price (\u20A6)</Text>
+              <Text style={styles.modalFieldLabel}>Your Cost (What You Paid)</Text>
               <TextInput
                 style={styles.modalInput}
                 placeholder="Cost Price (e.g. 12000)"
@@ -5060,29 +5185,46 @@ export default function Home() {
                 return Boolean(p.normal || p.wholesale);
               }).length > 0 && (
                 <View style={{ marginBottom: 12 }}>
-                  <Text style={styles.modalFieldLabel}>Quick Fill from Category Default</Text>
+                  <Text style={styles.modalFieldLabel}>Quick Fill from Category Wholesale Default</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: "row", marginTop: 4 }}>
-                    {categories
+                    {[...categories]
                       .filter((c) => {
                         const p = getEffectiveCategoryPrice(c.id, categories);
                         return Boolean(p.normal || p.wholesale);
                       })
+                      .sort((a, b) => {
+                        if (pricingLineMatchedCategory?.id === a.id) return -1;
+                        if (pricingLineMatchedCategory?.id === b.id) return 1;
+                        return 0;
+                      })
                       .map((cat) => {
                         const prices = getEffectiveCategoryPrice(cat.id, categories);
+                        const isMatched = pricingLineMatchedCategory?.id === cat.id;
+                        const wholesaleSell = prices.wholesale || prices.normal;
+
                         return (
                           <Pressable
                             key={cat.id}
-                            style={styles.categoryPricePill}
+                            style={[
+                              styles.categoryPricePill,
+                              isMatched && { borderColor: "#4ade80", backgroundColor: "#0d281e" },
+                            ]}
                             onPress={() => {
-                              if (prices.normal) setPriceInput(prices.normal);
-                              if (prices.wholesale) setCostInput(prices.wholesale);
+                              if (wholesaleSell) setPriceInput(wholesaleSell);
                             }}
                           >
-                            <Text style={styles.categoryPricePillName}>{cat.name}</Text>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                              <Text style={[styles.categoryPricePillName, isMatched && { color: "#4ade80", fontWeight: "700" }]}>
+                                {cat.name}
+                              </Text>
+                              {isMatched && (
+                                <Text style={{ fontSize: 9, color: "#86efac", backgroundColor: "#14532d", paddingHorizontal: 4, borderRadius: 4, fontWeight: "700" }}>
+                                  MATCHED
+                                </Text>
+                              )}
+                            </View>
                             <Text style={styles.categoryPricePillPrices}>
-                              {prices.normal ? `Sell: \u20A6${prices.normal}` : ""}
-                              {prices.normal && prices.wholesale ? " | " : ""}
-                              {prices.wholesale ? `Cost: \u20A6${prices.wholesale}` : ""}
+                              {prices.wholesale ? `Wholesale: \u20A6${prices.wholesale}` : prices.normal ? `Sell: \u20A6${prices.normal}` : ""}
                             </Text>
                           </Pressable>
                         );
@@ -5185,7 +5327,7 @@ export default function Home() {
 
               <TextInput
                 style={styles.modalInput}
-                placeholder="Dispatch Cost (\u20A6, optional)"
+                placeholder={"Dispatch Cost (\u20A6, optional)"}
                 placeholderTextColor="#8a928e"
                 keyboardType="numeric"
                 value={dispatchCost}
@@ -5253,7 +5395,7 @@ export default function Home() {
                       disabled={savingConfirm}
                     >
                       <Text style={styles.zeroPriceBypassText}>
-                        Price Remaining Items as \u20A60 & Confirm
+                        {"Price Remaining Items as \u20A60 & Confirm"}
                       </Text>
                     </Pressable>
                   </View>
@@ -5278,7 +5420,7 @@ export default function Home() {
                 <Text style={styles.modalSubtitle}>
                   Confirm order for {pinConfirmList?.customer_name || pinConfirmList?.customer_phone}?
                   {"\n\n"}
-                  Note: No stall security PIN is configured yet. You can confirm directly now, or set a PIN in Business Settings to protect transactions.
+                  No security PIN is set. You can confirm directly now, or set a PIN in Settings to protect transactions.
                 </Text>
 
                 {confirmError ? (
@@ -5290,27 +5432,27 @@ export default function Home() {
                       disabled={savingConfirm}
                     >
                       <Text style={styles.zeroPriceBypassText}>
-                        Price Remaining Items as \u20A60 & Confirm
+                        {"Price Remaining Items as \u20A60 & Confirm"}
                       </Text>
                     </Pressable>
                   </View>
                 ) : null}
 
-                <View style={[styles.modalButtons, { flexDirection: "column", gap: 8 }]}>
+                <View style={{ flexDirection: "column", gap: 10, marginTop: 16 }}>
                   <Pressable
-                    style={[styles.modalSaveBtn, { width: "100%", height: 46 }]}
+                    style={[styles.modalSaveBtn, { width: "100%", paddingVertical: 14, borderRadius: 10 }]}
                     onPress={() => handleExecutePinConfirm()}
                     disabled={savingConfirm}
                   >
                     {savingConfirm ? (
                       <ActivityIndicator color="#ffffff" size="small" />
                     ) : (
-                      <Text style={styles.modalSaveText}>Confirm Order (Without PIN)</Text>
+                      <Text style={[styles.modalSaveText, { fontSize: 15 }]}>Confirm Order</Text>
                     )}
                   </Pressable>
 
                   <Pressable
-                    style={[styles.modalSecondaryBtn, { width: "100%", height: 46 }]}
+                    style={[styles.modalSecondaryBtn, { width: "100%", paddingVertical: 14, borderRadius: 10 }]}
                     onPress={() => {
                       setPinConfirmList(null);
                       setConfirmError(null);
@@ -5320,22 +5462,79 @@ export default function Home() {
                     disabled={savingConfirm}
                   >
                     <LockIcon size={16} color="#084a2f" />
-                    <Text style={styles.modalSecondaryText}>Set Security PIN Now</Text>
+                    <Text style={[styles.modalSecondaryText, { fontSize: 13 }]}>Set Security PIN to Protect Transactions</Text>
                   </Pressable>
 
                   <Pressable
-                    style={[styles.modalCancelBtn, { width: "100%" }]}
+                    style={[styles.modalCancelBtn, { width: "100%", paddingVertical: 14, borderRadius: 10 }]}
                     onPress={() => {
                       setPinConfirmList(null);
                       setConfirmError(null);
                     }}
                     disabled={savingConfirm}
                   >
-                    <Text style={styles.modalCancelText}>Cancel</Text>
+                    <Text style={[styles.modalCancelText, { fontSize: 14 }]}>Cancel</Text>
                   </Pressable>
                 </View>
               </>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Return Sale Confirmation Modal (Replaces Android Alert) */}
+      <Modal statusBarTranslucent visible={saleToReturn !== null} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Return / Cancel Sale</Text>
+            <Text style={styles.modalSubtitle}>
+              Are you sure you want to mark this sale as returned?
+            </Text>
+
+            {saleToReturn && (
+              <View style={{ backgroundColor: "#1e293b", borderRadius: 12, padding: 14, marginVertical: 14, borderWidth: 1, borderColor: "#334155" }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
+                  <Text style={{ color: "#94a3b8", fontSize: 12, fontWeight: "600" }}>RECEIPT NUMBER</Text>
+                  <Text style={{ color: "#f8fafc", fontSize: 13, fontWeight: "700" }}>{saleToReturn.receipt_number || "Direct Sale"}</Text>
+                </View>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
+                  <Text style={{ color: "#94a3b8", fontSize: 12, fontWeight: "600" }}>SALE AMOUNT</Text>
+                  <Text style={{ color: "#4ade80", fontSize: 15, fontWeight: "800" }}>{formatMoney(saleToReturn.total_amount)}</Text>
+                </View>
+                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                  <Text style={{ color: "#94a3b8", fontSize: 12, fontWeight: "600" }}>PAYMENT METHOD</Text>
+                  <Text style={{ color: "#f8fafc", fontSize: 12, textTransform: "uppercase" }}>{saleToReturn.payment_method}</Text>
+                </View>
+              </View>
+            )}
+
+            <View style={{ backgroundColor: "rgba(248, 113, 113, 0.1)", borderRadius: 8, padding: 10, marginBottom: 16, borderWidth: 1, borderColor: "rgba(248, 113, 113, 0.2)" }}>
+              <Text style={{ color: "#fca5a5", fontSize: 12, lineHeight: 16 }}>
+                Returning this sale will cancel the transaction in your trading records and restore the sold items back to your shelf stock.
+              </Text>
+            </View>
+
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={[styles.modalCancelBtn, { flex: 1 }]}
+                onPress={() => setSaleToReturn(null)}
+                disabled={cancellingSale}
+              >
+                <Text style={styles.modalCancelText}>Keep Sale</Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.modalSaveBtn, { flex: 1, backgroundColor: "#dc2626" }]}
+                onPress={handleConfirmReturnSale}
+                disabled={cancellingSale}
+              >
+                {cancellingSale ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Confirm Return</Text>
+                )}
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>
@@ -5406,33 +5605,82 @@ export default function Home() {
                     <Text style={[styles.invoiceTh, { width: 95, textAlign: "right" }]}>TOTAL</Text>
                   </View>
 
-                  {invoiceModalList.lines.map((line, idx) => {
-                    const name = line.product_name || line.free_text || "Item";
-                    const qty = Number(line.quantity) || 1;
-                    const unitPrice = Number(line.shop_price ?? "0");
-                    const hasPrice = Boolean(line.shop_price && Number.isFinite(unitPrice));
-                    const lineTotal = hasPrice ? unitPrice * qty : 0;
+                  {(() => {
+                    type InvGroup = { title: string; lines: typeof invoiceModalList.lines };
+                    const groups: InvGroup[] = [];
+                    let curTitle = "General Items";
+                    let curLines: typeof invoiceModalList.lines = [];
 
-                    return (
-                      <View key={line.id || idx} style={styles.invoiceTableRow}>
-                        <View style={{ flex: 2 }}>
-                          <Text style={styles.invoiceItemName}>{name}</Text>
-                          {line.note && line.note !== "heading" ? (
-                            <Text style={styles.invoiceItemNote}>{line.note}</Text>
-                          ) : null}
+                    for (const line of invoiceModalList.lines) {
+                      if (line.note === "heading") {
+                        if (curLines.length > 0) {
+                          groups.push({ title: curTitle, lines: curLines });
+                          curLines = [];
+                        }
+                        curTitle = line.product_name || line.free_text || "General Items";
+                        continue;
+                      }
+                      const gName = line.group_name?.trim();
+                      if (gName && gName !== curTitle) {
+                        if (curLines.length > 0) {
+                          groups.push({ title: curTitle, lines: curLines });
+                          curLines = [];
+                        }
+                        curTitle = gName;
+                      }
+                      curLines.push(line);
+                    }
+                    if (curLines.length > 0) {
+                      groups.push({ title: curTitle, lines: curLines });
+                    }
+                    if (groups.length === 0) {
+                      groups.push({ title: "General Items", lines: invoiceModalList.lines.filter((l) => l.note !== "heading") });
+                    }
+
+                    return groups.map((grp, gIdx) => {
+                      const showHeader = groups.length > 1 || grp.title !== "General Items";
+                      return (
+                        <View key={`grp-${gIdx}`}>
+                          {showHeader && (
+                            <View style={{ backgroundColor: theme.cardHover, paddingHorizontal: 10, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: theme.borderLight }}>
+                              <Text style={{ fontSize: 11, fontWeight: "700", color: "#4ade80", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                                {grp.title}
+                              </Text>
+                            </View>
+                          )}
+                          {grp.lines.map((line, idx) => {
+                            const name = line.product_name || line.free_text || "Item";
+                            const qty = Number(line.quantity) || 1;
+                            const unitPrice = Number(line.shop_price ?? "0");
+                            const hasPrice = Boolean(line.shop_price && Number.isFinite(unitPrice));
+                            const lineTotal = hasPrice ? unitPrice * qty : 0;
+
+                            return (
+                              <View key={line.id || idx} style={styles.invoiceTableRow}>
+                                <View style={{ flex: 2 }}>
+                                  <Text style={styles.invoiceItemName}>{name}</Text>
+                                  {line.note && line.note !== "heading" ? (
+                                    <Text style={[styles.invoiceItemNote, { color: "#4ade80", fontWeight: "600" }]}>
+                                      {line.note}
+                                    </Text>
+                                  ) : null}
+                                </View>
+                                <Text style={[styles.invoiceItemQty, { width: 40, textAlign: "center" }]}>
+                                  {line.quantity}
+                                </Text>
+                                <Text style={[styles.invoiceItemPrice, { width: 85, textAlign: "right" }]}>
+                                  {hasPrice ? formatMoney(line.shop_price) : "Pending"}
+                                </Text>
+                                <Text style={[styles.invoiceItemTotal, { width: 95, textAlign: "right" }]}>
+                                  {hasPrice ? formatMoney(lineTotal.toString()) : "-"}
+                                </Text>
+                              </View>
+                            );
+                          })}
                         </View>
-                        <Text style={[styles.invoiceItemQty, { width: 40, textAlign: "center" }]}>
-                          {line.quantity}
-                        </Text>
-                        <Text style={[styles.invoiceItemPrice, { width: 85, textAlign: "right" }]}>
-                          {hasPrice ? formatMoney(line.shop_price) : "Pending"}
-                        </Text>
-                        <Text style={[styles.invoiceItemTotal, { width: 95, textAlign: "right" }]}>
-                          {hasPrice ? formatMoney(lineTotal.toString()) : "-"}
-                        </Text>
-                      </View>
-                    );
-                  })}
+                      );
+                    });
+                  })()}
                 </View>
 
                 {/* Summary / Totals */}
@@ -5537,7 +5785,7 @@ export default function Home() {
 
               <TextInput
                 style={styles.modalInput}
-                placeholder="Amount (\u20A6)"
+                placeholder={"Amount (\u20A6)"}
                 placeholderTextColor="#8a928e"
                 keyboardType="numeric"
                 value={paymentAmount}
@@ -5795,7 +6043,7 @@ export default function Home() {
                 />
               </View>
               <View style={{ flex: 2 }}>
-                <Text style={styles.modalFieldLabel}>Unit Price (\u20A6)</Text>
+                <Text style={styles.modalFieldLabel}>Unit Price</Text>
                 <TextInput
                   style={styles.modalInput}
                   placeholder="e.g. 5000"

@@ -982,9 +982,9 @@ export function acceptInvitation(token: string): Promise<AcceptedInvitation> {
 
 /** What the three buttons mean, in the trader's own words rather than the machine's. */
 export const LINE_STATES: { value: NonNullable<ListLineState>; label: string; hint: string }[] = [
-  { value: "have_it", label: "I have it", hint: "It is on the shelf" },
-  { value: "buy_it", label: "I will buy it", hint: "Go and find it in the market" },
-  { value: "cannot_get", label: "Cannot get it", hint: "Not available anywhere today" },
+  { value: "have_it", label: "In stock", hint: "Available in the shop" },
+  { value: "buy_it", label: "Getting it", hint: "Sourcing from the market" },
+  { value: "cannot_get", label: "Not available", hint: "Unavailable today" },
 ];
 
 /** Every list this business has been sent, newest first, with its lines. */

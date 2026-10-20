@@ -538,7 +538,7 @@ export default function Dashboard() {
             />
           )}
           <Stat
-            label="On the shelf"
+            label="In stock"
             value={formatCount(products.length)}
             hint={`${stock.filter((entry) => entry.is_out_of_stock).length} out of stock`}
           />

@@ -27,41 +27,98 @@ export function buildInvoiceHtml(
   const fulfillmentLabel = list.fulfillment_type === "waybill" ? "Waybill / Delivery" : "In-Shop Pickup";
 
   let computedSubtotal = 0;
-  const rowsHtml = list.lines
-    .map((line, idx) => {
-      const name = line.product_name || line.free_text || "Item";
-      const qty = Number(line.quantity) || 1;
-      const unitPriceNum = Number(line.shop_price ?? "0");
-      const hasPrice = Boolean(line.shop_price && Number.isFinite(unitPriceNum));
-      const lineTotal = hasPrice ? unitPriceNum * qty : 0;
-      if (hasPrice) computedSubtotal += lineTotal;
+  let itemCounter = 0;
 
-      const stateBadge =
-        line.state === "have_it"
-          ? `<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">GOTTEN</span>`
-          : line.state === "buy_it"
-          ? `<span style="background:#fef9c3;color:#a16207;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">IN MARKET</span>`
-          : line.state === "cannot_get"
-          ? `<span style="background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">UNAVAILABLE</span>`
-          : `<span style="background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">PENDING</span>`;
+  // Group lines by heading or group_name
+  type InvoiceGroup = {
+    title: string;
+    lines: typeof list.lines;
+  };
+  const groups: InvoiceGroup[] = [];
+  let currentGroupTitle = "General Items";
+  let currentGroupLines: typeof list.lines = [];
 
-      return `
-        <tr style="border-bottom: 1px solid #e2e8f0;">
-          <td style="padding: 10px 8px; text-align: center; color: #64748b; font-size: 13px;">${idx + 1}</td>
-          <td style="padding: 10px 8px;">
-            <div style="font-weight: 600; color: #0f172a; font-size: 14px;">${name}</div>
-            ${line.group_name ? `<div style="font-size: 11px; color: #94a3b8;">${line.group_name}</div>` : ""}
+  for (const line of list.lines) {
+    if (line.note === "heading") {
+      if (currentGroupLines.length > 0) {
+        groups.push({ title: currentGroupTitle, lines: currentGroupLines });
+        currentGroupLines = [];
+      }
+      currentGroupTitle = line.product_name || line.free_text || "General Items";
+      continue;
+    }
+
+    const groupFromLine = line.group_name?.trim();
+    if (groupFromLine && groupFromLine !== currentGroupTitle) {
+      if (currentGroupLines.length > 0) {
+        groups.push({ title: currentGroupTitle, lines: currentGroupLines });
+        currentGroupLines = [];
+      }
+      currentGroupTitle = groupFromLine;
+    }
+
+    currentGroupLines.push(line);
+  }
+  if (currentGroupLines.length > 0) {
+    groups.push({ title: currentGroupTitle, lines: currentGroupLines });
+  }
+
+  // If no groups formed, fallback to all lines
+  if (groups.length === 0) {
+    groups.push({
+      title: "General Items",
+      lines: list.lines.filter((l) => l.note !== "heading"),
+    });
+  }
+
+  const rowsHtml = groups
+    .map((grp) => {
+      const showHeader = groups.length > 1 || grp.title !== "General Items";
+      const headerRow = showHeader
+        ? `
+        <tr style="background: #f1f5f9; border-top: 2px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;">
+          <td colspan="5" style="padding: 8px 12px; font-weight: 700; font-size: 12px; color: #084a2f; text-transform: uppercase; letter-spacing: 0.5px;">
+            ${grp.title}
           </td>
-          <td style="padding: 10px 8px; text-align: center; font-size: 14px; font-weight: 600;">${line.quantity}</td>
-          <td style="padding: 10px 8px; text-align: right; font-size: 14px;">
-            ${hasPrice ? formatMoney(line.shop_price) : `<span style="color:#94a3b8;font-style:italic;">Pending</span>`}
-          </td>
-          <td style="padding: 10px 8px; text-align: right; font-size: 14px; font-weight: 700; color: #0f172a;">
-            ${hasPrice ? formatMoney(lineTotal.toString()) : `<span style="color:#94a3b8;">-</span>`}
-          </td>
-          <td style="padding: 10px 8px; text-align: center;">${stateBadge}</td>
         </tr>
-      `;
+      `
+        : "";
+
+      const itemRows = grp.lines
+        .map((line) => {
+          itemCounter += 1;
+          const name = line.product_name || line.free_text || "Item";
+          const qty = Number(line.quantity) || 1;
+          const unitPriceNum = Number(line.shop_price ?? "0");
+          const hasPrice = Boolean(line.shop_price && Number.isFinite(unitPriceNum));
+          const lineTotal = hasPrice ? unitPriceNum * qty : 0;
+          if (hasPrice) computedSubtotal += lineTotal;
+
+          const noteHtml =
+            line.note && line.note !== "heading"
+              ? `<div style="font-size: 12px; color: #64748b; margin-top: 2px;">Specification: <strong style="color: #0f172a;">${line.note}</strong></div>`
+              : "";
+
+          return `
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+              <td style="padding: 10px 8px; text-align: center; color: #64748b; font-size: 13px;">${itemCounter}</td>
+              <td style="padding: 10px 8px;">
+                <div style="font-weight: 600; color: #0f172a; font-size: 14px;">${name}</div>
+                ${noteHtml}
+              </td>
+              <td style="padding: 10px 8px; text-align: center; font-size: 14px; font-weight: 600;">${line.quantity}</td>
+              <td style="padding: 10px 8px; text-align: right; font-size: 14px;">
+                ${hasPrice ? formatMoney(line.shop_price) : `<span style="color:#94a3b8;font-style:italic;">Pending</span>`}
+              </td>
+              <td style="padding: 10px 8px; text-align: right; font-size: 14px; font-weight: 700; color: #0f172a;">
+                ${hasPrice ? formatMoney(lineTotal.toString()) : `<span style="color:#94a3b8;">-</span>`}
+              </td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      return `${headerRow}${itemRows}`;
     })
     .join("");
 
@@ -254,11 +311,10 @@ export function buildInvoiceHtml(
           <thead>
             <tr>
               <th style="width: 36px; text-align: center;">#</th>
-              <th style="text-align: left;">Item Description</th>
+              <th style="text-align: left;">Item & Description</th>
               <th style="width: 50px; text-align: center;">Qty</th>
-              <th style="width: 110px; text-align: right;">Unit Price</th>
-              <th style="width: 120px; text-align: right;">Total</th>
-              <th style="width: 90px; text-align: center;">Status</th>
+              <th style="width: 120px; text-align: right;">Unit Price</th>
+              <th style="width: 130px; text-align: right;">Total</th>
             </tr>
           </thead>
           <tbody>
