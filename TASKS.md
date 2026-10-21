@@ -4518,3 +4518,26 @@ How my business actually runs in Alaba, the struggles I face daily, and how AHIA
    - Bumped version to `0.4.4` (Android versionCode `9`).
    - Cleanly assembled standalone Android release APK via Gradle (`./gradlew assembleRelease`).
    - Published GitHub release `v0.4.4` with assets `AHIA-latest.apk` and `AHIA-v0.4.4-android.apk` marked as `latest`.
+
+### 17.21 Wholesale Pricing Model, Collapsible Category Lists, Live Daily Sales & Standalone Release v0.4.5 `[x]`
+1. **Wholesale Pricing Tier & Category Auto-Fill (`mobile/app/home.tsx`, `web/app/app/lists/page.tsx`)** `[x]`:
+   - Disentangled Wholesale selling price from Trader purchase cost across mobile and web.
+   - Scoped category auto-fill and quick pricing strictly to the item's matched category.
+2. **Collapsible Category Groupings & Spec Distinction (`mobile/app/home.tsx`, `mobile/lib/invoice.ts`, `web/app/app/lists/page.tsx`)** `[x]`:
+   - Grouped customer orders into collapsible category sections with item counts.
+   - Rendered variant notes and specs to clearly distinguish duplicate models (e.g. Privacy vs 21D Glass).
+   - Grouped invoice PDFs by category and stripped internal merchant status tags.
+3. **Advance Payment Persistence & History (`mobile/app/home.tsx`)** `[x]`:
+   - Preserved local payment states across list transitions.
+   - Added itemized payment history on list cards and enforced overpayment safeguards.
+4. **Return Sale Custom In-App Modal (`mobile/app/home.tsx`)** `[x]`:
+   - Replaced "Void Sale" and native Android alert dialogs with custom in-app Return Sale workflow.
+5. **PIN Pad Redesign & Dual Input (`mobile/components/pin-pad.tsx`, `mobile/app/home.tsx`)** `[x]`:
+   - High-contrast, well-spaced 4-digit boxes with device keyboard fallback and dialpad.
+   - Restored 3-button layout in No-PIN confirmation modal with accessible touch targets.
+6. **Real-time Sales Counter Reactivity (`mobile/app/home.tsx`)** `[x]`:
+   - Computed live transaction counts and gross sales from local state.
+7. **Mobile Release v0.4.5 Compilation & GitHub Release (`mobile/app.json`, `mobile/package.json`, `dist/AHIA-v0.4.5-android.apk`, `dist/AHIA-latest.apk`)** `[x]`:
+   - Bumped version to `0.4.5` (Android versionCode `10`).
+   - Cleanly assembled standalone Android release APK via Gradle (`./gradlew assembleRelease`).
+   - Published GitHub release `v0.4.5` with assets `AHIA-latest.apk` and `AHIA-v0.4.5-android.apk`.
