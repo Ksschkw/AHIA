@@ -2031,6 +2031,10 @@ export default function Home() {
           logo_url: editBizLogo.trim(),
         });
         setActiveBusiness((curr) => (curr ? { ...curr, logo_url: editBizLogo.trim() } : curr));
+        // Also sync the logo to the public storefront metadata so web storefront shows it
+        void updateStorefront(activeBusiness.id, {
+          logo_url: editBizLogo.trim(),
+        }).then((s) => setStorefrontDetails(s)).catch(() => {});
       }
       setShowBusinessModal(false);
       showToast("Business profile updated!");
@@ -2629,9 +2633,17 @@ export default function Home() {
           }}
         >
           <View style={styles.businessBadge}>
-            <Text style={styles.businessBadgeText}>
-              {activeBusiness?.name ? activeBusiness.name.slice(0, 2).toUpperCase() : "AH"}
-            </Text>
+            {activeBusiness?.logo_url ? (
+              <Image
+                source={{ uri: activeBusiness.logo_url }}
+                style={{ width: 38, height: 38, borderRadius: 8 }}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={styles.businessBadgeText}>
+                {activeBusiness?.name ? activeBusiness.name.slice(0, 2).toUpperCase() : "AH"}
+              </Text>
+            )}
           </View>
           <View>
             <Text style={styles.businessName} numberOfLines={1}>
@@ -4280,9 +4292,17 @@ export default function Home() {
             {/* User Profile Header */}
             <View style={styles.userProfileCard}>
               <View style={styles.userAvatar}>
-                <Text style={styles.userAvatarText}>
-                  {profile?.first_name ? profile.first_name.slice(0, 1).toUpperCase() : "U"}
-                </Text>
+                {profile?.avatar_url ? (
+                  <Image
+                    source={{ uri: profile.avatar_url }}
+                    style={{ width: 48, height: 48, borderRadius: 24 }}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Text style={styles.userAvatarText}>
+                    {profile?.first_name ? profile.first_name.slice(0, 1).toUpperCase() : "U"}
+                  </Text>
+                )}
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.userProfileName}>

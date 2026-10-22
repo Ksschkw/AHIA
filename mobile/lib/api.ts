@@ -223,6 +223,28 @@ export function listBusinesses(): Promise<TenantSummary[]> {
   return request<TenantSummary[]>("/api/v1/tenants");
 }
 
+export function createTenant(data: {
+  name: string;
+  slug?: string | null;
+  business_type?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string;
+  currency?: string;
+}): Promise<TenantDetails> {
+  return request<TenantDetails>("/api/v1/tenants", {
+    method: "POST",
+    body: {
+      ...data,
+      country: data.country || "NG",
+      currency: data.currency || "NGN",
+    },
+  });
+}
+
 export function listCategories(tenantId: string): Promise<Category[]> {
   return request<Category[]>(`/api/v1/tenants/${tenantId}/categories`);
 }
@@ -669,14 +691,65 @@ export interface StorefrontDetails {
   theme_bg_color: string | null;
   theme_bg_image: string | null;
   closing_statement: string | null;
+  logo_url?: string | null;
   is_published: boolean;
 }
 
-export function getStorefront(tenantId: string): Promise<StorefrontDetails> {
-  return request<StorefrontDetails>(`/api/v1/tenants/${tenantId}/storefront`);
+interface RawStorefrontResponse {
+  id: string;
+  tenant_id: string;
+  headline: string | null;
+  description: string | null;
+  contact_phone: string | null;
+  is_published: boolean;
 }
 
-export function updateStorefront(
+function parseStorefrontDetails(raw: RawStorefrontResponse): StorefrontDetails {
+  let cleanDesc = raw.description ?? "";
+  let themeColor: string | null = null;
+  let themeBg: string | null = null;
+  let themeBgImage: string | null = null;
+  let closing: string | null = null;
+  let logoUrl: string | null = null;
+
+  if (raw.description) {
+    const match = raw.description.match(/<!--\s*ahia-theme:({[\s\S]*?})\s*-->/);
+    if (match) {
+      try {
+        const parsed = JSON.parse(match[1]);
+        cleanDesc = raw.description.replace(/<!--\s*ahia-theme:[\s\S]*?-->/, "").trim();
+        themeColor = parsed.color || null;
+        themeBg = parsed.bg || null;
+        themeBgImage = parsed.bgImage || null;
+        closing = parsed.closing || null;
+        logoUrl = parsed.logoUrl || null;
+      } catch {
+        // ignore parse error
+      }
+    }
+  }
+
+  return {
+    id: raw.id,
+    tenant_id: raw.tenant_id,
+    headline: raw.headline,
+    description: cleanDesc || null,
+    contact_phone: raw.contact_phone,
+    theme_color: themeColor,
+    theme_bg_color: themeBg,
+    theme_bg_image: themeBgImage,
+    closing_statement: closing,
+    logo_url: logoUrl,
+    is_published: raw.is_published,
+  };
+}
+
+export async function getStorefront(tenantId: string): Promise<StorefrontDetails> {
+  const raw = await request<RawStorefrontResponse>(`/api/v1/tenants/${tenantId}/storefront`);
+  return parseStorefrontDetails(raw);
+}
+
+export async function updateStorefront(
   tenantId: string,
   data: {
     headline?: string | null;
@@ -686,29 +759,52 @@ export function updateStorefront(
     theme_bg_color?: string | null;
     theme_bg_image?: string | null;
     closing_statement?: string | null;
+    logo_url?: string | null;
   },
 ): Promise<StorefrontDetails> {
-  return request<StorefrontDetails>(`/api/v1/tenants/${tenantId}/storefront`, {
+  let combinedDesc: string | null | undefined = data.description;
+  const themePayload: Record<string, unknown> = {};
+  if (data.theme_color) themePayload.color = data.theme_color;
+  if (data.theme_bg_color) themePayload.bg = data.theme_bg_color;
+  if (data.theme_bg_image) themePayload.bgImage = data.theme_bg_image;
+  if (data.closing_statement) themePayload.closing = data.closing_statement;
+  if (data.logo_url) themePayload.logoUrl = data.logo_url;
+
+  if (Object.keys(themePayload).length > 0 || data.description !== undefined) {
+    const baseText = data.description?.trim() ?? "";
+    const metaTag = Object.keys(themePayload).length > 0 ? `\n<!-- ahia-theme:${JSON.stringify(themePayload)} -->` : "";
+    combinedDesc = `${baseText}${metaTag}`.trim() || null;
+  }
+
+  const backendBody: Record<string, unknown> = {};
+  if (data.headline !== undefined) backendBody.headline = data.headline;
+  if (combinedDesc !== undefined) backendBody.description = combinedDesc;
+  if (data.contact_phone !== undefined) backendBody.contact_phone = data.contact_phone;
+
+  const raw = await request<RawStorefrontResponse>(`/api/v1/tenants/${tenantId}/storefront`, {
     method: "PATCH",
-    body: data,
+    body: backendBody,
   });
+  return parseStorefrontDetails(raw);
 }
 
-export function publishStorefront(
+export async function publishStorefront(
   tenantId: string,
   details: { headline?: string | null; description?: string | null; contact_phone?: string | null },
 ): Promise<StorefrontDetails> {
-  return request<StorefrontDetails>(`/api/v1/tenants/${tenantId}/storefront/publish`, {
+  const raw = await request<RawStorefrontResponse>(`/api/v1/tenants/${tenantId}/storefront/publish`, {
     method: "POST",
     body: details,
   });
+  return parseStorefrontDetails(raw);
 }
 
-export function unpublishStorefront(tenantId: string): Promise<StorefrontDetails> {
-  return request<StorefrontDetails>(`/api/v1/tenants/${tenantId}/storefront/unpublish`, {
+export async function unpublishStorefront(tenantId: string): Promise<StorefrontDetails> {
+  const raw = await request<RawStorefrontResponse>(`/api/v1/tenants/${tenantId}/storefront/unpublish`, {
     method: "POST",
     body: {},
   });
+  return parseStorefrontDetails(raw);
 }
 
 export interface ProductImage {

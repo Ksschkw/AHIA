@@ -62,6 +62,7 @@ function extractStorefrontTheme(description: string | null | undefined): {
   themeBg: string;
   themeBgImage: string;
   closingMessage: string;
+  logoUrl: string | null;
 } {
   const defaultTheme = {
     cleanDescription: description ?? "",
@@ -69,6 +70,7 @@ function extractStorefrontTheme(description: string | null | undefined): {
     themeBg: "#fbf7f0",
     themeBgImage: "",
     closingMessage: "",
+    logoUrl: null,
   };
   if (!description) return defaultTheme;
 
@@ -84,6 +86,7 @@ function extractStorefrontTheme(description: string | null | undefined): {
       themeBg: parsed.bg || defaultTheme.themeBg,
       themeBgImage: parsed.bgImage || "",
       closingMessage: parsed.closing || "",
+      logoUrl: parsed.logoUrl || null,
     };
   } catch {
     return defaultTheme;
@@ -114,7 +117,7 @@ export default async function ShopPage({ params }: Params) {
     notFound();
   }
 
-  const { cleanDescription, themeColor, themeBg, themeBgImage, closingMessage } = extractStorefrontTheme(
+  const { cleanDescription, themeColor, themeBg, themeBgImage, closingMessage, logoUrl } = extractStorefrontTheme(
     shop.description,
   );
   const isBgDark = isDarkColor(themeBg);
@@ -154,9 +157,19 @@ export default async function ShopPage({ params }: Params) {
       <header className={styles.header}>
         <div className={styles.headerInner}>
           <div className={styles.shopBrandHeader}>
-            <span className={styles.businessAvatar}>
-              {shop.business_name.slice(0, 2).toUpperCase()}
-            </span>
+            {logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={logoUrl}
+                alt={shop.business_name}
+                className={styles.businessAvatar}
+                style={{ objectFit: "cover" }}
+              />
+            ) : (
+              <span className={styles.businessAvatar}>
+                {shop.business_name.slice(0, 2).toUpperCase()}
+              </span>
+            )}
             <div className={styles.businessTitleGroup}>
               <span className={styles.businessNameTop}>{shop.business_name}</span>
               <span className={styles.verifiedStoreBadge}>Direct Market Storefront</span>
