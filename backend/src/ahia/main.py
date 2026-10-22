@@ -182,6 +182,8 @@ def create_application(settings: Settings | None = None) -> FastAPI:
             allow_headers=[
                 "Authorization",
                 "Content-Type",
+                "Accept",
+                "Accept-Language",
                 resolved_settings.correlation_id_header,
             ],
             expose_headers=[resolved_settings.correlation_id_header],

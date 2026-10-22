@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import {
   currentAccessToken,
   forgetSession,
@@ -11,9 +12,14 @@ import {
  *
  * Persists session credentials securely on device and automatically restores
  * sessions on app startup.
+ *
+ * In web preview mode, BASE_URL defaults to relative paths so Metro's dev server proxy
+ * handles requests without cross-origin (CORS) blocks from the browser.
  */
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://p01--ahia-api--qw5xhkblp8hy.code.run";
+const BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL ??
+  (Platform.OS === "web" ? "" : "https://p01--ahia-api--qw5xhkblp8hy.code.run");
 
 export class ApiError extends Error {
   constructor(
@@ -31,7 +37,7 @@ async function refreshOnce(): Promise<boolean> {
   try {
     const response = await fetch(`${BASE_URL}/api/v1/auth/refresh`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
       body: JSON.stringify({ refresh_token: refreshToken }),
     });
     if (!response.ok) {
@@ -73,7 +79,6 @@ export async function request<T>(
       headers: {
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "Accept-Encoding": "gzip, deflate, br",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
