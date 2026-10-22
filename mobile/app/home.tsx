@@ -1989,10 +1989,14 @@ export default function Home() {
       setCustomerLists((curr) => curr.map((l) => (l.id === updatedList.id ? updatedList : l)));
       updateCachedCustomerList(activeBusiness.id, updatedList);
 
-      const customerName = paymentModalList.customer_name || paymentModalList.customer_phone;
+      const customerName = paymentModalList.customer_name || paymentModalList.customer_phone || "Customer";
+      const descriptiveReceipt = paymentNote.trim()
+        ? `${customerName}: ${paymentNote.trim()}`
+        : `${customerName} (Payment)`;
+
       const paymentSale: SaleSummary = {
         id: `sale-${paymentRecord.id}`,
-        receipt_number: `PAY-${Date.now().toString().slice(-6)}`,
+        receipt_number: descriptiveReceipt,
         created_at: paymentRecord.date,
         total_amount: amt.toFixed(2),
         payment_method: paymentMethod,
@@ -3613,10 +3617,32 @@ export default function Home() {
                           </View>
                         </Pressable>
 
-                        {!isCollapsed && sec.subs.map((sub, sIdx) => (
-                          <View key={sIdx} style={styles.subSectionBox}>
-                            {sub.sub && <Text style={styles.subTitle}>&gt; {sub.sub}</Text>}
-                            {sub.lines.map((line) => {
+                        {!isCollapsed && sec.subs.map((sub, sIdx) => {
+                          const subKey = `${item.id}_${sec.root}_${sub.sub ?? "__direct__"}`;
+                          const isSubCollapsed = sub.sub ? Boolean(collapsedSections[subKey]) : false;
+
+                          return (
+                            <View key={sIdx} style={styles.subSectionBox}>
+                              {sub.sub && (
+                                <Pressable
+                                  style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4, paddingHorizontal: 4, backgroundColor: "rgba(255,255,255,0.03)", borderRadius: 6, marginBottom: 4 }}
+                                  onPress={() => toggleSectionCollapse(subKey)}
+                                >
+                                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                                    <Text style={styles.subTitle}>&gt; {sub.sub}</Text>
+                                    <Text style={{ fontSize: 11, color: "#8a928e" }}>({sub.lines.length})</Text>
+                                  </View>
+                                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                                    <Text style={{ fontSize: 10, color: "#64748b" }}>
+                                      {isSubCollapsed ? "Expand" : "Collapse"}
+                                    </Text>
+                                    <View style={{ transform: [{ rotate: isSubCollapsed ? "0deg" : "180deg" }] }}>
+                                      <ChevronDownIcon size={12} color="#64748b" />
+                                    </View>
+                                  </View>
+                                </Pressable>
+                              )}
+                              {!isSubCollapsed && sub.lines.map((line) => {
                               const costNum = Number(line.cost_price ?? "0");
                               const shopNum = Number(line.shop_price ?? "0");
                               const hasBoth = Boolean(line.cost_price && line.shop_price && Number.isFinite(costNum) && Number.isFinite(shopNum));
@@ -3729,7 +3755,8 @@ export default function Home() {
                               );
                             })}
                           </View>
-                        ))}
+                        );
+                      })}
                       </View>
                     );
                   })}
@@ -3961,7 +3988,13 @@ export default function Home() {
                           />
                           <View style={{ flex: 1 }}>
                             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                              <Text style={styles.saleReceipt}>{s.receipt_number}</Text>
+                              <Text style={styles.saleReceipt}>
+                                {s.receipt_number.startsWith("PAY-")
+                                  ? `Order Payment #${s.receipt_number.slice(4)}`
+                                  : s.receipt_number.startsWith("REC-")
+                                  ? `Sale Receipt #${s.receipt_number.slice(4)}`
+                                  : s.receipt_number}
+                              </Text>
                               <View
                                 style={[
                                   styles.saleStatusPill,
