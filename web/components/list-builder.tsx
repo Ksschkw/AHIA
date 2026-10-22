@@ -620,7 +620,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     const doc: WaybillDocument = {
       shopName: shop.business_name,
       customerName: name.trim() || "A Customer",
-      customerPhone: phone.trim() || shop.contact_phone || "Not specified",
+      customerPhone: phone.trim() || "Not specified",
       date: new Date().toLocaleDateString("en-GB", {
         day: "numeric",
         month: "short",
@@ -1625,7 +1625,7 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
       </section>
 
       {showingList ? (
-        <section className={styles.section}>
+        <section id="review_my_list_section" className={styles.section}>
           <h2 className={styles.sectionTitle}>My list</h2>
           {chosen.length === 0 ? (
             <div className={styles.emptyCartBox}>
@@ -1827,7 +1827,18 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
         <button
           type="button"
           className={styles.barList}
-          onClick={() => setShowingList((open) => !open)}
+          onClick={() => {
+            const next = !showingList;
+            setShowingList(next);
+            if (next) {
+              setTimeout(() => {
+                document.getElementById("review_my_list_section")?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                });
+              }, 50);
+            }
+          }}
           aria-expanded={showingList}
         >
           <span className={styles.barCount}>
