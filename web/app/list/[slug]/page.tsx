@@ -27,7 +27,8 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   };
 }
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function ListPage({ params }: Params) {
   const { slug } = await params;
@@ -41,14 +42,14 @@ export default async function ListPage({ params }: Params) {
     business_name: shop.business_name,
     headline: shop.headline,
     contact_phone: shop.contact_phone,
-    products: shop.products.map((product) => ({
+    products: (shop.products ?? []).map((product) => ({
       product_slug: product.product_slug,
       name: product.name,
       selling_price: product.selling_price,
       group_name: product.group_name,
       is_special: product.is_special,
     })),
-    groups: shop.groups.map((group) => ({
+    groups: (shop.groups ?? []).map((group) => ({
       name: group.name,
       parent_name: group.parent_name,
       normal_price: group.normal_price,

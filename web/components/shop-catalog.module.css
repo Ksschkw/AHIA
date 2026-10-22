@@ -1,23 +1,31 @@
+/* Responsive catalog styles for AHIA shop.
+   Adheres to strict ASCII and CSS variables. */
+
 .catalogSection {
-  max-width: 900px;
+  max-width: 1240px;
   width: 100%;
   margin: 0 auto;
-  padding: 0 var(--space-4);
+  padding: 0 20px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: 20px;
 }
 
 .filterBar {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
+  position: sticky;
+  top: 66px;
+  z-index: 40;
+  background: var(--shop-surface);
+  padding: 12px 0 4px;
 }
 
 .searchRow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .searchWrap {
@@ -25,47 +33,23 @@
   flex: 1;
 }
 
-.trackOrdersPill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 44px;
-  padding: 0 16px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--line-strong);
-  background: var(--sand-2);
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 700;
-  font-family: inherit;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.15s ease;
-  flex: none;
-}
-
-.trackOrdersPill:hover {
-  background: var(--card);
-  border-color: var(--leaf);
-  color: var(--leaf);
-}
-
 .searchInput {
   width: 100%;
-  padding: 12px 16px 12px 42px;
-  font-size: var(--text-base);
+  height: 48px;
+  padding: 0 44px 0 44px;
+  font-size: 15px;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: 12px;
   background: var(--card);
   color: var(--ink);
   outline: none;
-  transition: border-color 0.15s ease;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
 }
 
 .searchInput:focus {
   border-color: var(--shop-accent, var(--leaf));
-  box-shadow: 0 0 0 3px rgba(8, 74, 47, 0.12);
+  box-shadow: 0 0 0 3px rgba(8, 74, 47, 0.14);
 }
 
 .searchIcon {
@@ -82,12 +66,48 @@
   right: 12px;
   top: 50%;
   transform: translateY(-50%);
-  background: none;
-  border: none;
-  font-size: 13px;
-  color: var(--ink-3);
+  background: var(--sand-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-2);
   cursor: pointer;
-  padding: 4px;
+  padding: 4px 8px;
+  transition: all 0.15s ease;
+}
+
+.clearSearchBtn:hover {
+  background: var(--card);
+  color: var(--ink);
+}
+
+.trackOrdersPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 18px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 750;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  flex: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+}
+
+.trackOrdersPill:hover {
+  background: var(--card-hover);
+  border-color: var(--shop-accent, var(--leaf));
+  color: var(--shop-accent, var(--leaf));
+  transform: translateY(-1px);
 }
 
 .categoryPills {
@@ -104,7 +124,7 @@
 }
 
 .categoryPills::-webkit-scrollbar-thumb {
-  background: var(--line);
+  background: var(--line-strong);
   border-radius: 4px;
 }
 
@@ -112,29 +132,37 @@
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
+  gap: 8px;
+  height: 38px;
+  padding: 0 14px;
   border-radius: var(--radius-pill);
-  font-size: var(--text-sm);
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 650;
   border: 1px solid var(--line);
   background: var(--card);
   color: var(--ink-2);
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
+  user-select: none;
 }
 
 .pill:hover {
   border-color: var(--line-strong);
   color: var(--ink);
+  transform: translateY(-1px);
+}
+
+.pill:active {
+  transform: translateY(0);
 }
 
 .pillActive {
   background: var(--shop-accent, var(--leaf));
   border-color: var(--shop-accent, var(--leaf));
   color: #ffffff;
-  font-weight: 700;
+  font-weight: 750;
+  box-shadow: 0 2px 8px rgba(8, 74, 47, 0.22);
 }
 
 .pillActive:hover {
@@ -142,64 +170,136 @@
   color: #ffffff;
 }
 
+.pillActiveSpecial {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #ffffff;
+  font-weight: 750;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.25);
+}
+
+.pillActiveSpecial:hover {
+  background: #b91c1c;
+  color: #ffffff;
+}
+
+.pillThumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  object-fit: cover;
+  flex: none;
+}
+
 .pillBadge {
   font-size: 11px;
-  padding: 2px 6px;
+  font-weight: 700;
+  padding: 2px 7px;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.08);
 }
 
-.pillActive .pillBadge {
+.pillActive .pillBadge,
+.pillActiveSpecial .pillBadge {
   background: rgba(255, 255, 255, 0.25);
   color: #ffffff;
 }
 
+.catalogMetaRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.catalogResultCount {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sectionsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+.categorySectionBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .sectionHeader {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   border-bottom: 2px solid var(--line);
-  padding-bottom: 8px;
-  margin-top: 12px;
+  padding-bottom: 10px;
+}
+
+.sectionHeadingWrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sectionThumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex: none;
 }
 
 .sectionHeading {
-  font-size: var(--text-lg);
-  font-weight: 750;
-  letter-spacing: -0.01em;
+  font-size: clamp(17px, 2.5vw, 22px);
+  font-weight: 800;
+  letter-spacing: -0.015em;
   margin: 0;
   color: var(--ink);
 }
 
 .sectionCount {
-  font-size: var(--text-sm);
+  font-size: 13px;
   color: var(--ink-3);
-  font-weight: 500;
+  font-weight: 600;
 }
 
+/* Product Grid */
 .grid {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
+  gap: 12px;
 }
 
-@media (min-width: 620px) {
+@media (min-width: 680px) {
   .grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--space-4);
+    gap: 16px;
   }
 }
 
-@media (min-width: 900px) {
+@media (min-width: 1024px) {
   .grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 20px;
   }
 }
 
+@media (min-width: 1320px) {
+  .grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 20px;
+  }
+}
+
+/* Card */
 .card {
   min-width: 0;
   display: flex;
@@ -212,51 +312,24 @@
   height: 100%;
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: 14px;
   overflow: hidden;
-  box-shadow: var(--shadow-sm);
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .cardInner:hover {
-  transform: translateY(-2px);
+  transform: translateY(-4px);
   border-color: var(--shop-accent, var(--leaf));
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
 }
 
 .cardLink {
   display: flex;
   flex-direction: column;
-  gap: 8px;
   flex: 1;
-  padding: var(--space-2);
   text-decoration: none;
   color: inherit;
-}
-
-.quickAddBtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 10px;
-  background: var(--sand-2);
-  color: var(--shop-accent, var(--leaf-dark));
-  font-size: 12px;
-  font-weight: 700;
-  text-decoration: none;
-  border-top: 1px solid var(--line);
-  transition: all 0.15s ease;
-  user-select: none;
-}
-
-.quickAddBtn:hover {
-  background: var(--shop-accent, var(--leaf));
-  color: #ffffff;
-}
-
-.quickAddBtn:active {
-  transform: scale(0.97);
-  opacity: 0.9;
 }
 
 .imageWrap {
@@ -264,7 +337,6 @@
   display: block;
   width: 100%;
   aspect-ratio: 1 / 1;
-  border-radius: var(--radius-sm);
   overflow: hidden;
   background: var(--sand-2);
 }
@@ -274,6 +346,11 @@
   height: 100%;
   object-fit: cover;
   display: block;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cardInner:hover .image {
+  transform: scale(1.05);
 }
 
 .imagePlaceholder {
@@ -288,85 +365,162 @@
 
 .specialBadge {
   position: absolute;
-  top: 6px;
-  left: 6px;
+  top: 8px;
+  left: 8px;
   background: #dc2626;
-  color: #fff;
+  color: #ffffff;
   font-size: 10px;
-  font-weight: 750;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 2px 6px;
-  border-radius: 4px;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3);
 }
 
-.specialTag {
-  display: inline-block;
-  background: #dc2626;
-  color: #fff;
-  font-size: 10px;
-  font-weight: 750;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 2px 6px;
-  border-radius: 4px;
-  margin-bottom: var(--space-1);
+.cardContent {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px 14px;
+  flex: 1;
 }
 
 .categoryTag {
   font-size: 11px;
   color: var(--ink-3);
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .productName {
-  font-size: var(--text-sm);
-  font-weight: 650;
+  font-size: 14px;
+  font-weight: 700;
   line-height: 1.35;
-  overflow-wrap: anywhere;
   color: var(--ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .price {
-  font-size: var(--text-md);
-  font-weight: 750;
+  font-size: 15px;
+  font-weight: 800;
   color: var(--shop-accent, var(--leaf-dark));
   margin-top: auto;
+  padding-top: 6px;
 }
 
+.quickAddBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 38px;
+  background: var(--sand-2);
+  color: var(--shop-accent, var(--leaf-dark));
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  border-top: 1px solid var(--line);
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.quickAddBtn:hover {
+  background: var(--shop-accent, var(--leaf));
+  color: #ffffff;
+}
+
+.quickAddBtn:active {
+  transform: scale(0.97);
+  filter: brightness(0.92);
+}
+
+/* Empty State */
 .emptyState {
-  padding: var(--space-5) var(--space-4);
+  padding: 48px 20px;
   text-align: center;
   background: var(--card);
   border: 1px dashed var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: 16px;
   color: var(--ink-2);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+}
+
+.emptyIcon {
+  color: var(--ink-3);
 }
 
 .emptyTitle {
-  font-size: var(--text-md);
-  font-weight: 700;
+  font-size: 17px;
+  font-weight: 800;
   color: var(--ink);
 }
 
-.pillThumb {
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  object-fit: cover;
-  flex: none;
+.emptyText {
+  font-size: 14px;
+  color: var(--ink-2);
+  margin: 0;
+  max-width: 44ch;
 }
 
-.sectionThumb {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  object-fit: cover;
-  flex: none;
+.resetSearchBtn {
+  margin-top: 6px;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: var(--radius-pill);
+  background: var(--shop-accent, var(--leaf));
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 750;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.resetSearchBtn:hover {
+  filter: brightness(1.08);
+}
+
+@media (max-width: 768px) {
+  .catalogSection {
+    padding: 0 12px;
+  }
+
+  .filterBar {
+    top: 58px;
+    padding: 8px 0;
+  }
+
+  .searchInput {
+    height: 44px;
+    font-size: 14px;
+  }
+
+  .trackOrdersPill {
+    height: 44px;
+    padding: 0 14px;
+    font-size: 12px;
+  }
+
+  .cardContent {
+    padding: 10px 10px 12px;
+  }
+
+  .productName {
+    font-size: 13px;
+  }
+
+  .price {
+    font-size: 14px;
+  }
 }
