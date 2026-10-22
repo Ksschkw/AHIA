@@ -3,7 +3,6 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   AppState,
   FlatList,
   Image,
@@ -733,6 +732,13 @@ export default function Home() {
   const [saleToReturn, setSaleToReturn] = useState<SaleSummary | null>(null);
   const [cancellingSale, setCancellingSale] = useState(false);
 
+  // Confirm-delete modal states (replace all Alert.alert calls)
+  const [confirmDeleteCategory, setConfirmDeleteCategory] = useState<Category | null>(null);
+  const [confirmDeleteProduct, setConfirmDeleteProduct] = useState<Product | null>(null);
+  const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
+  const [confirmRemoveMember, setConfirmRemoveMember] = useState<Member | null>(null);
+  const [confirmDeleteList, setConfirmDeleteList] = useState<CustomerList | null>(null);
+
   // Real-time today's sales count and revenue (guarantees newly recorded sales update immediately)
   const todaySalesCountAndRevenue = useMemo(() => {
     const now = new Date();
@@ -1342,56 +1348,44 @@ export default function Home() {
 
   const handleDeleteCategory = (category: Category) => {
     if (!activeBusiness) return;
-    Alert.alert(
-      "Delete Category?",
-      `Are you sure you want to delete ${category.name}? Items inside will move up to parent category.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            deleteLocalCategory(activeBusiness.id, category.id);
-            setCategories((curr) => curr.filter((c) => c.id !== category.id));
-    if (activeBusiness) void flushSyncOutbox(activeBusiness.id).catch(() => {});
-            if (currentCategoryId === category.id) {
-              setCurrentCategoryId(category.parent_id ?? null);
-            }
-            showToast(`Deleted ${category.name}`);
-            setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
-            void flushSyncOutbox(activeBusiness.id).then(() => {
-              setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
-            });
-          },
-        },
-      ],
-    );
+    setConfirmDeleteCategory(category);
+  };
+
+  const handleConfirmDeleteCategory = () => {
+    if (!activeBusiness || !confirmDeleteCategory) return;
+    const category = confirmDeleteCategory;
+    setConfirmDeleteCategory(null);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    deleteLocalCategory(activeBusiness.id, category.id);
+    setCategories((curr) => curr.filter((c) => c.id !== category.id));
+    void flushSyncOutbox(activeBusiness.id).catch(() => {});
+    if (currentCategoryId === category.id) {
+      setCurrentCategoryId(category.parent_id ?? null);
+    }
+    showToast(`Deleted ${category.name}`);
+    setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
+    void flushSyncOutbox(activeBusiness.id).then(() => {
+      setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
+    });
   };
 
   const handleDeleteProduct = (product: Product) => {
     if (!activeBusiness) return;
-    Alert.alert(
-      "Delete Product?",
-      `Are you sure you want to delete ${product.name}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            deleteLocalProduct(activeBusiness.id, product.id);
-            setProducts((curr) => curr.filter((p) => p.id !== product.id));
-            showToast(`Deleted ${product.name}`);
-            setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
-            void flushSyncOutbox(activeBusiness.id).then(() => {
-              setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
-            });
-          },
-        },
-      ],
-    );
+    setConfirmDeleteProduct(product);
+  };
+
+  const handleConfirmDeleteProduct = () => {
+    if (!activeBusiness || !confirmDeleteProduct) return;
+    const product = confirmDeleteProduct;
+    setConfirmDeleteProduct(null);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    deleteLocalProduct(activeBusiness.id, product.id);
+    setProducts((curr) => curr.filter((p) => p.id !== product.id));
+    showToast(`Deleted ${product.name}`);
+    setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
+    void flushSyncOutbox(activeBusiness.id).then(() => {
+      setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
+    });
   };
 
   const handleSaveBusinessPin = async () => {
@@ -1461,30 +1455,23 @@ export default function Home() {
 
   const handleBatchDelete = () => {
     if (!activeBusiness || selectedProductIds.size === 0) return;
-    Alert.alert(
-      "Delete Selected Items?",
-      `Are you sure you want to delete ${selectedProductIds.size} item(s)? This cannot be undone.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete All",
-          style: "destructive",
-          onPress: async () => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            try {
-              const ids = Array.from(selectedProductIds);
-              await Promise.all(ids.map((id) => deleteProduct(activeBusiness.id, id)));
-              setProducts((curr) => curr.filter((p) => !selectedProductIds.has(p.id)));
-              setSelectedProductIds(new Set());
-              showToast(`Deleted ${ids.length} item(s)`);
-              await loadData(activeBusiness.id);
-            } catch {
-              showToast("Batch deletion failed.");
-            }
-          },
-        },
-      ],
-    );
+    setConfirmBatchDelete(true);
+  };
+
+  const handleConfirmBatchDelete = async () => {
+    if (!activeBusiness) return;
+    setConfirmBatchDelete(false);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    try {
+      const ids = Array.from(selectedProductIds);
+      await Promise.all(ids.map((id) => deleteProduct(activeBusiness.id, id)));
+      setProducts((curr) => curr.filter((p) => !selectedProductIds.has(p.id)));
+      setSelectedProductIds(new Set());
+      showToast(`Deleted ${ids.length} item(s)`);
+      await loadData(activeBusiness.id);
+    } catch {
+      showToast("Batch deletion failed.");
+    }
   };
 
   const handleBatchPublish = async (shouldPublish: boolean) => {
@@ -2119,27 +2106,21 @@ export default function Home() {
 
   const handleRemoveMember = (member: Member) => {
     if (!activeBusiness) return;
-    Alert.alert(
-      "Remove Staff Member?",
-      `Are you sure you want to remove ${member.first_name} from the business?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            try {
-              await removeMember(activeBusiness.id, member.id);
-              setMembers((curr) => curr.filter((m) => m.id !== member.id));
-              showToast(`Removed ${member.first_name}`);
-            } catch {
-              showToast("Could not remove staff member.");
-            }
-          },
-        },
-      ],
-    );
+    setConfirmRemoveMember(member);
+  };
+
+  const handleConfirmRemoveMember = async () => {
+    if (!activeBusiness || !confirmRemoveMember) return;
+    const member = confirmRemoveMember;
+    setConfirmRemoveMember(null);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await removeMember(activeBusiness.id, member.id);
+      setMembers((curr) => curr.filter((m) => m.id !== member.id));
+      showToast(`Removed ${member.first_name}`);
+    } catch {
+      showToast("Could not remove staff member.");
+    }
   };
 
   const handleSaveLinePrice = async () => {
@@ -2605,39 +2586,33 @@ export default function Home() {
   };
 
   const handleDeleteList = (list: CustomerList) => {
-    Alert.alert(
-      "Delete Order from View?",
-      `Are you sure you want to completely remove this order from your view?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete from View",
-          style: "destructive",
-          onPress: async () => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            setDeletedListIds((prev) => {
-              const next = new Set(prev);
-              next.add(list.id);
-              try {
-                setAppSetting("ahia_deleted_list_ids", JSON.stringify(Array.from(next)));
-              } catch {
-                // ignore error saving
-              }
-              return next;
-            });
-            setCustomerLists((current) => current.filter((l) => l.id !== list.id));
-            showToast("Order removed from view");
-            if (activeBusiness) {
-              try {
-                await deleteCustomerList(activeBusiness.id, list.id);
-              } catch {
-                // Local deletion is preserved regardless
-              }
-            }
-          },
-        },
-      ],
-    );
+    setConfirmDeleteList(list);
+  };
+
+  const handleConfirmDeleteList = async () => {
+    const list = confirmDeleteList;
+    if (!list) return;
+    setConfirmDeleteList(null);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setDeletedListIds((prev) => {
+      const next = new Set(prev);
+      next.add(list.id);
+      try {
+        setAppSetting("ahia_deleted_list_ids", JSON.stringify(Array.from(next)));
+      } catch {
+        // ignore error saving
+      }
+      return next;
+    });
+    setCustomerLists((current) => current.filter((l) => l.id !== list.id));
+    showToast("Order removed from view");
+    if (activeBusiness) {
+      try {
+        await deleteCustomerList(activeBusiness.id, list.id);
+      } catch {
+        // Local deletion is preserved regardless
+      }
+    }
   };
 
   const pendingListsCount = customerLists.filter((l) => l.status !== "confirmed").length;
@@ -2754,7 +2729,6 @@ export default function Home() {
                 <Pressable
                   style={styles.actionTile}
                   onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setShowAddProductModal(true);
                   }}
                 >
@@ -2769,7 +2743,6 @@ export default function Home() {
               <Pressable
                 style={styles.actionTile}
                 onPress={() => {
-                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setShowExpenseModal(true);
                 }}
               >
@@ -2784,7 +2757,6 @@ export default function Home() {
                 <Pressable
                   style={styles.actionTile}
                   onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setShowAddCategoryModal(true);
                   }}
                 >
@@ -2861,7 +2833,6 @@ export default function Home() {
               <Pressable
                 style={[styles.modeToggleBtn, viewMode === "tree" && styles.modeToggleBtnActive]}
                 onPress={() => {
-                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setViewMode(viewMode === "folder" ? "tree" : "folder");
                 }}
               >
@@ -2879,7 +2850,6 @@ export default function Home() {
                 <Pressable
                   style={styles.breadcrumbItem}
                   onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setCurrentCategoryId(null);
                   }}
                 >
@@ -2894,7 +2864,6 @@ export default function Home() {
                     <Pressable
                       style={styles.breadcrumbItem}
                       onPress={() => {
-                        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         setCurrentCategoryId(crumb.id);
                       }}
                     >
@@ -2916,7 +2885,6 @@ export default function Home() {
                 <Pressable
                   style={styles.upLevelBtn}
                   onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setCurrentCategoryId(currentCategory?.parent_id ?? null);
                   }}
                 >
@@ -2932,7 +2900,6 @@ export default function Home() {
                 <Pressable
                   style={styles.folderActionBtn}
                   onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setShowAddCategoryModal(true);
                   }}
                 >
@@ -2945,7 +2912,6 @@ export default function Home() {
                 <Pressable
                   style={styles.folderActionBtn}
                   onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setShowAddProductModal(true);
                   }}
                 >
@@ -2959,7 +2925,6 @@ export default function Home() {
                   <Pressable
                     style={styles.folderActionBtn}
                     onPress={() => {
-                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setEditingCategory(currentCategory);
                       setEditCategoryName(currentCategory.name);
                       setEditCategoryNormalPrice(currentCategory.default_normal_price ?? "");
@@ -3002,7 +2967,6 @@ export default function Home() {
                           <Pressable
                             style={styles.treeNodeHeader}
                             onPress={() => {
-                              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                               setCurrentCategoryId(rootCat.id);
                               setViewMode("folder");
                             }}
@@ -3021,7 +2985,6 @@ export default function Home() {
                                 key={child.id}
                                 style={styles.treeChildNode}
                                 onPress={() => {
-                                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                                   setCurrentCategoryId(child.id);
                                   setViewMode("folder");
                                 }}
@@ -3054,7 +3017,6 @@ export default function Home() {
                             key={cat.id}
                             style={styles.folderCard}
                             onPress={() => {
-                              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                               setCurrentCategoryId(cat.id);
                             }}
                           >
@@ -3087,7 +3049,6 @@ export default function Home() {
                     {currentProducts.length > 0 && (
                       <Pressable
                         onPress={() => {
-                          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                           if (selectedProductIds.size === currentProducts.length) {
                             setSelectedProductIds(new Set());
                           } else {
@@ -3173,7 +3134,6 @@ export default function Home() {
                             <Pressable
                               style={styles.stockBtn}
                               onPress={() => {
-                                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                                 setRestockProduct(item);
                               }}
                             >
@@ -3198,7 +3158,6 @@ export default function Home() {
                               <Pressable
                                 style={styles.editBtn}
                                 onPress={() => {
-                                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                                   setEditingProduct(item);
                                   setEditPrice(item.selling_price ?? "");
                                   setEditWholesale(item.effective_wholesale_price ?? "");
@@ -3296,7 +3255,6 @@ export default function Home() {
                   <Pressable
                     style={styles.quickPasteBtn}
                     onPress={() => {
-                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setShowQuickPasteModal(true);
                     }}
                   >
@@ -3893,7 +3851,6 @@ export default function Home() {
                 <Pressable
                   style={styles.recordSaleBtn}
                   onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setShowRecordSaleModal(true);
                   }}
                 >
@@ -3904,7 +3861,6 @@ export default function Home() {
                 <Pressable
                   style={styles.logExpenseBtn}
                   onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setShowExpenseModal(true);
                   }}
                 >
@@ -3992,7 +3948,6 @@ export default function Home() {
                   <Pressable
                     style={styles.logExpenseTopBtn}
                     onPress={() => {
-                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setShowExpenseModal(true);
                     }}
                   >
@@ -4078,7 +4033,6 @@ export default function Home() {
                 <Pressable
                   style={styles.teamBackBtn}
                   onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setActiveSubView(null);
                   }}
                 >
@@ -4089,7 +4043,6 @@ export default function Home() {
                 <Pressable
                   style={styles.teamInviteTopBtn}
                   onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setShowInviteModal(true);
                   }}
                 >
@@ -4136,7 +4089,6 @@ export default function Home() {
                   <Pressable
                     style={styles.addStaffBtn}
                     onPress={() => {
-                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setShowInviteModal(true);
                     }}
                   >
@@ -4205,7 +4157,6 @@ export default function Home() {
                   <Pressable
                     style={styles.addStaffBtn}
                     onPress={() => {
-                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setShowInviteModal(true);
                     }}
                   >
@@ -4350,7 +4301,6 @@ export default function Home() {
               <Pressable
                 style={styles.editProfileBtn}
                 onPress={() => {
-                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setEditFirstName(profile?.first_name ?? "");
                   setEditLastName(profile?.last_name ?? "");
                   setEditPhone(profile?.phone ?? "");
@@ -4402,7 +4352,6 @@ export default function Home() {
                 <Pressable
                   style={styles.everythingTile}
                   onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setActiveSubView("team");
                   }}
                 >
@@ -4468,7 +4417,6 @@ export default function Home() {
                     <Pressable
                       style={styles.addStaffBtn}
                       onPress={() => {
-                        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         setStorefrontHeadline(storefrontDetails?.headline ?? "");
                         setStorefrontDesc(storefrontDetails?.description ?? "");
                         setStorefrontPhone(storefrontDetails?.contact_phone ?? "");
@@ -4504,7 +4452,6 @@ export default function Home() {
                   <Pressable
                     style={styles.addStaffBtn}
                     onPress={() => {
-                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setShowInviteModal(true);
                     }}
                   >
@@ -4606,7 +4553,6 @@ export default function Home() {
                   <Pressable
                     style={styles.addStaffBtn}
                     onPress={() => {
-                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setEditBizName(businessDetails?.name ?? activeBusiness?.name ?? "");
                       setEditBizAddress(businessDetails?.address ?? "");
                       setEditBizPhone(businessDetails?.phone ?? "");
@@ -4671,7 +4617,6 @@ export default function Home() {
             <Pressable
               style={styles.signOutBtn}
               onPress={() => {
-                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setShowSignOutModal(true);
               }}
             >
@@ -6205,7 +6150,6 @@ export default function Home() {
                         isSelected && styles.rolePillActive,
                       ]}
                       onPress={() => {
-                        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         setExpenseCategoryId(key);
                         setExpenseError(null);
                       }}
@@ -7002,7 +6946,6 @@ export default function Home() {
                   activeBusiness?.id === b.id && styles.shopOptionActive,
                 ]}
                 onPress={() => {
-                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setActiveBusiness(b);
                   setAppSetting("last_active_tenant_id", b.id);
                   setShowShopModal(false);
@@ -7073,6 +7016,144 @@ export default function Home() {
           </View>
         </View>
       </Modal>
+      {/* Confirm Delete Category Modal */}
+      <Modal statusBarTranslucent visible={confirmDeleteCategory !== null} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 320 }]}>
+            <Text style={styles.modalTitle}>Remove this category?</Text>
+            <Text style={[styles.modalSubtitle, { marginBottom: 20 }]}>
+              {confirmDeleteCategory?.name
+                ? `"${confirmDeleteCategory.name}" will be removed. Items inside will move up to the parent category.`
+                : "This category will be removed."}
+            </Text>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <Pressable
+                style={[styles.modalCancelBtn, styles.modalBtnFlex]}
+                onPress={() => setConfirmDeleteCategory(null)}
+              >
+                <Text style={styles.modalCancelText}>Keep It</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalSaveBtn, styles.modalBtnFlex, { backgroundColor: "#ef4444" }]}
+                onPress={handleConfirmDeleteCategory}
+              >
+                <Text style={styles.modalSaveText}>Remove</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Confirm Delete Product Modal */}
+      <Modal statusBarTranslucent visible={confirmDeleteProduct !== null} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 320 }]}>
+            <Text style={styles.modalTitle}>Remove this item?</Text>
+            <Text style={[styles.modalSubtitle, { marginBottom: 20 }]}>
+              {confirmDeleteProduct?.name
+                ? `"${confirmDeleteProduct.name}" will be removed from your shelf.`
+                : "This item will be removed from your shelf."}
+            </Text>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <Pressable
+                style={[styles.modalCancelBtn, styles.modalBtnFlex]}
+                onPress={() => setConfirmDeleteProduct(null)}
+              >
+                <Text style={styles.modalCancelText}>Keep It</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalSaveBtn, styles.modalBtnFlex, { backgroundColor: "#ef4444" }]}
+                onPress={handleConfirmDeleteProduct}
+              >
+                <Text style={styles.modalSaveText}>Remove</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Confirm Batch Delete Modal */}
+      <Modal statusBarTranslucent visible={confirmBatchDelete} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 320 }]}>
+            <Text style={styles.modalTitle}>Remove {selectedProductIds.size} item(s)?</Text>
+            <Text style={[styles.modalSubtitle, { marginBottom: 20 }]}>
+              These items will be permanently removed from your shelf. This cannot be undone.
+            </Text>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <Pressable
+                style={[styles.modalCancelBtn, styles.modalBtnFlex]}
+                onPress={() => setConfirmBatchDelete(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalSaveBtn, styles.modalBtnFlex, { backgroundColor: "#ef4444" }]}
+                onPress={() => { void handleConfirmBatchDelete(); }}
+              >
+                <Text style={styles.modalSaveText}>Remove All</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Confirm Remove Member Modal */}
+      <Modal statusBarTranslucent visible={confirmRemoveMember !== null} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 320 }]}>
+            <Text style={styles.modalTitle}>Remove staff from business?</Text>
+            <Text style={[styles.modalSubtitle, { marginBottom: 20 }]}>
+              {confirmRemoveMember?.first_name
+                ? `${confirmRemoveMember.first_name} will lose access to this business.`
+                : "This staff member will lose access to this business."}
+            </Text>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <Pressable
+                style={[styles.modalCancelBtn, styles.modalBtnFlex]}
+                onPress={() => setConfirmRemoveMember(null)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalSaveBtn, styles.modalBtnFlex, { backgroundColor: "#ef4444" }]}
+                onPress={() => { void handleConfirmRemoveMember(); }}
+              >
+                <Text style={styles.modalSaveText}>Remove</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Confirm Delete Order Modal */}
+      <Modal statusBarTranslucent visible={confirmDeleteList !== null} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 320 }]}>
+            <Text style={styles.modalTitle}>Remove this order from view?</Text>
+            <Text style={[styles.modalSubtitle, { marginBottom: 20 }]}>
+              {confirmDeleteList?.customer_name
+                ? `Order for ${confirmDeleteList.customer_name} will be removed from your list.`
+                : "This order will be removed from your list."}
+            </Text>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <Pressable
+                style={[styles.modalCancelBtn, styles.modalBtnFlex]}
+                onPress={() => setConfirmDeleteList(null)}
+              >
+                <Text style={styles.modalCancelText}>Keep It</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalSaveBtn, styles.modalBtnFlex, { backgroundColor: "#ef4444" }]}
+                onPress={() => { void handleConfirmDeleteList(); }}
+              >
+                <Text style={styles.modalSaveText}>Remove</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
