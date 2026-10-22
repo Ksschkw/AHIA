@@ -1,0 +1,56 @@
+name: release-latest-alias
+
+on:
+  release:
+    types: [published, edited]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-latest-asset:
+    name: Sync AHIA-latest.apk alias asset
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Ensure AHIA-latest.apk alias exists on release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+
+          TARGET_TAG="${TAG_NAME:-}"
+          if [ -z "$TARGET_TAG" ]; then
+            TARGET_TAG=$(gh release view --json tagName -q .tagName)
+          fi
+
+          echo "Target release tag: $TARGET_TAG"
+
+          # Check if an APK exists on this release
+          ASSETS_JSON=$(gh release view "$TARGET_TAG" --json assets -q .assets)
+          LATEST_ASSET=$(echo "$ASSETS_JSON" | jq -r '.[] | select(.name == "AHIA-latest.apk") | .url')
+
+          if [ -n "$LATEST_ASSET" ] && [ "$LATEST_ASSET" != "null" ]; then
+            echo "AHIA-latest.apk is already present on release $TARGET_TAG"
+            exit 0
+          fi
+
+          # Find the versioned APK asset
+          VERSION_APK_URL=$(echo "$ASSETS_JSON" | jq -r '.[] | select(.name | test("^AHIA-.*\\.apk$")) | .url' | head -n 1)
+
+          if [ -z "$VERSION_APK_URL" ] || [ "$VERSION_APK_URL" = "null" ]; then
+            echo "No APK asset found on release $TARGET_TAG to alias."
+            exit 0
+          fi
+
+          VERSION_APK_NAME=$(echo "$ASSETS_JSON" | jq -r '.[] | select(.name | test("^AHIA-.*\\.apk$")) | .name' | head -n 1)
+          echo "Found versioned APK: $VERSION_APK_NAME. Downloading..."
+          gh release download "$TARGET_TAG" -p "$VERSION_APK_NAME" -O "AHIA-latest.apk"
+
+          echo "Uploading AHIA-latest.apk to release $TARGET_TAG..."
+          gh release upload "$TARGET_TAG" "AHIA-latest.apk" --clobber
+          echo "Successfully synced AHIA-latest.apk alias!"
