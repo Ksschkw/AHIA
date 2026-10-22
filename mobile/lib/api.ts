@@ -175,6 +175,7 @@ export interface CustomerListLine {
   product_id: string | null;
   product_name: string | null;
   group_name: string | null;
+  parent_position?: number | null;
   free_text: string | null;
   note: string | null;
   quantity: string;
@@ -600,9 +601,10 @@ export function updateProfile(data: {
   email?: string;
   avatar_url?: string;
 }): Promise<UserProfile> {
+  const { avatar_url: _ignored, ...body } = data;
   return request<UserProfile>("/api/v1/users/me", {
     method: "PATCH",
-    body: data,
+    body,
   });
 }
 
@@ -632,9 +634,10 @@ export function updateBusiness(
     logo_url?: string | null;
   },
 ): Promise<TenantDetails> {
+  const { logo_url: _ignored, ...body } = data;
   return request<TenantDetails>(`/api/v1/tenants/${tenantId}`, {
     method: "PATCH",
-    body: data,
+    body,
   });
 }
 

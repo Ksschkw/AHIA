@@ -805,7 +805,11 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
           quantity: String(line.quantity),
           unit: "piece",
           ...(line.isHeading ? { note: "heading" } : {}),
-          ...(line.note && !line.isHeading ? { note: line.note } : {}),
+          ...(!line.isHeading && line.note
+            ? { note: line.note }
+            : !line.isHeading && line.groupName && under < 0
+            ? { note: line.groupName }
+            : {}),
           // A heading at the top has no parent; anything under one names it by position.
           ...(under >= 0 ? { parent_position: under } : {}),
         };

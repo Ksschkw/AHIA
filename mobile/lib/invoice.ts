@@ -1,6 +1,6 @@
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
-import { type CustomerList, type TenantDetails } from "@/lib/api";
+import { type CustomerList, type TenantDetails, type Product, type Category } from "@/lib/api";
 
 function formatMoney(amount: string | null | undefined): string {
   if (!amount) return "Price on request";
@@ -9,10 +9,22 @@ function formatMoney(amount: string | null | undefined): string {
   return `\u20A6${num.toLocaleString("en-NG", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 
+function buildCategoryPath(catId: string, allCategories: Category[]): string {
+  const cat = allCategories.find((c) => c.id === catId);
+  if (!cat) return "";
+  if (cat.parent_id) {
+    const parentPath = buildCategoryPath(cat.parent_id, allCategories);
+    return parentPath ? `${parentPath} > ${cat.name}` : cat.name;
+  }
+  return cat.name;
+}
+
 export function buildInvoiceHtml(
   business: { name: string; slug?: string },
   details: TenantDetails | null,
-  list: CustomerList
+  list: CustomerList,
+  allProducts: Product[] = [],
+  allCategories: Category[] = []
 ): string {
   const dateStr = new Date(list.created_at).toLocaleDateString("en-NG", {
     day: "numeric",
@@ -29,96 +41,159 @@ export function buildInvoiceHtml(
   let computedSubtotal = 0;
   let itemCounter = 0;
 
-  // Group lines by heading or group_name
-  type InvoiceGroup = {
-    title: string;
+  // Build hierarchical groupings (Root -> Sub -> Lines)
+  interface SubGroup {
+    subTitle: string | null;
     lines: typeof list.lines;
-  };
-  const groups: InvoiceGroup[] = [];
-  let currentGroupTitle = "General Items";
-  let currentGroupLines: typeof list.lines = [];
+  }
+  interface RootGroup {
+    rootTitle: string;
+    subs: SubGroup[];
+  }
+
+  const rootMap = new Map<string, Map<string, typeof list.lines>>();
 
   for (const line of list.lines) {
-    if (line.note === "heading") {
-      if (currentGroupLines.length > 0) {
-        groups.push({ title: currentGroupTitle, lines: currentGroupLines });
-        currentGroupLines = [];
+    if (line.note === "heading") continue;
+
+    let rawGroup = line.group_name?.trim();
+
+    // Check parent_position heading if available
+    if (line.parent_position !== undefined && line.parent_position !== null && list.lines[line.parent_position]) {
+      const parentHeading = list.lines[line.parent_position];
+      const headingText = parentHeading.free_text?.trim() || parentHeading.product_name?.trim();
+      if (headingText) {
+        if (rawGroup && !rawGroup.toLowerCase().includes(headingText.toLowerCase())) {
+          rawGroup = `${rawGroup} > ${headingText}`;
+        } else if (!rawGroup) {
+          rawGroup = headingText;
+        }
       }
-      currentGroupTitle = line.product_name || line.free_text || "General Items";
-      continue;
     }
 
-    const groupFromLine = line.group_name?.trim();
-    if (groupFromLine && groupFromLine !== currentGroupTitle) {
-      if (currentGroupLines.length > 0) {
-        groups.push({ title: currentGroupTitle, lines: currentGroupLines });
-        currentGroupLines = [];
+    // Check catalog product & category hierarchy
+    if ((!rawGroup || rawGroup === "General Items") && line.product_id && allProducts.length > 0) {
+      const prod = allProducts.find((p) => p.id === line.product_id);
+      if (prod?.category_id && allCategories.length > 0) {
+        const catPath = buildCategoryPath(prod.category_id, allCategories);
+        if (catPath) {
+          rawGroup = rawGroup && rawGroup !== "General Items" ? `${catPath} > ${rawGroup}` : catPath;
+        }
       }
-      currentGroupTitle = groupFromLine;
     }
 
-    currentGroupLines.push(line);
-  }
-  if (currentGroupLines.length > 0) {
-    groups.push({ title: currentGroupTitle, lines: currentGroupLines });
+    // Check line note
+    if (line.note && line.note !== "heading") {
+      const trimmedNote = line.note.trim();
+      if (rawGroup && !rawGroup.toLowerCase().includes(trimmedNote.toLowerCase())) {
+        rawGroup = `${rawGroup} > ${trimmedNote}`;
+      } else if (!rawGroup) {
+        rawGroup = trimmedNote;
+      }
+    }
+
+    let root = "General Items";
+    let sub: string | null = null;
+    if (rawGroup) {
+      if (rawGroup.includes(" > ")) {
+        const parts = rawGroup.split(" > ").map((s) => s.trim()).filter(Boolean);
+        root = parts[0] || "General Items";
+        sub = parts.slice(1).join(" > ") || null;
+      } else {
+        root = rawGroup;
+      }
+    }
+
+    const subKey = sub ?? "__direct__";
+    if (!rootMap.has(root)) {
+      rootMap.set(root, new Map());
+    }
+    const subs = rootMap.get(root)!;
+    if (!subs.has(subKey)) {
+      subs.set(subKey, []);
+    }
+    subs.get(subKey)!.push(line);
   }
 
-  // If no groups formed, fallback to all lines
-  if (groups.length === 0) {
-    groups.push({
-      title: "General Items",
-      lines: list.lines.filter((l) => l.note !== "heading"),
-    });
+  // Fallback if no non-heading lines were mapped
+  if (rootMap.size === 0) {
+    const directMap = new Map<string, typeof list.lines>();
+    directMap.set("__direct__", list.lines.filter((l) => l.note !== "heading"));
+    rootMap.set("General Items", directMap);
   }
 
-  const rowsHtml = groups
+  const rootGroups: RootGroup[] = Array.from(rootMap.entries()).map(([rootTitle, subsMap]) => ({
+    rootTitle,
+    subs: Array.from(subsMap.entries()).map(([subKey, lines]) => ({
+      subTitle: subKey === "__direct__" ? null : subKey,
+      lines,
+    })),
+  }));
+
+  const rowsHtml = rootGroups
     .map((grp) => {
-      const showHeader = groups.length > 1 || grp.title !== "General Items";
-      const headerRow = showHeader
+      const showRootHeader = rootGroups.length > 1 || grp.rootTitle !== "General Items";
+      const rootHeaderRow = showRootHeader
         ? `
-        <tr style="background: #f1f5f9; border-top: 2px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;">
-          <td colspan="5" style="padding: 8px 12px; font-weight: 700; font-size: 12px; color: #084a2f; text-transform: uppercase; letter-spacing: 0.5px;">
-            ${grp.title}
+        <tr style="background: #eef4f0; border-top: 2px solid #084a2f; border-bottom: 1px solid #cbd5e1;">
+          <td colspan="5" style="padding: 10px 12px; font-weight: 800; font-size: 13px; color: #084a2f; text-transform: uppercase; letter-spacing: 0.5px;">
+            ${grp.rootTitle}
           </td>
         </tr>
       `
         : "";
 
-      const itemRows = grp.lines
-        .map((line) => {
-          itemCounter += 1;
-          const name = line.product_name || line.free_text || "Item";
-          const qty = Number(line.quantity) || 1;
-          const unitPriceNum = Number(line.shop_price ?? "0");
-          const hasPrice = Boolean(line.shop_price && Number.isFinite(unitPriceNum));
-          const lineTotal = hasPrice ? unitPriceNum * qty : 0;
-          if (hasPrice) computedSubtotal += lineTotal;
-
-          const noteHtml =
-            line.note && line.note !== "heading"
-              ? `<div style="font-size: 12px; color: #64748b; margin-top: 2px;">Specification: <strong style="color: #0f172a;">${line.note}</strong></div>`
-              : "";
-
-          return `
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 10px 8px; text-align: center; color: #64748b; font-size: 13px;">${itemCounter}</td>
-              <td style="padding: 10px 8px;">
-                <div style="font-weight: 600; color: #0f172a; font-size: 14px;">${name}</div>
-                ${noteHtml}
-              </td>
-              <td style="padding: 10px 8px; text-align: center; font-size: 14px; font-weight: 600;">${line.quantity}</td>
-              <td style="padding: 10px 8px; text-align: right; font-size: 14px;">
-                ${hasPrice ? formatMoney(line.shop_price) : `<span style="color:#94a3b8;font-style:italic;">Pending</span>`}
-              </td>
-              <td style="padding: 10px 8px; text-align: right; font-size: 14px; font-weight: 700; color: #0f172a;">
-                ${hasPrice ? formatMoney(lineTotal.toString()) : `<span style="color:#94a3b8;">-</span>`}
+      const subSectionRows = grp.subs
+        .map((sub) => {
+          const subHeaderRow = sub.subTitle
+            ? `
+            <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+              <td colspan="5" style="padding: 6px 14px; font-weight: 700; font-size: 12px; color: #334155;">
+                &gt; ${sub.subTitle}
               </td>
             </tr>
-          `;
+          `
+            : "";
+
+          const itemRows = sub.lines
+            .map((line) => {
+              itemCounter += 1;
+              const name = line.product_name || line.free_text || "Item";
+              const qty = Number(line.quantity) || 1;
+              const unitPriceNum = Number(line.shop_price ?? "0");
+              const hasPrice = Boolean(line.shop_price && Number.isFinite(unitPriceNum));
+              const lineTotal = hasPrice ? unitPriceNum * qty : 0;
+              if (hasPrice) computedSubtotal += lineTotal;
+
+              const noteHtml =
+                line.note && line.note !== "heading"
+                  ? `<div style="font-size: 12px; color: #64748b; margin-top: 2px;">Specification: <strong style="color: #0f172a;">${line.note}</strong></div>`
+                  : "";
+
+              return `
+                <tr style="border-bottom: 1px solid #e2e8f0;">
+                  <td style="padding: 10px 8px; text-align: center; color: #64748b; font-size: 13px;">${itemCounter}</td>
+                  <td style="padding: 10px 8px;">
+                    <div style="font-weight: 600; color: #0f172a; font-size: 14px;">${name}</div>
+                    ${noteHtml}
+                  </td>
+                  <td style="padding: 10px 8px; text-align: center; font-size: 14px; font-weight: 600;">${line.quantity}</td>
+                  <td style="padding: 10px 8px; text-align: right; font-size: 14px;">
+                    ${hasPrice ? formatMoney(line.shop_price) : `<span style="color:#94a3b8;font-style:italic;">Pending</span>`}
+                  </td>
+                  <td style="padding: 10px 8px; text-align: right; font-size: 14px; font-weight: 700; color: #0f172a;">
+                    ${hasPrice ? formatMoney(lineTotal.toString()) : `<span style="color:#94a3b8;">-</span>`}
+                  </td>
+                </tr>
+              `;
+            })
+            .join("");
+
+          return `${subHeaderRow}${itemRows}`;
         })
         .join("");
 
-      return `${headerRow}${itemRows}`;
+      return `${rootHeaderRow}${subSectionRows}`;
     })
     .join("");
 
@@ -371,9 +446,11 @@ export function buildInvoiceHtml(
 export async function generateAndSharePdfInvoice(
   business: { name: string; slug?: string },
   details: TenantDetails | null,
-  list: CustomerList
+  list: CustomerList,
+  allProducts: Product[] = [],
+  allCategories: Category[] = []
 ): Promise<void> {
-  const html = buildInvoiceHtml(business, details, list);
+  const html = buildInvoiceHtml(business, details, list, allProducts, allCategories);
   const customerName = list.customer_name || "Customer";
 
   const { uri } = await Print.printToFileAsync({
@@ -396,8 +473,10 @@ export async function generateAndSharePdfInvoice(
 export async function printInvoice(
   business: { name: string; slug?: string },
   details: TenantDetails | null,
-  list: CustomerList
+  list: CustomerList,
+  allProducts: Product[] = [],
+  allCategories: Category[] = []
 ): Promise<void> {
-  const html = buildInvoiceHtml(business, details, list);
+  const html = buildInvoiceHtml(business, details, list, allProducts, allCategories);
   await Print.printAsync({ html });
 }

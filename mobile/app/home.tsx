@@ -396,11 +396,37 @@ function groupCustomerListLines(
 
     let rawGroup = line.group_name?.trim();
 
-    // If line lacks group_name, resolve from linked product & category hierarchy
-    if (!rawGroup && line.product_id && allProducts.length > 0) {
+    // Check parent_position heading if available in lines
+    if (line.parent_position !== undefined && line.parent_position !== null && lines[line.parent_position]) {
+      const parentHeading = lines[line.parent_position];
+      const headingText = parentHeading.free_text?.trim() || parentHeading.product_name?.trim();
+      if (headingText) {
+        if (rawGroup && !rawGroup.toLowerCase().includes(headingText.toLowerCase())) {
+          rawGroup = `${rawGroup} > ${headingText}`;
+        } else if (!rawGroup) {
+          rawGroup = headingText;
+        }
+      }
+    }
+
+    // If line lacks group_name or is default, resolve from linked product & category hierarchy
+    if ((!rawGroup || rawGroup === "General Items") && line.product_id && allProducts.length > 0) {
       const prod = allProducts.find((p) => p.id === line.product_id);
       if (prod?.category_id && allCategories.length > 0) {
-        rawGroup = buildCategoryPath(prod.category_id, allCategories);
+        const catPath = buildCategoryPath(prod.category_id, allCategories);
+        if (catPath) {
+          rawGroup = rawGroup && rawGroup !== "General Items" ? `${catPath} > ${rawGroup}` : catPath;
+        }
+      }
+    }
+
+    // Check line note for subcategory or variant spec
+    if (line.note && line.note !== "heading") {
+      const trimmedNote = line.note.trim();
+      if (rawGroup && !rawGroup.toLowerCase().includes(trimmedNote.toLowerCase())) {
+        rawGroup = `${rawGroup} > ${trimmedNote}`;
+      } else if (!rawGroup) {
+        rawGroup = trimmedNote;
       }
     }
 
@@ -709,11 +735,17 @@ export default function Home() {
 
   // Real-time today's sales count and revenue (guarantees newly recorded sales update immediately)
   const todaySalesCountAndRevenue = useMemo(() => {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const now = new Date();
     const todaySales = sales.filter((s) => {
       if (s.cancelled_at || s.payment_status === "cancelled") return false;
       if (!s.created_at) return false;
-      return s.created_at.startsWith(todayStr) || s.created_at.slice(0, 10) === todayStr;
+      const d = new Date(s.created_at);
+      if (Number.isNaN(d.getTime())) return false;
+      return (
+        d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth() &&
+        d.getDate() === now.getDate()
+      );
     });
     const localRevenue = todaySales.reduce((acc, s) => acc + (Number(s.total_amount) || 0), 0);
     const serverRevenue = Number(dailyStats?.total_revenue || "0");
@@ -982,8 +1014,13 @@ export default function Home() {
         cacheBusinessDetails(tenantId, bDetails);
       }
       if (uProfile) {
-        setProfile(uProfile);
-        cacheProfile(uProfile);
+        const cached = getCachedProfile();
+        const merged = {
+          ...uProfile,
+          avatar_url: profile?.avatar_url || cached?.avatar_url || null,
+        };
+        setProfile(merged);
+        cacheProfile(merged);
       }
 
       setRunningOut(freshLowStock);
@@ -1050,8 +1087,13 @@ export default function Home() {
         ]);
 
         if (freshProfile) {
-          setProfile(freshProfile);
-          cacheProfile(freshProfile);
+          const cached = getCachedProfile();
+          const mergedProfile = {
+            ...freshProfile,
+            avatar_url: profile?.avatar_url || cached?.avatar_url || null,
+          };
+          setProfile(mergedProfile);
+          cacheProfile(mergedProfile);
         }
 
         if (found && found.length > 0) {
@@ -1867,7 +1909,7 @@ export default function Home() {
     setExportingPdf(true);
     showToast("Generating official business invoice PDF...");
     try {
-      await generateAndSharePdfInvoice(activeBusiness, businessDetails, item);
+      await generateAndSharePdfInvoice(activeBusiness, businessDetails, item, products, categories);
       showToast("Invoice PDF generated and shared!");
     } catch (err: any) {
       showToast(err?.message || "Could not export PDF.");
@@ -1880,7 +1922,7 @@ export default function Home() {
     if (!activeBusiness) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      await printInvoice(activeBusiness, businessDetails, item);
+      await printInvoice(activeBusiness, businessDetails, item, products, categories);
     } catch (err: any) {
       showToast(err?.message || "Could not open print/save dialog.");
     }
@@ -1993,9 +2035,9 @@ export default function Home() {
         name: editBizName.trim() || undefined,
         address: editBizAddress.trim() || undefined,
         phone: editBizPhone.trim() || undefined,
-        logo_url: editBizLogo.trim() || undefined,
       });
-      setBusinessDetails(updated);
+      const logoToSave = editBizLogo.trim() || businessDetails?.logo_url || null;
+      setBusinessDetails({ ...updated, logo_url: logoToSave });
       if (editBizLogo.trim()) {
         updateCachedBusiness(activeBusiness.id, {
           name: editBizName.trim() || undefined,
@@ -2021,9 +2063,13 @@ export default function Home() {
         last_name: editLastName.trim() || undefined,
         phone: editPhone.trim() || undefined,
         email: editEmail.trim() || undefined,
-        avatar_url: editAvatarUrl.trim() || undefined,
       });
-      setProfile(updated);
+      const fullProfile = {
+        ...updated,
+        avatar_url: editAvatarUrl.trim() || profile?.avatar_url || null,
+      };
+      setProfile(fullProfile);
+      cacheProfile(fullProfile);
       setShowProfileModal(false);
       showToast("Profile updated successfully!");
     } catch {
@@ -4778,11 +4824,11 @@ export default function Home() {
                 </Pressable>
               )}
               <View style={styles.modalButtons}>
-                <Pressable style={styles.modalCancelBtn} onPress={() => setShowAddProductModal(false)}>
+                <Pressable style={[styles.modalCancelBtn, styles.modalBtnFlex]} onPress={() => setShowAddProductModal(false)}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </Pressable>
                 <Pressable
-                  style={styles.modalSaveBtn}
+                  style={[styles.modalSaveBtn, styles.modalBtnFlex]}
                   onPress={handleCreateProduct}
                   disabled={savingProduct}
                 >
@@ -4870,11 +4916,11 @@ export default function Home() {
                 </Pressable>
               )}
               <View style={styles.modalButtons}>
-                <Pressable style={styles.modalCancelBtn} onPress={() => setShowAddCategoryModal(false)}>
+                <Pressable style={[styles.modalCancelBtn, styles.modalBtnFlex]} onPress={() => setShowAddCategoryModal(false)}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </Pressable>
                 <Pressable
-                  style={styles.modalSaveBtn}
+                  style={[styles.modalSaveBtn, styles.modalBtnFlex]}
                   onPress={handleCreateCategory}
                   disabled={savingCategory}
                 >
@@ -4960,11 +5006,11 @@ export default function Home() {
                 </Pressable>
               )}
               <View style={styles.modalButtons}>
-                <Pressable style={styles.modalCancelBtn} onPress={() => setEditingCategory(null)}>
+                <Pressable style={[styles.modalCancelBtn, styles.modalBtnFlex]} onPress={() => setEditingCategory(null)}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </Pressable>
                 <Pressable
-                  style={styles.modalSaveBtn}
+                  style={[styles.modalSaveBtn, styles.modalBtnFlex]}
                   onPress={handleSaveCategoryEdit}
                   disabled={savingEditCategory}
                 >
@@ -5009,7 +5055,7 @@ export default function Home() {
                 </Pressable>
               ))}
             </ScrollView>
-            <Pressable style={styles.modalCancelBtn} onPress={() => setBatchModal(null)}>
+            <Pressable style={[styles.modalCancelBtn, { width: "100%", marginTop: 8 }]} onPress={() => setBatchModal(null)}>
               <Text style={styles.modalCancelText}>Cancel</Text>
             </Pressable>
           </View>
@@ -5079,11 +5125,11 @@ export default function Home() {
                 </Pressable>
               )}
               <View style={styles.modalButtons}>
-                <Pressable style={styles.modalCancelBtn} onPress={() => setEditingProduct(null)}>
+                <Pressable style={[styles.modalCancelBtn, styles.modalBtnFlex]} onPress={() => setEditingProduct(null)}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </Pressable>
                 <Pressable
-                  style={styles.modalSaveBtn}
+                  style={[styles.modalSaveBtn, styles.modalBtnFlex]}
                   onPress={handleSaveProductEdit}
                   disabled={savingEdit}
                 >
@@ -5121,11 +5167,11 @@ export default function Home() {
                 onChangeText={setRestockQty}
               />
               <View style={styles.modalButtons}>
-                <Pressable style={styles.modalCancelBtn} onPress={() => setRestockProduct(null)}>
+                <Pressable style={[styles.modalCancelBtn, styles.modalBtnFlex]} onPress={() => setRestockProduct(null)}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </Pressable>
                 <Pressable
-                  style={styles.modalSaveBtn}
+                  style={[styles.modalSaveBtn, styles.modalBtnFlex]}
                   onPress={handleReceiveStock}
                   disabled={savingRestock}
                 >
@@ -5263,11 +5309,11 @@ export default function Home() {
               </Pressable>
 
               <View style={styles.modalButtons}>
-                <Pressable style={styles.modalCancelBtn} onPress={() => setPricingLine(null)}>
+                <Pressable style={[styles.modalCancelBtn, styles.modalBtnFlex]} onPress={() => setPricingLine(null)}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </Pressable>
                 <Pressable
-                  style={styles.modalSaveBtn}
+                  style={[styles.modalSaveBtn, styles.modalBtnFlex]}
                   onPress={handleSaveLinePrice}
                   disabled={savingPrice}
                 >
@@ -5343,11 +5389,11 @@ export default function Home() {
               />
 
               <View style={styles.modalButtons}>
-                <Pressable style={styles.modalCancelBtn} onPress={() => setDispatchModalList(null)}>
+                <Pressable style={[styles.modalCancelBtn, styles.modalBtnFlex]} onPress={() => setDispatchModalList(null)}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </Pressable>
                 <Pressable
-                  style={styles.modalSaveBtn}
+                  style={[styles.modalSaveBtn, styles.modalBtnFlex]}
                   onPress={handleDispatchWaybill}
                   disabled={savingDispatch}
                 >
@@ -5403,7 +5449,7 @@ export default function Home() {
 
                 <View style={styles.modalButtons}>
                   <Pressable
-                    style={styles.modalCancelBtn}
+                    style={[styles.modalCancelBtn, styles.modalBtnFlex]}
                     onPress={() => {
                       setPinConfirmList(null);
                       setConfirmError(null);
@@ -5848,14 +5894,14 @@ export default function Home() {
 
               <View style={styles.modalButtons}>
                 <Pressable
-                  style={styles.modalCancelBtn}
+                  style={[styles.modalCancelBtn, styles.modalBtnFlex]}
                   onPress={() => setPaymentModalList(null)}
                   disabled={savingPayment}
                 >
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </Pressable>
                 <Pressable
-                  style={styles.modalSaveBtn}
+                  style={[styles.modalSaveBtn, styles.modalBtnFlex]}
                   onPress={handleRecordPayment}
                   disabled={savingPayment}
                 >
@@ -5926,7 +5972,7 @@ export default function Home() {
 
               <View style={styles.modalButtons}>
                 <Pressable
-                  style={styles.modalCancelBtn}
+                  style={[styles.modalCancelBtn, styles.modalBtnFlex]}
                   onPress={() => {
                     setShowQuickPasteModal(false);
                     setQuickPastePhone("");
@@ -5939,6 +5985,7 @@ export default function Home() {
                 <Pressable
                   style={[
                     styles.modalSaveBtn,
+                    styles.modalBtnFlex,
                     (!quickPastePhone.trim() || !quickPasteText.trim()) && { opacity: 0.5 },
                   ]}
                   onPress={handleQuickPasteSubmit}
@@ -6083,7 +6130,7 @@ export default function Home() {
 
             <View style={styles.modalButtons}>
               <Pressable
-                style={styles.modalCancelBtn}
+                style={[styles.modalCancelBtn, styles.modalBtnFlex]}
                 onPress={() => {
                   setShowRecordSaleModal(false);
                   setSaleProductId(null);
@@ -6097,6 +6144,7 @@ export default function Home() {
               <Pressable
                 style={[
                   styles.modalSaveBtn,
+                  styles.modalBtnFlex,
                   (!saleProductId || !saleQuantity.trim()) && { opacity: 0.5 },
                 ]}
                 onPress={handleRecordCustomSale}
@@ -6180,11 +6228,11 @@ export default function Home() {
               ) : null}
 
               <View style={styles.modalButtons}>
-                <Pressable style={styles.modalCancelBtn} onPress={() => setShowExpenseModal(false)}>
+                <Pressable style={[styles.modalCancelBtn, styles.modalBtnFlex]} onPress={() => setShowExpenseModal(false)}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </Pressable>
                 <Pressable
-                  style={styles.modalSaveBtn}
+                  style={[styles.modalSaveBtn, styles.modalBtnFlex]}
                   onPress={handleRecordExpense}
                   disabled={savingExpense}
                 >
@@ -6236,11 +6284,11 @@ export default function Home() {
                 ))}
               </View>
               <View style={styles.modalButtons}>
-                <Pressable style={styles.modalCancelBtn} onPress={() => setShowInviteModal(false)}>
+                <Pressable style={[styles.modalCancelBtn, styles.modalBtnFlex]} onPress={() => setShowInviteModal(false)}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </Pressable>
                 <Pressable
-                  style={styles.modalSaveBtn}
+                  style={[styles.modalSaveBtn, styles.modalBtnFlex]}
                   onPress={handleInviteStaff}
                   disabled={savingInvite}
                 >
@@ -6480,11 +6528,11 @@ export default function Home() {
             </View>
 
             <View style={styles.modalButtons}>
-              <Pressable style={styles.modalCancelBtn} onPress={() => setShowStorefrontModal(false)}>
+              <Pressable style={[styles.modalCancelBtn, styles.modalBtnFlex]} onPress={() => setShowStorefrontModal(false)}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </Pressable>
               <Pressable
-                style={styles.modalSaveBtn}
+                style={[styles.modalSaveBtn, styles.modalBtnFlex]}
                 onPress={handleUpdateStorefront}
                 disabled={savingStorefront}
               >
@@ -6573,11 +6621,11 @@ export default function Home() {
                 onChangeText={setEditBizPhone}
               />
               <View style={styles.modalButtons}>
-                <Pressable style={styles.modalCancelBtn} onPress={() => setShowBusinessModal(false)}>
+                <Pressable style={[styles.modalCancelBtn, styles.modalBtnFlex]} onPress={() => setShowBusinessModal(false)}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </Pressable>
                 <Pressable
-                  style={styles.modalSaveBtn}
+                  style={[styles.modalSaveBtn, styles.modalBtnFlex]}
                   onPress={handleUpdateBusiness}
                   disabled={savingBusiness}
                 >
@@ -6718,13 +6766,13 @@ export default function Home() {
 
                   <View style={styles.modalButtons}>
                     <Pressable
-                      style={styles.modalCancelBtn}
+                      style={[styles.modalCancelBtn, styles.modalBtnFlex]}
                       onPress={() => setShowPasswordModal(false)}
                     >
                       <Text style={styles.modalCancelText}>Cancel</Text>
                     </Pressable>
                     <Pressable
-                      style={styles.modalSaveBtn}
+                      style={[styles.modalSaveBtn, styles.modalBtnFlex]}
                       onPress={handleChangePassword}
                       disabled={savingPassword}
                     >
@@ -6919,13 +6967,13 @@ export default function Home() {
 
               <View style={styles.modalButtons}>
                 <Pressable
-                  style={styles.modalCancelBtn}
+                  style={[styles.modalCancelBtn, styles.modalBtnFlex]}
                   onPress={() => setShowProfileModal(false)}
                 >
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </Pressable>
                 <Pressable
-                  style={styles.modalSaveBtn}
+                  style={[styles.modalSaveBtn, styles.modalBtnFlex]}
                   onPress={handleUpdateProfile}
                   disabled={savingProfile || !editFirstName.trim()}
                 >
@@ -6972,7 +7020,7 @@ export default function Home() {
               </Pressable>
             ))}
             <Pressable
-              style={[styles.modalSaveBtn, { marginTop: 12, marginBottom: 8 }]}
+              style={[styles.modalSaveBtn, { marginTop: 12, marginBottom: 8, width: "100%" }]}
               onPress={() => {
                 setShowShopModal(false);
                 router.push("/join" as any);
@@ -6980,7 +7028,7 @@ export default function Home() {
             >
               <Text style={styles.modalSaveText}>+ Join with Invite Code</Text>
             </Pressable>
-            <Pressable style={styles.modalCancelBtn} onPress={() => setShowShopModal(false)}>
+            <Pressable style={[styles.modalCancelBtn, { width: "100%" }]} onPress={() => setShowShopModal(false)}>
               <Text style={styles.modalCancelText}>Close</Text>
             </Pressable>
           </View>
@@ -8847,27 +8895,40 @@ const createStyles = (theme: ThemePalette) => StyleSheet.create({
     gap: 10,
     marginTop: 10,
   },
-  modalCancelBtn: {
+  modalBtnFlex: {
     flex: 1,
+  },
+  modalCancelBtn: {
     backgroundColor: theme.cardHover,
-    padding: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 8,
     alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
   },
   modalCancelText: {
     color: theme.textSecondary,
     fontWeight: "600",
+    fontSize: 14,
+    textAlign: "center",
   },
   modalSaveBtn: {
-    flex: 1,
     backgroundColor: "#084a2f",
-    padding: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 8,
     alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
   },
   modalSaveText: {
     color: "#ffffff",
     fontWeight: "700",
+    fontSize: 14,
+    textAlign: "center",
   },
   modalInlineError: {
     color: "#f87171",

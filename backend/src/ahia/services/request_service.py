@@ -123,13 +123,28 @@ def request_response(
     position_by_id = {line.id: line.position for line in lines}
 
     line_responses: list[RequestLineResponseSchema] = []
+    lines_by_id = {line.id: line for line in lines}
     for line in lines:
+        parent_heading = lines_by_id.get(line.parent_line_id) if line.parent_line_id else None
+        heading_title = (
+            parent_heading.free_text.strip()
+            if (parent_heading and parent_heading.note == "heading" and parent_heading.free_text)
+            else None
+        )
+
         prod = products_by_id.get(line.product_id) if (products_by_id and line.product_id) else None
         prod_name = prod.name if prod else None
         grp_name: str | None = None
         if prod and prod.category_id and categories_by_id:
             grp_name = _build_category_path(prod.category_id, categories_by_id)
-        if not grp_name and line.note and line.note != "heading":
+
+        if heading_title:
+            if grp_name:
+                if heading_title.lower() not in grp_name.lower():
+                    grp_name = f"{grp_name} > {heading_title}"
+            else:
+                grp_name = heading_title
+        elif not grp_name and line.note and line.note != "heading":
             grp_name = line.note
 
         line_responses.append(
@@ -437,13 +452,30 @@ class RequestService:
         position_by_id = {line.id: line.position for line in lines}
 
         public_lines: list[PublicListLineSchema] = []
+        lines_by_id = {line.id: line for line in lines}
         for line in lines:
             prod = products_by_id.get(line.product_id) if line.product_id else None
             item_text = prod.name if prod else (line.free_text or "From the shop")
             group_path: str | None = None
             if prod and prod.category_id:
                 group_path = _build_category_path(prod.category_id, categories_by_id)
-            if not group_path and line.note and line.note != "heading":
+
+            parent_heading = lines_by_id.get(line.parent_line_id) if line.parent_line_id else None
+            heading_title = (
+                parent_heading.free_text.strip()
+                if (
+                    parent_heading and parent_heading.note == "heading" and parent_heading.free_text
+                )
+                else None
+            )
+
+            if heading_title:
+                if group_path:
+                    if heading_title.lower() not in group_path.lower():
+                        group_path = f"{group_path} > {heading_title}"
+                else:
+                    group_path = heading_title
+            elif not group_path and line.note and line.note != "heading":
                 group_path = line.note
 
             public_lines.append(
