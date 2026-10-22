@@ -1129,7 +1129,7 @@ export default function Home() {
     })();
   }, [loadData]);
 
-  // Periodic background auto-sync every 15 seconds
+  // Periodic background auto-sync and new orders poller every 8 seconds
   useEffect(() => {
     if (!activeBusiness) return;
     const interval = setInterval(() => {
@@ -1138,22 +1138,36 @@ export default function Home() {
           const pending = getPendingOutboxCount(activeBusiness.id);
           if (pending > 0) {
             const res = await flushSyncOutbox(activeBusiness.id);
+            setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
             if (res.sales > 0 || res.mutations > 0) {
-              setPendingSyncCount(getPendingOutboxCount(activeBusiness.id));
               const freshP = getCachedProducts(activeBusiness.id);
               const freshC = getCachedCategories(activeBusiness.id);
               setProducts(freshP);
               setCategories(freshC);
             }
           }
+
+          // Automatically fetch incoming customer lists/waybills silently in the background
+          const freshLists = await listCustomerLists(activeBusiness.id).catch(() => null);
+          if (freshLists && Array.isArray(freshLists)) {
+            const cachedLists = getCachedCustomerLists(activeBusiness.id);
+            const cachedMap = new Map(cachedLists.map((l) => [l.id, l]));
+            const merged = freshLists.map((fl) => {
+              const prev = cachedMap.get(fl.id);
+              return mergePreservedListFields(fl, prev);
+            });
+            const visibleLists = merged.filter((l) => !deletedListIds.has(l.id));
+            setCustomerLists(visibleLists);
+            cacheCustomerLists(activeBusiness.id, merged);
+          }
         } catch {
           // Offline, non-fatal background poll
         }
       })();
-    }, 15000);
+    }, 8000);
 
     return () => clearInterval(interval);
-  }, [activeBusiness]);
+  }, [activeBusiness, deletedListIds]);
 
   // Hierarchical Breadcrumbs
   const breadcrumbs = useMemo(() => {
@@ -2311,12 +2325,11 @@ export default function Home() {
 
   const handleCycleLineState = async (listId: string, lineId: string, currentState: string) => {
     if (!activeBusiness) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const curIdx = CYCLE_LINE_STATES.indexOf(currentState as any);
     const nextIdx = (curIdx + 1) % CYCLE_LINE_STATES.length;
     const nextState = CYCLE_LINE_STATES[nextIdx];
 
-    // Optimistic UI update instantly!
+    // Optimistic UI update instantly with zero delay!
     setCustomerLists((current) =>
       current.map((l) =>
         l.id === listId
@@ -2329,16 +2342,6 @@ export default function Home() {
           : l
       )
     );
-
-    const label =
-      nextState === "have_it"
-        ? "In Stock"
-        : nextState === "buy_it"
-        ? "Getting It"
-        : nextState === "cannot_get"
-        ? "Not Available"
-        : "Not Checked";
-    showToast(`Status: ${label}`);
 
     try {
       const updatedList = await workListLine(activeBusiness.id, listId, lineId, { state: nextState });
@@ -2703,22 +2706,25 @@ export default function Home() {
           </View>
         </Pressable>
 
-        <Pressable
-          style={[styles.syncButton, pendingSyncCount > 0 && styles.syncButtonPending]}
-          onPress={handleSyncOutbox}
-          disabled={isSyncing}
-        >
-          {isSyncing ? (
-            <ActivityIndicator size="small" color="#084a2f" />
-          ) : (
-            <View style={styles.syncInner}>
-              <SyncIcon size={14} color="#084a2f" />
-              <Text style={styles.syncButtonText}>
-                {pendingSyncCount > 0 ? `${pendingSyncCount} Sync` : "Online"}
-              </Text>
-            </View>
-          )}
-        </Pressable>
+        {/* Subtle sync status indicator - only shows pill when pending changes exist or actively syncing */}
+        {pendingSyncCount > 0 || isSyncing ? (
+          <Pressable
+            style={[styles.syncButton, styles.syncButtonPending]}
+            onPress={handleSyncOutbox}
+            disabled={isSyncing}
+          >
+            {isSyncing ? (
+              <ActivityIndicator size="small" color="#084a2f" />
+            ) : (
+              <View style={styles.syncInner}>
+                <SyncIcon size={12} color="#084a2f" />
+                <Text style={styles.syncButtonText}>
+                  {`${pendingSyncCount} syncing`}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+        ) : null}
       </View>
 
       {/* Toast Notice */}
@@ -7374,14 +7380,27 @@ const createStyles = (theme: ThemePalette) => StyleSheet.create({
     fontSize: 12,
   },
   toast: {
+    position: "absolute",
+    top: 60,
+    left: 20,
+    right: 20,
     backgroundColor: "#084a2f",
-    padding: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
     alignItems: "center",
+    zIndex: 9999,
+    elevation: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   toastText: {
     color: "#ffffff",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 13,
+    textAlign: "center",
   },
   mainContainer: {
     flex: 1,
