@@ -109,6 +109,7 @@ import {
   copyProducts,
   createCategory,
   createProduct,
+  createTenant,
   currentUser,
   dailySales,
   deleteCategory,
@@ -852,6 +853,12 @@ export default function Home() {
   const [savingPin, setSavingPin] = useState(false);
 
   const [showShopModal, setShowShopModal] = useState(false);
+  const [showCreateShopModal, setShowCreateShopModal] = useState(false);
+  const [newShopName, setNewShopName] = useState("");
+  const [newShopType, setNewShopType] = useState("");
+  const [newShopPhone, setNewShopPhone] = useState("");
+  const [newShopAddress, setNewShopAddress] = useState("");
+  const [creatingShop, setCreatingShop] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [activeSubView, setActiveSubView] = useState<"team" | null>(null);
@@ -2042,6 +2049,49 @@ export default function Home() {
       showToast("Could not update business details.");
     } finally {
       setSavingBusiness(false);
+    }
+  };
+
+  const handleCreateBusiness = async () => {
+    if (!newShopName.trim()) {
+      showToast("Please enter a business or stall name.");
+      return;
+    }
+    setCreatingShop(true);
+    try {
+      const created = await createTenant({
+        name: newShopName.trim(),
+        business_type: newShopType.trim() || undefined,
+        phone: newShopPhone.trim() || undefined,
+        address: newShopAddress.trim() || undefined,
+      });
+
+      const newMembership: TenantSummary = {
+        id: created.id,
+        name: created.name,
+        slug: created.slug,
+        currency: "NGN",
+        is_active: true,
+      };
+
+      const updatedBusinesses = [...(businesses ?? []), newMembership];
+      setBusinesses(updatedBusinesses);
+      cacheBusinesses(updatedBusinesses);
+      setActiveBusiness(newMembership);
+      setAppSetting("last_active_tenant_id", created.id);
+
+      setShowCreateShopModal(false);
+      setNewShopName("");
+      setNewShopType("");
+      setNewShopPhone("");
+      setNewShopAddress("");
+
+      showToast(`Created ${created.name}! Switched to new stall.`);
+      void loadData(created.id);
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : "Could not create business.");
+    } finally {
+      setCreatingShop(false);
     }
   };
 
@@ -6983,19 +7033,102 @@ export default function Home() {
               </Pressable>
             ))}
             <Pressable
-              style={[styles.modalSaveBtn, { marginTop: 12, marginBottom: 8, width: "100%" }]}
+              style={[styles.modalSaveBtn, { marginTop: 12, marginBottom: 8, width: "100%", backgroundColor: "#084a2f" }]}
+              onPress={() => {
+                setShowShopModal(false);
+                setShowCreateShopModal(true);
+              }}
+            >
+              <Text style={styles.modalSaveText}>+ Create New Stall / Business</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.modalSaveBtn, { marginBottom: 8, width: "100%", backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }]}
               onPress={() => {
                 setShowShopModal(false);
                 router.push("/join" as any);
               }}
             >
-              <Text style={styles.modalSaveText}>+ Join with Invite Code</Text>
+              <Text style={[styles.modalSaveText, { color: theme.text }]}>Join with Invite Code</Text>
             </Pressable>
             <Pressable style={[styles.modalCancelBtn, { width: "100%" }]} onPress={() => setShowShopModal(false)}>
               <Text style={styles.modalCancelText}>Close</Text>
             </Pressable>
           </View>
         </View>
+      </Modal>
+
+      {/* Create New Business Modal */}
+      <Modal statusBarTranslucent visible={showCreateShopModal} transparent animationType="slide">
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <ScrollView contentContainerStyle={styles.modalScrollContent}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Create New Stall / Business</Text>
+              <Text style={styles.modalSubtitle}>
+                Add another shop, warehouse, or line of trade under your account.
+              </Text>
+
+              <Text style={styles.modalFieldLabel}>Business / Stall Name *</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. DePeculiar Screen Guards 2"
+                placeholderTextColor="#8a928e"
+                value={newShopName}
+                onChangeText={setNewShopName}
+              />
+
+              <Text style={styles.modalFieldLabel}>Line of Trade (Optional)</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. Phone Accessories, Electricals"
+                placeholderTextColor="#8a928e"
+                value={newShopType}
+                onChangeText={setNewShopType}
+              />
+
+              <Text style={styles.modalFieldLabel}>Stall Phone Number (Optional)</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Phone for this stall"
+                placeholderTextColor="#8a928e"
+                keyboardType="phone-pad"
+                value={newShopPhone}
+                onChangeText={setNewShopPhone}
+              />
+
+              <Text style={styles.modalFieldLabel}>Shop Address / Market Location (Optional)</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. Shop 4B, Alaba Int'l Market"
+                placeholderTextColor="#8a928e"
+                value={newShopAddress}
+                onChangeText={setNewShopAddress}
+              />
+
+              <View style={styles.modalButtons}>
+                <Pressable
+                  style={[styles.modalCancelBtn, styles.modalBtnFlex]}
+                  onPress={() => setShowCreateShopModal(false)}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.modalSaveBtn, styles.modalBtnFlex]}
+                  onPress={handleCreateBusiness}
+                  disabled={creatingShop || !newShopName.trim()}
+                >
+                  {creatingShop ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text style={styles.modalSaveText}>Create Stall</Text>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Custom Styled Sign Out Modal */}
