@@ -246,11 +246,17 @@
   text-decoration: none;
   border-top: 1px solid var(--line);
   transition: all 0.15s ease;
+  user-select: none;
 }
 
 .quickAddBtn:hover {
   background: var(--shop-accent, var(--leaf));
   color: #ffffff;
+}
+
+.quickAddBtn:active {
+  transform: scale(0.97);
+  opacity: 0.9;
 }
 
 .imageWrap {
