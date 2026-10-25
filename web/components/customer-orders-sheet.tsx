@@ -38,6 +38,13 @@ export function CustomerOrdersSheet({
   const [searched, setSearched] = useState(false);
   const [orders, setOrders] = useState<CustomerListSummary[]>([]);
   const [knownTokens, setKnownTokens] = useState<Record<string, string>>({});
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [paymentProofOrderId, setPaymentProofOrderId] = useState<string | null>(null);
+  const [proofAmount, setProofAmount] = useState("");
+  const [proofRef, setProofRef] = useState("");
+  const [submittingProof, setSubmittingProof] = useState(false);
+  const [proofSuccessMap, setProofSuccessMap] = useState<Record<string, string>>({});
+  const [proofError, setProofError] = useState<string | null>(null);
 
   // Restore remembered phone number and cached list paths on mount or open
   useEffect(() => {
@@ -115,6 +122,42 @@ export function CustomerOrdersSheet({
       void fetchOrders(phone);
     }
   }, [isOpen, phone, searched, fetchOrders]);
+
+  const handleSendPaymentProof = async (orderId: string) => {
+    if (!proofAmount.trim()) {
+      setProofError("Please enter the amount paid.");
+      return;
+    }
+    setSubmittingProof(true);
+    setProofError(null);
+    try {
+      const res = await fetch(`/shop/${encodeURIComponent(tenantSlug)}/customer-lists/payment-proof`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requestId: orderId,
+          phone,
+          amount: proofAmount.trim(),
+          note: proofRef.trim(),
+        }),
+      });
+      if (res.ok) {
+        setProofSuccessMap((prev) => ({
+          ...prev,
+          [orderId]: `Payment proof submitted for \u20A6${proofAmount.trim()}! The shop will confirm receipt.`,
+        }));
+        setPaymentProofOrderId(null);
+        setProofAmount("");
+        setProofRef("");
+      } else {
+        setProofError("Could not submit payment proof. Please check your connection.");
+      }
+    } catch {
+      setProofError("Could not submit payment proof.");
+    } finally {
+      setSubmittingProof(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -212,6 +255,28 @@ export function CustomerOrdersSheet({
               {orders.map((order) => {
                 const badge = formatStatusBadge(order.status);
                 const trackerPath = knownTokens[order.id];
+                const isExpanded = expandedOrderId === order.id;
+                const isProofOpen = paymentProofOrderId === order.id;
+                const proofSuccess = proofSuccessMap[order.id];
+
+                // Check existing proof in note
+                const existingProofMatch = order.note?.match(/<!--\s*ahia-proof:({[\s\S]*?})\s*-->/);
+                let existingProof: { amount?: string; ref?: string; at?: string } | null = null;
+                if (existingProofMatch) {
+                  try {
+                    existingProof = JSON.parse(existingProofMatch[1]);
+                  } catch {
+                    // ignore
+                  }
+                }
+
+                // Group order lines by category
+                const groups: Record<string, typeof order.lines> = {};
+                for (const line of order.lines) {
+                  const g = line.group?.trim() || "General Goods";
+                  if (!groups[g]) groups[g] = [];
+                  groups[g].push(line);
+                }
 
                 return (
                   <li key={order.id} className={styles.orderCard}>
@@ -234,7 +299,116 @@ export function CustomerOrdersSheet({
                       </div>
                     ) : null}
 
-                    {order.lines_preview && order.lines_preview.length > 0 ? (
+                    {proofSuccess ? (
+                      <div className={styles.proofSuccessBanner}>
+                        <span>{proofSuccess}</span>
+                      </div>
+                    ) : existingProof ? (
+                      <div className={styles.proofSubmittedBanner}>
+                        <strong>Payment Proof Submitted:</strong>
+                        <span>{"\u20A6"}{Number(existingProof.amount || 0).toLocaleString()} {existingProof.ref ? `(Ref: ${existingProof.ref})` : ""}</span>
+                      </div>
+                    ) : null}
+
+                    {/* Expandable Breakdown Toggle */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+                      <button
+                        type="button"
+                        className={styles.expandToggleBtn}
+                        onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
+                      >
+                        {isExpanded ? "\u25B2 Hide Itemized Breakdown" : "\u25BC View Itemized Breakdown"}
+                      </button>
+
+                      {order.priced_total && !existingProof && !proofSuccess && (
+                        <button
+                          type="button"
+                          className={styles.attachProofBtn}
+                          onClick={() => {
+                            setPaymentProofOrderId(isProofOpen ? null : order.id);
+                            setProofError(null);
+                          }}
+                        >
+                          {isProofOpen ? "Cancel Proof" : "+ Attach Payment Proof"}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Payment Proof Submission Form */}
+                    {isProofOpen && (
+                      <div className={styles.proofFormBox}>
+                        <h4 className={styles.proofFormTitle}>Attach Payment Receipt / Transfer</h4>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          <input
+                            type="number"
+                            placeholder="Amount Paid (e.g. 15000)"
+                            className={styles.proofInput}
+                            value={proofAmount}
+                            onChange={(e) => setProofAmount(e.target.value)}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Bank / Transfer Ref / Note"
+                            className={styles.proofInput}
+                            value={proofRef}
+                            onChange={(e) => setProofRef(e.target.value)}
+                          />
+                          {proofError && <span className={styles.proofErrorText}>{proofError}</span>}
+                          <button
+                            type="button"
+                            className={styles.submitProofBtn}
+                            onClick={() => handleSendPaymentProof(order.id)}
+                            disabled={submittingProof}
+                          >
+                            {submittingProof ? "Submitting..." : "Submit Payment Proof to Trader"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Detailed Category Item Breakdown */}
+                    {isExpanded && (
+                      <div className={styles.breakdownBox}>
+                        {Object.entries(groups).map(([groupName, groupLines]) => (
+                          <div key={groupName} className={styles.groupSection}>
+                            <div className={styles.groupHeader}>
+                              <span className={styles.groupTitle}>{groupName}</span>
+                              <span className={styles.groupCount}>{groupLines.length} items</span>
+                            </div>
+                            <div className={styles.groupLinesList}>
+                              {groupLines.map((line, idx) => {
+                                const qty = Number(line.quantity) || 1;
+                                const unitPrice = line.shop_price ? Number(line.shop_price) : null;
+                                const lineTotal = unitPrice ? qty * unitPrice : null;
+
+                                return (
+                                  <div key={idx} className={styles.breakdownLineRow}>
+                                    <div style={{ flex: 1 }}>
+                                      <span className={styles.lineNameText}>{line.text}</span>
+                                      <span className={styles.lineQtyText}>
+                                        Qty: {line.quantity} {line.unit || "pcs"}
+                                      </span>
+                                    </div>
+                                    <div style={{ textAlign: "right" }}>
+                                      <span className={styles.lineTotalText}>
+                                        {lineTotal !== null ? formatMoneyOrOnRequest(String(lineTotal)) : "Pending"}
+                                      </span>
+                                      {unitPrice !== null && (
+                                        <span className={styles.unitPriceText}>
+                                          {"\u20A6"}{unitPrice.toLocaleString()} / {line.unit || "pcs"}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {!isExpanded && order.lines_preview && order.lines_preview.length > 0 ? (
                       <div className={styles.chipsWrap}>
                         {order.lines_preview.map((preview, idx) => (
                           <span key={idx} className={styles.chip}>
@@ -294,5 +468,36 @@ export function CustomerOrdersSheet({
         </div>
       </div>
     </div>
+  );
+}
+
+export function TrackOrdersTrigger({
+  tenantSlug,
+  businessName,
+  className,
+  children,
+}: {
+  tenantSlug: string;
+  businessName: string;
+  className?: string;
+  children?: React.ReactNode;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        className={className}
+        onClick={() => setIsOpen(true)}
+      >
+        {children || "Track Orders"}
+      </button>
+      <CustomerOrdersSheet
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        tenantSlug={tenantSlug}
+        businessName={businessName}
+      />
+    </>
   );
 }

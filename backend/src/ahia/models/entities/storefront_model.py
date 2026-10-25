@@ -38,7 +38,7 @@ from ahia.core.errors import EntityInvariantError
 from ahia.models.entities.phone_number import is_plausible_phone_number
 
 MAXIMUM_HEADLINE_LENGTH: Final[int] = 120
-MAXIMUM_DESCRIPTION_LENGTH: Final[int] = 1_000
+MAXIMUM_DESCRIPTION_LENGTH: Final[int] = 500_000
 MAXIMUM_CONTACT_PHONE_LENGTH: Final[int] = 32
 
 

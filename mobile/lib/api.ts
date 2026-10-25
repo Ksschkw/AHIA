@@ -114,6 +114,19 @@ export async function signIn(identifier: string, password: string): Promise<void
   await rememberSession(session);
 }
 
+/** Check if the provided password matches the user's account password. */
+export async function verifyUserPassword(identifier: string, password: string): Promise<boolean> {
+  try {
+    await request<{ access_token: string; refresh_token: string }>("/api/v1/auth/login", {
+      method: "POST",
+      body: { identifier: identifier.trim(), password },
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Create an account, and be signed in with it. */
 export async function registerAccount(details: {
   firstName: string;
@@ -442,6 +455,8 @@ export interface SaleSummary {
   payment_status: string;
   created_at: string;
   cancelled_at?: string | null;
+  seller_id?: string | null;
+  customer_id?: string | null;
 }
 
 export function listSales(tenantId: string, limit: string = "50"): Promise<SaleSummary[]> {
@@ -766,25 +781,43 @@ export async function updateStorefront(
     closing_statement?: string | null;
     logo_url?: string | null;
   },
+  existingOverride?: StorefrontDetails | null,
 ): Promise<StorefrontDetails> {
-  let combinedDesc: string | null | undefined = data.description;
-  const themePayload: Record<string, unknown> = {};
-  if (data.theme_color) themePayload.color = data.theme_color;
-  if (data.theme_bg_color) themePayload.bg = data.theme_bg_color;
-  if (data.theme_bg_image) themePayload.bgImage = data.theme_bg_image;
-  if (data.closing_statement) themePayload.closing = data.closing_statement;
-  if (data.logo_url) themePayload.logoUrl = data.logo_url;
-
-  if (Object.keys(themePayload).length > 0 || data.description !== undefined) {
-    const baseText = data.description?.trim() ?? "";
-    const metaTag = Object.keys(themePayload).length > 0 ? `\n<!-- ahia-theme:${JSON.stringify(themePayload)} -->` : "";
-    combinedDesc = `${baseText}${metaTag}`.trim() || null;
+  // Use passed existing storefront if available, or fetch once
+  let existing: StorefrontDetails | null = existingOverride ?? null;
+  if (!existing) {
+    try {
+      existing = await getStorefront(tenantId);
+    } catch {
+      // ignore
+    }
   }
+
+  const themePayload: Record<string, unknown> = {};
+  const themeColor = data.theme_color !== undefined ? data.theme_color : existing?.theme_color;
+  const themeBg = data.theme_bg_color !== undefined ? data.theme_bg_color : existing?.theme_bg_color;
+  const themeBgImage = data.theme_bg_image !== undefined ? data.theme_bg_image : existing?.theme_bg_image;
+  const closing = data.closing_statement !== undefined ? data.closing_statement : existing?.closing_statement;
+  const logoUrl = data.logo_url !== undefined ? data.logo_url : existing?.logo_url;
+
+  if (themeColor) themePayload.color = themeColor;
+  if (themeBg) themePayload.bg = themeBg;
+  if (themeBgImage) themePayload.bgImage = themeBgImage;
+  if (closing) themePayload.closing = closing;
+  if (logoUrl) themePayload.logoUrl = logoUrl;
+
+  const baseText = (data.description !== undefined ? data.description : existing?.description)?.trim() ?? "";
+  const metaTag = Object.keys(themePayload).length > 0 ? `\n<!-- ahia-theme:${JSON.stringify(themePayload)} -->` : "";
+  const combinedDesc = `${baseText}${metaTag}`.trim() || null;
 
   const backendBody: Record<string, unknown> = {};
   if (data.headline !== undefined) backendBody.headline = data.headline;
-  if (combinedDesc !== undefined) backendBody.description = combinedDesc;
+  else if (existing?.headline !== undefined) backendBody.headline = existing.headline;
+
+  backendBody.description = combinedDesc;
+
   if (data.contact_phone !== undefined) backendBody.contact_phone = data.contact_phone;
+  else if (existing?.contact_phone !== undefined) backendBody.contact_phone = existing.contact_phone;
 
   const raw = await request<RawStorefrontResponse>(`/api/v1/tenants/${tenantId}/storefront`, {
     method: "PATCH",

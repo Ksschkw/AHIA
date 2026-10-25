@@ -38,7 +38,9 @@ export type Storefront = Schemas["StorefrontResponseSchema"];
 export type Member = Schemas["MembershipResponseSchema"];
 export type CustomerList = Schemas["RequestResponseSchema"];
 export type CustomerListLine = Schemas["RequestLineResponseSchema"];
-export type CustomerListSummary = Schemas["CustomerListSummarySchema"];
+export type CustomerListSummary = Schemas["CustomerListSummarySchema"] & {
+  note?: string | null;
+};
 export type CustomerListLineItem = Schemas["CustomerListLineItemSchema"];
 export type ListLineState = Schemas["RequestLineWorkSchema"]["state"];
 export type MembershipInvitation = Schemas["InvitationResponseSchema"];

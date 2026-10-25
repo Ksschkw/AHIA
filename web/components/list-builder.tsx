@@ -1045,6 +1045,26 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
         onReorderLines={handleReorderLines}
       />
       <header className={styles.header}>
+        <div style={{ marginBottom: "6px" }}>
+          <Link
+            href={`/shop/${shop.tenant_slug}`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              fontSize: "13px",
+              fontWeight: 700,
+              color: "var(--leaf, #084a2f)",
+              textDecoration: "none",
+              padding: "4px 10px",
+              borderRadius: "999px",
+              background: "var(--sand-2, #f1ede4)",
+              width: "fit-content",
+            }}
+          >
+            &larr; Back to Storefront
+          </Link>
+        </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
           <div>
             <p className={styles.kicker}>Sending a list to</p>

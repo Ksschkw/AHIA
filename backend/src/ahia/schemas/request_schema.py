@@ -218,6 +218,17 @@ class CustomerListSummarySchema(BaseModel):
     priced_total: str | None
     lines_preview: list[str]
     lines: list[CustomerListLineItemSchema] = []
+    note: str | None = None
+
+
+class PaymentProofSubmissionSchema(BaseModel):
+    """Payment receipt proof submitted by a customer for an order."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    customer_phone: str
+    amount: str
+    reference_note: str | None = None
 
 
 class DispatchSchema(BaseModel):

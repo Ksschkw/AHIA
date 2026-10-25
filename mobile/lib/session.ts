@@ -1,11 +1,12 @@
+import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 
 /**
- * The session, kept where a phone keeps secrets.
+ * The session, kept where a device keeps secrets.
  *
- * Persists both access_token and refresh_token in SecureStore so that app closes,
- * background kills, and device restarts do not lose authentication or kick the
- * trader back to the login screen.
+ * Persists both access_token and refresh_token in SecureStore on mobile and localStorage
+ * on web so that app closes, background kills, browser reloads, and device restarts do
+ * not lose authentication or kick the trader back to the login screen.
  */
 
 const REFRESH_KEY = "ahia.refresh_token";
@@ -13,20 +14,67 @@ const ACCESS_KEY = "ahia.access_token";
 
 let accessToken: string | null = null;
 
+const isWeb = Platform.OS === "web";
+
+async function storageSet(key: string, value: string): Promise<void> {
+  if (isWeb && typeof window !== "undefined" && window.localStorage) {
+    window.localStorage.setItem(key, value);
+    return;
+  }
+  try {
+    await SecureStore.setItemAsync(key, value, {
+      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    });
+  } catch {
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.setItem(key, value);
+    }
+  }
+}
+
+async function storageGet(key: string): Promise<string | null> {
+  if (isWeb && typeof window !== "undefined" && window.localStorage) {
+    return window.localStorage.getItem(key);
+  }
+  try {
+    const val = await SecureStore.getItemAsync(key);
+    if (val) return val;
+  } catch {
+    // Fallback
+  }
+  if (typeof window !== "undefined" && window.localStorage) {
+    return window.localStorage.getItem(key);
+  }
+  return null;
+}
+
+async function storageDelete(key: string): Promise<void> {
+  if (isWeb && typeof window !== "undefined" && window.localStorage) {
+    window.localStorage.removeItem(key);
+    return;
+  }
+  try {
+    await SecureStore.deleteItemAsync(key).catch(() => {});
+  } catch {
+    // Fallback
+  }
+  if (typeof window !== "undefined" && window.localStorage) {
+    window.localStorage.removeItem(key);
+  }
+}
+
 export function currentAccessToken(): string | null {
   return accessToken;
 }
 
 export function rememberAccessToken(token: string): void {
   accessToken = token;
-  SecureStore.setItemAsync(ACCESS_KEY, token, {
-    keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-  }).catch(() => {});
+  storageSet(ACCESS_KEY, token).catch(() => {});
 }
 
 export async function readStoredAccessToken(): Promise<string | null> {
   try {
-    const token = await SecureStore.getItemAsync(ACCESS_KEY);
+    const token = await storageGet(ACCESS_KEY);
     if (token) {
       accessToken = token;
     }
@@ -43,21 +91,17 @@ export async function rememberSession(session: {
   accessToken = session.access_token;
   try {
     await Promise.all([
-      SecureStore.setItemAsync(ACCESS_KEY, session.access_token, {
-        keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-      }),
-      SecureStore.setItemAsync(REFRESH_KEY, session.refresh_token, {
-        keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-      }),
+      storageSet(ACCESS_KEY, session.access_token),
+      storageSet(REFRESH_KEY, session.refresh_token),
     ]);
   } catch {
-    // Non-fatal if keychain write delays
+    // Non-fatal if storage write delays
   }
 }
 
 export async function readRefreshToken(): Promise<string | null> {
   try {
-    return await SecureStore.getItemAsync(REFRESH_KEY);
+    return await storageGet(REFRESH_KEY);
   } catch {
     return null;
   }
@@ -68,8 +112,8 @@ export async function forgetSession(): Promise<void> {
   accessToken = null;
   try {
     await Promise.all([
-      SecureStore.deleteItemAsync(ACCESS_KEY).catch(() => {}),
-      SecureStore.deleteItemAsync(REFRESH_KEY).catch(() => {}),
+      storageDelete(ACCESS_KEY),
+      storageDelete(REFRESH_KEY),
     ]);
   } catch {
     // Ignore deletion errors during signout

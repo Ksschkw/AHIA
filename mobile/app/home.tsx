@@ -45,6 +45,7 @@ import {
   deleteLocalProduct,
   updateCachedBusiness,
   enqueueOfflineSale,
+  enqueueOutboxMutation,
   flushSyncOutbox,
   getCachedBusinesses,
   getCachedCategories,
@@ -57,7 +58,7 @@ import {
 } from "@/lib/db";
 import { forgetSession } from "@/lib/session";
 import { getTheme, getSavedThemeMode, saveThemeMode, type ThemeMode, type ThemePalette } from "@/lib/theme";
-import { hasBusinessPin, setBusinessPin, verifyBusinessPin } from "@/lib/pin";
+import { hasBusinessPin, setBusinessPin, verifyBusinessPin, clearBusinessPin } from "@/lib/pin";
 import { useAppLifecycle } from "@/lib/lifecycle";
 import { fetchUnreadCount } from "@/lib/notifications";
 import {
@@ -150,6 +151,7 @@ import {
   updateProduct,
   updateProfile,
   updateStorefront,
+  verifyUserPassword,
   workListLine,
   type Category,
   type CustomerList,
@@ -221,6 +223,26 @@ function formatWaNumber(rawPhone: string | null | undefined): string | null {
   if (digits.startsWith("0")) return "234" + digits.slice(1);
   if (digits.length === 10) return "234" + digits;
   return digits;
+}
+
+function getSaleDisplayTitle(
+  s: SaleSummary,
+  profile: UserProfile | null,
+  members: Member[],
+  customerLists: CustomerList[]
+): string {
+  if (profile && s.seller_id === profile.id) return "Sale by You";
+  const member = members.find((m) => m.user_id === s.seller_id);
+  if (member) {
+    const name = [member.first_name, member.last_name].filter(Boolean).join(" ");
+    if (name) return `Sale by ${name}`;
+    if (member.phone) return `Sale by ${member.phone}`;
+  }
+  const matched = s.customer_id ? customerLists.find((l) => l.id === s.customer_id) : null;
+  if (matched?.customer_name) return `Order by ${matched.customer_name}`;
+  if (s.receipt_number.includes(":")) return s.receipt_number.split(":")[0];
+  if (s.receipt_number.startsWith("PAY-")) return `Order Payment #${s.receipt_number.slice(4)}`;
+  return "Direct Sale";
 }
 
 function getInvitationStatus(
@@ -548,6 +570,7 @@ export default function Home() {
   });
 
   const [listFilterTab, setListFilterTab] = useState<"unworked" | "worked" | "all">("unworked");
+  const [workedSubFilter, setWorkedSubFilter] = useState<"all" | "unconfirmed" | "confirmed" | "dispatched" | "paid">("all");
   const [deletedListIds, setDeletedListIds] = useState<Set<string>>(() => {
     try {
       const raw = getAppSetting("ahia_deleted_list_ids");
@@ -570,10 +593,23 @@ export default function Home() {
       return nonDeleted.filter((l) => !isListWorked(l));
     }
     if (listFilterTab === "worked") {
-      return nonDeleted.filter((l) => isListWorked(l));
+      const worked = nonDeleted.filter((l) => isListWorked(l));
+      if (workedSubFilter === "unconfirmed") {
+        return worked.filter((l) => l.status !== "confirmed");
+      }
+      if (workedSubFilter === "confirmed") {
+        return worked.filter((l) => l.status === "confirmed");
+      }
+      if (workedSubFilter === "dispatched") {
+        return worked.filter((l) => Boolean(l.dispatched_at || l.waybill_number));
+      }
+      if (workedSubFilter === "paid") {
+        return worked.filter((l) => Number(l.amount_paid || l.advance_payment || 0) > 0);
+      }
+      return worked;
     }
     return nonDeleted;
-  }, [customerLists, deletedListIds, listFilterTab, isListWorked]);
+  }, [customerLists, deletedListIds, listFilterTab, workedSubFilter, isListWorked]);
 
   const unworkedListsCount = useMemo(() => {
     return customerLists.filter((l) => !deletedListIds.has(l.id) && !isListWorked(l)).length;
@@ -581,6 +617,22 @@ export default function Home() {
 
   const workedListsCount = useMemo(() => {
     return customerLists.filter((l) => !deletedListIds.has(l.id) && isListWorked(l)).length;
+  }, [customerLists, deletedListIds, isListWorked]);
+
+  const workedUnconfirmedCount = useMemo(() => {
+    return customerLists.filter((l) => !deletedListIds.has(l.id) && isListWorked(l) && l.status !== "confirmed").length;
+  }, [customerLists, deletedListIds, isListWorked]);
+
+  const workedConfirmedCount = useMemo(() => {
+    return customerLists.filter((l) => !deletedListIds.has(l.id) && isListWorked(l) && l.status === "confirmed").length;
+  }, [customerLists, deletedListIds, isListWorked]);
+
+  const workedDispatchedCount = useMemo(() => {
+    return customerLists.filter((l) => !deletedListIds.has(l.id) && isListWorked(l) && Boolean(l.dispatched_at || l.waybill_number)).length;
+  }, [customerLists, deletedListIds, isListWorked]);
+
+  const workedPaidCount = useMemo(() => {
+    return customerLists.filter((l) => !deletedListIds.has(l.id) && isListWorked(l) && Number(l.amount_paid || l.advance_payment || 0) > 0).length;
   }, [customerLists, deletedListIds, isListWorked]);
   const [sales, setSales] = useState<SaleSummary[]>(() => {
     try {
@@ -851,6 +903,10 @@ export default function Home() {
   const [businessPinInput, setBusinessPinInput] = useState("");
   const [businessPinConfirm, setBusinessPinConfirm] = useState("");
   const [savingPin, setSavingPin] = useState(false);
+  const [pinResetPassword, setPinResetPassword] = useState("");
+  const [pinResetVerifying, setPinResetVerifying] = useState(false);
+  const [pinResetError, setPinResetError] = useState<string | null>(null);
+  const [showPinResetFlow, setShowPinResetFlow] = useState(false);
 
   const [showShopModal, setShowShopModal] = useState(false);
   const [showCreateShopModal, setShowCreateShopModal] = useState(false);
@@ -1634,10 +1690,17 @@ export default function Home() {
         mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8,
+        quality: 0.5,
+        base64: true,
       });
-      if (!result.canceled && result.assets[0]?.uri) {
-        onSelected(result.assets[0].uri);
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        let uri = asset.uri;
+        if (asset.base64) {
+          const mime = asset.mimeType || "image/jpeg";
+          uri = `data:${mime};base64,${asset.base64}`;
+        }
+        onSelected(uri);
         showToast("Photo selected from device.");
       }
     } catch {
@@ -1704,35 +1767,34 @@ export default function Home() {
     const targetCat = (expenseCategoryId || (expenseCategories[0]?.value ?? expenseCategories[0]?.id ?? "OTHER")).toUpperCase();
     setExpenseError(null);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setSavingExpense(true);
-    try {
-      const res = await recordExpense(activeBusiness.id, {
-        amount: cleanAmount,
-        category: targetCat,
-        description: expenseDescription.trim() || null,
-        payment_method: (expensePaymentMethod || "CASH").toUpperCase(),
-      });
-      const newExp: ExpenseItem = {
-        id: res?.id || `exp-${Date.now()}`,
-        category: targetCat,
-        amount: cleanAmount,
-        payment_method: (expensePaymentMethod || "CASH").toUpperCase(),
-        description: expenseDescription.trim() || null,
-        incurred_at: new Date().toISOString(),
-      };
-      setExpenses((prev) => [newExp, ...prev]);
-      cacheExpenses(activeBusiness.id, [newExp, ...expenses]);
 
-      setExpenseAmount("");
-      setExpenseDescription("");
-      setShowExpenseModal(false);
-      showToast("Expense logged successfully!");
-      void loadData(activeBusiness.id);
-    } catch (err: any) {
-      setExpenseError(err?.message || "Could not record expense. Please verify amount and category.");
-    } finally {
-      setSavingExpense(false);
-    }
+    const localId = `exp-local-${Date.now()}`;
+    const newExp: ExpenseItem = {
+      id: localId,
+      category: targetCat,
+      amount: cleanAmount,
+      payment_method: (expensePaymentMethod || "CASH").toUpperCase(),
+      description: expenseDescription.trim() || null,
+      incurred_at: new Date().toISOString(),
+    };
+    const updated = [newExp, ...expenses];
+    setExpenses(updated);
+    cacheExpenses(activeBusiness.id, updated);
+
+    enqueueOutboxMutation(activeBusiness.id, "RECORD_EXPENSE", "expense", {
+      amount: cleanAmount,
+      category: targetCat,
+      description: expenseDescription.trim() || null,
+      payment_method: (expensePaymentMethod || "CASH").toUpperCase(),
+    });
+
+    setExpenseAmount("");
+    setExpenseDescription("");
+    setShowExpenseModal(false);
+    showToast("Expense logged successfully!");
+
+    // Non-blocking background sync
+    void flushSyncOutbox(activeBusiness.id).catch(() => {});
   };
 
   const handleInviteStaff = async () => {
@@ -1768,14 +1830,18 @@ export default function Home() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSavingStorefront(true);
     try {
-      const updated = await updateStorefront(activeBusiness.id, {
-        headline: storefrontHeadline.trim() || null,
-        description: storefrontDesc.trim() || null,
-        contact_phone: storefrontPhone.trim() || null,
-        theme_color: storefrontThemeColor || null,
-        theme_bg_color: storefrontThemeBg || null,
-        closing_statement: storefrontClosing.trim() || null,
-      });
+      const updated = await updateStorefront(
+        activeBusiness.id,
+        {
+          headline: storefrontHeadline.trim() || null,
+          description: storefrontDesc.trim() || null,
+          contact_phone: storefrontPhone.trim() || null,
+          theme_color: storefrontThemeColor || null,
+          theme_bg_color: storefrontThemeBg || null,
+          closing_statement: storefrontClosing.trim() || null,
+        },
+        storefrontDetails,
+      );
       setStorefrontDetails(updated);
       setShowStorefrontModal(false);
       showToast("Storefront appearance updated!");
@@ -2038,6 +2104,64 @@ export default function Home() {
     }
   };
 
+  const handleAcceptCustomerProof = async (list: CustomerList, amount: string, ref: string) => {
+    if (!activeBusiness) return;
+    const amt = Number(amount);
+    if (!Number.isFinite(amt) || amt <= 0) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    const paymentRecord: ListPayment = {
+      id: `pay-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      amount: amt.toString(),
+      date: new Date().toISOString(),
+      note: ref ? `Transfer Proof: ${ref}` : "Online Payment Proof",
+      payment_method: "transfer",
+    };
+
+    const priorAdvance = Number(list.amount_paid ?? list.advance_payment ?? 0);
+    const existingPayments = (list.payments && list.payments.length > 0)
+      ? list.payments
+      : (priorAdvance > 0
+          ? [{
+              id: `pay-advance-${list.id}`,
+              amount: priorAdvance.toString(),
+              date: list.created_at || new Date().toISOString(),
+              note: "Advance Deposit",
+              payment_method: "cash" as const,
+            }]
+          : []);
+
+    const updatedPayments = [...existingPayments, paymentRecord];
+    const newTotalPaid = updatedPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+    const updatedList: CustomerList = {
+      ...list,
+      payments: updatedPayments,
+      amount_paid: newTotalPaid.toString(),
+    };
+
+    setCustomerLists((curr) => curr.map((l) => (l.id === updatedList.id ? updatedList : l)));
+    updateCachedCustomerList(activeBusiness.id, updatedList);
+
+    const customerName = list.customer_name || list.customer_phone || "Customer";
+    const descriptiveReceipt = `${customerName}: Transfer Proof \u20A6${amt.toLocaleString()}`;
+
+    const paymentSale: SaleSummary = {
+      id: `sale-${paymentRecord.id}`,
+      receipt_number: descriptiveReceipt,
+      total_amount: amt.toString(),
+      payment_method: "TRANSFER",
+      payment_status: "paid",
+      created_at: new Date().toISOString(),
+      cancelled_at: null,
+    };
+    const nextSales = [paymentSale, ...sales];
+    setSales(nextSales);
+    cacheSales(activeBusiness.id, nextSales);
+
+    showToast(`Payment of \u20A6${amt.toLocaleString()} accepted & recorded!`);
+  };
+
   const handleUpdateBusiness = async () => {
     if (!activeBusiness) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -2057,9 +2181,13 @@ export default function Home() {
         });
         setActiveBusiness((curr) => (curr ? { ...curr, logo_url: editBizLogo.trim() } : curr));
         // Also sync the logo to the public storefront metadata so web storefront shows it
-        void updateStorefront(activeBusiness.id, {
-          logo_url: editBizLogo.trim(),
-        }).then((s) => setStorefrontDetails(s)).catch(() => {});
+        void updateStorefront(
+          activeBusiness.id,
+          {
+            logo_url: editBizLogo.trim(),
+          },
+          storefrontDetails,
+        ).then((s) => setStorefrontDetails(s)).catch(() => {});
       }
       setShowBusinessModal(false);
       showToast("Business profile updated!");
@@ -2135,6 +2263,41 @@ export default function Home() {
       showToast("Could not update profile.");
     } finally {
       setSavingProfile(false);
+    }
+  };
+
+  const handleVerifyPasswordForPinReset = async () => {
+    if (!pinResetPassword.trim()) {
+      setPinResetError("Enter your account password.");
+      return;
+    }
+    const identifier = profile?.phone || profile?.email || businessDetails?.phone || "";
+    if (!identifier) {
+      setPinResetError("No account identifier found.");
+      return;
+    }
+    setPinResetVerifying(true);
+    setPinResetError(null);
+    try {
+      const ok = await verifyUserPassword(identifier, pinResetPassword);
+      if (!ok) {
+        setPinResetError("Incorrect account password. Please try again.");
+        return;
+      }
+      if (activeBusiness) {
+        await clearBusinessPin(activeBusiness.id);
+      }
+      setHasPin(false);
+      setShowPinResetFlow(false);
+      setPinResetPassword("");
+      setPinSetupStep(1);
+      setPinSetupFirst("");
+      setPinSetupError(null);
+      showToast("Password verified. Enter your new 4-digit PIN.");
+    } catch (err: any) {
+      setPinResetError(err?.message || "Verification failed.");
+    } finally {
+      setPinResetVerifying(false);
     }
   };
 
@@ -2638,12 +2801,20 @@ export default function Home() {
     void Linking.openURL(waUrl);
   };
 
-  const handleShareStorefront = () => {
+  const handleShareStorefront = async () => {
     if (!activeBusiness) return;
     const storefrontUrl = `https://useahia-hazel.vercel.app/shop/${activeBusiness.slug}`;
     const msg = `Hello! Check out our catalog on AHIA: ${storefrontUrl}`;
-    const waUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
-    void Linking.openURL(waUrl);
+    try {
+      await Share.share({
+        message: msg,
+        url: storefrontUrl,
+        title: activeBusiness.name,
+      });
+    } catch {
+      const waUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+      void Linking.openURL(waUrl);
+    }
   };
 
   const handleDeleteList = (list: CustomerList) => {
@@ -2870,8 +3041,8 @@ export default function Home() {
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                     <ReceiptIcon size={18} color="#4ade80" />
                     <View>
-                      <Text style={styles.saleReceipt}>{sale.receipt_number}</Text>
-                      <Text style={styles.saleDate}>{sale.payment_method.toUpperCase()}</Text>
+                      <Text style={styles.saleReceipt}>{getSaleDisplayTitle(sale, profile, members, customerLists)}</Text>
+                      <Text style={styles.saleDate}>{sale.receipt_number} &bull; {sale.payment_method.toUpperCase()}</Text>
                     </View>
                   </View>
                   <Text style={styles.saleAmount}>{formatMoney(sale.total_amount)}</Text>
@@ -3364,6 +3535,56 @@ export default function Home() {
                     </Text>
                   </Pressable>
                 </View>
+
+                {/* Status sub-filter for Worked orders */}
+                {listFilterTab === "worked" && (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 6, paddingTop: 10, paddingBottom: 2 }}
+                  >
+                    <Pressable
+                      style={[styles.subFilterChip, workedSubFilter === "all" && styles.subFilterChipActive]}
+                      onPress={() => setWorkedSubFilter("all")}
+                    >
+                      <Text style={[styles.subFilterChipText, workedSubFilter === "all" && styles.subFilterChipTextActive]}>
+                        All ({workedListsCount})
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.subFilterChip, workedSubFilter === "unconfirmed" && styles.subFilterChipActive]}
+                      onPress={() => setWorkedSubFilter("unconfirmed")}
+                    >
+                      <Text style={[styles.subFilterChipText, workedSubFilter === "unconfirmed" && styles.subFilterChipTextActive]}>
+                        Priced Quotes ({workedUnconfirmedCount})
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.subFilterChip, workedSubFilter === "confirmed" && styles.subFilterChipActive]}
+                      onPress={() => setWorkedSubFilter("confirmed")}
+                    >
+                      <Text style={[styles.subFilterChipText, workedSubFilter === "confirmed" && styles.subFilterChipTextActive]}>
+                        Confirmed ({workedConfirmedCount})
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.subFilterChip, workedSubFilter === "dispatched" && styles.subFilterChipActive]}
+                      onPress={() => setWorkedSubFilter("dispatched")}
+                    >
+                      <Text style={[styles.subFilterChipText, workedSubFilter === "dispatched" && styles.subFilterChipTextActive]}>
+                        Dispatched ({workedDispatchedCount})
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.subFilterChip, workedSubFilter === "paid" && styles.subFilterChipActive]}
+                      onPress={() => setWorkedSubFilter("paid")}
+                    >
+                      <Text style={[styles.subFilterChipText, workedSubFilter === "paid" && styles.subFilterChipTextActive]}>
+                        With Payment ({workedPaidCount})
+                      </Text>
+                    </Pressable>
+                  </ScrollView>
+                )}
               </View>
             }
             ListEmptyComponent={
@@ -3498,6 +3719,41 @@ export default function Home() {
 
                   {isExpanded && (
                     <>
+                      {/* Customer Payment Proof Card */}
+                      {(() => {
+                        const proofMatch = item.note?.match(/<!--\s*ahia-proof:({[\s\S]*?})\s*-->/);
+                        let proofData: { amount?: string; ref?: string; at?: string } | null = null;
+                        if (proofMatch) {
+                          try {
+                            proofData = JSON.parse(proofMatch[1]);
+                          } catch {
+                            // ignore
+                          }
+                        }
+                        if (!proofData) return null;
+                        return (
+                          <View style={styles.customerProofCard}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.customerProofTitle}>CUSTOMER SUBMITTED PAYMENT RECEIPT</Text>
+                              <Text style={styles.customerProofAmount}>
+                                {"\u20A6"}{Number(proofData.amount || 0).toLocaleString()} {proofData.ref ? `(Ref: ${proofData.ref})` : ""}
+                              </Text>
+                              <Text style={styles.customerProofDate}>
+                                {proofData.at ? new Date(proofData.at).toLocaleString() : "Recently submitted"}
+                              </Text>
+                            </View>
+                            {!isFullyPaid && (
+                              <Pressable
+                                style={styles.customerProofAcceptBtn}
+                                onPress={() => handleAcceptCustomerProof(item, proofData!.amount || "0", proofData!.ref || "")}
+                              >
+                                <Text style={styles.customerProofAcceptBtnText}>Accept & Record</Text>
+                              </Pressable>
+                            )}
+                          </View>
+                        );
+                      })()}
+
                       {/* Fulfillment Preference (Set by Customer - Read-Only) */}
                       <View style={{ marginBottom: 10, paddingHorizontal: 4, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                         <Text style={styles.paymentLabel}>CUSTOMER FULFILLMENT</Text>
@@ -3989,11 +4245,7 @@ export default function Home() {
                           <View style={{ flex: 1 }}>
                             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                               <Text style={styles.saleReceipt}>
-                                {s.receipt_number.startsWith("PAY-")
-                                  ? `Order Payment #${s.receipt_number.slice(4)}`
-                                  : s.receipt_number.startsWith("REC-")
-                                  ? `Sale Receipt #${s.receipt_number.slice(4)}`
-                                  : s.receipt_number}
+                                {getSaleDisplayTitle(s, profile, members, customerLists)}
                               </Text>
                               <View
                                 style={[
@@ -4007,7 +4259,7 @@ export default function Home() {
                               </View>
                             </View>
                             <Text style={styles.saleDate}>
-                              {new Date(s.created_at).toLocaleString([], {
+                              {s.receipt_number} &bull; {new Date(s.created_at).toLocaleString([], {
                                 month: "short",
                                 day: "numeric",
                                 hour: "2-digit",
@@ -5488,7 +5740,7 @@ export default function Home() {
                 />
 
                 {confirmError && (
-                  <View style={{ marginTop: 12, alignItems: "center" }}>
+                  <View style={{ marginTop: 12, alignItems: "center", width: "100%" }}>
                     <Pressable
                       style={styles.zeroPriceBypassBtn}
                       onPress={handlePriceRemainingLinesZeroAndConfirm}
@@ -5500,6 +5752,19 @@ export default function Home() {
                     </Pressable>
                   </View>
                 )}
+
+                <Pressable
+                  style={styles.forgotPinBtn}
+                  onPress={() => {
+                    setPinConfirmList(null);
+                    setConfirmError(null);
+                    setSecurityTab("pin");
+                    setShowPinResetFlow(true);
+                    setShowPasswordModal(true);
+                  }}
+                >
+                  <Text style={styles.forgotPinText}>Forgot PIN? Reset with Account Password</Text>
+                </Pressable>
 
                 <View style={styles.modalButtons}>
                   <Pressable
@@ -6849,7 +7114,56 @@ export default function Home() {
                       {hasPin ? "Stall Security PIN is Active" : "No PIN Set for this Stall"}
                     </Text>
                   </View>
-                  {pinSetupStep === 1 ? (
+
+                  {hasPin && !showPinResetFlow && (
+                    <Pressable
+                      style={{ marginTop: 6, marginBottom: 12, alignItems: "center" }}
+                      onPress={() => {
+                        setShowPinResetFlow(true);
+                        setPinResetError(null);
+                      }}
+                    >
+                      <Text style={{ color: "#38bdf8", fontSize: 13, fontWeight: "600", textDecorationLine: "underline" }}>
+                        Forgot PIN? Reset with Account Password
+                      </Text>
+                    </Pressable>
+                  )}
+
+                  {showPinResetFlow ? (
+                    <View style={{ marginTop: 8, width: "100%" }}>
+                      <Text style={styles.modalFieldLabel}>Verify Account Password</Text>
+                      <TextInput
+                        style={styles.modalInput}
+                        placeholder="Enter your AHIA account password"
+                        placeholderTextColor="#8a928e"
+                        secureTextEntry
+                        value={pinResetPassword}
+                        onChangeText={setPinResetPassword}
+                      />
+                      {pinResetError && <Text style={styles.modalInlineError}>{pinResetError}</Text>}
+                      <Pressable
+                        style={[styles.modalSaveBtn, { width: "100%", paddingVertical: 12, marginTop: 10 }]}
+                        onPress={handleVerifyPasswordForPinReset}
+                        disabled={pinResetVerifying}
+                      >
+                        {pinResetVerifying ? (
+                          <ActivityIndicator color="#ffffff" size="small" />
+                        ) : (
+                          <Text style={styles.modalSaveText}>Verify Password & Reset PIN</Text>
+                        )}
+                      </Pressable>
+                      <Pressable
+                        style={{ marginTop: 10, alignItems: "center", padding: 6 }}
+                        onPress={() => {
+                          setShowPinResetFlow(false);
+                          setPinResetError(null);
+                          setPinResetPassword("");
+                        }}
+                      >
+                        <Text style={{ color: "#8a928e", fontSize: 13 }}>Cancel Reset</Text>
+                      </Pressable>
+                    </View>
+                  ) : pinSetupStep === 1 ? (
                     <View style={{ alignItems: "center", marginTop: 8 }}>
                       <Text style={styles.pinStepTitle}>Choose a 4-digit Stall Security PIN</Text>
                       <PinPad
@@ -8439,17 +8753,88 @@ const createStyles = (theme: ThemePalette) => StyleSheet.create({
     flex: 1,
   },
   zeroPriceBypassBtn: {
-    backgroundColor: "#fef3c7",
-    borderWidth: 1,
-    borderColor: "#f59e0b",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
+    backgroundColor: "#d97706",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
     alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
   },
   zeroPriceBypassText: {
-    color: "#b45309",
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  forgotPinBtn: {
+    marginTop: 14,
+    paddingVertical: 8,
+    alignItems: "center",
+  },
+  forgotPinText: {
+    color: "#38bdf8",
+    fontSize: 13,
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
+  customerProofCard: {
+    backgroundColor: "#0d281e",
+    borderWidth: 1.5,
+    borderColor: "#4ade80",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  customerProofTitle: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#4ade80",
+    letterSpacing: 0.6,
+  },
+  customerProofAmount: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#ffffff",
+    marginTop: 2,
+  },
+  customerProofDate: {
+    fontSize: 11,
+    color: "#a7f3d0",
+  },
+  customerProofAcceptBtn: {
+    backgroundColor: "#4ade80",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+  },
+  customerProofAcceptBtnText: {
+    color: "#084a2f",
     fontSize: 12,
+    fontWeight: "800",
+  },
+  subFilterChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: theme.card,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  subFilterChipActive: {
+    backgroundColor: "#084a2f",
+    borderColor: "#084a2f",
+  },
+  subFilterChipText: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    fontWeight: "600",
+  },
+  subFilterChipTextActive: {
+    color: "#ffffff",
     fontWeight: "700",
   },
   modalSecondaryBtn: {

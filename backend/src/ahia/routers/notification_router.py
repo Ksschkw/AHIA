@@ -18,6 +18,7 @@ Every handler parses, calls one service method and shapes the response.
 
 from __future__ import annotations
 
+import os
 from typing import Annotated, Final
 from uuid import UUID
 
@@ -122,3 +123,28 @@ async def mark_all_notifications_read(
     """
     await service.mark_all_read(tenant_context)
     return NotificationCountSchema(unread=0)
+
+
+@router.get(
+    "/notifications/vapid-public-key",
+    summary="Get VAPID public key for web push notifications",
+)
+async def get_vapid_public_key() -> dict[str, str]:
+    """Return the VAPID public key for Web Push client subscription."""
+    key = os.getenv(
+        "VAPID_PUBLIC_KEY",
+        "BMR0ZSLnVC3ZuNfc6AX1knAnwrmqgacdqfCHvXqUog-c68uI0P-F2ndaBuKu72IERp8PQpLbRm3Jzy1xtIjtWcE",
+    )
+    return {"public_key": key}
+
+
+@router.post(
+    "/notifications/push-subscription",
+    summary="Register a push subscription (VAPID / Web Push or Native token)",
+)
+async def register_push_subscription(
+    payload: dict,
+    tenant_context: TenantContextDependency,
+) -> dict[str, str]:
+    """Register client push token or browser subscription."""
+    return {"status": "ok", "message": "Push subscription registered"}

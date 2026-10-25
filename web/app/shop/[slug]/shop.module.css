@@ -137,6 +137,50 @@
   flex: none;
 }
 
+.headerTrackBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-strong);
+  background: var(--sand-2);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.headerTrackBtn:hover {
+  border-color: var(--shop-accent);
+  color: var(--shop-accent);
+}
+
+.heroTrackBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--line-strong);
+  background: var(--card);
+  color: var(--ink);
+  font-size: var(--text-base);
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.heroTrackBtn:hover {
+  border-color: var(--shop-accent);
+  transform: translateY(-1px);
+}
+
 .listShortcutBtn {
   display: inline-flex;
   align-items: center;
@@ -549,7 +593,51 @@
     padding: 10px 16px;
   }
 
-  .listShortcutBtn {
+  .headerTrackBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-strong);
+  background: var(--sand-2);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.headerTrackBtn:hover {
+  border-color: var(--shop-accent);
+  color: var(--shop-accent);
+}
+
+.heroTrackBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--line-strong);
+  background: var(--card);
+  color: var(--ink);
+  font-size: var(--text-base);
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.heroTrackBtn:hover {
+  border-color: var(--shop-accent);
+  transform: translateY(-1px);
+}
+
+.listShortcutBtn {
     display: none;
   }
 

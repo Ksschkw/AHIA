@@ -26,6 +26,8 @@ customer reading "unavailable" is a customer who takes his list elsewhere.
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -603,9 +605,54 @@ class RequestService:
                         priced_total=(money_text(sum(priced, Decimal("0.00"))) if priced else None),
                         lines_preview=preview_texts,
                         lines=line_items,
+                        note=req.note,
                     )
                 )
             return summaries
+
+    async def record_payment_proof(
+        self,
+        *,
+        tenant_slug: str,
+        request_id: UUID,
+        customer_phone: str,
+        amount: str,
+        reference_note: str | None = None,
+    ) -> None:
+        """Attach payment receipt proof submitted by a customer to their order."""
+        unit_of_work = self._unit_of_work_factory()
+        async with unit_of_work:
+            session = unit_of_work.session_handle
+            tenant = await tenant_crud.get_by_slug(session, tenant_slug)
+            if tenant is None:
+                raise NotFoundError(
+                    operation="record_payment_proof",
+                    entity="storefront",
+                    identifier=tenant_slug,
+                    detail="no shop answers at that address",
+                )
+            req_record = await session.get(request_crud.RequestRecord, request_id)
+            if req_record is None or req_record.tenant_id != tenant.id:
+                raise NotFoundError(
+                    operation="record_payment_proof",
+                    entity="request",
+                    identifier=str(request_id),
+                    detail="no list found",
+                )
+            tag = json.dumps(
+                {
+                    "amount": amount.strip(),
+                    "ref": (reference_note or "").strip(),
+                    "at": datetime.now(UTC).isoformat(),
+                }
+            )
+            proof_comment = f"\n<!-- ahia-proof:{tag} -->"
+            existing_note = req_record.note or ""
+            if "<!-- ahia-proof:" in existing_note:
+                existing_note = re.sub(r"\n?<!--\s*ahia-proof:[\s\S]*?-->", "", existing_note)
+            req_record.note = (existing_note.strip() + proof_comment).strip()
+            await session.flush()
+            await unit_of_work.commit()
 
     # ------------------------------------------------------------------
     # What the trader does

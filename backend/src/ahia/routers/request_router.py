@@ -19,6 +19,7 @@ from ahia.routers.tenant_router import require_tenant_context
 from ahia.schemas.request_schema import (
     CustomerListSummarySchema,
     DispatchSchema,
+    PaymentProofSubmissionSchema,
     PublicListSchema,
     PublicRequestAcceptedSchema,
     PublicRequestSchema,
@@ -106,6 +107,27 @@ async def list_customer_history(
 ) -> list[CustomerListSummarySchema]:
     """Return recent lists from this phone number to this shop, with lines for one-tap reuse."""
     return await service.list_customer_history(tenant_slug=tenant_slug, customer_phone=phone)
+
+
+@public_router.post(
+    "/shop/{tenant_slug}/requests/{request_id}/payment-proof",
+    summary="Submit payment proof for an order",
+)
+async def submit_payment_proof(
+    tenant_slug: str,
+    request_id: UUID,
+    payload: PaymentProofSubmissionSchema,
+    service: RequestServiceDependency,
+) -> dict[str, str]:
+    """Submit proof of payment (amount and reference/note) for an order."""
+    await service.record_payment_proof(
+        tenant_slug=tenant_slug,
+        request_id=request_id,
+        customer_phone=payload.customer_phone,
+        amount=payload.amount,
+        reference_note=payload.reference_note,
+    )
+    return {"status": "ok", "message": "Payment proof submitted successfully."}
 
 
 @router.get(

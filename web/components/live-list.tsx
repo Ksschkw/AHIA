@@ -23,10 +23,10 @@ import styles from "./live-list.module.css";
 const REFRESH_MS = 15_000;
 
 const STATE_WORD: Record<string, string> = {
-  somewhere: "Not looked at yet",
-  have_it: "The shop has it",
-  buy_it: "The shop is finding it",
-  cannot_get: "The shop could not get it",
+  somewhere: "Pending Review",
+  have_it: "In Stock & Ready",
+  buy_it: "Sourcing from Market",
+  cannot_get: "Currently Unavailable",
 };
 
 export function LiveList({
@@ -114,41 +114,105 @@ export function LiveList({
     }
   }
 
+  // Group lines by category
+  const groups: Record<string, typeof list.lines> = {};
+  for (const line of list.lines) {
+    const g = line.group?.trim() || "General Goods";
+    if (!groups[g]) groups[g] = [];
+    groups[g].push(line);
+  }
+
   return (
     <main className={styles.page}>
+      <div style={{ marginBottom: "16px" }}>
+        <Link
+          href={`/shop/${slug}`}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            fontSize: "13px",
+            fontWeight: 700,
+            color: "var(--leaf, #084a2f)",
+            textDecoration: "none",
+            padding: "6px 12px",
+            borderRadius: "999px",
+            background: "var(--sand-2, #f1ede4)",
+          }}
+        >
+          &larr; Back to Storefront
+        </Link>
+      </div>
       <header className={styles.header}>
-        <p className={styles.kicker}>Your list for</p>
+        <p className={styles.kicker}>Order tracking for</p>
         <h1 className={styles.shopName}>{list.business_name}</h1>
         <p className={styles.status}>
           {list.status === "confirmed"
-            ? "Confirmed - the shop is packing it."
+            ? "Confirmed - the shop is packing your goods."
             : `${list.lines.length} items, sent ${new Date(list.created_at).toLocaleString()}`}
         </p>
       </header>
 
       <section className={styles.section}>
-        {/* **His own shape, drawn.** A line he wrote as a heading is shown as one; what he put under it is
-            indented beneath it. The shop's groups are a quieter label on the line itself, because they are the
-            trader's words rather than the customer's. */}
-        <ul className={styles.items}>
-          {shaped.map(({ line, depth }) => (
-            <li
-              key={`${line.position}-${line.text}`}
-              className={depth > 0 ? styles.itemUnder : styles.item}
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {Object.entries(groups).map(([groupName, groupLines]) => (
+            <div
+              key={groupName}
+              style={{
+                background: "var(--card, #ffffff)",
+                border: "1px solid var(--line, #e2dcd2)",
+                borderRadius: "16px",
+                overflow: "hidden",
+              }}
             >
-              <span className={styles.itemBody}>
-                <span className={depth > 0 ? styles.itemNameIn : styles.itemName}>{line.text}</span>
-                <span className={styles.itemMeta}>
-                  {line.quantity} pcs - {STATE_WORD[line.state] ?? line.state}
-                  {line.group ? ` - ${line.group}` : ""}
+              <div
+                style={{
+                  background: "var(--sand-2, #f1ede4)",
+                  padding: "10px 16px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  borderBottom: "1px solid var(--line, #e2dcd2)",
+                }}
+              >
+                <span style={{ fontSize: "12px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--ink, #0f172a)" }}>
+                  {groupName}
                 </span>
-              </span>
-              <span className={styles.itemPrice}>
-                {line.shop_price ? formatMoneyOrOnRequest(line.shop_price) : "price to be confirmed"}
-              </span>
-            </li>
+                <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--ink-3, #64748b)" }}>
+                  {groupLines.length} items
+                </span>
+              </div>
+              <ul className={styles.items} style={{ margin: 0, padding: 0 }}>
+                {groupLines.map((line) => {
+                  const qty = Number(line.quantity) || 1;
+                  const unitPrice = line.shop_price ? Number(line.shop_price) : null;
+                  const lineTotal = unitPrice !== null ? qty * unitPrice : null;
+
+                  return (
+                    <li key={`${line.position}-${line.text}`} className={styles.item}>
+                      <span className={styles.itemBody}>
+                        <span className={styles.itemName}>{line.text}</span>
+                        <span className={styles.itemMeta}>
+                          {line.quantity} pcs &bull; <strong style={{ color: "var(--leaf, #084a2f)" }}>{STATE_WORD[line.state] ?? line.state}</strong>
+                        </span>
+                      </span>
+                      <div style={{ textAlign: "right" }}>
+                        <span className={styles.itemPrice}>
+                          {lineTotal !== null ? formatMoneyOrOnRequest(String(lineTotal)) : "Price on request"}
+                        </span>
+                        {unitPrice !== null && (
+                          <span style={{ display: "block", fontSize: "11px", color: "var(--ink-3, #64748b)" }}>
+                            {"\u20A6"}{unitPrice.toLocaleString()} / pcs
+                          </span>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           ))}
-        </ul>
+        </div>
       </section>
 
       <section className={styles.summary}>

@@ -18,6 +18,7 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
+  recordExpense,
 } from "./api";
 
 /**
@@ -867,8 +868,8 @@ export async function flushOutbox(tenantId: string): Promise<number> {
 /** Enqueue a generic mutation into SQLite sync_outbox. */
 export function enqueueOutboxMutation(
   tenantId: string,
-  action: "CREATE_CATEGORY" | "UPDATE_CATEGORY" | "DELETE_CATEGORY" | "CREATE_PRODUCT" | "UPDATE_PRODUCT" | "DELETE_PRODUCT",
-  entityType: "category" | "product",
+  action: "CREATE_CATEGORY" | "UPDATE_CATEGORY" | "DELETE_CATEGORY" | "CREATE_PRODUCT" | "UPDATE_PRODUCT" | "DELETE_PRODUCT" | "RECORD_EXPENSE",
+  entityType: "category" | "product" | "expense",
   payload: Record<string, unknown>,
 ): string {
   const id = `outbox-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -1253,6 +1254,13 @@ export async function flushSyncOutbox(tenantId: string): Promise<{ sales: number
           });
         } else if (item.action === "DELETE_PRODUCT") {
           await deleteProduct(tenantId, payload.product_id);
+        } else if (item.action === "RECORD_EXPENSE") {
+          await recordExpense(tenantId, {
+            amount: payload.amount,
+            category: payload.category,
+            description: payload.description,
+            payment_method: payload.payment_method,
+          });
         }
 
         db.runSync("UPDATE sync_outbox SET status = 'synced' WHERE id = ?", [item.id]);

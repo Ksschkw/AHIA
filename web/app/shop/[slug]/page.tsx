@@ -5,6 +5,8 @@ import { notFound } from "next/navigation";
 import { CheckMarkIcon, ItemBoxIcon, PhoneIcon, SparklesIcon } from "@/components/icons";
 import { ShopCatalog } from "@/components/shop-catalog";
 import { StorefrontThemeToggle } from "@/components/storefront-theme-toggle";
+import { TrackOrdersTrigger } from "@/components/customer-orders-sheet";
+import { BuildListButton } from "@/components/build-list-button";
 import { fetchPublicShop, whatsAppLink } from "@/lib/server-api";
 import styles from "./shop.module.css";
 
@@ -171,16 +173,16 @@ export default async function ShopPage({ params }: Params) {
             </div>
           </div>
           <div className={styles.headerRight}>
+            <TrackOrdersTrigger
+              tenantSlug={shop.tenant_slug}
+              businessName={shop.business_name}
+              className={styles.headerTrackBtn}
+            />
+            <BuildListButton
+              href={`/list/${shop.tenant_slug}`}
+              className={styles.listShortcutBtn}
+            />
             <StorefrontThemeToggle />
-            <Link className={styles.listShortcutBtn} href={`/list/${shop.tenant_slug}`}>
-              <ItemBoxIcon size={16} />
-              <span>Build your list</span>
-            </Link>
-            {whatsapp ? (
-              <a className={styles.headerCta} href={whatsapp} rel="noreferrer noopener" target="_blank">
-                WhatsApp Order
-              </a>
-            ) : null}
           </div>
         </div>
       </header>
@@ -233,10 +235,15 @@ export default async function ShopPage({ params }: Params) {
             </div>
 
             <div className={styles.heroActions}>
-              <Link className={styles.primary} href={`/list/${shop.tenant_slug}`}>
-                <ItemBoxIcon size={18} />
-                <span>Build your list</span>
-              </Link>
+              <BuildListButton
+                href={`/list/${shop.tenant_slug}`}
+                className={styles.primary}
+              />
+              <TrackOrdersTrigger
+                tenantSlug={shop.tenant_slug}
+                businessName={shop.business_name}
+                className={styles.heroTrackBtn}
+              />
               {whatsapp ? (
                 <a className={styles.secondaryWhatsApp} href={whatsapp} rel="noreferrer noopener" target="_blank">
                   <span>Order on WhatsApp</span>

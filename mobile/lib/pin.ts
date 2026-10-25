@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 
 /**
@@ -12,6 +13,55 @@ import * as SecureStore from "expo-secure-store";
  */
 
 export const SHORTEST_PIN = 4;
+
+const isWeb = Platform.OS === "web";
+
+async function storageSet(key: string, value: string): Promise<void> {
+  if (isWeb && typeof window !== "undefined" && window.localStorage) {
+    window.localStorage.setItem(key, value);
+    return;
+  }
+  try {
+    await SecureStore.setItemAsync(key, value, {
+      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    });
+  } catch {
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.setItem(key, value);
+    }
+  }
+}
+
+async function storageGet(key: string): Promise<string | null> {
+  if (isWeb && typeof window !== "undefined" && window.localStorage) {
+    return window.localStorage.getItem(key);
+  }
+  try {
+    const val = await SecureStore.getItemAsync(key);
+    if (val) return val;
+  } catch {
+    // Fallback
+  }
+  if (typeof window !== "undefined" && window.localStorage) {
+    return window.localStorage.getItem(key);
+  }
+  return null;
+}
+
+async function storageDelete(key: string): Promise<void> {
+  if (isWeb && typeof window !== "undefined" && window.localStorage) {
+    window.localStorage.removeItem(key);
+    return;
+  }
+  try {
+    await SecureStore.deleteItemAsync(key).catch(() => {});
+  } catch {
+    // Fallback
+  }
+  if (typeof window !== "undefined" && window.localStorage) {
+    window.localStorage.removeItem(key);
+  }
+}
 
 function pinKey(tenantId: string): string {
   return `ahia.biz_pin.${tenantId}`;
@@ -34,7 +84,7 @@ async function simpleHash(pin: string, salt: string): Promise<string> {
 
 export async function hasBusinessPin(tenantId: string): Promise<boolean> {
   try {
-    const stored = await SecureStore.getItemAsync(pinKey(tenantId));
+    const stored = await storageGet(pinKey(tenantId));
     return Boolean(stored);
   } catch {
     return false;
@@ -44,14 +94,14 @@ export async function hasBusinessPin(tenantId: string): Promise<boolean> {
 export async function setBusinessPin(tenantId: string, pin: string): Promise<void> {
   const salt = `salt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const digest = await simpleHash(pin, salt);
-  await SecureStore.setItemAsync(saltKey(tenantId), salt);
-  await SecureStore.setItemAsync(pinKey(tenantId), digest);
+  await storageSet(saltKey(tenantId), salt);
+  await storageSet(pinKey(tenantId), digest);
 }
 
 export async function verifyBusinessPin(tenantId: string, pin: string): Promise<boolean> {
   try {
-    const salt = await SecureStore.getItemAsync(saltKey(tenantId));
-    const known = await SecureStore.getItemAsync(pinKey(tenantId));
+    const salt = await storageGet(saltKey(tenantId));
+    const known = await storageGet(pinKey(tenantId));
     if (!salt || !known) return false;
     const computed = await simpleHash(pin, salt);
     return computed === known;
@@ -62,8 +112,8 @@ export async function verifyBusinessPin(tenantId: string, pin: string): Promise<
 
 export async function clearBusinessPin(tenantId: string): Promise<void> {
   try {
-    await SecureStore.deleteItemAsync(saltKey(tenantId));
-    await SecureStore.deleteItemAsync(pinKey(tenantId));
+    await storageDelete(saltKey(tenantId));
+    await storageDelete(pinKey(tenantId));
   } catch {
     // Non-fatal
   }
