@@ -31,6 +31,7 @@ export type DailySalesSummary = Schemas["DailySalesSummarySchema"];
 export type LowStockProduct = Schemas["LowStockProductSchema"];
 export type ExpenseCategoryList = Schemas["ExpenseCategoryListSchema"];
 export type ExpenseCategory = Schemas["ExpenseCategorySchema"];
+export type ExpenseCategoryCode = Schemas["ExpenseCategory"];
 export type PaymentMethod = Schemas["PaymentMethod"];
 export type ExpenseCreate = Schemas["ExpenseCreateSchema"];
 export type ProductImage = Schemas["ProductImageResponseSchema"];

@@ -120,7 +120,25 @@
   width: 44px;
   height: 28px;
   border-radius: 999px;
+  position: relative;
   transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bottombarBadge {
+  position: absolute;
+  top: -2px;
+  right: 0px;
+  background: var(--leaf, #238636);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 0 5px;
+  border-radius: 999px;
+  min-width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .bottombarLinkCurrent {
