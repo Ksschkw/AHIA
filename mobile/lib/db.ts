@@ -655,16 +655,25 @@ export function getCachedBusinessDetails(tenantId: string): TenantDetails | null
   }
 }
 
+/** Return local date formatted as YYYY-MM-DD using local device timezone. */
+export function getLocalDateString(d: Date = new Date()): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 /** Cache daily sales stats for offline viewing. */
 export function cacheDailyStats(tenantId: string, stats: DailySalesSummary): void {
   try {
     const db = getDb();
     if (!db) return;
     const now = new Date().toISOString();
+    const statDate = stats.date || getLocalDateString();
     db.runSync(
       `INSERT OR REPLACE INTO cached_daily_stats (tenant_id, date, total_revenue, total_sales, updated_at)
        VALUES (?, ?, ?, ?, ?)`,
-      [tenantId, stats.date, stats.total_revenue, stats.total_sales, now],
+      [tenantId, statDate, stats.total_revenue, stats.total_sales, now],
     );
   } catch {
     // Non-fatal
@@ -682,6 +691,15 @@ export function getCachedDailyStats(tenantId: string): DailySalesSummary | null 
       total_sales: number;
     }>("SELECT tenant_id, date, total_revenue, total_sales FROM cached_daily_stats WHERE tenant_id = ?", [tenantId]);
     if (!row) return null;
+    const todayStr = getLocalDateString();
+    // If cached stats are from a previous date, do not display yesterday's sales as today's
+    if (row.date !== todayStr) {
+      return {
+        date: todayStr,
+        total_revenue: "0.00",
+        total_sales: 0,
+      };
+    }
     return {
       date: row.date,
       total_revenue: row.total_revenue,

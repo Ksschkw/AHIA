@@ -763,8 +763,26 @@ export function listExpenseCategories(tenantId: string): Promise<ExpenseCategory
   return request<ExpenseCategoryList>(`/api/v1/tenants/${tenantId}/expenses/categories`);
 }
 
-export function dailySales(tenantId: string): Promise<DailySalesSummary> {
-  return request<DailySalesSummary>(`/api/v1/tenants/${tenantId}/reports/daily-sales`);
+export async function dailySales(tenantId: string): Promise<DailySalesSummary> {
+  const res = await request<DailySalesSummary>(`/api/v1/tenants/${tenantId}/reports/daily-sales`);
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const todayStr = `${year}-${month}-${day}`;
+  const todayEntry = res.days?.find((item) => item.sold_on === todayStr);
+  if (todayEntry) {
+    return {
+      ...res,
+      total_revenue: todayEntry.revenue,
+      total_sales: todayEntry.sale_count,
+    };
+  }
+  return {
+    ...res,
+    total_revenue: "0.00",
+    total_sales: 0,
+  };
 }
 
 export function lowStock(tenantId: string, limit = "5"): Promise<LowStockProduct[]> {

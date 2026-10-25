@@ -474,10 +474,42 @@ export interface DailySalesSummary {
   date: string;
   total_revenue: string;
   total_sales: number;
+  days?: Array<{
+    sold_on: string;
+    revenue: string;
+    sale_count: number;
+  }>;
 }
 
-export function dailySales(tenantId: string): Promise<DailySalesSummary> {
-  return request<DailySalesSummary>(`/api/v1/tenants/${tenantId}/reports/daily-sales`);
+export async function dailySales(tenantId: string): Promise<DailySalesSummary> {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const todayStr = `${year}-${month}-${day}`;
+  const res = await request<{
+    since: string;
+    until: string;
+    total_revenue: string;
+    total_sales: number;
+    days?: Array<{ sold_on: string; revenue: string; sale_count: number }>;
+  }>(`/api/v1/tenants/${tenantId}/reports/daily-sales`);
+
+  const todayEntry = res.days?.find((item) => item.sold_on === todayStr);
+  if (todayEntry) {
+    return {
+      date: todayStr,
+      total_revenue: todayEntry.revenue,
+      total_sales: todayEntry.sale_count,
+      days: res.days,
+    };
+  }
+  return {
+    date: todayStr,
+    total_revenue: "0.00",
+    total_sales: 0,
+    days: res.days ?? [],
+  };
 }
 
 export interface ExpenseCategory {

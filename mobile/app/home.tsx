@@ -51,6 +51,7 @@ import {
   getCachedCategories,
   getCachedCustomerLists,
   getCachedProducts,
+  getLocalDateString,
   getPendingOutboxCount,
   updateCachedCustomerList,
   updateLocalCategory,
@@ -649,7 +650,13 @@ export default function Home() {
       const lastActiveId = getAppSetting("last_active_tenant_id");
       const b = getCachedBusinesses();
       const target = (lastActiveId ? b.find((x) => x.id === lastActiveId) : null) ?? b[0];
-      return target ? getCachedDailyStats(target.id) : null;
+      if (!target) return null;
+      const cached = getCachedDailyStats(target.id);
+      const todayStr = getLocalDateString();
+      if (cached && cached.date === todayStr) {
+        return cached;
+      }
+      return { date: todayStr, total_revenue: "0.00", total_sales: 0 };
     } catch {
       return null;
     }
@@ -794,6 +801,7 @@ export default function Home() {
 
   // Real-time today's sales count and revenue (guarantees newly recorded sales update immediately)
   const todaySalesCountAndRevenue = useMemo(() => {
+    const todayStr = getLocalDateString();
     const now = new Date();
     const todaySales = sales.filter((s) => {
       if (s.cancelled_at || s.payment_status === "cancelled") return false;
@@ -807,9 +815,11 @@ export default function Home() {
       );
     });
     const localRevenue = todaySales.reduce((acc, s) => acc + (Number(s.total_amount) || 0), 0);
-    const serverRevenue = Number(dailyStats?.total_revenue || "0");
+    const isStatsForToday = Boolean(dailyStats?.date && dailyStats.date === todayStr);
+    const serverRevenue = isStatsForToday ? Number(dailyStats?.total_revenue || "0") : 0;
+    const serverCount = isStatsForToday ? (dailyStats?.total_sales ?? 0) : 0;
     const bestRevenue = Math.max(localRevenue, serverRevenue).toFixed(2);
-    const bestCount = Math.max(todaySales.length, dailyStats?.total_sales ?? 0);
+    const bestCount = Math.max(todaySales.length, serverCount);
     return {
       revenue: bestRevenue,
       count: bestCount,
@@ -1057,19 +1067,28 @@ export default function Home() {
         cacheSales(tenantId, freshSales);
       }
       if (freshDaily) {
-        const todayStr = new Date().toISOString().slice(0, 10);
+        const todayStr = getLocalDateString();
         const allKnownSales = freshSales.length > 0 ? freshSales : cachedSales;
-        const localTodaySales = allKnownSales.filter(
-          (s) =>
-            (s.created_at?.startsWith(todayStr) || s.created_at?.slice(0, 10) === todayStr) &&
-            s.payment_status !== "cancelled" &&
-            !s.cancelled_at
-        );
+        const localTodaySales = allKnownSales.filter((s) => {
+          if (!s.created_at) return false;
+          if (s.payment_status === "cancelled" || s.cancelled_at) return false;
+          const d = new Date(s.created_at);
+          if (Number.isNaN(d.getTime())) return false;
+          return (
+            d.getFullYear() === new Date().getFullYear() &&
+            d.getMonth() === new Date().getMonth() &&
+            d.getDate() === new Date().getDate()
+          );
+        });
         const localTodaySum = localTodaySales.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
-        const resolvedDaily = {
-          ...freshDaily,
-          total_revenue: Math.max(Number(freshDaily.total_revenue || 0), localTodaySum).toFixed(2),
-          total_sales: Math.max(freshDaily.total_sales || 0, localTodaySales.length),
+        const isStatsForToday = Boolean(freshDaily.date && freshDaily.date === todayStr);
+        const remoteRevenue = isStatsForToday ? Number(freshDaily.total_revenue || 0) : 0;
+        const remoteCount = isStatsForToday ? (freshDaily.total_sales || 0) : 0;
+        const resolvedDaily: DailySalesSummary = {
+          date: todayStr,
+          total_revenue: Math.max(remoteRevenue, localTodaySum).toFixed(2),
+          total_sales: Math.max(remoteCount, localTodaySales.length),
+          days: freshDaily.days,
         };
         setDailyStats(resolvedDaily);
         cacheDailyStats(tenantId, resolvedDaily);
@@ -2620,7 +2639,10 @@ export default function Home() {
           if (freshSales) setSales(freshSales);
         }).catch(() => {});
         void dailySales(activeBusiness.id).then((stats) => {
-          if (stats) setDailyStats(stats);
+          if (stats) {
+            setDailyStats(stats);
+            cacheDailyStats(activeBusiness.id, stats);
+          }
         }).catch(() => {});
       }
       setPinConfirmList(null);
@@ -2665,7 +2687,10 @@ export default function Home() {
           if (freshSales) setSales(freshSales);
         }).catch(() => {});
         void dailySales(activeBusiness.id).then((stats) => {
-          if (stats) setDailyStats(stats);
+          if (stats) {
+            setDailyStats(stats);
+            cacheDailyStats(activeBusiness.id, stats);
+          }
         }).catch(() => {});
       }
       setPinConfirmList(null);
