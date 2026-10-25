@@ -763,6 +763,20 @@ export function listExpenseCategories(tenantId: string): Promise<ExpenseCategory
   return request<ExpenseCategoryList>(`/api/v1/tenants/${tenantId}/expenses/categories`);
 }
 
+export interface ExpenseItem {
+  id: string;
+  category: string;
+  amount: string;
+  payment_method: string;
+  description: string | null;
+  incurred_at: string;
+  is_reversed?: boolean;
+}
+
+export function listExpenses(tenantId: string, limit = "50"): Promise<ExpenseItem[]> {
+  return request<ExpenseItem[]>(`/api/v1/tenants/${tenantId}/expenses`, { query: { limit } });
+}
+
 export async function dailySales(tenantId: string): Promise<DailySalesSummary> {
   const res = await request<DailySalesSummary>(`/api/v1/tenants/${tenantId}/reports/daily-sales`);
   const d = new Date();

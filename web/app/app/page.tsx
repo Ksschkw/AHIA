@@ -58,6 +58,7 @@ import {
   listBusinesses,
   listCustomerLists,
   listExpenseCategories,
+  listExpenses,
   listProductImages,
   cachedRead,
   rememberedBusinessId,
@@ -75,6 +76,7 @@ import {
   type CustomerList,
   type DailySalesSummary,
   type ExpenseCategory,
+  type ExpenseItem,
   type Category,
   type ExpenseCategoryList,
   type PaymentMethod,
@@ -90,6 +92,8 @@ import {
   type UserProfile,
 } from "@/lib/api";
 import { formatCount, formatMoney, formatMoneyOrOnRequest, formatQuantity } from "@/lib/format";
+import { calculateProfitMetrics } from "@/lib/profit";
+import { SalesTimelineChart } from "@/components/SalesTimelineChart";
 import styles from "./dashboard.module.css";
 
 type Notice = { message: string; tone: "good" | "bad" };
@@ -130,6 +134,22 @@ export default function Dashboard() {
   const [recentSales, setRecentSales] = useState<SaleSummary[]>([]);
   const [runningOut, setRunningOut] = useState<LowStockProduct[]>([]);
   const [categories, setCategories] = useState<ExpenseCategoryList | null>(null);
+  const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
+
+  const todayProfitMetrics = useMemo(() => {
+    const todayRevenue = Number(today?.total_revenue || 0);
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const todayStr = `${year}-${month}-${day}`;
+    return calculateProfitMetrics({
+      revenue: todayRevenue,
+      products,
+      expenses,
+      todayStr,
+    });
+  }, [today, products, expenses]);
   // The product groups, which are a different thing from the spending categories above: these are how
   // the shelf is arranged - Category, Subcategory - and what a list is read under.
   const [productGroups, setProductGroups] = useState<Category[]>([]);
@@ -196,7 +216,7 @@ export default function Dashboard() {
       setCustomerLists(rememberedLists);
     }
 
-    const [foundProducts, foundStock, summary, sales, low, expenseCategories, foundLists] = await Promise.all([
+    const [foundProducts, foundStock, summary, sales, low, expenseCategories, foundLists, foundExpenses] = await Promise.all([
       listProducts(tenantId).catch(() => []),
       listStock(tenantId).catch(() => []),
       dailySales(tenantId).catch(() => null),
@@ -204,6 +224,7 @@ export default function Dashboard() {
       lowStock(tenantId, "5").catch(() => []),
       listExpenseCategories(tenantId).catch(() => null),
       listCustomerLists(tenantId).catch(() => []),
+      listExpenses(tenantId).catch(() => []),
     ]);
     setProducts(foundProducts);
     // Ready only now: everything above this line is a request in flight, and a shelf that says it is
@@ -219,6 +240,7 @@ export default function Dashboard() {
     setRunningOut(low);
     setCategories(expenseCategories);
     setCustomerLists(foundLists);
+    setExpenses(foundExpenses);
   }, []);
 
   /**
@@ -275,6 +297,7 @@ export default function Dashboard() {
       setToday(null);
       setRecentSales([]);
       setRunningOut([]);
+      setExpenses([]);
       setPhotos({});
       setStorefront(null);
       // The detail first: it carries the currency, so every amount on the page is rendered in the
@@ -523,12 +546,26 @@ export default function Dashboard() {
 
         <section className={styles.heroRow}>
           {isOwnerOrManager ? (
-            <Stat
-              label="Sold today"
-              value={formatMoney(today?.total_revenue ?? "0.00", currency)}
-              hint={`${formatCount(today?.total_sales ?? 0)} sales`}
-              tone="good"
-            />
+            <>
+              <Stat
+                label="Sold today"
+                value={formatMoney(today?.total_revenue ?? "0.00", currency)}
+                hint={`${formatCount(today?.total_sales ?? 0)} sales`}
+                tone="good"
+              />
+              <Stat
+                label="Net Profit"
+                value={formatMoney(todayProfitMetrics.netProfit.toFixed(2), currency)}
+                hint={`${todayProfitMetrics.marginPercent}% margin`}
+                tone={todayProfitMetrics.netProfit >= 0 ? "good" : "warn"}
+              />
+              <Stat
+                label="Expenses today"
+                value={formatMoney(todayProfitMetrics.expenses.toFixed(2), currency)}
+                hint={`${expenses.filter((e) => !e.is_reversed && (!e.incurred_at || e.incurred_at.slice(0, 10) === new Date().toISOString().slice(0, 10))).length} logged`}
+                tone={todayProfitMetrics.expenses > 0 ? "warn" : "plain"}
+              />
+            </>
           ) : (
             <Stat
               label="Recent sales"
@@ -555,6 +592,19 @@ export default function Dashboard() {
             tone={unansweredCount > 0 ? "warn" : "plain"}
           />
         </section>
+
+        {isOwnerOrManager ? (
+          <SalesTimelineChart
+            days={today?.days ?? []}
+            sales={recentSales}
+            currency={currency}
+            marginRatio={
+              todayProfitMetrics.revenue > 0
+                ? todayProfitMetrics.grossProfit / todayProfitMetrics.revenue
+                : 0.28
+            }
+          />
+        ) : null}
 
         <div className={styles.columns}>
           <Card
@@ -972,6 +1022,8 @@ export default function Dashboard() {
           runExpense(async () => {
             if (!businessId) return;
             await recordExpense(businessId, input);
+            const freshExp = await listExpenses(businessId).catch(() => []);
+            setExpenses(freshExp);
             setSheet(null);
             setNotice({
               message: `Spending recorded: ${formatMoney(input.amount, currency)}`,

@@ -58,6 +58,8 @@ import {
   updateLocalProduct,
 } from "@/lib/db";
 import { forgetSession } from "@/lib/session";
+import { calculateProfitMetrics } from "@/lib/profit";
+import { SalesTimelineChart } from "@/components/SalesTimelineChart";
 import { getTheme, getSavedThemeMode, saveThemeMode, type ThemeMode, type ThemePalette } from "@/lib/theme";
 import { hasBusinessPin, setBusinessPin, verifyBusinessPin, clearBusinessPin } from "@/lib/pin";
 import { useAppLifecycle } from "@/lib/lifecycle";
@@ -880,6 +882,17 @@ export default function Home() {
   const [expenseError, setExpenseError] = useState<string | null>(null);
   const [savingExpense, setSavingExpense] = useState(false);
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
+
+  const todayProfitMetrics = useMemo(() => {
+    const todayRevenue = Number(todaySalesCountAndRevenue.revenue || 0);
+    const todayStr = getLocalDateString();
+    return calculateProfitMetrics({
+      revenue: todayRevenue,
+      products,
+      expenses,
+      todayStr,
+    });
+  }, [todaySalesCountAndRevenue.revenue, products, expenses]);
 
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [invitePhone, setInvitePhone] = useState("");
@@ -2954,27 +2967,59 @@ export default function Home() {
             {/* KPI Cards */}
             <View style={styles.kpiRow}>
               {isOwnerOrManager ? (
-                <View style={[styles.kpiCard, styles.kpiCardHighlight]}>
-                  <Text style={styles.kpiLabel}>Today's Sales</Text>
-                  <Text style={styles.kpiValue}>
-                    {formatMoney(todaySalesCountAndRevenue.revenue)}
-                  </Text>
-                  <Text style={styles.kpiMeta}>{todaySalesCountAndRevenue.count} transaction(s)</Text>
-                </View>
-              ) : (
-                <View style={[styles.kpiCard, styles.kpiCardHighlight]}>
-                  <Text style={styles.kpiLabel}>Recent Sales</Text>
-                  <Text style={styles.kpiValue}>{sales.length}</Text>
-                  <Text style={styles.kpiMeta}>Recorded by staff</Text>
-                </View>
-              )}
+                <>
+                  <View style={[styles.kpiCard, styles.kpiCardHighlight]}>
+                    <Text style={styles.kpiLabel}>Today's Sales</Text>
+                    <Text style={styles.kpiValue}>
+                      {formatMoney(todaySalesCountAndRevenue.revenue)}
+                    </Text>
+                    <Text style={styles.kpiMeta}>{todaySalesCountAndRevenue.count} transaction(s)</Text>
+                  </View>
 
-              <View style={styles.kpiCard}>
-                <Text style={styles.kpiLabel}>On the Shelf</Text>
-                <Text style={styles.kpiValue}>{products.length}</Text>
-                <Text style={styles.kpiMeta}>Catalog Items</Text>
-              </View>
+                  <View style={[styles.kpiCard, styles.kpiCardHighlight]}>
+                    <Text style={styles.kpiLabel}>Est. Net Profit</Text>
+                    <Text style={[styles.kpiValue, { color: "#238636" }]}>
+                      {formatMoney(todayProfitMetrics.netProfit.toFixed(2))}
+                    </Text>
+                    <Text style={styles.kpiMeta}>{todayProfitMetrics.marginPercent}% margin</Text>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <View style={[styles.kpiCard, styles.kpiCardHighlight]}>
+                    <Text style={styles.kpiLabel}>Recent Sales</Text>
+                    <Text style={styles.kpiValue}>{sales.length}</Text>
+                    <Text style={styles.kpiMeta}>Recorded by staff</Text>
+                  </View>
+
+                  <View style={styles.kpiCard}>
+                    <Text style={styles.kpiLabel}>On the Shelf</Text>
+                    <Text style={styles.kpiValue}>{products.length}</Text>
+                    <Text style={styles.kpiMeta}>Catalog Items</Text>
+                  </View>
+                </>
+              )}
             </View>
+
+            {isOwnerOrManager && (
+              <View style={styles.kpiRow}>
+                <View style={styles.kpiCard}>
+                  <Text style={styles.kpiLabel}>Expenses Today</Text>
+                  <Text style={[styles.kpiValue, { color: todayProfitMetrics.expenses > 0 ? "#cf222e" : theme.text }]}>
+                    {formatMoney(todayProfitMetrics.expenses.toFixed(2))}
+                  </Text>
+                  <Text style={styles.kpiMeta}>
+                    {expenses.filter((e) => !e.is_reversed && (!e.incurred_at || e.incurred_at.slice(0, 10) === getLocalDateString())).length} logged
+                  </Text>
+                </View>
+
+                <View style={styles.kpiCard}>
+                  <Text style={styles.kpiLabel}>On the Shelf</Text>
+                  <Text style={styles.kpiValue}>{products.length}</Text>
+                  <Text style={styles.kpiMeta}>Catalog Items</Text>
+                </View>
+              </View>
+            )}
 
             <View style={styles.kpiRow}>
               <View style={styles.kpiCard}>
@@ -2989,6 +3034,20 @@ export default function Home() {
                 <Text style={styles.kpiMeta}>Product Groups</Text>
               </View>
             </View>
+
+            {isOwnerOrManager && (
+              <SalesTimelineChart
+                days={dailyStats?.days ?? []}
+                sales={sales}
+                currency={activeBusiness?.currency || "NGN"}
+                marginRatio={
+                  todayProfitMetrics.revenue > 0
+                    ? todayProfitMetrics.grossProfit / todayProfitMetrics.revenue
+                    : 0.28
+                }
+                isDarkMode={themeMode === "dark"}
+              />
+            )}
 
             {/* Quick Actions Grid with Native SVG Icons */}
             <Text style={styles.sectionHeading}>Quick Actions</Text>
@@ -4183,6 +4242,31 @@ export default function Home() {
               <Text style={styles.tradingSummaryMeta}>
                 {todaySalesCountAndRevenue.count} transaction(s) recorded today
               </Text>
+
+              {isOwnerOrManager && (
+                <View style={styles.tradingSummaryRow}>
+                  <View style={styles.tradingSummaryItem}>
+                    <Text style={styles.tradingSummaryItemLabel}>Gross Profit</Text>
+                    <Text style={[styles.tradingSummaryItemValue, { color: "#238636" }]}>
+                      {formatMoney(todayProfitMetrics.grossProfit.toFixed(2))}
+                    </Text>
+                  </View>
+
+                  <View style={styles.tradingSummaryItem}>
+                    <Text style={styles.tradingSummaryItemLabel}>Expenses</Text>
+                    <Text style={[styles.tradingSummaryItemValue, { color: todayProfitMetrics.expenses > 0 ? "#cf222e" : theme.text }]}>
+                      {formatMoney(todayProfitMetrics.expenses.toFixed(2))}
+                    </Text>
+                  </View>
+
+                  <View style={styles.tradingSummaryItem}>
+                    <Text style={styles.tradingSummaryItemLabel}>Net Profit</Text>
+                    <Text style={[styles.tradingSummaryItemValue, { color: "#238636" }]}>
+                      {formatMoney(todayProfitMetrics.netProfit.toFixed(2))}
+                    </Text>
+                  </View>
+                </View>
+              )}
             </View>
 
             {/* Sub-tab Pills & Header Actions */}
@@ -4245,6 +4329,21 @@ export default function Home() {
                 </Pressable>
               </View>
             </View>
+
+            {/* Sales Sub-tab Timeline & History */}
+            {tradingSubTab === "sales" && isOwnerOrManager && (
+              <SalesTimelineChart
+                days={dailyStats?.days ?? []}
+                sales={sales}
+                currency={activeBusiness?.currency || "NGN"}
+                marginRatio={
+                  todayProfitMetrics.revenue > 0
+                    ? todayProfitMetrics.grossProfit / todayProfitMetrics.revenue
+                    : 0.28
+                }
+                isDarkMode={themeMode === "dark"}
+              />
+            )}
 
             {/* Sales Sub-tab */}
             {tradingSubTab === "sales" ? (
@@ -9155,6 +9254,29 @@ const createStyles = (theme: ThemePalette) => StyleSheet.create({
   tradingSummaryMeta: {
     color: theme.textSecondary,
     fontSize: 12,
+  },
+  tradingSummaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.12)",
+  },
+  tradingSummaryItem: {
+    flex: 1,
+  },
+  tradingSummaryItemLabel: {
+    fontSize: 10,
+    color: theme.textSecondary,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    marginBottom: 2,
+  },
+  tradingSummaryItemValue: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: theme.text,
   },
   logExpenseBtn: {
     flexDirection: "row",

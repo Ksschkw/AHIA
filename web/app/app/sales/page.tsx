@@ -19,13 +19,19 @@ import {
   firstPaint,
   rememberedBusinessId,
   currentUser,
+  dailySales,
   getBusiness,
   listBusinesses,
+  listProducts,
   listSales,
+  type DailySalesSummary,
+  type Product,
   type SaleSummary,
   type Tenant,
 } from "@/lib/api";
 import { formatMoney } from "@/lib/format";
+import { calculateProfitMetrics } from "@/lib/profit";
+import { SalesTimelineChart } from "@/components/SalesTimelineChart";
 import styles from "../dashboard.module.css";
 
 export default function Sales() {
@@ -33,6 +39,8 @@ export default function Sales() {
   const [sales, setSales] = useState<SaleSummary[] | null>(() =>
     firstPaint<SaleSummary[]>(rememberedBusinessId(), (id) => `/api/v1/tenants/${id}/sales`),
   );
+  const [dailySummary, setDailySummary] = useState<DailySalesSummary | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
   const [currency, setCurrency] = useState("NGN");
   const [state, setState] = useState<"loading" | "ready">(() =>
     rememberedBusinessId() ? "ready" : "loading",
@@ -40,8 +48,14 @@ export default function Sales() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async (tenantId: string) => {
-    const found = await listSales(tenantId, "50");
+    const [found, summary, prods] = await Promise.all([
+      listSales(tenantId, "50"),
+      dailySales(tenantId).catch(() => null),
+      listProducts(tenantId).catch(() => []),
+    ]);
     setSales(found);
+    setDailySummary(summary);
+    setProducts(prods);
     setState("ready");
   }, []);
 
@@ -73,6 +87,11 @@ export default function Sales() {
   const total = useMemo(
     () => (sales ?? []).reduce((running, sale) => running + Number(sale.total_amount ?? "0"), 0),
     [sales],
+  );
+
+  const profitMetrics = useMemo(
+    () => calculateProfitMetrics({ revenue: total, products }),
+    [total, products],
   );
 
   return (
@@ -113,11 +132,24 @@ export default function Sales() {
       ) : null}
 
       {(sales ?? []).length > 0 ? (
-        <Card title={`${sales?.length ?? 0} sales`}>
-          <p className={styles.totalPreview}>
-            {formatMoney(total.toFixed(2), currency)} in total
-          </p>
-          <ul className={styles.list}>
+        <>
+          <SalesTimelineChart
+            days={dailySummary?.days ?? []}
+            sales={sales ?? []}
+            currency={currency}
+            marginRatio={
+              profitMetrics.revenue > 0 ? profitMetrics.grossProfit / profitMetrics.revenue : 0.28
+            }
+          />
+          <Card title={`${sales?.length ?? 0} sales`}>
+            <p className={styles.totalPreview}>
+              {formatMoney(total.toFixed(2), currency)} in total | Est. Profit:{" "}
+              <strong style={{ color: "var(--leaf, #238636)" }}>
+                {formatMoney(profitMetrics.grossProfit.toFixed(2), currency)}
+              </strong>{" "}
+              ({profitMetrics.marginPercent}%)
+            </p>
+            <ul className={styles.list}>
             {(sales ?? []).map((sale) => (
               <li key={sale.id} className={styles.row}>
                 <span className={styles.rowMain}>
@@ -142,7 +174,8 @@ export default function Sales() {
             ))}
           </ul>
         </Card>
-      ) : null}
+      </>
+    ) : null}
 
       {notice ? <Toast message={notice} tone="bad" onDismiss={() => setNotice(null)} /> : null}
     </main>

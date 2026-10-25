@@ -112,7 +112,8 @@ function runMigrations(db: SQLite.SQLiteDatabase): void {
       date TEXT NOT NULL,
       total_revenue TEXT NOT NULL,
       total_sales INTEGER NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      days_json TEXT
     );
     CREATE TABLE IF NOT EXISTS cached_sales (
       id TEXT PRIMARY KEY,
@@ -218,6 +219,7 @@ function runMigrations(db: SQLite.SQLiteDatabase): void {
   ensureCol("cached_businesses", "address", "TEXT");
   ensureCol("cached_businesses", "phone", "TEXT");
   ensureCol("cached_businesses", "email", "TEXT");
+  ensureCol("cached_daily_stats", "days_json", "TEXT");
 }
 
 function getDb(): SQLite.SQLiteDatabase | null {
@@ -670,10 +672,11 @@ export function cacheDailyStats(tenantId: string, stats: DailySalesSummary): voi
     if (!db) return;
     const now = new Date().toISOString();
     const statDate = stats.date || getLocalDateString();
+    const daysJson = stats.days ? JSON.stringify(stats.days) : null;
     db.runSync(
-      `INSERT OR REPLACE INTO cached_daily_stats (tenant_id, date, total_revenue, total_sales, updated_at)
-       VALUES (?, ?, ?, ?, ?)`,
-      [tenantId, statDate, stats.total_revenue, stats.total_sales, now],
+      `INSERT OR REPLACE INTO cached_daily_stats (tenant_id, date, total_revenue, total_sales, updated_at, days_json)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [tenantId, statDate, stats.total_revenue, stats.total_sales, now, daysJson],
     );
   } catch {
     // Non-fatal
@@ -689,21 +692,33 @@ export function getCachedDailyStats(tenantId: string): DailySalesSummary | null 
       date: string;
       total_revenue: string;
       total_sales: number;
-    }>("SELECT tenant_id, date, total_revenue, total_sales FROM cached_daily_stats WHERE tenant_id = ?", [tenantId]);
+      days_json?: string | null;
+    }>("SELECT tenant_id, date, total_revenue, total_sales, days_json FROM cached_daily_stats WHERE tenant_id = ?", [tenantId]);
     if (!row) return null;
     const todayStr = getLocalDateString();
-    // If cached stats are from a previous date, do not display yesterday's sales as today's
+    let parsedDays: Array<{ sold_on: string; revenue: string; sale_count: number }> = [];
+    if (row.days_json) {
+      try {
+        parsedDays = JSON.parse(row.days_json);
+      } catch {
+        parsedDays = [];
+      }
+    }
+    // If cached stats are from a previous date, do not display yesterday's sales as today's,
+    // but preserve the days timeline for charts and progress reports.
     if (row.date !== todayStr) {
       return {
         date: todayStr,
         total_revenue: "0.00",
         total_sales: 0,
+        days: parsedDays,
       };
     }
     return {
       date: row.date,
       total_revenue: row.total_revenue,
       total_sales: row.total_sales,
+      days: parsedDays,
     };
   } catch {
     return null;
