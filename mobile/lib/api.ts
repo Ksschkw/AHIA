@@ -455,6 +455,7 @@ export interface SaleSummary {
   payment_status: string;
   created_at: string;
   cancelled_at?: string | null;
+  cancellation_reason?: string | null;
   seller_id?: string | null;
   customer_id?: string | null;
 }

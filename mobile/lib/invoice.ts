@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { type CustomerList, type TenantDetails, type Product, type Category } from "@/lib/api";
@@ -20,7 +21,7 @@ function buildCategoryPath(catId: string, allCategories: Category[]): string {
 }
 
 export function buildInvoiceHtml(
-  business: { name: string; slug?: string },
+  business: { name: string; slug?: string; logo_url?: string | null },
   details: TenantDetails | null,
   list: CustomerList,
   allProducts: Product[] = [],
@@ -36,6 +37,7 @@ export function buildInvoiceHtml(
   const customerName = list.customer_name || "Valued Customer";
   const customerPhone = list.customer_phone || "N/A";
   const businessPhone = details?.phone || "";
+  const logoUrl = details?.logo_url || business?.logo_url || null;
   const fulfillmentLabel = list.fulfillment_type === "waybill" ? "Waybill / Delivery" : "In-Shop Pickup";
 
   let computedSubtotal = 0;
@@ -244,6 +246,18 @@ export function buildInvoiceHtml(
             padding-bottom: 20px;
             margin-bottom: 24px;
           }
+          .biz-brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+          }
+          .biz-logo {
+            width: 56px;
+            height: 56px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+          }
           .biz-name {
             font-size: 26px;
             font-weight: 800;
@@ -352,9 +366,16 @@ export function buildInvoiceHtml(
       </head>
       <body>
         <div class="header-row">
-          <div>
-            <div class="biz-name">${business.name}</div>
-            <div class="biz-meta">${businessPhone ? `Phone: ${businessPhone}` : "Official Merchant Invoice"}</div>
+          <div class="biz-brand">
+            ${
+              logoUrl
+                ? `<img src="${logoUrl}" alt="${business.name}" class="biz-logo" />`
+                : ""
+            }
+            <div>
+              <div class="biz-name">${business.name}</div>
+              <div class="biz-meta">${businessPhone ? `Phone: ${businessPhone}` : "Official Merchant Invoice"}</div>
+            </div>
           </div>
           <div class="invoice-tag">
             <div class="invoice-title">INVOICE</div>
@@ -444,7 +465,7 @@ export function buildInvoiceHtml(
 }
 
 export async function generateAndSharePdfInvoice(
-  business: { name: string; slug?: string },
+  business: { name: string; slug?: string; logo_url?: string | null },
   details: TenantDetails | null,
   list: CustomerList,
   allProducts: Product[] = [],
@@ -453,25 +474,37 @@ export async function generateAndSharePdfInvoice(
   const html = buildInvoiceHtml(business, details, list, allProducts, allCategories);
   const customerName = list.customer_name || "Customer";
 
-  const { uri } = await Print.printToFileAsync({
-    html,
-    base64: false,
-  });
-
-  const isAvailable = await Sharing.isAvailableAsync();
-  if (isAvailable) {
-    await Sharing.shareAsync(uri, {
-      UTI: "com.adobe.pdf",
-      mimeType: "application/pdf",
-      dialogTitle: `Share Invoice - ${customerName}`,
-    });
-  } else {
+  if (Platform.OS === "web") {
     await Print.printAsync({ html });
+    return;
   }
+
+  try {
+    const file = await Print.printToFileAsync({
+      html,
+      base64: false,
+    });
+
+    if (file && file.uri) {
+      const isAvailable = await Sharing.isAvailableAsync().catch(() => false);
+      if (isAvailable) {
+        await Sharing.shareAsync(file.uri, {
+          mimeType: "application/pdf",
+          dialogTitle: `Share Invoice - ${customerName}`,
+        });
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn("Direct PDF sharing failed, falling back to system print/save:", err);
+  }
+
+  // Fallback if sharing is unavailable or file sharing fails
+  await Print.printAsync({ html });
 }
 
 export async function printInvoice(
-  business: { name: string; slug?: string },
+  business: { name: string; slug?: string; logo_url?: string | null },
   details: TenantDetails | null,
   list: CustomerList,
   allProducts: Product[] = [],

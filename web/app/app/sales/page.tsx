@@ -11,9 +11,9 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { SaleIcon } from "@/components/icons";
+import { SaleIcon, SearchIcon, PhoneIcon } from "@/components/icons";
 import { EmptySalesIllustration } from "@/components/illustrations";
-import { Card, Empty, Loading, Pill, Toast } from "@/components/ui";
+import { Card, Empty, Loading, Pill, Sheet, Toast } from "@/components/ui";
 import {
   cachedRead,
   firstPaint,
@@ -22,12 +22,15 @@ import {
   dailySales,
   getBusiness,
   listBusinesses,
+  listCustomerLists,
   listProducts,
   listSales,
+  type CustomerList,
   type DailySalesSummary,
   type Product,
   type SaleSummary,
   type Tenant,
+  type UserProfile,
 } from "@/lib/api";
 import { formatMoney } from "@/lib/format";
 import { calculateProfitMetrics } from "@/lib/profit";
@@ -41,28 +44,38 @@ export default function Sales() {
   );
   const [dailySummary, setDailySummary] = useState<DailySalesSummary | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [customerLists, setCustomerLists] = useState<CustomerList[]>([]);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [currency, setCurrency] = useState("NGN");
   const [state, setState] = useState<"loading" | "ready">(() =>
     rememberedBusinessId() ? "ready" : "loading",
   );
   const [notice, setNotice] = useState<string | null>(null);
 
+  // Search & Filter state for old sales and blame investigation
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "paid" | "returned">("all");
+  const [selectedSaleAudit, setSelectedSaleAudit] = useState<SaleSummary | null>(null);
+
   const load = useCallback(async (tenantId: string) => {
-    const [found, summary, prods] = await Promise.all([
+    const [found, summary, prods, lists] = await Promise.all([
       listSales(tenantId, "50"),
       dailySales(tenantId).catch(() => null),
       listProducts(tenantId).catch(() => []),
+      listCustomerLists(tenantId).catch(() => []),
     ]);
     setSales(found);
     setDailySummary(summary);
     setProducts(prods);
+    setCustomerLists(lists);
     setState("ready");
   }, []);
 
   useEffect(() => {
     void (async () => {
       try {
-        await currentUser();
+        const me = await currentUser().catch(() => null);
+        if (me) setUserProfile(me);
         const businesses = await listBusinesses();
         const remembered =
           typeof window === "undefined" ? null : window.localStorage.getItem("ahia.business");
@@ -149,33 +162,342 @@ export default function Sales() {
               </strong>{" "}
               ({profitMetrics.marginPercent}%)
             </p>
-            <ul className={styles.list}>
-            {(sales ?? []).map((sale) => (
-              <li key={sale.id} className={styles.row}>
-                <span className={styles.rowMain}>
-                  <span
-                    className={styles.rowName}
-                    style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-                  >
-                    <SaleIcon size={16} style={{ color: "var(--leaf)", flexShrink: 0 }} />
-                    <span>{sale.receipt_number}</span>
-                  </span>
-                  <span className={styles.rowMeta}>
-                    {new Date(sale.occurred_at).toLocaleString()}
-                    {sale.payment_status ? ` - ${sale.payment_status.toLowerCase()}` : ""}
-                  </span>
+
+            {/* Search & Filter Controls to track old stuff and blame */}
+            <div style={{ display: "flex", gap: "10px", alignItems: "center", margin: "14px 0", flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: "220px", position: "relative" }}>
+                <input
+                  type="text"
+                  placeholder="Search sales by receipt, customer, amount, date..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px 8px 32px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border, #e5e7eb)",
+                    background: "var(--paper, #fff)",
+                    color: "var(--ink, #111)",
+                    fontSize: "13px",
+                  }}
+                />
+                <span style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#8a928e" }}>
+                  <SearchIcon size={14} />
                 </span>
-                <span className={styles.rowEnd}>
-                  <Pill tone={sale.cancelled_at ? "bad" : "good"}>
-                    {formatMoney(sale.total_amount, currency)}
-                  </Pill>
-                </span>
-              </li>
-            ))}
-          </ul>
+              </div>
+              <div style={{ display: "flex", gap: "6px" }}>
+                {(["all", "paid", "returned"] as const).map((filter) => {
+                  const count =
+                    filter === "all"
+                      ? (sales ?? []).length
+                      : filter === "paid"
+                      ? (sales ?? []).filter((s) => !s.cancelled_at).length
+                      : (sales ?? []).filter((s) => Boolean(s.cancelled_at)).length;
+                  return (
+                    <button
+                      key={filter}
+                      type="button"
+                      onClick={() => setStatusFilter(filter)}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: "999px",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        border: statusFilter === filter ? "1px solid #238636" : "1px solid var(--border, #e5e7eb)",
+                        background: statusFilter === filter ? "#238636" : "var(--paper, #fff)",
+                        color: statusFilter === filter ? "#fff" : "var(--ink, #111)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {filter === "all" ? `All (${count})` : filter === "paid" ? `Paid (${count})` : `Returned (${count})`}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {(() => {
+              const filteredSales = (sales ?? []).filter((s) => {
+                if (statusFilter === "paid" && s.cancelled_at) return false;
+                if (statusFilter === "returned" && !s.cancelled_at) return false;
+                if (!searchQuery.trim()) return true;
+                const q = searchQuery.toLowerCase();
+                const receipt = (s.receipt_number || "").toLowerCase();
+                const amt = (s.total_amount || "").toLowerCase();
+                const date = new Date(s.occurred_at).toLocaleString().toLowerCase();
+                return receipt.includes(q) || amt.includes(q) || date.includes(q);
+              });
+
+              if (filteredSales.length === 0) {
+                return (
+                  <p style={{ textAlign: "center", color: "var(--ink-secondary, #6b7280)", padding: "20px 0" }}>
+                    No matching sales found for &ldquo;{searchQuery}&rdquo;.
+                  </p>
+                );
+              }
+
+              return (
+                <ul className={styles.list}>
+                  {filteredSales.map((sale) => (
+                    <li
+                      key={sale.id}
+                      className={styles.row}
+                      onClick={() => setSelectedSaleAudit(sale)}
+                      style={{ cursor: "pointer", transition: "background 0.15s ease" }}
+                      title="Click to inspect transaction audit & blame"
+                    >
+                      <span className={styles.rowMain}>
+                        <span
+                          className={styles.rowName}
+                          style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+                        >
+                          <SaleIcon size={16} style={{ color: "var(--leaf)", flexShrink: 0 }} />
+                          <span>{sale.receipt_number}</span>
+                        </span>
+                        <span className={styles.rowMeta}>
+                          {new Date(sale.occurred_at).toLocaleString()}
+                          {sale.payment_status ? ` - ${sale.payment_status.toLowerCase()}` : ""}
+                          <span style={{ color: "var(--leaf, #238636)", marginLeft: "8px", fontWeight: 600 }}>
+                            Audit Blame &rsaquo;
+                          </span>
+                        </span>
+                      </span>
+                      <span className={styles.rowEnd}>
+                        <Pill tone={sale.cancelled_at ? "bad" : "good"}>
+                          {formatMoney(sale.total_amount, currency)}
+                        </Pill>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              );
+            })()}
         </Card>
       </>
     ) : null}
+
+      {/* Sale Detail & Audit Blame Sheet Dialog */}
+      <Sheet
+        open={selectedSaleAudit !== null}
+        title={selectedSaleAudit ? `Transaction Audit - #${selectedSaleAudit.receipt_number}` : "Sale Audit"}
+        onClose={() => setSelectedSaleAudit(null)}
+      >
+        {selectedSaleAudit ? (() => {
+          const isCancelled = Boolean(selectedSaleAudit.cancelled_at);
+          const linkedList = customerLists.find(
+            (l) =>
+              l.id === selectedSaleAudit.receipt_number.replace(/^RCP-/, "") ||
+              selectedSaleAudit.receipt_number.includes(l.id.slice(0, 8)) ||
+              (selectedSaleAudit.receipt_number.startsWith("PAY-") && selectedSaleAudit.receipt_number.slice(4).startsWith(l.id.slice(0, 8))) ||
+              l.lines.some((line) => line.id === selectedSaleAudit.id)
+          );
+
+          const authorName = [userProfile?.first_name, userProfile?.last_name].filter(Boolean).join(" ") || "Account Owner / Staff";
+          const authorPhone = userProfile?.phone || userProfile?.email || "Terminal Device";
+
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              {/* Total & Status Box */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "16px",
+                  borderRadius: "12px",
+                  border: isCancelled ? "1px solid #f87171" : "1px solid #238636",
+                  background: isCancelled ? "rgba(248,113,113,0.08)" : "rgba(35,134,54,0.08)",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--ink-secondary, #6b7280)", letterSpacing: "0.5px" }}>
+                    TOTAL AMOUNT
+                  </div>
+                  <div style={{ fontSize: "24px", fontWeight: 800, color: isCancelled ? "#f87171" : "var(--leaf, #238636)", marginTop: "4px" }}>
+                    {formatMoney(selectedSaleAudit.total_amount, currency)}
+                  </div>
+                  <div style={{ fontSize: "12px", color: "var(--ink-secondary, #6b7280)", marginTop: "2px" }}>
+                    {new Date(selectedSaleAudit.occurred_at).toLocaleString()}
+                  </div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <Pill tone={isCancelled ? "bad" : "good"}>
+                    {isCancelled ? "RETURNED / VOIDED" : selectedSaleAudit.payment_status.toUpperCase()}
+                  </Pill>
+                </div>
+              </div>
+
+              {/* Author & Blame Section */}
+              <div
+                style={{
+                  padding: "14px",
+                  borderRadius: "10px",
+                  border: "1px solid var(--border, #e5e7eb)",
+                  background: "var(--paper, #fff)",
+                }}
+              >
+                <div style={{ fontSize: "12px", fontWeight: 800, color: "var(--ink, #111)", marginBottom: "10px", letterSpacing: "0.5px" }}>
+                  {"\uD83D\uDD0D"} TRANSACTION AUTHOR & BLAME
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border, #f3f4f6)", fontSize: "13px" }}>
+                  <span style={{ color: "var(--ink-secondary, #6b7280)" }}>Recorded / Sold By</span>
+                  <span style={{ fontWeight: 700, color: "#1f6feb" }}>{authorName} ({authorPhone})</span>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border, #f3f4f6)", fontSize: "13px" }}>
+                  <span style={{ color: "var(--ink-secondary, #6b7280)" }}>Confirmed By</span>
+                  <span style={{ fontWeight: 700, color: "#238636" }}>
+                    {linkedList?.status === "confirmed" ? "Owner / Manager (PIN Verified)" : "Direct Register Sale"}
+                  </span>
+                </div>
+
+                {linkedList ? (
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border, #f3f4f6)", fontSize: "13px" }}>
+                    <span style={{ color: "var(--ink-secondary, #6b7280)" }}>Customer</span>
+                    <span style={{ fontWeight: 700, color: "var(--ink, #111)" }}>
+                      {linkedList.customer_name || linkedList.customer_phone || "Customer"} ({linkedList.customer_phone || "No phone"})
+                    </span>
+                  </div>
+                ) : null}
+
+                {isCancelled ? (
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: "13px" }}>
+                    <span style={{ color: "#cf222e" }}>Voided / Returned At</span>
+                    <span style={{ fontWeight: 700, color: "#cf222e" }}>
+                      {new Date(selectedSaleAudit.cancelled_at!).toLocaleString()}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Waybill & Logistics Section (if available) */}
+              {linkedList && (linkedList.waybill_number || linkedList.transporter_name) ? (
+                <div
+                  style={{
+                    padding: "14px",
+                    borderRadius: "10px",
+                    border: "1px solid var(--border, #e5e7eb)",
+                    background: "var(--paper, #fff)",
+                  }}
+                >
+                  <div style={{ fontSize: "12px", fontWeight: 800, color: "#f59e0b", marginBottom: "10px", letterSpacing: "0.5px" }}>
+                    {"\uD83D\uDE9A"} WAYBILL & LOGISTICS DISPATCH
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: "13px" }}>
+                    <span style={{ color: "var(--ink-secondary, #6b7280)" }}>Carrier / Transporter</span>
+                    <span style={{ fontWeight: 700 }}>{linkedList.transporter_name || "Motor Carrier / Courier"}</span>
+                  </div>
+
+                  {linkedList.transporter_phone ? (
+                    <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: "13px" }}>
+                      <span style={{ color: "var(--ink-secondary, #6b7280)" }}>Carrier Contact</span>
+                      <a href={`tel:${linkedList.transporter_phone}`} style={{ fontWeight: 700, color: "#1f6feb", textDecoration: "none" }}>
+                        {linkedList.transporter_phone} (Call)
+                      </a>
+                    </div>
+                  ) : null}
+
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: "13px" }}>
+                    <span style={{ color: "var(--ink-secondary, #6b7280)" }}>Waybill / Receipt #</span>
+                    <span style={{ fontWeight: 700, color: "#238636" }}>{linkedList.waybill_number || "Pending receipt"}</span>
+                  </div>
+
+                  {linkedList.dispatch_cost ? (
+                    <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: "13px" }}>
+                      <span style={{ color: "var(--ink-secondary, #6b7280)" }}>Waybill Cost</span>
+                      <span style={{ fontWeight: 700 }}>{formatMoney(linkedList.dispatch_cost, currency)}</span>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {/* Sold Lines Breakdown */}
+              {linkedList && linkedList.lines && linkedList.lines.filter((l) => l.note !== "heading").length > 0 ? (
+                <div
+                  style={{
+                    padding: "14px",
+                    borderRadius: "10px",
+                    border: "1px solid var(--border, #e5e7eb)",
+                    background: "var(--paper, #fff)",
+                  }}
+                >
+                  <div style={{ fontSize: "12px", fontWeight: 800, color: "var(--ink, #111)", marginBottom: "8px", letterSpacing: "0.5px" }}>
+                    SOLD ITEMS & QUANTITIES
+                  </div>
+                  {linkedList.lines
+                    .filter((l) => l.note !== "heading")
+                    .map((line, lIdx) => (
+                      <div
+                        key={line.id || lIdx}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          padding: "6px 0",
+                          borderBottom: lIdx < linkedList.lines.length - 1 ? "1px solid var(--border, #f3f4f6)" : "none",
+                          fontSize: "13px",
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{line.product_name || line.free_text || "Item"}</div>
+                          <div style={{ fontSize: "11px", color: "var(--ink-secondary, #6b7280)" }}>
+                            Qty: {line.quantity} {line.unit || "pcs"} &bull; Unit: {formatMoney(line.shop_price || "0", currency)}
+                          </div>
+                        </div>
+                        <div style={{ fontWeight: 700, color: "var(--leaf, #238636)" }}>
+                          {formatMoney(line.line_total || (Number(line.shop_price || 0) * Number(line.quantity || 1)).toString(), currency)}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              ) : null}
+
+              {/* Quick Actions */}
+              <div style={{ display: "flex", gap: "10px", marginTop: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  style={{
+                    flex: 1,
+                    padding: "10px 16px",
+                    borderRadius: "8px",
+                    border: "none",
+                    background: "var(--leaf, #238636)",
+                    color: "#fff",
+                    fontWeight: 700,
+                    fontSize: "13px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Print / Save Invoice
+                </button>
+                {linkedList?.customer_phone ? (
+                  <a
+                    href={`https://wa.me/${linkedList.customer_phone.replace(/[^\d]/g, "")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      flex: 1,
+                      padding: "10px 16px",
+                      borderRadius: "8px",
+                      border: "none",
+                      background: "#1f6feb",
+                      color: "#fff",
+                      fontWeight: 700,
+                      fontSize: "13px",
+                      textAlign: "center",
+                      textDecoration: "none",
+                    }}
+                  >
+                    WhatsApp Customer
+                  </a>
+                ) : null}
+              </div>
+            </div>
+          );
+        })() : null}
+      </Sheet>
 
       {notice ? <Toast message={notice} tone="bad" onDismiss={() => setNotice(null)} /> : null}
     </main>

@@ -135,6 +135,7 @@ export default function Dashboard() {
   const [runningOut, setRunningOut] = useState<LowStockProduct[]>([]);
   const [categories, setCategories] = useState<ExpenseCategoryList | null>(null);
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
+  const [showTimelineChart, setShowTimelineChart] = useState(false);
 
   const todayProfitMetrics = useMemo(() => {
     const todayRevenue = Number(today?.total_revenue || 0);
@@ -594,16 +595,55 @@ export default function Dashboard() {
         </section>
 
         {isOwnerOrManager ? (
-          <SalesTimelineChart
-            days={today?.days ?? []}
-            sales={recentSales}
-            currency={currency}
-            marginRatio={
-              todayProfitMetrics.revenue > 0
-                ? todayProfitMetrics.grossProfit / todayProfitMetrics.revenue
-                : 0.28
-            }
-          />
+          <div style={{ marginBottom: "20px" }}>
+            <button
+              type="button"
+              onClick={() => setShowTimelineChart((prev) => !prev)}
+              style={{
+                width: "100%",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "12px 18px",
+                borderRadius: "12px",
+                border: "1px solid var(--border, #e5e7eb)",
+                background: "var(--paper, #ffffff)",
+                cursor: "pointer",
+                marginBottom: showTimelineChart ? "12px" : "0",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <span style={{ fontSize: "16px" }}>{"\uD83D\uDCC8"}</span>
+                <div style={{ textAlign: "left" }}>
+                  <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--ink, #111827)" }}>
+                    Sales & Profit Progress Timeline
+                  </div>
+                  <div style={{ fontSize: "12px", color: "var(--ink-secondary, #6b7280)" }}>
+                    {showTimelineChart
+                      ? "Click to collapse visual charts"
+                      : "Click to view 7d / 14d / 30d visual trends & daily performance"}
+                  </div>
+                </div>
+              </div>
+              <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--leaf, #238636)" }}>
+                {showTimelineChart ? "Hide Chart \u25B2" : "Show Chart \u25BC"}
+              </span>
+            </button>
+
+            {showTimelineChart ? (
+              <SalesTimelineChart
+                days={today?.days ?? []}
+                sales={recentSales}
+                currency={currency}
+                marginRatio={
+                  todayProfitMetrics.revenue > 0
+                    ? todayProfitMetrics.grossProfit / todayProfitMetrics.revenue
+                    : 0.28
+                }
+              />
+            ) : null}
+          </div>
         ) : null}
 
         <div className={styles.columns}>

@@ -849,8 +849,15 @@ export default function Home() {
   const [quickPasteText, setQuickPasteText] = useState("");
   const [savingQuickPaste, setSavingQuickPaste] = useState(false);
 
-  // Collapsible list cards
+  // Collapsible list cards & payment history
   const [expandedListIds, setExpandedListIds] = useState<Set<string>>(() => new Set());
+  const [expandedPaymentListIds, setExpandedPaymentListIds] = useState<Set<string>>(() => new Set());
+  const [showTimelineChart, setShowTimelineChart] = useState(false);
+
+  // Sale Audit & Blame state
+  const [selectedSaleAudit, setSelectedSaleAudit] = useState<SaleSummary | null>(null);
+  const [historySearchQuery, setHistorySearchQuery] = useState("");
+  const [salesFilterStatus, setSalesFilterStatus] = useState<"all" | "paid" | "returned">("all");
 
   // Customer List Part Payment / Advance Payment modal state
   const [paymentModalList, setPaymentModalList] = useState<CustomerList | null>(null);
@@ -2015,10 +2022,23 @@ export default function Home() {
     setExportingPdf(true);
     showToast("Generating official business invoice PDF...");
     try {
-      await generateAndSharePdfInvoice(activeBusiness, businessDetails, item, products, categories);
-      showToast("Invoice PDF generated and shared!");
+      await generateAndSharePdfInvoice(
+        {
+          name: businessDetails?.name || activeBusiness.name,
+          slug: activeBusiness.slug,
+          logo_url: businessDetails?.logo_url || activeBusiness.logo_url,
+        },
+        businessDetails,
+        item,
+        products,
+        categories
+      );
+      showToast("Invoice ready!");
     } catch (err: any) {
-      showToast(err?.message || "Could not export PDF.");
+      const msg = String(err?.message || "");
+      if (!msg.toLowerCase().includes("cancel") && !msg.toLowerCase().includes("dismiss")) {
+        showToast(err?.message || "Could not export PDF.");
+      }
     } finally {
       setExportingPdf(false);
     }
@@ -2028,7 +2048,17 @@ export default function Home() {
     if (!activeBusiness) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      await printInvoice(activeBusiness, businessDetails, item, products, categories);
+      await printInvoice(
+        {
+          name: businessDetails?.name || activeBusiness.name,
+          slug: activeBusiness.slug,
+          logo_url: businessDetails?.logo_url || activeBusiness.logo_url,
+        },
+        businessDetails,
+        item,
+        products,
+        categories
+      );
     } catch (err: any) {
       showToast(err?.message || "Could not open print/save dialog.");
     }
@@ -3036,17 +3066,59 @@ export default function Home() {
             </View>
 
             {isOwnerOrManager && (
-              <SalesTimelineChart
-                days={dailyStats?.days ?? []}
-                sales={sales}
-                currency={activeBusiness?.currency || "NGN"}
-                marginRatio={
-                  todayProfitMetrics.revenue > 0
-                    ? todayProfitMetrics.grossProfit / todayProfitMetrics.revenue
-                    : 0.28
-                }
-                isDarkMode={themeMode === "dark"}
-              />
+              <View style={{ marginVertical: 6 }}>
+                <Pressable
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    backgroundColor: theme.card,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    borderRadius: 12,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                  }}
+                  onPress={() => {
+                    void Haptics.selectionAsync();
+                    setShowTimelineChart((prev) => !prev);
+                  }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+                    <Text style={{ fontSize: 14 }}>{"\uD83D\uDCC8"}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>
+                        Sales & Profit Timeline
+                      </Text>
+                      <Text style={{ fontSize: 11, color: theme.textSecondary }}>
+                        {showTimelineChart ? "Tap to collapse chart" : "Tap to view 7d / 14d / 30d visual trends"}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: "#238636" }}>
+                      {showTimelineChart ? "Hide" : "View"}
+                    </Text>
+                    <View style={{ transform: [{ rotate: showTimelineChart ? "180deg" : "0deg" }] }}>
+                      <ChevronDownIcon size={14} color="#238636" />
+                    </View>
+                  </View>
+                </Pressable>
+
+                {showTimelineChart && (
+                  <SalesTimelineChart
+                    days={dailyStats?.days ?? []}
+                    sales={sales}
+                    currency={activeBusiness?.currency || "NGN"}
+                    marginRatio={
+                      todayProfitMetrics.revenue > 0
+                        ? todayProfitMetrics.grossProfit / todayProfitMetrics.revenue
+                        : 0.28
+                    }
+                    isDarkMode={themeMode === "dark"}
+                  />
+                )}
+              </View>
             )}
 
             {/* Quick Actions Grid with Native SVG Icons */}
@@ -3121,16 +3193,26 @@ export default function Home() {
               </View>
             ) : (
               sales.slice(0, 5).map((sale) => (
-                <View key={sale.id} style={styles.saleRow}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <Pressable
+                  key={sale.id}
+                  style={styles.saleRow}
+                  onPress={() => {
+                    void Haptics.selectionAsync();
+                    setSelectedSaleAudit(sale);
+                  }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
                     <ReceiptIcon size={18} color="#4ade80" />
-                    <View>
+                    <View style={{ flex: 1 }}>
                       <Text style={styles.saleReceipt}>{getSaleDisplayTitle(sale, profile, members, customerLists)}</Text>
                       <Text style={styles.saleDate}>{sale.receipt_number} &bull; {sale.payment_method.toUpperCase()}</Text>
                     </View>
                   </View>
-                  <Text style={styles.saleAmount}>{formatMoney(sale.total_amount)}</Text>
-                </View>
+                  <View style={{ alignItems: "flex-end", gap: 2 }}>
+                    <Text style={styles.saleAmount}>{formatMoney(sale.total_amount)}</Text>
+                    <Text style={{ fontSize: 10, color: "#238636", fontWeight: "600" }}>Audit & Blame &rsaquo;</Text>
+                  </View>
+                </Pressable>
               ))
             )}
           </ScrollView>
@@ -3880,39 +3962,87 @@ export default function Home() {
                           </View>
                         </View>
 
-                        {/* Itemized payment history so advance payments and deposits are directly visible */}
+                        {/* Itemized payment history so advance payments and deposits are directly visible - smartly collapsed by default */}
                         {item.payments && item.payments.length > 0 ? (
                           <View style={{ marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.08)" }}>
-                            <Text style={{ fontSize: 11, fontWeight: "700", color: "#8a928e", letterSpacing: 0.5, marginBottom: 6 }}>
-                              PAYMENT HISTORY ({item.payments.length})
-                            </Text>
-                            {item.payments.map((p, pIdx) => (
-                              <View key={p.id || pIdx} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 3 }}>
-                                <View style={{ flex: 1, paddingRight: 8 }}>
-                                  <Text style={{ color: "#d1d5db", fontSize: 12, fontWeight: "600" }}>
-                                    {p.note || (pIdx === 0 ? "Advance Deposit" : `Part Payment #${pIdx + 1}`)}
-                                  </Text>
-                                  <Text style={{ color: "#8a928e", fontSize: 11 }}>
-                                    {new Date(p.date).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} via {(p.payment_method || "transfer").toUpperCase()}
-                                  </Text>
-                                </View>
-                                <Text style={{ color: "#4ade80", fontSize: 13, fontWeight: "700" }}>
-                                  +{formatMoney(p.amount.toString())}
+                            <Pressable
+                              style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4 }}
+                              onPress={() => {
+                                setExpandedPaymentListIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(item.id)) next.delete(item.id);
+                                  else next.add(item.id);
+                                  return next;
+                                });
+                              }}
+                            >
+                              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                                <Text style={{ fontSize: 11, fontWeight: "700", color: "#8a928e", letterSpacing: 0.5 }}>
+                                  PAYMENT HISTORY ({item.payments.length})
+                                </Text>
+                                <Text style={{ fontSize: 11, color: "#4ade80", fontWeight: "700" }}>
+                                  {"\u20A6"}{Number(totalPaid || 0).toLocaleString()} paid
                                 </Text>
                               </View>
-                            ))}
+                              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                                <Text style={{ fontSize: 11, color: "#8a928e" }}>
+                                  {expandedPaymentListIds.has(item.id) ? "Hide" : "Show"}
+                                </Text>
+                                <View style={{ transform: [{ rotate: expandedPaymentListIds.has(item.id) ? "180deg" : "0deg" }] }}>
+                                  <ChevronDownIcon size={14} color="#8a928e" />
+                                </View>
+                              </View>
+                            </Pressable>
+                            {expandedPaymentListIds.has(item.id) &&
+                              item.payments.map((p, pIdx) => (
+                                <View key={p.id || pIdx} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 3 }}>
+                                  <View style={{ flex: 1, paddingRight: 8 }}>
+                                    <Text style={{ color: "#d1d5db", fontSize: 12, fontWeight: "600" }}>
+                                      {p.note || (pIdx === 0 ? "Advance Deposit" : `Part Payment #${pIdx + 1}`)}
+                                    </Text>
+                                    <Text style={{ color: "#8a928e", fontSize: 11 }}>
+                                      {new Date(p.date).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} via {(p.payment_method || "transfer").toUpperCase()}
+                                    </Text>
+                                  </View>
+                                  <Text style={{ color: "#4ade80", fontSize: 13, fontWeight: "700" }}>
+                                    +{formatMoney(p.amount.toString())}
+                                  </Text>
+                                </View>
+                              ))}
                           </View>
                         ) : totalPaid > 0 ? (
                           <View style={{ marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.08)" }}>
-                            <Text style={{ fontSize: 11, fontWeight: "700", color: "#8a928e", letterSpacing: 0.5, marginBottom: 4 }}>
-                              RECORDED ADVANCE DEPOSIT
-                            </Text>
-                            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                              <Text style={{ color: "#d1d5db", fontSize: 12 }}>Deposit on file</Text>
-                              <Text style={{ color: "#4ade80", fontSize: 13, fontWeight: "700" }}>
-                                +{formatMoney(totalPaid.toString())}
+                            <Pressable
+                              style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4 }}
+                              onPress={() => {
+                                setExpandedPaymentListIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(item.id)) next.delete(item.id);
+                                  else next.add(item.id);
+                                  return next;
+                                });
+                              }}
+                            >
+                              <Text style={{ fontSize: 11, fontWeight: "700", color: "#8a928e", letterSpacing: 0.5 }}>
+                                RECORDED ADVANCE DEPOSIT
                               </Text>
-                            </View>
+                              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                                <Text style={{ fontSize: 11, color: "#8a928e" }}>
+                                  {expandedPaymentListIds.has(item.id) ? "Hide" : "Show"}
+                                </Text>
+                                <View style={{ transform: [{ rotate: expandedPaymentListIds.has(item.id) ? "180deg" : "0deg" }] }}>
+                                  <ChevronDownIcon size={14} color="#8a928e" />
+                                </View>
+                              </View>
+                            </Pressable>
+                            {expandedPaymentListIds.has(item.id) && (
+                              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 4 }}>
+                                <Text style={{ color: "#d1d5db", fontSize: 12 }}>Deposit on file</Text>
+                                <Text style={{ color: "#4ade80", fontSize: 13, fontWeight: "700" }}>
+                                  +{formatMoney(totalPaid.toString())}
+                                </Text>
+                              </View>
+                            )}
                           </View>
                         ) : null}
 
@@ -4348,6 +4478,57 @@ export default function Home() {
             {/* Sales Sub-tab */}
             {tradingSubTab === "sales" ? (
               <View>
+                {/* Search & Filter Sales to track old stuff and investigate blame */}
+                {sales.length > 0 && (
+                  <View style={{ marginBottom: 12, gap: 8 }}>
+                    <View style={styles.searchBoxWrap}>
+                      <SearchIcon size={16} color="#8a928e" />
+                      <TextInput
+                        style={styles.searchInputClean}
+                        placeholder="Search sales by receipt, customer, seller, date..."
+                        placeholderTextColor="#8a928e"
+                        value={historySearchQuery}
+                        onChangeText={setHistorySearchQuery}
+                      />
+                      {historySearchQuery.length > 0 && (
+                        <Pressable onPress={() => setHistorySearchQuery("")}>
+                          <CloseIcon size={16} color="#8a928e" />
+                        </Pressable>
+                      )}
+                    </View>
+
+                    <View style={{ flexDirection: "row", gap: 6 }}>
+                      {(["all", "paid", "returned"] as const).map((filter) => {
+                        const count =
+                          filter === "all"
+                            ? sales.length
+                            : filter === "paid"
+                            ? sales.filter((s) => !s.cancelled_at).length
+                            : sales.filter((s) => Boolean(s.cancelled_at)).length;
+                        return (
+                          <Pressable
+                            key={filter}
+                            onPress={() => setSalesFilterStatus(filter)}
+                            style={[
+                              styles.subFilterChip,
+                              salesFilterStatus === filter && styles.subFilterChipActive,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.subFilterChipText,
+                                salesFilterStatus === filter && styles.subFilterChipTextActive,
+                              ]}
+                            >
+                              {filter === "all" ? `All (${count})` : filter === "paid" ? `Paid (${count})` : `Returned (${count})`}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
+
                 {sales.length === 0 ? (
                   <View style={styles.emptyBox}>
                     <ReceiptIcon size={32} color="#6e7681" />
@@ -4356,11 +4537,41 @@ export default function Home() {
                       Tap "+ Sale" above or "Sell 1" on any catalog item to record your first transaction.
                     </Text>
                   </View>
-                ) : (
-                  sales.map((s) => {
+                ) : (() => {
+                  const filteredSales = sales.filter((s) => {
+                    if (salesFilterStatus === "paid" && s.cancelled_at) return false;
+                    if (salesFilterStatus === "returned" && !s.cancelled_at) return false;
+                    if (!historySearchQuery.trim()) return true;
+                    const q = historySearchQuery.toLowerCase();
+                    const title = getSaleDisplayTitle(s, profile, members, customerLists).toLowerCase();
+                    const receipt = (s.receipt_number || "").toLowerCase();
+                    const amt = (s.total_amount || "").toLowerCase();
+                    const method = (s.payment_method || "").toLowerCase();
+                    const date = new Date(s.created_at).toLocaleString().toLowerCase();
+                    return title.includes(q) || receipt.includes(q) || amt.includes(q) || method.includes(q) || date.includes(q);
+                  });
+
+                  if (filteredSales.length === 0) {
+                    return (
+                      <View style={styles.emptyBox}>
+                        <ReceiptIcon size={28} color="#6e7681" />
+                        <Text style={styles.emptyTitle}>No matching transactions</Text>
+                        <Text style={styles.emptySubtitle}>Try searching with a different keyword or filter.</Text>
+                      </View>
+                    );
+                  }
+
+                  return filteredSales.map((s) => {
                     const isCancelled = Boolean(s.cancelled_at);
                     return (
-                      <View key={s.id} style={styles.saleRow}>
+                      <Pressable
+                        key={s.id}
+                        style={styles.saleRow}
+                        onPress={() => {
+                          void Haptics.selectionAsync();
+                          setSelectedSaleAudit(s);
+                        }}
+                      >
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
                           <ReceiptIcon
                             size={20}
@@ -4391,10 +4602,13 @@ export default function Home() {
                               })}{" "}
                               via {s.payment_method.toUpperCase()}
                             </Text>
+                            <Text style={{ fontSize: 10, color: "#238636", fontWeight: "600", marginTop: 2 }}>
+                              Audit blame, waybill & receipt &rsaquo;
+                            </Text>
                           </View>
                         </View>
 
-                        <View style={{ alignItems: "flex-end", gap: 4 }}>
+                        <View style={{ alignItems: "flex-end", gap: 6 }}>
                           <Text
                             style={[
                               styles.saleAmount,
@@ -4406,16 +4620,19 @@ export default function Home() {
                           {!isCancelled && (
                             <Pressable
                               style={styles.voidBtn}
-                              onPress={() => setSaleToReturn(s)}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                setSaleToReturn(s);
+                              }}
                             >
-                              <Text style={styles.voidBtnText}>Return Sale</Text>
+                              <Text style={styles.voidBtnText}>Return</Text>
                             </Pressable>
                           )}
                         </View>
-                      </View>
+                      </Pressable>
                     );
-                  })
-                )}
+                  });
+                })()}
               </View>
             ) : (
               /* Expenses Sub-tab */
@@ -6033,11 +6250,20 @@ export default function Home() {
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, { maxHeight: "90%", padding: 16 }]}>
             <View style={styles.invoiceModalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>{activeBusiness?.name || "Official Invoice"}</Text>
-                <Text style={styles.modalSubtitle}>
-                  Order #{invoiceModalList ? invoiceModalList.id.slice(0, 8) : ""}
-                </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, paddingRight: 8 }}>
+                {(businessDetails?.logo_url || activeBusiness?.logo_url) ? (
+                  <Image
+                    source={{ uri: businessDetails?.logo_url || activeBusiness?.logo_url || "" }}
+                    style={{ width: 44, height: 44, borderRadius: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }}
+                    resizeMode="cover"
+                  />
+                ) : null}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalTitle}>{businessDetails?.name || activeBusiness?.name || "Official Invoice"}</Text>
+                  <Text style={styles.modalSubtitle}>
+                    Order #{invoiceModalList ? invoiceModalList.id.slice(0, 8) : ""}
+                  </Text>
+                </View>
               </View>
               <Pressable
                 style={styles.closeCircleBtn}
@@ -6251,6 +6477,366 @@ export default function Home() {
                 </View>
               </ScrollView>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Sale Detail & Audit Blame Modal */}
+      <Modal statusBarTranslucent visible={selectedSaleAudit !== null} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxHeight: "90%", padding: 18 }]}>
+            {selectedSaleAudit && (() => {
+              const isCancelled = Boolean(selectedSaleAudit.cancelled_at);
+              const linkedList = customerLists.find(
+                (l) =>
+                  l.id === selectedSaleAudit.customer_id ||
+                  selectedSaleAudit.receipt_number.includes(l.id.slice(0, 8)) ||
+                  (selectedSaleAudit.receipt_number.startsWith("PAY-") && selectedSaleAudit.receipt_number.slice(4).startsWith(l.id.slice(0, 8))) ||
+                  l.lines.some((line) => line.id === selectedSaleAudit.id)
+              );
+
+              // Find author / seller
+              const isSelf = profile && selectedSaleAudit.seller_id === profile.id;
+              const sellerMember = members.find((m) => m.user_id === selectedSaleAudit.seller_id);
+              const sellerName = isSelf
+                ? [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") || "You (Account Owner)"
+                : sellerMember
+                ? [sellerMember.first_name, sellerMember.last_name].filter(Boolean).join(" ") || "Stall Staff"
+                : selectedSaleAudit.seller_id
+                ? `Staff (ID: ${selectedSaleAudit.seller_id.slice(0, 8)})`
+                : "Counter Checkout";
+              const sellerRole = isSelf
+                ? "Owner / Trader Admin"
+                : sellerMember?.role || "Sales Representative";
+              const sellerPhone = isSelf
+                ? profile?.phone || profile?.email || "Current Device"
+                : sellerMember?.phone || "Staff Phone Not Set";
+
+              const cleanCustomerPhone = linkedList?.customer_phone ? formatWaNumber(linkedList.customer_phone) : null;
+
+              return (
+                <View style={{ flex: 1 }}>
+                  {/* Modal Header */}
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                      <Text style={styles.modalTitle}>Sale Audit & Blame</Text>
+                      <Text style={styles.modalSubtitle}>Receipt #{selectedSaleAudit.receipt_number}</Text>
+                    </View>
+                    <Pressable
+                      style={styles.closeCircleBtn}
+                      onPress={() => setSelectedSaleAudit(null)}
+                    >
+                      <CloseIcon size={18} color="#64748b" />
+                    </Pressable>
+                  </View>
+
+                  <ScrollView showsVerticalScrollIndicator={false}>
+                    {/* Amount & Status Card */}
+                    <View
+                      style={{
+                        backgroundColor: isCancelled ? "rgba(248,113,113,0.1)" : "rgba(35,134,54,0.12)",
+                        borderWidth: 1,
+                        borderColor: isCancelled ? "#f87171" : "#238636",
+                        borderRadius: 14,
+                        padding: 14,
+                        marginBottom: 14,
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <View>
+                        <Text style={{ fontSize: 11, fontWeight: "700", color: "#8a928e", letterSpacing: 0.5 }}>
+                          TRANSACTION TOTAL
+                        </Text>
+                        <Text style={{ fontSize: 22, fontWeight: "800", color: isCancelled ? "#f87171" : "#4ade80", marginTop: 2 }}>
+                          {formatMoney(selectedSaleAudit.total_amount)}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: "#8a928e", marginTop: 2 }}>
+                          {new Date(selectedSaleAudit.created_at).toLocaleString([], {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: "flex-end", gap: 4 }}>
+                        <View
+                          style={[
+                            styles.saleStatusPill,
+                            isCancelled ? styles.salePillCancelled : styles.salePillSuccess,
+                          ]}
+                        >
+                          <Text style={styles.saleStatusText}>
+                            {isCancelled ? "RETURNED / VOIDED" : selectedSaleAudit.payment_status.toUpperCase()}
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 11, color: "#cbd5e1", fontWeight: "600" }}>
+                          via {selectedSaleAudit.payment_method.toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Git-Style Blame Box: Who is Responsible */}
+                    <View
+                      style={{
+                        backgroundColor: "#161b22",
+                        borderWidth: 1,
+                        borderColor: "#30363d",
+                        borderRadius: 12,
+                        padding: 12,
+                        marginBottom: 14,
+                      }}
+                    >
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                        <Text style={{ fontSize: 14 }}>{"\uD83D\uDD0D"}</Text>
+                        <Text style={{ fontSize: 12, fontWeight: "800", color: "#f0f6fc", letterSpacing: 0.5 }}>
+                          TRANSACTION AUTHOR & BLAME
+                        </Text>
+                      </View>
+
+                      {/* Author row */}
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.06)" }}>
+                        <Text style={{ fontSize: 12, color: "#8b949e" }}>Recorded / Sold By</Text>
+                        <View style={{ alignItems: "flex-end" }}>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: "#58a6ff" }}>{sellerName}</Text>
+                          <Text style={{ fontSize: 10, color: "#8b949e" }}>{sellerRole} &bull; {sellerPhone}</Text>
+                        </View>
+                      </View>
+
+                      {/* Confirmation row */}
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.06)" }}>
+                        <Text style={{ fontSize: 12, color: "#8b949e" }}>Confirmed By</Text>
+                        <View style={{ alignItems: "flex-end" }}>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: "#3fb950" }}>
+                            {linkedList?.status === "confirmed" ? "Owner / Manager (PIN Verified)" : "Direct Register Sale"}
+                          </Text>
+                          <Text style={{ fontSize: 10, color: "#8b949e" }}>
+                            {linkedList?.created_at ? `Order at ${new Date(linkedList.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Instant Checkout"}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Customer info */}
+                      {linkedList && (
+                        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.06)" }}>
+                          <Text style={{ fontSize: 12, color: "#8b949e" }}>Customer</Text>
+                          <View style={{ alignItems: "flex-end" }}>
+                            <Text style={{ fontSize: 12, fontWeight: "700", color: "#f0f6fc" }}>
+                              {linkedList.customer_name || linkedList.customer_phone || "Customer"}
+                            </Text>
+                            <Text style={{ fontSize: 10, color: "#8b949e" }}>{linkedList.customer_phone || "No phone"}</Text>
+                          </View>
+                        </View>
+                      )}
+
+                      {/* Return blame if cancelled */}
+                      {isCancelled && (
+                        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 6 }}>
+                          <Text style={{ fontSize: 12, color: "#f85149" }}>Voided / Returned At</Text>
+                          <View style={{ alignItems: "flex-end" }}>
+                            <Text style={{ fontSize: 12, fontWeight: "700", color: "#f85149" }}>
+                              {new Date(selectedSaleAudit.cancelled_at!).toLocaleString()}
+                            </Text>
+                            <Text style={{ fontSize: 10, color: "#8b949e" }}>
+                              Reason: {selectedSaleAudit.cancellation_reason || "Customer return"}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Waybill & Logistics Section (if available) */}
+                    {linkedList && (linkedList.waybill_number || linkedList.transporter_name || linkedList.fulfillment_type === "waybill") && (
+                      <View
+                        style={{
+                          backgroundColor: "#161b22",
+                          borderWidth: 1,
+                          borderColor: "#30363d",
+                          borderRadius: 12,
+                          padding: 12,
+                          marginBottom: 14,
+                        }}
+                      >
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                          <TruckIcon size={16} color="#f59e0b" />
+                          <Text style={{ fontSize: 12, fontWeight: "800", color: "#f59e0b", letterSpacing: 0.5 }}>
+                            WAYBILL & LOGISTICS DISPATCH
+                          </Text>
+                        </View>
+
+                        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4 }}>
+                          <Text style={{ fontSize: 12, color: "#8b949e" }}>Carrier / Transporter</Text>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: "#f0f6fc" }}>
+                            {linkedList.transporter_name || "Motor Carrier / Courier"}
+                          </Text>
+                        </View>
+
+                        {linkedList.transporter_phone ? (
+                          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4 }}>
+                            <Text style={{ fontSize: 12, color: "#8b949e" }}>Carrier Contact</Text>
+                            <Pressable
+                              onPress={() => {
+                                if (linkedList.transporter_phone) {
+                                  void Linking.openURL(`tel:${linkedList.transporter_phone}`);
+                                }
+                              }}
+                            >
+                              <Text style={{ fontSize: 12, fontWeight: "700", color: "#38bdf8" }}>
+                                {linkedList.transporter_phone} (Tap to Call)
+                              </Text>
+                            </Pressable>
+                          </View>
+                        ) : null}
+
+                        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4 }}>
+                          <Text style={{ fontSize: 12, color: "#8b949e" }}>Waybill / Receipt #</Text>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: "#4ade80" }}>
+                            {linkedList.waybill_number || "Pending receipt"}
+                          </Text>
+                        </View>
+
+                        {linkedList.dispatch_cost ? (
+                          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4 }}>
+                            <Text style={{ fontSize: 12, color: "#8b949e" }}>Dispatch / Waybill Cost</Text>
+                            <Text style={{ fontSize: 12, fontWeight: "700", color: "#f0f6fc" }}>
+                              {formatMoney(linkedList.dispatch_cost)}
+                            </Text>
+                          </View>
+                        ) : null}
+
+                        {linkedList.dispatched_at ? (
+                          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4 }}>
+                            <Text style={{ fontSize: 12, color: "#8b949e" }}>Departure / Dispatched</Text>
+                            <Text style={{ fontSize: 12, color: "#cbd5e1" }}>
+                              {new Date(linkedList.dispatched_at).toLocaleString()}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    )}
+
+                    {/* Order Items Breakdown */}
+                    {linkedList && linkedList.lines && linkedList.lines.filter((l) => l.note !== "heading").length > 0 && (
+                      <View
+                        style={{
+                          backgroundColor: "#161b22",
+                          borderWidth: 1,
+                          borderColor: "#30363d",
+                          borderRadius: 12,
+                          padding: 12,
+                          marginBottom: 14,
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: "800", color: "#f0f6fc", marginBottom: 8, letterSpacing: 0.5 }}>
+                          SOLD ITEMS & QUANTITIES
+                        </Text>
+                        {linkedList.lines
+                          .filter((l) => l.note !== "heading")
+                          .map((line, lIdx) => (
+                            <View
+                              key={line.id || lIdx}
+                              style={{
+                                flexDirection: "row",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                paddingVertical: 5,
+                                borderBottomWidth: lIdx < linkedList.lines.length - 1 ? 1 : 0,
+                                borderBottomColor: "rgba(255,255,255,0.06)",
+                              }}
+                            >
+                              <View style={{ flex: 1, paddingRight: 8 }}>
+                                <Text style={{ fontSize: 12, fontWeight: "600", color: "#f0f6fc" }}>
+                                  {line.product_name || line.free_text || "Item"}
+                                </Text>
+                                <Text style={{ fontSize: 10, color: "#8b949e" }}>
+                                  Qty: {line.quantity} {line.unit || "pcs"} &bull; Unit: {formatMoney(line.shop_price || "0")}
+                                </Text>
+                              </View>
+                              <Text style={{ fontSize: 12, fontWeight: "700", color: "#4ade80" }}>
+                                {formatMoney(line.line_total || ((Number(line.shop_price || 0) * Number(line.quantity || 1)).toString()))}
+                              </Text>
+                            </View>
+                          ))}
+                      </View>
+                    )}
+
+                    {/* Action Buttons */}
+                    <View style={{ gap: 8, marginTop: 4 }}>
+                      {linkedList && (
+                        <Pressable
+                          style={{
+                            backgroundColor: "#238636",
+                            paddingVertical: 12,
+                            borderRadius: 10,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 8,
+                          }}
+                          onPress={() => {
+                            setSelectedSaleAudit(null);
+                            setInvoiceModalList(linkedList);
+                          }}
+                        >
+                          <ReceiptIcon size={16} color="#ffffff" />
+                          <Text style={{ color: "#ffffff", fontWeight: "700", fontSize: 13 }}>
+                            View & Share Official Invoice (PDF)
+                          </Text>
+                        </Pressable>
+                      )}
+
+                      {cleanCustomerPhone && (
+                        <Pressable
+                          style={{
+                            backgroundColor: "#1f6feb",
+                            paddingVertical: 12,
+                            borderRadius: 10,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 8,
+                          }}
+                          onPress={() => {
+                            void Linking.openURL(`https://wa.me/${cleanCustomerPhone}`);
+                          }}
+                        >
+                          <ShareIcon size={16} color="#ffffff" />
+                          <Text style={{ color: "#ffffff", fontWeight: "700", fontSize: 13 }}>
+                            Chat with Customer on WhatsApp
+                          </Text>
+                        </Pressable>
+                      )}
+
+                      {!isCancelled && (
+                        <Pressable
+                          style={{
+                            backgroundColor: "rgba(248,113,113,0.15)",
+                            borderWidth: 1,
+                            borderColor: "#f87171",
+                            paddingVertical: 10,
+                            borderRadius: 10,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                          onPress={() => {
+                            const sale = selectedSaleAudit;
+                            setSelectedSaleAudit(null);
+                            setSaleToReturn(sale);
+                          }}
+                        >
+                          <Text style={{ color: "#f87171", fontWeight: "700", fontSize: 12 }}>
+                            Return / Void This Sale
+                          </Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  </ScrollView>
+                </View>
+              );
+            })()}
           </View>
         </View>
       </Modal>
