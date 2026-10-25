@@ -14,7 +14,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { SaleIcon, SearchIcon, PlusIcon } from "@/components/icons";
+import { SaleIcon, SearchIcon, PlusIcon, TruckIcon } from "@/components/icons";
 import { EmptySalesIllustration } from "@/components/illustrations";
 import { Card, Empty, Field, Loading, Pill, Select, Sheet, Toast } from "@/components/ui";
 import {
@@ -496,8 +496,8 @@ export default function Sales() {
                   background: "var(--paper, #fff)",
                 }}
               >
-                <div style={{ fontSize: "12px", fontWeight: 800, color: "var(--ink, #111)", marginBottom: "10px", letterSpacing: "0.5px" }}>
-                  {"\uD83D\uDD0D"} TRANSACTION AUTHOR & BLAME
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", fontWeight: 800, color: "var(--ink, #111)", marginBottom: "10px", letterSpacing: "0.5px" }}>
+                  <SearchIcon size={14} /> TRANSACTION AUTHOR & BLAME
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border, #f3f4f6)", fontSize: "13px" }}>
@@ -541,8 +541,8 @@ export default function Sales() {
                     background: "var(--paper, #fff)",
                   }}
                 >
-                  <div style={{ fontSize: "12px", fontWeight: 800, color: "#f59e0b", marginBottom: "10px", letterSpacing: "0.5px" }}>
-                    {"\uD83D\uDE9A"} WAYBILL & LOGISTICS DISPATCH
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", fontWeight: 800, color: "#d97706", marginBottom: "10px", letterSpacing: "0.5px" }}>
+                    <TruckIcon size={14} /> WAYBILL & LOGISTICS DISPATCH
                   </div>
 
                   <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: "13px" }}>

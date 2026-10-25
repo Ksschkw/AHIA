@@ -70,6 +70,7 @@ import {
   CameraIcon,
   CannotGetIcon,
   CartIcon,
+  ChartIcon,
   CheckMarkIcon,
   ChevronDownIcon,
   ChevronRightIcon,
@@ -3085,7 +3086,7 @@ export default function Home() {
                   }}
                 >
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
-                    <Text style={{ fontSize: 14 }}>{"\uD83D\uDCC8"}</Text>
+                    <ChartIcon size={16} color="#238636" />
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>
                         Sales & Profit Timeline
@@ -6591,7 +6592,7 @@ export default function Home() {
                       }}
                     >
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                        <Text style={{ fontSize: 14 }}>{"\uD83D\uDD0D"}</Text>
+                        <SearchIcon size={14} color="#58a6ff" />
                         <Text style={{ fontSize: 12, fontWeight: "800", color: "#f0f6fc", letterSpacing: 0.5 }}>
                           TRANSACTION AUTHOR & BLAME
                         </Text>

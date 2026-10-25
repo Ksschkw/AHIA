@@ -18,6 +18,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Brand, Wordmark } from "@/components/brand";
 import {
+  ChartIcon,
+  ChevronDownIcon,
   ExpenseIcon,
   Icon,
   ItemBoxIcon,
@@ -614,7 +616,7 @@ export default function Dashboard() {
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <span style={{ fontSize: "16px" }}>{"\uD83D\uDCC8"}</span>
+                <ChartIcon size={20} style={{ color: "var(--leaf, #238636)" }} />
                 <div style={{ textAlign: "left" }}>
                   <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--ink, #111827)" }}>
                     Sales & Profit Progress Timeline
@@ -626,9 +628,10 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
-              <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--leaf, #238636)" }}>
-                {showTimelineChart ? "Hide Chart \u25B2" : "Show Chart \u25BC"}
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", fontWeight: 700, color: "var(--leaf, #238636)" }}>
+                <span>{showTimelineChart ? "Hide Chart" : "Show Chart"}</span>
+                <ChevronDownIcon size={16} style={{ transform: showTimelineChart ? "rotate(180deg)" : "none", transition: "transform 0.2s ease" }} />
+              </div>
             </button>
 
             {showTimelineChart ? (

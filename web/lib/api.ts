@@ -19,7 +19,9 @@ import type { components, paths } from "./api-schema";
 type Schemas = components["schemas"];
 
 export type AuthenticatedSession = Schemas["AuthenticatedSessionSchema"];
-export type UserProfile = Schemas["UserResponseSchema"];
+export type UserProfile = Schemas["UserResponseSchema"] & {
+  avatar_url?: string | null;
+};
 export type Tenant = Schemas["TenantResponseSchema"];
 export type TenantSummary = Schemas["TenantSummarySchema"];
 export type Product = Schemas["ProductResponseSchema"];

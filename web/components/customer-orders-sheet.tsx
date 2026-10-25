@@ -317,7 +317,7 @@ export function CustomerOrdersSheet({
                         className={styles.expandToggleBtn}
                         onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
                       >
-                        {isExpanded ? "\u25B2 Hide Itemized Breakdown" : "\u25BC View Itemized Breakdown"}
+                        {isExpanded ? "Hide Itemized Breakdown" : "View Itemized Breakdown"}
                       </button>
 
                       {order.priced_total && !existingProof && !proofSuccess && (

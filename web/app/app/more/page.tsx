@@ -4,8 +4,8 @@
  * The unified More & Settings hub for AHIA.
  *
  * Matches the mobile app's More tab identically:
- * - User Profile & Account Settings
- * - Everything in AHIA navigation grid
+ * - User Profile with Avatar & Account Settings
+ * - Everything in AHIA navigation grid with actual SVG icons
  * - Storefront Studio (publish/draft, live preview link, copy/share)
  * - Team & Staff management (invitations, roles, permissions)
  * - Business profile & logo management
@@ -18,6 +18,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import {
+  BoxIcon,
+  BuildingIcon,
+  GlobeIcon,
+  KeyIcon,
+  ListIcon,
+  LockIcon,
+  ReceiptIcon,
+  ShopIcon,
+} from "@/components/icons";
 import { Field, Loading, Pill, Select, Sheet, Toast } from "@/components/ui";
 import {
   acceptInvitation,
@@ -106,6 +116,7 @@ function packStorefrontDescription(
 export default function MorePage() {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string>("");
   const [business, setBusiness] = useState<Tenant | null>(null);
   const [userRole, setUserRole] = useState("OWNER");
   const [businessLogo, setBusinessLogo] = useState("");
@@ -124,6 +135,7 @@ export default function MorePage() {
   const [editLastName, setEditLastName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  const [editAvatarUrl, setEditAvatarUrl] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
 
   const [showBusinessModal, setShowBusinessModal] = useState(false);
@@ -169,7 +181,15 @@ export default function MorePage() {
   const loadData = useCallback(async () => {
     try {
       const user = await currentUser();
-      setProfile(user);
+      const storedAvatar =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem(`ahia.user_avatar.${user.id}`) ||
+            window.localStorage.getItem("ahia.user_avatar") ||
+            ""
+          : "";
+      const effectiveAvatar = user.avatar_url || storedAvatar;
+      setAvatarUrl(effectiveAvatar);
+      setProfile({ ...user, avatar_url: effectiveAvatar || null });
 
       const businesses = await listBusinesses();
       const remembered =
@@ -229,6 +249,7 @@ export default function MorePage() {
 
   // Handlers
   const handleSaveProfile = async () => {
+    if (!profile) return;
     setSavingProfile(true);
     try {
       const updated = await updateProfile({
@@ -237,7 +258,19 @@ export default function MorePage() {
         phone: editPhone.trim() || undefined,
         email: editEmail.trim() || undefined,
       });
-      setProfile(updated);
+
+      const trimmedAvatar = editAvatarUrl.trim();
+      if (typeof window !== "undefined") {
+        if (trimmedAvatar) {
+          window.localStorage.setItem(`ahia.user_avatar.${updated.id}`, trimmedAvatar);
+          window.localStorage.setItem("ahia.user_avatar", trimmedAvatar);
+        } else {
+          window.localStorage.removeItem(`ahia.user_avatar.${updated.id}`);
+          window.localStorage.removeItem("ahia.user_avatar");
+        }
+      }
+      setAvatarUrl(trimmedAvatar);
+      setProfile({ ...updated, avatar_url: trimmedAvatar || null });
       setShowProfileModal(false);
       setNotice({ message: "Profile updated successfully!", tone: "good" });
     } catch (err: unknown) {
@@ -497,7 +530,17 @@ export default function MorePage() {
       {/* User Profile Card */}
       <div className={styles.profileCard}>
         <div className={styles.avatar}>
-          {profile?.first_name ? profile.first_name.slice(0, 1).toUpperCase() : "U"}
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt={profile?.first_name || "Profile"}
+              className={styles.avatarImg}
+            />
+          ) : profile?.first_name ? (
+            profile.first_name.slice(0, 1).toUpperCase()
+          ) : (
+            "U"
+          )}
         </div>
         <div className={styles.profileInfo}>
           <h2 className={styles.profileName}>
@@ -516,6 +559,7 @@ export default function MorePage() {
             setEditLastName(profile?.last_name ?? "");
             setEditPhone(profile?.phone ?? "");
             setEditEmail(profile?.email ?? "");
+            setEditAvatarUrl(avatarUrl);
             setShowProfileModal(true);
           }}
         >
@@ -527,22 +571,30 @@ export default function MorePage() {
       <h3 className={styles.sectionTitle}>Everything in AHIA</h3>
       <div className={styles.grid}>
         <Link href="/app" className={styles.tile}>
-          <span className={styles.tileIcon}>{"\uD83C\uDFEA"}</span>
+          <span className={styles.tileIcon}>
+            <ShopIcon size={24} style={{ color: "#22c55e" }} />
+          </span>
           <span className={styles.tileTitle}>The Shop</span>
           <span className={styles.tileDesc}>Daily counter</span>
         </Link>
         <Link href="/app/items" className={styles.tile}>
-          <span className={styles.tileIcon}>{"\uD83D\uDCE6"}</span>
+          <span className={styles.tileIcon}>
+            <BoxIcon size={24} style={{ color: "#3b82f6" }} />
+          </span>
           <span className={styles.tileTitle}>Catalog</span>
           <span className={styles.tileDesc}>Folders & Items</span>
         </Link>
         <Link href="/app/lists" className={styles.tile}>
-          <span className={styles.tileIcon}>{"\uD83D\uDCCB"}</span>
+          <span className={styles.tileIcon}>
+            <ListIcon size={24} style={{ color: "#f59e0b" }} />
+          </span>
           <span className={styles.tileTitle}>Lists</span>
           <span className={styles.tileDesc}>Customer orders</span>
         </Link>
         <Link href="/app/sales" className={styles.tile}>
-          <span className={styles.tileIcon}>{"\uD83E\uDDFE"}</span>
+          <span className={styles.tileIcon}>
+            <ReceiptIcon size={24} style={{ color: "#8b5cf6" }} />
+          </span>
           <span className={styles.tileTitle}>Trading</span>
           <span className={styles.tileDesc}>Daily ledger</span>
         </Link>
@@ -552,7 +604,9 @@ export default function MorePage() {
           rel="noopener noreferrer"
           className={styles.tile}
         >
-          <span className={styles.tileIcon}>{"\uD83C\uDF10"}</span>
+          <span className={styles.tileIcon}>
+            <GlobeIcon size={24} style={{ color: "#10b981" }} />
+          </span>
           <span className={styles.tileTitle}>Storefront</span>
           <span className={styles.tileDesc}>Public link</span>
         </a>
@@ -567,7 +621,9 @@ export default function MorePage() {
             setShowBusinessModal(true);
           }}
         >
-          <span className={styles.tileIcon}>{"\uD83C\uDFE2"}</span>
+          <span className={styles.tileIcon}>
+            <BuildingIcon size={24} style={{ color: "#eab308" }} />
+          </span>
           <span className={styles.tileTitle}>Stall Profile</span>
           <span className={styles.tileDesc}>Address & name</span>
         </button>
@@ -582,7 +638,9 @@ export default function MorePage() {
             setShowPinModal(true);
           }}
         >
-          <span className={styles.tileIcon}>{"\uD83D\uDD12"}</span>
+          <span className={styles.tileIcon}>
+            <LockIcon size={24} style={{ color: "#ef4444" }} />
+          </span>
           <span className={styles.tileTitle}>Security PIN</span>
           <span className={styles.tileDesc}>{hasPin ? "PIN Protected" : "Set PIN"}</span>
         </button>
@@ -591,7 +649,9 @@ export default function MorePage() {
           className={styles.tile}
           onClick={() => setShowPasswordModal(true)}
         >
-          <span className={styles.tileIcon}>{"\uD83D\uDD11"}</span>
+          <span className={styles.tileIcon}>
+            <KeyIcon size={24} style={{ color: "#ec4899" }} />
+          </span>
           <span className={styles.tileTitle}>Password</span>
           <span className={styles.tileDesc}>Account login</span>
         </button>
@@ -912,6 +972,14 @@ export default function MorePage() {
         <Field label="Last Name" id="edit-last-name" value={editLastName} onChange={setEditLastName} optional />
         <Field label="Phone Number" id="edit-phone" value={editPhone} onChange={setEditPhone} optional />
         <Field label="Email Address" id="edit-email" value={editEmail} onChange={setEditEmail} optional />
+        <Field
+          label="Profile Avatar / Photo URL"
+          id="edit-avatar"
+          value={editAvatarUrl}
+          onChange={setEditAvatarUrl}
+          hint="Direct web link to your avatar photo"
+          optional
+        />
         <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
           <button type="button" className={styles.secondaryBtn} onClick={() => setShowProfileModal(false)}>
             Cancel

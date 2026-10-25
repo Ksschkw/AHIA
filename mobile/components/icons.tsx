@@ -360,3 +360,12 @@ export function CameraIcon({ size = 20, color = "currentColor" }: IconProps) {
     </Svg>
   );
 }
+
+export function ChartIcon({ size = 24, color = "currentColor" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M3 3v18h18" />
+      <Path d="m19 9-5 5-4-4-3 3" />
+    </Svg>
+  );
+}

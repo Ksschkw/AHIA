@@ -413,3 +413,106 @@ export function DoubleCheckIcon(props: IconProps) {
     </svg>
   );
 }
+
+/** The shop counter and awning. */
+export function ShopIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <path d="M3 9.5 5 4h14l2 5.5" />
+      <path d="M4 9.5h16V20H4z" />
+      <path d="M9 20v-5h6v5" />
+    </Frame>
+  );
+}
+
+/** A receipt for sales ledger. */
+export function ReceiptIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
+      <path d="M9.5 8h5M9.5 12h5" />
+    </Frame>
+  );
+}
+
+/** Catalog items / box. */
+export function BoxIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z" />
+      <path d="M3.5 7.5 12 12l8.5-4.5M12 12v9" />
+    </Frame>
+  );
+}
+
+/** Customer lists and waybills. */
+export function ListIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <path d="M4 6.5h2M4 12h2M4 17.5h2" />
+      <path d="M9 6.5h11M9 12h11M9 17.5h11" />
+    </Frame>
+  );
+}
+
+/** Storefront globe web link. */
+export function GlobeIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 2a14.5 14.5 0 0 0 0 20M12 2a14.5 14.5 0 0 1 0 20M2 12h20" />
+    </Frame>
+  );
+}
+
+/** Physical building / stall profile. */
+export function BuildingIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <rect x="4" y="2" width="16" height="20" rx="2" />
+      <path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01" />
+    </Frame>
+  );
+}
+
+/** Padlock security for PIN. */
+export function LockIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </Frame>
+  );
+}
+
+/** Key for password and credentials. */
+export function KeyIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <circle cx="7.5" cy="15.5" r="4.5" />
+      <path d="m11 12 9-9M17 3l4 4M14 6l3 3" />
+    </Frame>
+  );
+}
+
+/** Waybill & logistics dispatch truck. */
+export function TruckIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <rect x="1" y="3" width="15" height="13" rx="1" />
+      <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+      <circle cx="5.5" cy="18.5" r="2.5" />
+      <circle cx="18.5" cy="18.5" r="2.5" />
+    </Frame>
+  );
+}
+
+/** Chart timeline for sales progress. */
+export function ChartIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <path d="M3 3v18h18" />
+      <path d="m19 9-5 5-4-4-3 3" />
+    </Frame>
+  );
+}
