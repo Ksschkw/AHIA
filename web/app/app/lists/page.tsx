@@ -577,6 +577,30 @@ export default function ListsPage() {
 
       if (typeof window !== "undefined") {
         window.localStorage.setItem(`ahia.list_payments.${paymentModalList.id}`, JSON.stringify(updatedPayments));
+        if (business?.id) {
+          const customerName = paymentModalList.customer_name || paymentModalList.customer_phone || "Customer";
+          const descriptiveReceipt = paymentNote.trim()
+            ? `${customerName}: ${paymentNote.trim()}`
+            : `${customerName} (Payment)`;
+          const paymentSale = {
+            id: `sale-${paymentRecord.id}`,
+            receipt_number: descriptiveReceipt,
+            customer_id: null,
+            seller_id: business.id,
+            total_amount: amt.toFixed(2),
+            status: "completed",
+            payment_status: "paid",
+            occurred_at: paymentRecord.date,
+            cancelled_at: null,
+          };
+          try {
+            const storedSales = window.localStorage.getItem(`ahia.sales.${business.id}`);
+            const parsed = storedSales ? JSON.parse(storedSales) : [];
+            window.localStorage.setItem(`ahia.sales.${business.id}`, JSON.stringify([paymentSale, ...parsed]));
+          } catch {
+            // non-fatal
+          }
+        }
       }
 
       setLists((prev) => prev.map((l) => (l.id === updatedList.id ? updatedList : l)));

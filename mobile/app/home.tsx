@@ -811,8 +811,9 @@ export default function Home() {
     const now = new Date();
     const todaySales = sales.filter((s) => {
       if (s.cancelled_at || s.payment_status === "cancelled") return false;
-      if (!s.created_at) return false;
-      const d = new Date(s.created_at);
+      const dateStr = s.created_at || (s as any).occurred_at;
+      if (!dateStr) return false;
+      const d = new Date(dateStr);
       if (Number.isNaN(d.getTime())) return false;
       return (
         d.getFullYear() === now.getFullYear() &&
@@ -1094,9 +1095,10 @@ export default function Home() {
         const todayStr = getLocalDateString();
         const allKnownSales = freshSales.length > 0 ? freshSales : cachedSales;
         const localTodaySales = allKnownSales.filter((s) => {
-          if (!s.created_at) return false;
+          const dateStr = s.created_at || (s as any).occurred_at;
+          if (!dateStr) return false;
           if (s.payment_status === "cancelled" || s.cancelled_at) return false;
-          const d = new Date(s.created_at);
+          const d = new Date(dateStr);
           if (Number.isNaN(d.getTime())) return false;
           return (
             d.getFullYear() === new Date().getFullYear() &&
@@ -3209,7 +3211,7 @@ export default function Home() {
                     <ReceiptIcon size={18} color="#4ade80" />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.saleReceipt}>{getSaleDisplayTitle(sale, profile, members, customerLists)}</Text>
-                      <Text style={styles.saleDate}>{sale.receipt_number} &bull; {sale.payment_method.toUpperCase()}</Text>
+                      <Text style={styles.saleDate}>{sale.receipt_number} &bull; {(sale.payment_method || "CASH").toUpperCase()}</Text>
                     </View>
                   </View>
                   <View style={{ alignItems: "flex-end", gap: 2 }}>
@@ -4551,7 +4553,7 @@ export default function Home() {
                     const receipt = (s.receipt_number || "").toLowerCase();
                     const amt = (s.total_amount || "").toLowerCase();
                     const method = (s.payment_method || "").toLowerCase();
-                    const date = new Date(s.created_at).toLocaleString().toLowerCase();
+                    const date = new Date(s.created_at || (s as any).occurred_at || Date.now()).toLocaleString().toLowerCase();
                     return title.includes(q) || receipt.includes(q) || amt.includes(q) || method.includes(q) || date.includes(q);
                   });
 
@@ -4598,13 +4600,13 @@ export default function Home() {
                               </View>
                             </View>
                             <Text style={styles.saleDate}>
-                              {s.receipt_number} &bull; {new Date(s.created_at).toLocaleString([], {
+                              {s.receipt_number} &bull; {new Date(s.created_at || (s as any).occurred_at || Date.now()).toLocaleString([], {
                                 month: "short",
                                 day: "numeric",
                                 hour: "2-digit",
                                 minute: "2-digit",
                               })}{" "}
-                              via {s.payment_method.toUpperCase()}
+                              via {(s.payment_method || "CASH").toUpperCase()}
                             </Text>
                             <Text style={{ fontSize: 10, color: "#238636", fontWeight: "600", marginTop: 2 }}>
                               Audit blame, waybill & receipt &rsaquo;
@@ -6557,7 +6559,7 @@ export default function Home() {
                           {formatMoney(selectedSaleAudit.total_amount)}
                         </Text>
                         <Text style={{ fontSize: 11, color: "#8a928e", marginTop: 2 }}>
-                          {new Date(selectedSaleAudit.created_at).toLocaleString([], {
+                          {new Date(selectedSaleAudit.created_at || (selectedSaleAudit as any).occurred_at || Date.now()).toLocaleString([], {
                             month: "short",
                             day: "numeric",
                             year: "numeric",
@@ -6578,7 +6580,7 @@ export default function Home() {
                           </Text>
                         </View>
                         <Text style={{ fontSize: 11, color: "#cbd5e1", fontWeight: "600" }}>
-                          via {selectedSaleAudit.payment_method.toUpperCase()}
+                          via {(selectedSaleAudit.payment_method || "CASH").toUpperCase()}
                         </Text>
                       </View>
                     </View>

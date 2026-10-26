@@ -167,14 +167,177 @@ export default function Dashboard() {
   const [stock, setStock] = useState<InventoryLevel[]>([]);
   const [today, setToday] = useState<DailySalesSummary | null>(null);
   const [recentSales, setRecentSales] = useState<SaleSummary[]>([]);
+  const [customerLists, setCustomerLists] = useState<CustomerList[]>(() => {
+    const id = rememberedBusinessId();
+    if (!id) return [];
+    return cachedRead<CustomerList[]>(`/api/v1/tenants/${id}/requests`) ?? [];
+  });
   const [runningOut, setRunningOut] = useState<LowStockProduct[]>([]);
   const [categories, setCategories] = useState<ExpenseCategoryList | null>(null);
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
   const [showTimelineChart, setShowTimelineChart] = useState(true);
   const [selectedSaleAudit, setSelectedSaleAudit] = useState<SaleSummary | null>(null);
 
+  // Combine remote expenses with local offline/optimistic expenses
+  const allExpenses = useMemo(() => {
+    const remote = expenses ?? [];
+    if (!businessId || typeof window === "undefined") return remote;
+    try {
+      const stored = window.localStorage.getItem(`ahia.expenses.${businessId}`);
+      if (!stored) return remote;
+      const local = JSON.parse(stored) as ExpenseItem[];
+      const seen = new Set(remote.map((e) => e.id));
+      const combined = [...remote];
+      for (const item of local) {
+        if (!seen.has(item.id)) {
+          combined.push(item);
+          seen.add(item.id);
+        }
+      }
+      return combined;
+    } catch {
+      return remote;
+    }
+  }, [expenses, businessId]);
+
+  // Merge direct sales with customer list payments, deposits, and confirmed orders
+  const allRecentSales = useMemo(() => {
+    const list: SaleSummary[] = [...(recentSales ?? [])];
+    const seenIds = new Set(list.map((s) => s.id));
+    const seenReceipts = new Set(list.map((s) => s.receipt_number));
+
+    // Also load any locally recorded shelf sales
+    if (businessId && typeof window !== "undefined") {
+      try {
+        const stored = window.localStorage.getItem(`ahia.sales.${businessId}`);
+        if (stored) {
+          const localSales = JSON.parse(stored) as SaleSummary[];
+          for (const s of localSales) {
+            if (!seenIds.has(s.id) && !seenReceipts.has(s.receipt_number)) {
+              list.push(s);
+              seenIds.add(s.id);
+              seenReceipts.add(s.receipt_number);
+            }
+          }
+        }
+      } catch {
+        // Non-fatal
+      }
+    }
+
+    // Synthesize customer list orders and payments
+    for (const cl of customerLists) {
+      let payments: Array<{ id?: string; amount: string; date?: string; note?: string | null }> = cl.payments || [];
+      if (typeof window !== "undefined") {
+        try {
+          const stored = window.localStorage.getItem(`ahia.list_payments.${cl.id}`);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              payments = parsed;
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      const paidAmt = Number(cl.amount_paid || cl.advance_payment || 0);
+      if (payments.length === 0 && paidAmt > 0) {
+        payments = [
+          {
+            id: `pay-advance-${cl.id}`,
+            amount: paidAmt.toString(),
+            date: cl.created_at || new Date().toISOString(),
+            note: "Advance Deposit",
+          },
+        ];
+      }
+
+      let paymentsTotal = 0;
+      for (const p of payments) {
+        const amt = Number(p.amount || 0);
+        if (amt <= 0) continue;
+        paymentsTotal += amt;
+        const pId = `sale-pay-${p.id || cl.id}-${amt}`;
+        const pReceipt = `${cl.customer_name || cl.customer_phone || "Customer"}: ${p.note || "Payment"}`;
+        if (!seenIds.has(pId) && !seenReceipts.has(pReceipt)) {
+          list.push({
+            id: pId,
+            receipt_number: pReceipt,
+            customer_id: null,
+            seller_id: user?.id || cl.id,
+            total_amount: amt.toFixed(2),
+            status: "completed",
+            payment_status: "paid",
+            occurred_at: p.date || cl.created_at || new Date().toISOString(),
+            cancelled_at: null,
+          });
+          seenIds.add(pId);
+          seenReceipts.add(pReceipt);
+        }
+      }
+
+      if (cl.status === "confirmed" && paymentsTotal === 0) {
+        const listTotal = cl.lines.reduce((sum, line) => {
+          if (line.note === "heading") return sum;
+          const price = Number(line.shop_price || 0);
+          const qty = Number(line.quantity || 1);
+          return sum + (Number(line.line_total) || price * qty);
+        }, 0);
+
+        if (listTotal > 0) {
+          const ordId = `sale-ord-${cl.id}`;
+          const ordReceipt = `${cl.customer_name || cl.customer_phone || "Order"}: Confirmed Order`;
+          if (!seenIds.has(ordId) && !seenReceipts.has(ordReceipt)) {
+            list.push({
+              id: ordId,
+              receipt_number: ordReceipt,
+              customer_id: null,
+              seller_id: user?.id || cl.id,
+              total_amount: listTotal.toFixed(2),
+              status: "completed",
+              payment_status: "confirmed",
+              occurred_at: cl.dispatched_at || cl.created_at || new Date().toISOString(),
+              cancelled_at: null,
+            });
+            seenIds.add(ordId);
+            seenReceipts.add(ordReceipt);
+          }
+        }
+      }
+    }
+
+    return list.sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
+  }, [recentSales, customerLists, businessId, user?.id]);
+
+  const todaySalesCountAndRevenue = useMemo(() => {
+    const now = new Date();
+    const todaySales = allRecentSales.filter((s) => {
+      if (s.cancelled_at || s.payment_status === "cancelled") return false;
+      const dateStr = s.occurred_at || (s as any).created_at;
+      if (!dateStr) return false;
+      const d = new Date(dateStr);
+      if (Number.isNaN(d.getTime())) return false;
+      return (
+        d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth() &&
+        d.getDate() === now.getDate()
+      );
+    });
+
+    const localRevenue = todaySales.reduce((acc, s) => acc + (Number(s.total_amount) || 0), 0);
+    const serverRevenue = Number(today?.total_revenue || "0");
+    const serverCount = today?.total_sales ?? 0;
+
+    return {
+      revenue: Math.max(localRevenue, serverRevenue).toFixed(2),
+      count: Math.max(todaySales.length, serverCount),
+    };
+  }, [allRecentSales, today]);
+
   const todayProfitMetrics = useMemo(() => {
-    const todayRevenue = Number(today?.total_revenue || 0);
+    const todayRevenue = Number(todaySalesCountAndRevenue.revenue || 0);
     const d = new Date();
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, "0");
@@ -183,10 +346,10 @@ export default function Dashboard() {
     return calculateProfitMetrics({
       revenue: todayRevenue,
       products,
-      expenses,
+      expenses: allExpenses,
       todayStr,
     });
-  }, [today, products, expenses]);
+  }, [todaySalesCountAndRevenue.revenue, products, allExpenses]);
   // The product groups, which are a different thing from the spending categories above: these are how
   // the shelf is arranged - Category, Subcategory - and what a list is read under.
   const [productGroups, setProductGroups] = useState<Category[]>([]);
@@ -198,11 +361,6 @@ export default function Dashboard() {
   const [photosAvailable, setPhotosAvailable] = useState<boolean | null>(null);
   const [photoProduct, setPhotoProduct] = useState<Product | null>(null);
   const [storefront, setStorefront] = useState<Storefront | null>(null);
-  const [customerLists, setCustomerLists] = useState<CustomerList[]>(() => {
-    const id = rememberedBusinessId();
-    if (!id) return [];
-    return cachedRead<CustomerList[]>(`/api/v1/tenants/${id}/requests`) ?? [];
-  });
   const [shelfQuery, setShelfQuery] = useState("");
 
   //: Which action is in flight, if any. A boolean would disable every control on the screen for
@@ -588,8 +746,8 @@ export default function Dashboard() {
             <>
               <Stat
                 label="Sold today"
-                value={formatMoney(today?.total_revenue ?? "0.00", currency)}
-                hint={`${formatCount(today?.total_sales ?? 0)} sales`}
+                value={formatMoney(todaySalesCountAndRevenue.revenue, currency)}
+                hint={`${formatCount(todaySalesCountAndRevenue.count)} sales`}
                 tone="good"
               />
               <Stat
@@ -601,14 +759,14 @@ export default function Dashboard() {
               <Stat
                 label="Expenses today"
                 value={formatMoney(todayProfitMetrics.expenses.toFixed(2), currency)}
-                hint={`${expenses.filter((e) => !e.is_reversed && (!e.incurred_at || e.incurred_at.slice(0, 10) === new Date().toISOString().slice(0, 10))).length} logged`}
+                hint={`${allExpenses.filter((e) => !e.is_reversed && (!e.incurred_at || e.incurred_at.slice(0, 10) === new Date().toISOString().slice(0, 10))).length} logged`}
                 tone={todayProfitMetrics.expenses > 0 ? "warn" : "plain"}
               />
             </>
           ) : (
             <Stat
               label="Recent sales"
-              value={formatCount(recentSales.length)}
+              value={formatCount(allRecentSales.length)}
               hint="Recorded recently"
               tone="good"
             />
@@ -673,7 +831,7 @@ export default function Dashboard() {
             {showTimelineChart ? (
               <SalesTimelineChart
                 days={today?.days ?? []}
-                sales={recentSales}
+                sales={allRecentSales}
                 currency={currency}
                 marginRatio={
                   todayProfitMetrics.revenue > 0
@@ -730,7 +888,7 @@ export default function Dashboard() {
                 </button>
               }
             >
-              {recentSales.length === 0 ? (
+              {allRecentSales.length === 0 ? (
                 <Empty
                   illustration={<EmptySalesIllustration size={90} />}
                   action={
@@ -743,7 +901,7 @@ export default function Dashboard() {
                 </Empty>
               ) : (
                 <ul className={styles.list}>
-                  {recentSales.map((sale) => (
+                  {allRecentSales.map((sale) => (
                     <li key={sale.id} className={styles.row}>
                       <div className={styles.rowMain}>
                         <span
@@ -1010,6 +1168,16 @@ export default function Dashboard() {
                                     },
                                   ],
                                 });
+                                if (typeof window !== "undefined" && businessId && receipt?.sale) {
+                                  try {
+                                    const stored = window.localStorage.getItem(`ahia.sales.${businessId}`);
+                                    const parsed = stored ? JSON.parse(stored) : [];
+                                    window.localStorage.setItem(`ahia.sales.${businessId}`, JSON.stringify([receipt.sale, ...parsed]));
+                                  } catch {
+                                    // non-fatal
+                                  }
+                                }
+                                setRecentSales((prev) => [receipt.sale as any, ...prev]);
                                 await refresh();
                                 setNotice({
                                   message: `Sold one ${product.name} - ${receipt.sale.receipt_number} for ${formatMoney(receipt.sale.total_amount, currency)}`,
@@ -1258,6 +1426,16 @@ export default function Dashboard() {
           runSale(async () => {
             if (!businessId) return;
             const receipt = await recordSale(businessId, input);
+            if (typeof window !== "undefined" && businessId && receipt?.sale) {
+              try {
+                const stored = window.localStorage.getItem(`ahia.sales.${businessId}`);
+                const parsed = stored ? JSON.parse(stored) : [];
+                window.localStorage.setItem(`ahia.sales.${businessId}`, JSON.stringify([receipt.sale, ...parsed]));
+              } catch {
+                // non-fatal
+              }
+            }
+            setRecentSales((prev) => [receipt.sale as any, ...prev]);
             setSheet(null);
             await refresh();
             setNotice({
@@ -1314,9 +1492,32 @@ export default function Dashboard() {
         onSubmit={(input) =>
           runExpense(async () => {
             if (!businessId) return;
-            await recordExpense(businessId, input);
-            const freshExp = await listExpenses(businessId).catch(() => []);
-            setExpenses(freshExp);
+            const localId = `exp-local-${Date.now()}`;
+            const newExp: ExpenseItem = {
+              id: localId,
+              category: input.category,
+              amount: Number(input.amount).toFixed(2),
+              payment_method: "CASH",
+              description: input.description ?? null,
+              incurred_at: new Date().toISOString(),
+            };
+            if (typeof window !== "undefined") {
+              try {
+                const stored = window.localStorage.getItem(`ahia.expenses.${businessId}`);
+                const parsed = stored ? JSON.parse(stored) : [];
+                window.localStorage.setItem(`ahia.expenses.${businessId}`, JSON.stringify([newExp, ...parsed]));
+              } catch {
+                // non-fatal
+              }
+            }
+            setExpenses((prev) => [newExp, ...prev]);
+            try {
+              await recordExpense(businessId, input);
+              const freshExp = await listExpenses(businessId).catch(() => []);
+              setExpenses(freshExp);
+            } catch {
+              // already saved locally
+            }
             setSheet(null);
             setNotice({
               message: `Spending recorded: ${formatMoney(input.amount, currency)}`,

@@ -122,19 +122,157 @@ export default function Sales() {
     })();
   }, [load]);
 
+  // Combine remote expenses with local offline/optimistic expenses
+  const allExpenses = useMemo(() => {
+    const remote = expenses ?? [];
+    if (!business?.id || typeof window === "undefined") return remote;
+    try {
+      const stored = window.localStorage.getItem(`ahia.expenses.${business.id}`);
+      if (!stored) return remote;
+      const local = JSON.parse(stored) as ExpenseItem[];
+      const seen = new Set(remote.map((e) => e.id));
+      const combined = [...remote];
+      for (const item of local) {
+        if (!seen.has(item.id)) {
+          combined.push(item);
+          seen.add(item.id);
+        }
+      }
+      return combined;
+    } catch {
+      return remote;
+    }
+  }, [expenses, business?.id]);
+
+  // Merge direct sales with customer list payments, deposits, and confirmed orders
+  const allSales = useMemo(() => {
+    const list: SaleSummary[] = [...(sales ?? [])];
+    const seenIds = new Set(list.map((s) => s.id));
+    const seenReceipts = new Set(list.map((s) => s.receipt_number));
+
+    // Also load any locally recorded shelf sales
+    if (business?.id && typeof window !== "undefined") {
+      try {
+        const stored = window.localStorage.getItem(`ahia.sales.${business.id}`);
+        if (stored) {
+          const localSales = JSON.parse(stored) as SaleSummary[];
+          for (const s of localSales) {
+            if (!seenIds.has(s.id) && !seenReceipts.has(s.receipt_number)) {
+              list.push(s);
+              seenIds.add(s.id);
+              seenReceipts.add(s.receipt_number);
+            }
+          }
+        }
+      } catch {
+        // Non-fatal
+      }
+    }
+
+    // Synthesize customer list orders and payments
+    for (const cl of customerLists) {
+      // 1. Check for itemized payments (from list.payments or localStorage)
+      let payments: Array<{ id?: string; amount: string; date?: string; note?: string | null }> = cl.payments || [];
+      if (typeof window !== "undefined") {
+        try {
+          const stored = window.localStorage.getItem(`ahia.list_payments.${cl.id}`);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              payments = parsed;
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      // If no payments array but amount_paid / advance_payment > 0
+      const paidAmt = Number(cl.amount_paid || cl.advance_payment || 0);
+      if (payments.length === 0 && paidAmt > 0) {
+        payments = [
+          {
+            id: `pay-advance-${cl.id}`,
+            amount: paidAmt.toString(),
+            date: cl.created_at || new Date().toISOString(),
+            note: "Advance Deposit",
+          },
+        ];
+      }
+
+      // Add each payment as a sale transaction
+      let paymentsTotal = 0;
+      for (const p of payments) {
+        const amt = Number(p.amount || 0);
+        if (amt <= 0) continue;
+        paymentsTotal += amt;
+        const pId = `sale-pay-${p.id || cl.id}-${amt}`;
+        const pReceipt = `${cl.customer_name || cl.customer_phone || "Customer"}: ${p.note || "Payment"}`;
+        if (!seenIds.has(pId) && !seenReceipts.has(pReceipt)) {
+          list.push({
+            id: pId,
+            receipt_number: pReceipt,
+            customer_id: null,
+            seller_id: userProfile?.id || cl.id,
+            total_amount: amt.toFixed(2),
+            status: "completed",
+            payment_status: "paid",
+            occurred_at: p.date || cl.created_at || new Date().toISOString(),
+            cancelled_at: null,
+          });
+          seenIds.add(pId);
+          seenReceipts.add(pReceipt);
+        }
+      }
+
+      // 2. Confirmed customer lists that have no payments recorded yet
+      if (cl.status === "confirmed" && paymentsTotal === 0) {
+        const listTotal = cl.lines.reduce((sum, line) => {
+          if (line.note === "heading") return sum;
+          const price = Number(line.shop_price || 0);
+          const qty = Number(line.quantity || 1);
+          return sum + (Number(line.line_total) || price * qty);
+        }, 0);
+
+        if (listTotal > 0) {
+          const ordId = `sale-ord-${cl.id}`;
+          const ordReceipt = `${cl.customer_name || cl.customer_phone || "Order"}: Confirmed Order`;
+          if (!seenIds.has(ordId) && !seenReceipts.has(ordReceipt)) {
+            list.push({
+              id: ordId,
+              receipt_number: ordReceipt,
+              customer_id: null,
+              seller_id: userProfile?.id || cl.id,
+              total_amount: listTotal.toFixed(2),
+              status: "completed",
+              payment_status: "confirmed",
+              occurred_at: cl.dispatched_at || cl.created_at || new Date().toISOString(),
+              cancelled_at: null,
+            });
+            seenIds.add(ordId);
+            seenReceipts.add(ordReceipt);
+          }
+        }
+      }
+    }
+
+    // Sort newest to oldest
+    return list.sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
+  }, [sales, customerLists, business?.id, userProfile?.id]);
+
   const total = useMemo(
-    () => (sales ?? []).reduce((running, sale) => running + Number(sale.total_amount ?? "0"), 0),
-    [sales],
+    () => allSales.reduce((running, sale) => running + (sale.cancelled_at ? 0 : Number(sale.total_amount ?? "0")), 0),
+    [allSales],
   );
 
   const totalExpenses = useMemo(
-    () => expenses.reduce((running, exp) => running + (exp.is_reversed ? 0 : Number(exp.amount ?? "0")), 0),
-    [expenses],
+    () => allExpenses.reduce((running, exp) => running + (exp.is_reversed ? 0 : Number(exp.amount ?? "0")), 0),
+    [allExpenses],
   );
 
   const profitMetrics = useMemo(
-    () => calculateProfitMetrics({ revenue: total, products, expenses }),
-    [total, products, expenses],
+    () => calculateProfitMetrics({ revenue: total, products, expenses: allExpenses }),
+    [total, products, allExpenses],
   );
 
   const handleLogExpense = async () => {
@@ -145,10 +283,32 @@ export default function Sales() {
       return;
     }
     setSavingExpense(true);
+
+    const localId = `exp-local-${Date.now()}`;
+    const newExp: ExpenseItem = {
+      id: localId,
+      category: expenseCategory,
+      amount: Number(amt).toFixed(2),
+      payment_method: "CASH",
+      description: expenseDescription.trim() || null,
+      incurred_at: new Date().toISOString(),
+    };
+
+    if (typeof window !== "undefined") {
+      try {
+        const existingStored = window.localStorage.getItem(`ahia.expenses.${business.id}`);
+        const parsed = existingStored ? JSON.parse(existingStored) : [];
+        window.localStorage.setItem(`ahia.expenses.${business.id}`, JSON.stringify([newExp, ...parsed]));
+      } catch {
+        // Non-fatal
+      }
+    }
+    setExpenses((prev) => [newExp, ...prev]);
+
     try {
       await recordExpense(business.id, {
         category: expenseCategory,
-        amount: amt,
+        amount: Number(amt).toFixed(2),
         description: expenseDescription.trim() || undefined,
         payment_method: "CASH",
       });
@@ -158,7 +318,10 @@ export default function Sales() {
       setNotice("Expense logged successfully!");
       void load(business.id);
     } catch {
-      setNotice("Could not record expense.");
+      setShowExpenseModal(false);
+      setExpenseAmount("");
+      setExpenseDescription("");
+      setNotice("Expense saved locally and will sync when connected.");
     } finally {
       setSavingExpense(false);
     }
@@ -191,7 +354,7 @@ export default function Sales() {
               transition: "all 0.15s ease",
             }}
           >
-            Sales ({sales?.length ?? 0})
+            Sales ({allSales.length})
           </button>
           <button
             type="button"
@@ -208,7 +371,7 @@ export default function Sales() {
               transition: "all 0.15s ease",
             }}
           >
-            Expenses ({expenses.length})
+            Expenses ({allExpenses.length})
           </button>
         </div>
       </div>
@@ -218,7 +381,7 @@ export default function Sales() {
       {/* SALES TAB */}
       {tradingTab === "sales" ? (
         <>
-          {state === "ready" && (sales ?? []).length === 0 ? (
+          {state === "ready" && allSales.length === 0 ? (
             <Empty
               illustration={<EmptySalesIllustration size={110} />}
               action={
@@ -247,17 +410,17 @@ export default function Sales() {
             </Empty>
           ) : null}
 
-          {(sales ?? []).length > 0 ? (
+          {allSales.length > 0 ? (
             <>
               <SalesTimelineChart
                 days={dailySummary?.days ?? []}
-                sales={sales ?? []}
+                sales={allSales}
                 currency={currency}
                 marginRatio={
                   profitMetrics.revenue > 0 ? profitMetrics.grossProfit / profitMetrics.revenue : 0.28
                 }
               />
-              <Card title={`${sales?.length ?? 0} sales`}>
+              <Card title={`${allSales.length} sales`}>
                 <p className={styles.totalPreview}>
                   {formatMoney(total.toFixed(2), currency)} in total | Est. Profit:{" "}
                   <strong style={{ color: "var(--leaf, #238636)" }}>
@@ -292,10 +455,10 @@ export default function Sales() {
                     {(["all", "paid", "returned"] as const).map((filter) => {
                       const count =
                         filter === "all"
-                          ? (sales ?? []).length
+                          ? allSales.length
                           : filter === "paid"
-                          ? (sales ?? []).filter((s) => !s.cancelled_at).length
-                          : (sales ?? []).filter((s) => Boolean(s.cancelled_at)).length;
+                          ? allSales.filter((s) => !s.cancelled_at).length
+                          : allSales.filter((s) => Boolean(s.cancelled_at)).length;
                       return (
                         <button
                           key={filter}
@@ -320,7 +483,7 @@ export default function Sales() {
                 </div>
 
                 {(() => {
-                  const filteredSales = (sales ?? []).filter((s) => {
+                  const filteredSales = allSales.filter((s) => {
                     if (statusFilter === "paid" && s.cancelled_at) return false;
                     if (statusFilter === "returned" && !s.cancelled_at) return false;
                     if (!searchQuery.trim()) return true;
@@ -407,12 +570,12 @@ export default function Sales() {
           </button>
         </div>
 
-        {expenses.length === 0 ? (
+        {allExpenses.length === 0 ? (
           <Empty>No expenses recorded yet. Tap "+ Log Expense" to record rent, transport, or fuel.</Empty>
         ) : (
-          <Card title={`${expenses.length} expenses`}>
+          <Card title={`${allExpenses.length} expenses`}>
             <ul className={styles.list}>
-              {expenses.map((exp) => (
+              {allExpenses.map((exp) => (
                 <li key={exp.id} className={styles.row}>
                   <span className={styles.rowMain}>
                     <span className={styles.rowName}>

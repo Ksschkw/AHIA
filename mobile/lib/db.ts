@@ -732,10 +732,16 @@ export function cacheSales(tenantId: string, sales: SaleSummary[]): void {
     if (!db) return;
     db.withTransactionSync(() => {
       for (const s of sales) {
+        const createdAt = s.created_at || (s as any).occurred_at || new Date().toISOString();
+        const normalized = {
+          ...s,
+          created_at: createdAt,
+          occurred_at: (s as any).occurred_at || createdAt,
+        };
         db.runSync(
           `INSERT OR REPLACE INTO cached_sales (id, tenant_id, data_json, created_at)
            VALUES (?, ?, ?, ?)`,
-          [s.id, tenantId, JSON.stringify(s), s.created_at],
+          [s.id, tenantId, JSON.stringify(normalized), createdAt],
         );
       }
     });
@@ -862,7 +868,7 @@ export async function flushOutbox(tenantId: string): Promise<number> {
       unit_price: string;
       payment_method: string;
     }>(
-      "SELECT id, product_id, quantity, unit_price, payment_method FROM sale_outbox WHERE tenant_id = ? AND status = 'pending'",
+      "SELECT id, product_id, quantity, unit_price, payment_method FROM sale_outbox WHERE tenant_id = ? AND status IN ('pending', 'failed')",
       [tenantId],
     );
 
@@ -927,11 +933,11 @@ export function getPendingOutboxCount(tenantId: string): number {
     const db = getDb();
     if (!db) return 0;
     const saleRow = db.getFirstSync<{ count: number }>(
-      "SELECT COUNT(*) as count FROM sale_outbox WHERE tenant_id = ? AND status = 'pending'",
+      "SELECT COUNT(*) as count FROM sale_outbox WHERE tenant_id = ? AND status IN ('pending', 'failed')",
       [tenantId],
     );
     const syncRow = db.getFirstSync<{ count: number }>(
-      "SELECT COUNT(*) as count FROM sync_outbox WHERE tenant_id = ? AND status = 'pending'",
+      "SELECT COUNT(*) as count FROM sync_outbox WHERE tenant_id = ? AND status IN ('pending', 'failed')",
       [tenantId],
     );
     return (saleRow?.count ?? 0) + (syncRow?.count ?? 0);
@@ -1237,7 +1243,7 @@ export async function flushSyncOutbox(tenantId: string): Promise<{ sales: number
       entity_type: string;
       payload_json: string;
     }>(
-      "SELECT id, action, entity_type, payload_json FROM sync_outbox WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at ASC",
+      "SELECT id, action, entity_type, payload_json FROM sync_outbox WHERE tenant_id = ? AND status IN ('pending', 'failed') ORDER BY created_at ASC",
       [tenantId],
     );
 

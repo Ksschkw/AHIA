@@ -300,13 +300,42 @@ export function copyProducts(
 export function recordSale(
   tenantId: string,
   sale: {
-    lines: Array<{ product_id: string; quantity: string; unit_price: string }>;
-    payment_method: string;
+    lines: Array<{ product_id: string; quantity: string; unit_price?: string; discount_amount?: string }>;
+    payment_method?: string;
+    payments?: Array<{ amount: string; method?: string; reference?: string | null }>;
   },
 ): Promise<{ id: string; total_amount: string }> {
+  let computedTotal = 0;
+  const formattedLines = sale.lines.map((l) => {
+    const qty = Number(l.quantity || "1");
+    const price = Number(l.unit_price || "0");
+    computedTotal += qty * price;
+    return {
+      product_id: l.product_id,
+      quantity: Number(l.quantity || "1").toFixed(3),
+      unit_price: Number(l.unit_price || "0").toFixed(2),
+      discount_amount: l.discount_amount ? Number(l.discount_amount).toFixed(2) : "0.00",
+    };
+  });
+
+  const method = sale.payment_method?.toUpperCase();
+  const validMethod = method === "BANK_TRANSFER" || method === "TRANSFER" ? "BANK_TRANSFER" : "CASH";
+
+  const payments = sale.payments && sale.payments.length > 0
+    ? sale.payments.map((p) => ({
+        amount: Number(p.amount).toFixed(2),
+        method: p.method === "BANK_TRANSFER" || p.method === "TRANSFER" ? "BANK_TRANSFER" : "CASH",
+        reference: p.reference ?? null,
+      }))
+    : [{ amount: computedTotal.toFixed(2), method: validMethod }];
+
   return request<{ id: string; total_amount: string }>(`/api/v1/tenants/${tenantId}/sales`, {
     method: "POST",
-    body: sale,
+    body: {
+      lines: formattedLines,
+      payments,
+      discount_amount: "0.00",
+    },
   });
 }
 
@@ -451,17 +480,27 @@ export interface SaleSummary {
   id: string;
   receipt_number: string;
   total_amount: string;
-  payment_method: string;
+  payment_method?: string;
   payment_status: string;
   created_at: string;
+  occurred_at?: string;
   cancelled_at?: string | null;
   cancellation_reason?: string | null;
   seller_id?: string | null;
   customer_id?: string | null;
 }
 
-export function listSales(tenantId: string, limit: string = "50"): Promise<SaleSummary[]> {
-  return request<SaleSummary[]>(`/api/v1/tenants/${tenantId}/sales?limit=${limit}`);
+export async function listSales(tenantId: string, limit: string = "50"): Promise<SaleSummary[]> {
+  const data = await request<SaleSummary[]>(`/api/v1/tenants/${tenantId}/sales?limit=${limit}`);
+  return (data || []).map((s) => {
+    const rawDate = s.created_at || (s as any).occurred_at || new Date().toISOString();
+    return {
+      ...s,
+      created_at: rawDate,
+      occurred_at: (s as any).occurred_at || rawDate,
+      payment_method: s.payment_method || "CASH",
+    };
+  });
 }
 
 export function cancelSale(tenantId: string, saleId: string, reason: string): Promise<void> {
@@ -550,13 +589,16 @@ export function recordExpense(
     payment_method?: string;
   },
 ): Promise<{ id: string; amount: string }> {
+  const method = data.payment_method?.toUpperCase();
+  const validMethod = method === "BANK_TRANSFER" || method === "TRANSFER" ? "BANK_TRANSFER" : "CASH";
+  const desc = data.description?.trim();
   return request<{ id: string; amount: string }>(`/api/v1/tenants/${tenantId}/expenses`, {
     method: "POST",
     body: {
-      category: data.category,
-      amount: data.amount,
-      description: data.description ?? null,
-      payment_method: (data.payment_method || "CASH").toUpperCase(),
+      category: data.category.toUpperCase(),
+      amount: Number(data.amount).toFixed(2),
+      description: desc && desc.length > 0 ? desc : null,
+      payment_method: validMethod,
     },
   });
 }
