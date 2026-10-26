@@ -7,7 +7,7 @@
  * - Two sub-tabs: "Sales" and "Expenses"
  * - Sales timeline progress chart (revenue vs profit)
  * - Search past transactions and filter by All / Paid / Returned
- * - Git-blame style Transaction Audit drawer showing who sold it, waybill, and lines
+ * - Transaction Audit drawer showing who sold it, waybill, and lines
  * - Business expenses tracker with category breakdown and "+ Log Expense" sheet
  */
 
@@ -66,7 +66,7 @@ export default function Sales() {
   // Trading Sub-tabs
   const [tradingTab, setTradingTab] = useState<"sales" | "expenses">("sales");
 
-  // Search & Filter state for old sales and blame investigation
+  // Search & Filter state for old sales and staff accountability audit
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "paid" | "returned">("all");
   const [selectedSaleAudit, setSelectedSaleAudit] = useState<SaleSummary | null>(null);
@@ -333,7 +333,7 @@ export default function Sales() {
         <div>
           <h1 className={styles.title} style={{ marginBottom: "2px" }}>Daily Trading</h1>
           <p className={styles.lede} style={{ margin: 0 }}>
-            Daily revenue, expenses, and transaction git-blame audit.
+            Daily revenue, expenses, and staff transaction audit.
           </p>
         </div>
 
@@ -429,7 +429,7 @@ export default function Sales() {
                   ({profitMetrics.marginPercent}%)
                 </p>
 
-                {/* Search & Filter Controls to track old stuff and blame */}
+                {/* Search & Filter Controls to track past sales and staff audit */}
                 <div style={{ display: "flex", gap: "10px", alignItems: "center", margin: "14px 0", flexWrap: "wrap" }}>
                   <div style={{ flex: 1, minWidth: "220px", position: "relative" }}>
                     <input
@@ -510,7 +510,7 @@ export default function Sales() {
                           className={styles.row}
                           onClick={() => setSelectedSaleAudit(sale)}
                           style={{ cursor: "pointer", transition: "background 0.15s ease" }}
-                          title="Click to inspect transaction audit & blame"
+                          title="Click to view staff audit and waybill details"
                         >
                           <span className={styles.rowMain}>
                             <span
@@ -524,7 +524,7 @@ export default function Sales() {
                               {new Date(sale.occurred_at).toLocaleString()}
                               {sale.payment_status ? ` - ${sale.payment_status.toLowerCase()}` : ""}
                               <span style={{ color: "var(--leaf, #238636)", marginLeft: "8px", fontWeight: 600 }}>
-                                Audit Blame &rsaquo;
+                                Audit Staff &rsaquo;
                               </span>
                             </span>
                           </span>
@@ -599,7 +599,7 @@ export default function Sales() {
       </div>
     )}
 
-      {/* Sale Detail & Audit Blame Sheet Dialog */}
+      {/* Sale Detail & Audit Sheet Dialog */}
       <Sheet
         open={selectedSaleAudit !== null}
         title={selectedSaleAudit ? `Transaction Audit - #${selectedSaleAudit.receipt_number}` : "Sale Audit"}
@@ -650,7 +650,7 @@ export default function Sales() {
                 </div>
               </div>
 
-              {/* Author & Blame Section */}
+              {/* Staff Accountability & Confirmation Section */}
               <div
                 style={{
                   padding: "14px",
@@ -660,7 +660,7 @@ export default function Sales() {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", fontWeight: 800, color: "var(--ink, #111)", marginBottom: "10px", letterSpacing: "0.5px" }}>
-                  <SearchIcon size={14} /> TRANSACTION AUTHOR & BLAME
+                  <SearchIcon size={14} /> STAFF & CONFIRMATION AUDIT
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border, #f3f4f6)", fontSize: "13px" }}>

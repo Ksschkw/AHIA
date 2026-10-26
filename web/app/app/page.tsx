@@ -924,7 +924,7 @@ export default function Dashboard() {
                           className={styles.auditBtn}
                           onClick={() => setSelectedSaleAudit(sale)}
                         >
-                          Audit &amp; Blame &rsaquo;
+                          Audit Staff &rsaquo;
                         </button>
                       </div>
                     </li>
@@ -1241,13 +1241,13 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Sale Audit & Blame Modal */}
+      {/* Sale Audit & Details Modal */}
       {selectedSaleAudit ? (
         <div className={styles.modalOverlay} onClick={() => setSelectedSaleAudit(null)}>
           <div className={styles.modalBox} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <div>
-                <h3 className={styles.modalTitle}>Sale Audit &amp; Blame</h3>
+                <h3 className={styles.modalTitle}>Sale Audit &amp; Details</h3>
                 <div className={styles.modalSubtitle}>Receipt #{selectedSaleAudit.receipt_number}</div>
               </div>
               <button
@@ -1327,8 +1327,8 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Git-Style Blame Box */}
-            <div className={styles.blameCard}>
+            {/* Staff Accountability Box */}
+            <div className={styles.auditCard}>
               <div
                 style={{
                   fontSize: "11px",
@@ -1338,11 +1338,11 @@ export default function Dashboard() {
                   letterSpacing: "0.5px",
                 }}
               >
-                COMMIT AUTHOR &amp; BLAME
+                STAFF &amp; CONFIRMATION AUDIT
               </div>
-              <div className={styles.blameRow}>
-                <span className={styles.blameLabel}>Seller / Recorded By:</span>
-                <span className={styles.blameValue}>
+              <div className={styles.auditRow}>
+                <span className={styles.auditLabel}>Seller / Recorded By:</span>
+                <span className={styles.auditValue}>
                   {(() => {
                     const isSelf = user && selectedSaleAudit.seller_id === user.id;
                     const m = members.find((x) => x.user_id === selectedSaleAudit.seller_id);
@@ -1361,9 +1361,9 @@ export default function Dashboard() {
                   })()}
                 </span>
               </div>
-              <div className={styles.blameRow}>
-                <span className={styles.blameLabel}>Role / Permission:</span>
-                <span className={styles.blameValue}>
+              <div className={styles.auditRow}>
+                <span className={styles.auditLabel}>Role / Permission:</span>
+                <span className={styles.auditValue}>
                   {(() => {
                     const isSelf = user && selectedSaleAudit.seller_id === user.id;
                     const m = members.find((x) => x.user_id === selectedSaleAudit.seller_id);
@@ -1372,18 +1372,18 @@ export default function Dashboard() {
                   })()}
                 </span>
               </div>
-              <div className={styles.blameRow}>
-                <span className={styles.blameLabel}>Seller ID:</span>
+              <div className={styles.auditRow}>
+                <span className={styles.auditLabel}>Seller ID:</span>
                 <span
-                  className={styles.blameValue}
+                  className={styles.auditValue}
                   style={{ fontFamily: "monospace", fontSize: "11px" }}
                 >
                   {selectedSaleAudit.seller_id || "system"}
                 </span>
               </div>
-              <div className={styles.blameRow}>
-                <span className={styles.blameLabel}>Origin Channel:</span>
-                <span className={styles.blameValue}>
+              <div className={styles.auditRow}>
+                <span className={styles.auditLabel}>Origin Channel:</span>
+                <span className={styles.auditValue}>
                   {(() => {
                     const linked = customerLists.find(
                       (l) =>

@@ -859,7 +859,7 @@ export default function Home() {
   const [expandedPaymentListIds, setExpandedPaymentListIds] = useState<Set<string>>(() => new Set());
   const [showTimelineChart, setShowTimelineChart] = useState(true);
 
-  // Sale Audit & Blame state
+  // Sale Staff Audit state
   const [selectedSaleAudit, setSelectedSaleAudit] = useState<SaleSummary | null>(null);
   const [historySearchQuery, setHistorySearchQuery] = useState("");
   const [salesFilterStatus, setSalesFilterStatus] = useState<"all" | "paid" | "returned">("all");
@@ -3216,7 +3216,7 @@ export default function Home() {
                   </View>
                   <View style={{ alignItems: "flex-end", gap: 2 }}>
                     <Text style={styles.saleAmount}>{formatMoney(sale.total_amount)}</Text>
-                    <Text style={{ fontSize: 10, color: "#238636", fontWeight: "600" }}>Audit & Blame &rsaquo;</Text>
+                    <Text style={{ fontSize: 10, color: "#238636", fontWeight: "600" }}>Audit Staff &rsaquo;</Text>
                   </View>
                 </Pressable>
               ))
@@ -4484,7 +4484,7 @@ export default function Home() {
             {/* Sales Sub-tab */}
             {tradingSubTab === "sales" ? (
               <View>
-                {/* Search & Filter Sales to track old stuff and investigate blame */}
+                {/* Search & Filter Sales to track past sales and staff audit */}
                 {sales.length > 0 && (
                   <View style={{ marginBottom: 12, gap: 8 }}>
                     <View style={styles.searchBoxWrap}>
@@ -4609,7 +4609,7 @@ export default function Home() {
                               via {(s.payment_method || "CASH").toUpperCase()}
                             </Text>
                             <Text style={{ fontSize: 10, color: "#238636", fontWeight: "600", marginTop: 2 }}>
-                              Audit blame, waybill & receipt &rsaquo;
+                              Audit staff, waybill & receipt &rsaquo;
                             </Text>
                           </View>
                         </View>
@@ -6487,7 +6487,7 @@ export default function Home() {
         </View>
       </Modal>
 
-      {/* Sale Detail & Audit Blame Modal */}
+      {/* Sale Detail & Staff Audit Modal */}
       <Modal statusBarTranslucent visible={selectedSaleAudit !== null} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, { maxHeight: "90%", padding: 18 }]}>
@@ -6525,7 +6525,7 @@ export default function Home() {
                   {/* Modal Header */}
                   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                     <View style={{ flex: 1, paddingRight: 8 }}>
-                      <Text style={styles.modalTitle}>Sale Audit & Blame</Text>
+                      <Text style={styles.modalTitle}>Sale Audit & Details</Text>
                       <Text style={styles.modalSubtitle}>Receipt #{selectedSaleAudit.receipt_number}</Text>
                     </View>
                     <Pressable
@@ -6585,7 +6585,7 @@ export default function Home() {
                       </View>
                     </View>
 
-                    {/* Git-Style Blame Box: Who is Responsible */}
+                    {/* Staff Accountability Box: Who is Responsible */}
                     <View
                       style={{
                         backgroundColor: "#161b22",
@@ -6599,7 +6599,7 @@ export default function Home() {
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
                         <SearchIcon size={14} color="#58a6ff" />
                         <Text style={{ fontSize: 12, fontWeight: "800", color: "#f0f6fc", letterSpacing: 0.5 }}>
-                          TRANSACTION AUTHOR & BLAME
+                          STAFF & CONFIRMATION AUDIT
                         </Text>
                       </View>
 
@@ -6638,7 +6638,7 @@ export default function Home() {
                         </View>
                       )}
 
-                      {/* Return blame if cancelled */}
+                      {/* Return record if cancelled */}
                       {isCancelled && (
                         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 6 }}>
                           <Text style={{ fontSize: 12, color: "#f85149" }}>Voided / Returned At</Text>

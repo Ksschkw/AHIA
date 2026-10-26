@@ -985,7 +985,7 @@
 }
 
 /* -------------------------------------------------------------------------
-   Stock Health, Audit & Blame Modal Styles
+   Stock Health & Staff Audit Modal Styles
    ------------------------------------------------------------------------- */
 
 .auditBtn {
@@ -1070,7 +1070,7 @@
   border-color: var(--leaf);
 }
 
-.blameCard {
+.auditCard {
   background: var(--sand-2);
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -1080,7 +1080,7 @@
   gap: 10px;
 }
 
-.blameRow {
+.auditRow {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1088,12 +1088,12 @@
   font-size: 13px;
 }
 
-.blameLabel {
+.auditLabel {
   font-weight: 600;
   color: var(--ink-2);
 }
 
-.blameValue {
+.auditValue {
   font-weight: 700;
   color: var(--ink);
   text-align: right;
