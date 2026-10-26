@@ -1,505 +1,662 @@
-/* Working a customer's list.
-   One line per item, everything about that item on that line, because a trader holds the goods in one
-   hand and the phone in the other. Big targets, plain numbers, nothing hidden behind a tap. */
+/* Lists / Orders & Waybills tab for AHIA Web
+   Matches mobile app's Orders & Waybills design 1:1 */
 
 .page {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  max-width: 900px;
+  gap: var(--space-4, 16px);
+  max-width: 960px;
   margin: 0 auto;
-  padding-bottom: var(--space-6);
+  padding-bottom: var(--space-6, 32px);
 }
 
-.header {
+.listsHeaderWrap {
+  margin-bottom: 12px;
+}
+
+.listsHeaderTop {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
 }
 
-.title {
-  font-size: var(--text-xl);
+.listsHeaderTitle {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--ink, #111827);
+  margin: 0;
   letter-spacing: -0.02em;
 }
 
-.lede {
-  font-size: var(--text-base);
-  color: var(--ink-2);
-  max-width: 62ch;
-  line-height: var(--leading-normal);
+.listsHeaderSubtitle {
+  font-size: 13px;
+  color: var(--ink-2, #6b7280);
+  margin: 2px 0 0;
 }
 
-.listHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-.openShopBtn {
+.quickPasteBtn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 38px;
-  padding: 0 var(--space-4);
-  background: var(--leaf);
+  background: var(--leaf, #0b5d3b);
   color: #ffffff;
-  border-radius: var(--radius-pill);
-  font-size: var(--text-xs);
-  font-weight: 750;
-  text-decoration: none;
-  transition: opacity 0.15s ease;
-}
-
-.openShopBtn:hover {
-  opacity: 0.9;
-}
-
-.meta {
-  font-size: var(--text-sm);
-  color: var(--ink-2);
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.phoneMeta {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.headPills {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.note {
-  margin-top: var(--space-2);
-  font-size: var(--text-sm);
-  color: var(--ink-2);
-  padding: var(--space-2) var(--space-3);
-  background: var(--sand-2);
-  border-radius: var(--radius-sm);
-}
-
-.headActions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin-top: var(--space-3);
-}
-
-.totalPreview {
-  font-size: var(--text-md);
-  font-weight: 750;
-  color: var(--leaf-dark);
-}
-
-.lines {
-  list-style: none;
-  margin: var(--space-3) 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.line {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--sand);
-}
-
-.lineWho {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.lineNameRow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.lineItemIcon {
-  color: var(--ink-3);
-  flex-shrink: 0;
-}
-
-.lineName {
-  font-size: var(--text-md);
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
-
-.lineMeta {
-  font-size: var(--text-xs);
-  color: var(--ink-3);
-}
-
-.categoryBadge {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--leaf-dark);
-  background: var(--leaf-soft);
-  padding: 2px 8px;
+  padding: 8px 14px;
   border-radius: 999px;
-  margin-bottom: 4px;
-  align-self: flex-start;
-}
-
-.sectionDivider {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  background: var(--leaf-soft);
-  border-left: 3px solid var(--leaf);
-  border-radius: 4px;
-  margin-top: var(--space-2);
-}
-
-.sectionDividerTitle {
-  font-size: var(--text-xs);
+  font-size: 12px;
   font-weight: 750;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--leaf-dark);
-}
-
-.cannotGetOn,
-.cannotGetOff {
-  min-height: 32px;
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-pill);
-  font-family: inherit;
-  font-size: var(--text-xs);
-  font-weight: 700;
+  border: none;
   cursor: pointer;
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+  transition: opacity 0.15s ease, transform 0.1s ease;
 }
 
-.cannotGetOn {
-  background: #fde8e8;
-  border: 1px solid #f98080;
-  color: #9b1c1c;
+.quickPasteBtn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
 }
 
-.cannotGetOff {
-  background: var(--card);
-  border: 1px solid var(--line-strong);
-  color: var(--ink-2);
-}
-
-.cannotGetOn:disabled,
-.cannotGetOff:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-.lineUnavailable {
-  opacity: 0.5;
-  text-decoration: line-through;
-}
-
-.compactPriceRow {
+/* Filter Pills */
+.listFilterPillsRow {
   display: flex;
-  align-items: flex-end;
-  gap: var(--space-2);
-  margin-top: var(--space-1);
+  background: var(--sand-2, #f3ece1);
+  border-radius: 10px;
+  padding: 4px;
+  gap: 4px;
 }
 
-.compactPriceField {
+.listFilterPill {
   flex: 1;
-  max-width: 150px;
-}
-
-.lineStates {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.stateOn,
-.stateOff {
-  min-height: 40px;
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-pill);
-  font-family: inherit;
-  font-size: var(--text-sm);
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.stateOn {
-  background: var(--leaf);
-  border: 1px solid var(--leaf);
-  color: #fff;
-}
-
-.stateOff {
-  background: var(--card);
-  border: 1px solid var(--line-strong);
-  color: var(--ink-2);
-}
-
-.stateOn:disabled,
-.stateOff:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-.lineNumbers {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-2);
-  align-items: end;
-}
-
-@media (min-width: 620px) {
-  .lineNumbers {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-.lineTotal {
-  font-size: var(--text-sm);
-  font-weight: 700;
-  color: var(--leaf-dark);
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.lineUnpriced {
-  font-size: var(--text-sm);
-  color: var(--ink-3);
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.pricedCheck {
-  color: var(--leaf);
-  flex-shrink: 0;
-}
-
-.unpricedClock {
-  color: var(--ink-3);
-  flex-shrink: 0;
-}
-
-.quote {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-3);
-  align-items: end;
-  margin-top: var(--space-4);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--line);
-}
-
-@media (min-width: 620px) {
-  .quote {
-    grid-template-columns: 1fr auto auto;
-  }
-}
-
-.quoteTotal {
-  font-size: var(--text-lg);
-  font-weight: 800;
-  color: var(--leaf-dark);
-}
-
-.blocked {
-  grid-column: 1 / -1;
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--gold);
-}
-
-.foot {
-  text-align: center;
-}
-
-.footLink {
-  font-size: var(--text-sm);
-  font-weight: 650;
-  color: var(--leaf);
-  text-decoration: none;
-}
-
-.deleteListBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 38px;
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-pill);
-  font-family: inherit;
-  font-size: var(--text-xs);
-  font-weight: 700;
-  background: transparent;
-  border: 1px solid var(--line-strong);
-  color: #9b1c1c;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.deleteListBtn:hover {
-  background: #fde8e8;
-  border-color: #f98080;
-}
-
-.modalOverlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-  padding: var(--space-3);
-  backdrop-filter: blur(2px);
-}
-
-.modalCard {
-  background: var(--card);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-md);
-  max-width: 440px;
-  width: 100%;
-  padding: var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-}
-
-.modalTitle {
-  font-size: var(--text-lg);
-  font-weight: 750;
-  color: #9b1c1c;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-}
-
-.modalBody {
-  font-size: var(--text-sm);
-  color: var(--ink-2);
-  line-height: var(--leading-normal);
-  margin: 0;
-}
-
-.modalWarning {
-  font-size: var(--text-xs);
-  color: #771d1d;
-  background: #fef2f2;
-  border-left: 3px solid #ef4444;
   padding: 8px 12px;
-  border-radius: 4px;
-}
-
-.modalActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-}
-
-.modalCancelBtn {
-  min-height: 38px;
-  padding: 0 var(--space-4);
-  background: var(--sand-2);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-pill);
-  font-family: inherit;
-  font-size: var(--text-xs);
-  font-weight: 700;
-  color: var(--ink);
-  cursor: pointer;
-}
-
-.modalCancelBtn:hover {
-  background: var(--line);
-}
-
-.modalConfirmDeleteBtn {
-  min-height: 38px;
-  padding: 0 var(--space-4);
-  background: #dc2626;
-  border: 1px solid #b91c1c;
-  border-radius: var(--radius-pill);
-  font-family: inherit;
-  font-size: var(--text-xs);
-  font-weight: 700;
-  color: #ffffff;
-  cursor: pointer;
-}
-
-.modalConfirmDeleteBtn:hover {
-  background: #b91c1c;
-}
-
-.modalConfirmDeleteBtn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.filterPillsRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: var(--space-3);
-  flex-wrap: wrap;
-}
-
-.filterPill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: 20px;
-  background: var(--surface, #ffffff);
-  border: 1px solid var(--line-strong, #e2e8f0);
-  font-family: inherit;
+  border-radius: 8px;
   font-size: 13px;
-  font-weight: 700;
-  color: var(--ink-2, #64748b);
+  font-weight: 600;
+  color: var(--ink-2, #5c5549);
+  background: transparent;
+  border: none;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.filterPill:hover {
-  border-color: #22c55e;
-  color: var(--ink-1, #0f172a);
+.listFilterPillActive {
+  background: var(--card, #ffffff);
+  color: var(--ink, #1e1b16);
+  font-weight: 750;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
-.filterPillActive {
+/* Sub-filter chips for Worked orders */
+.subFilterRow {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 0 4px;
+}
+
+.subFilterChip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--sand-2, #f3ece1);
+  color: var(--ink-2, #5c5549);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.subFilterChipActive {
+  background: var(--leaf-soft, #e6f1ea);
+  color: var(--leaf-dark, #084a2f);
+  border-color: var(--leaf, #0b5d3b);
+  font-weight: 750;
+}
+
+/* Empty State */
+.emptyBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 24px;
+  background: var(--card, #ffffff);
+  border: 1px dashed var(--line, #e7dfd2);
+  border-radius: 16px;
+  margin-top: 12px;
+}
+
+.emptyTitle {
+  font-size: 16px;
+  font-weight: 750;
+  color: var(--ink, #111827);
+  margin: 12px 0 4px;
+}
+
+.emptySubtitle {
+  font-size: 13px;
+  color: var(--ink-2, #6b7280);
+  max-width: 440px;
+  line-height: 1.5;
+}
+
+/* List Card */
+.listCard {
+  background: var(--card, #ffffff);
+  border: 1px solid var(--line, #e7dfd2);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  margin-bottom: 12px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.listCard:hover {
+  border-color: var(--leaf, #0b5d3b);
+}
+
+.listCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.listCustomerName {
+  font-size: 15px;
+  font-weight: 750;
+  color: var(--ink, #111827);
+  margin-right: 8px;
+}
+
+.badgeSmall {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.badgeWaybill {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
+.badgePickup {
+  background: rgba(56, 189, 248, 0.12);
+  color: #0369a1;
+}
+
+.badgePaid {
   background: rgba(34, 197, 94, 0.12);
-  border-color: #22c55e;
   color: #15803d;
 }
 
-:global([data-theme="dark"]) .filterPillActive {
-  background: rgba(74, 222, 128, 0.16);
-  border-color: #4ade80;
-  color: #4ade80;
+.badgePartPaid {
+  background: rgba(249, 115, 22, 0.12);
+  color: #c2410c;
+}
+
+.badgeUnpaid {
+  background: rgba(148, 163, 184, 0.16);
+  color: #475569;
+}
+
+.listDate {
+  font-size: 12px;
+  color: var(--ink-2, #6b7280);
+  margin-top: 3px;
+}
+
+.statusBadge {
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.statusConfirmed {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.statusPending {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+/* Card Body when expanded */
+.cardExpandedBody {
+  padding: 0 16px 16px;
+  border-top: 1px solid var(--line, #e7dfd2);
+  background: var(--sand, #fbf7f0);
+}
+
+/* Customer Payment Proof Card */
+.customerProofCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 14px 0 10px;
+}
+
+.customerProofTitle {
+  font-size: 11px;
+  font-weight: 800;
+  color: #1d4ed8;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.customerProofAmount {
+  font-size: 15px;
+  font-weight: 800;
+  color: #1e3a8a;
+  margin: 2px 0;
+}
+
+.customerProofDate {
+  font-size: 11px;
+  color: #60a5fa;
+}
+
+.customerProofAcceptBtn {
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+/* Customer Fulfillment Info */
+.fulfillmentRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 12px 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-2, #6b7280);
+}
+
+/* Payment Summary Card */
+.paymentSummaryCard {
+  background: var(--card, #ffffff);
+  border: 1px solid var(--line, #e7dfd2);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+.paymentSummaryRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  text-align: center;
+}
+
+.paymentLabel {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--ink-2, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.paymentVal {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--ink, #111827);
+  margin-top: 2px;
+}
+
+.recordPaymentBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--leaf-soft, #e6f1ea);
+  color: var(--leaf-dark, #084a2f);
+  border: 1px dashed var(--leaf, #0b5d3b);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: all 0.15s ease;
+}
+
+.recordPaymentBtn:hover {
+  background: var(--leaf, #0b5d3b);
+  color: #ffffff;
+}
+
+/* Category Sections */
+.sectionBox {
+  background: var(--card, #ffffff);
+  border: 1px solid var(--line, #e7dfd2);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 0;
+}
+
+.sectionRootTitle {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--leaf-dark, #084a2f);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.subSectionBox {
+  margin-top: 6px;
+  padding-left: 4px;
+}
+
+.subTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-2, #475569);
+}
+
+/* Line Item */
+.lineItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--sand-2, #f3ece1);
+  gap: 12px;
+}
+
+.lineItem:last-child {
+  border-bottom: none;
+}
+
+.lineMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.lineTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.lineName {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink, #111827);
+}
+
+.lineStateBadge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.lineStateHaveIt {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.lineStateBuyIt {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.lineStateCannotGet {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.lineStateSomewhere {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.linePriceDetailRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  margin-top: 3px;
+  flex-wrap: wrap;
+}
+
+.linePrice {
+  font-weight: 700;
+  color: var(--ink, #111827);
+}
+
+.lineCost {
+  color: var(--ink-2, #6b7280);
+}
+
+.lineMargin {
+  font-weight: 700;
+}
+
+.marginPositive {
+  color: #15803d;
+}
+
+.marginNegative {
+  color: #b91c1c;
+}
+
+.lineActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lineStatusCycleBtn {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lineStatusBtnHaveIt {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #15803d;
+}
+
+.lineStatusBtnBuyIt {
+  background: #fef9c3;
+  border-color: #fde047;
+  color: #854d0e;
+}
+
+.lineStatusBtnUnavailable {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.lineStatusBtnSomewhere {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #64748b;
+}
+
+.linePriceBtn {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background: var(--sand-2, #f3ece1);
+  border: 1px solid var(--line, #e7dfd2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-2, #6b7280);
+  cursor: pointer;
+}
+
+.linePriceBtn:hover {
+  background: var(--card, #ffffff);
+  color: var(--ink, #111827);
+}
+
+/* Waybill Banner */
+.waybillBanner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 10px 0;
+  font-size: 13px;
+  color: #166534;
+  font-weight: 600;
+}
+
+/* List Footer & Action Buttons */
+.listFooter {
+  background: var(--card, #ffffff);
+  border: 1px solid var(--line, #e7dfd2);
+  border-radius: 10px;
+  padding: 14px;
+  margin-top: 10px;
+}
+
+.listFooterTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.totalLabel {
+  font-size: 11px;
+  font-weight: 750;
+  color: var(--ink-2, #6b7280);
+  text-transform: uppercase;
+}
+
+.totalAmount {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--ink, #111827);
+}
+
+.statusPill {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.statusPillConfirmed {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.statusPillDraft {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.footerActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.autoPriceBtn,
+.waBtn,
+.invoiceBtn,
+.dispatchBtn,
+.confirmBtn,
+.deleteListBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 750;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+}
+
+.autoPriceBtn {
+  background: var(--leaf-soft, #e6f1ea);
+  color: var(--leaf-dark, #084a2f);
+}
+
+.waBtn {
+  background: #25d366;
+  color: #ffffff;
+}
+
+.invoiceBtn {
+  background: #0284c7;
+  color: #ffffff;
+}
+
+.dispatchBtn {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.confirmBtn {
+  background: var(--leaf, #0b5d3b);
+  color: #ffffff;
+}
+
+.deleteListBtn {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.autoPriceBtn:hover,
+.waBtn:hover,
+.invoiceBtn:hover,
+.dispatchBtn:hover,
+.confirmBtn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
 }

@@ -39,7 +39,25 @@ export type ExpenseCreate = Schemas["ExpenseCreateSchema"];
 export type ProductImage = Schemas["ProductImageResponseSchema"];
 export type Storefront = Schemas["StorefrontResponseSchema"];
 export type Member = Schemas["MembershipResponseSchema"];
-export type CustomerList = Schemas["RequestResponseSchema"];
+export interface ListPayment {
+  id: string;
+  amount: string;
+  date: string;
+  note?: string | null;
+  payment_method: string;
+}
+export type CustomerList = Schemas["RequestResponseSchema"] & {
+  transporter_name?: string | null;
+  transporter_phone?: string | null;
+  waybill_number?: string | null;
+  dispatch_cost?: string | null;
+  tracking_url?: string | null;
+  dispatched_at?: string | null;
+  fulfillment_type?: "pickup" | "waybill" | null;
+  advance_payment?: string | null;
+  amount_paid?: string | null;
+  payments?: ListPayment[];
+};
 export type CustomerListLine = Schemas["RequestLineResponseSchema"];
 export type CustomerListSummary = Schemas["CustomerListSummarySchema"] & {
   note?: string | null;
@@ -1027,6 +1045,34 @@ export const LINE_STATES: { value: NonNullable<ListLineState>; label: string; hi
 /** Every list this business has been sent, newest first, with its lines. */
 export function listCustomerLists(tenantId: string): Promise<CustomerList[]> {
   return request<CustomerList[]>(`/api/v1/tenants/${tenantId}/requests`);
+}
+
+export interface PublicRequestLine {
+  product_slug?: string | null;
+  free_text?: string | null;
+  quantity: string;
+  unit: string;
+  note?: string | null;
+  parent_position?: number | null;
+}
+
+export interface PublicRequestPayload {
+  customer_phone: string;
+  customer_name?: string | null;
+  lines: PublicRequestLine[];
+}
+
+export function submitCustomerList(
+  tenantSlug: string,
+  payload: PublicRequestPayload,
+): Promise<{ request_id: string; line_count: number; message: string; list_path: string }> {
+  return request<{ request_id: string; line_count: number; message: string; list_path: string }>(
+    `/shop/${encodeURIComponent(tenantSlug)}/requests`,
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
 }
 
 /** Lists a returning customer has previously sent to this shop, for quick reordering. */
