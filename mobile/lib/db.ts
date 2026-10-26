@@ -19,6 +19,7 @@ import {
   updateProduct,
   deleteProduct,
   recordExpense,
+  receiveStock,
 } from "./api";
 
 /**
@@ -907,8 +908,16 @@ export async function flushOutbox(tenantId: string): Promise<number> {
 /** Enqueue a generic mutation into SQLite sync_outbox. */
 export function enqueueOutboxMutation(
   tenantId: string,
-  action: "CREATE_CATEGORY" | "UPDATE_CATEGORY" | "DELETE_CATEGORY" | "CREATE_PRODUCT" | "UPDATE_PRODUCT" | "DELETE_PRODUCT" | "RECORD_EXPENSE",
-  entityType: "category" | "product" | "expense",
+  action:
+    | "CREATE_CATEGORY"
+    | "UPDATE_CATEGORY"
+    | "DELETE_CATEGORY"
+    | "CREATE_PRODUCT"
+    | "UPDATE_PRODUCT"
+    | "DELETE_PRODUCT"
+    | "RECORD_EXPENSE"
+    | "RECEIVE_STOCK",
+  entityType: "category" | "product" | "expense" | "stock",
   payload: Record<string, unknown>,
 ): string {
   const id = `outbox-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -1109,6 +1118,7 @@ export function createLocalProduct(
     category_id?: string | null;
     description?: string | null;
     image_url?: string | null;
+    initial_stock?: string | null;
   },
 ): Product {
   const tempId = `prod-local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -1163,6 +1173,7 @@ export function createLocalProduct(
     wholesale_price: data.wholesale_price ?? null,
     category_id: data.category_id ?? null,
     description: data.description ?? null,
+    initial_stock: data.initial_stock ?? null,
   });
 
   return product;
@@ -1284,6 +1295,13 @@ export async function flushSyncOutbox(tenantId: string): Promise<{ sales: number
             created.id,
             payload.temp_id,
           ]);
+          if (payload.initial_stock && parseFloat(String(payload.initial_stock)) > 0) {
+            try {
+              await receiveStock(tenantId, created.id, String(payload.initial_stock), "Opening stock");
+            } catch {
+              // Non-blocking stock receipt
+            }
+          }
         } else if (item.action === "UPDATE_PRODUCT") {
           await updateProduct(tenantId, payload.product_id, {
             name: payload.name,
@@ -1300,6 +1318,13 @@ export async function flushSyncOutbox(tenantId: string): Promise<{ sales: number
             description: payload.description,
             payment_method: payload.payment_method,
           });
+        } else if (item.action === "RECEIVE_STOCK") {
+          await receiveStock(
+            tenantId,
+            payload.product_id as string,
+            String(payload.quantity),
+            payload.note as string | undefined,
+          );
         }
 
         db.runSync("UPDATE sync_outbox SET status = 'synced' WHERE id = ?", [item.id]);

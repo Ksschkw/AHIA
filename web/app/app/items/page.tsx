@@ -51,6 +51,7 @@ import {
   publishProduct,
   unpublishProduct,
   listStock,
+  receiveStock,
   copyProducts,
   moveProductsBatch,
   listProductImages,
@@ -232,6 +233,16 @@ export default function Items() {
   const [newProdWholesalePrice, setNewProdWholesalePrice] = useState("");
   const [newProdPiecesPerPack, setNewProdPiecesPerPack] = useState("");
   const [newProdPublish, setNewProdPublish] = useState(true);
+  const [newProdInitialStock, setNewProdInitialStock] = useState("");
+
+  // Restock modal state
+  const [restockProduct, setRestockProduct] = useState<Product | null>(null);
+  const [restockQty, setRestockQty] = useState("");
+  const [restockNote, setRestockNote] = useState("");
+  const [savingRestock, setSavingRestock] = useState(false);
+
+  // Edit product extra state
+  const [editProdAddStock, setEditProdAddStock] = useState("");
 
   const load = useCallback(async (tenantId: string) => {
     const [foundProducts, foundCategories, foundStock] = await Promise.all([
@@ -588,11 +599,24 @@ export default function Items() {
           // Photo upload failure is non-blocking
         }
       }
+      if (newProdInitialStock.trim()) {
+        const initQty = parseFloat(newProdInitialStock.trim());
+        if (!isNaN(initQty) && initQty > 0) {
+          try {
+            await receiveStock(business.id, created.id, newProdInitialStock.trim(), "Opening stock");
+            const updatedStock = await listStock(business.id);
+            setStock(updatedStock);
+          } catch {
+            // Non-blocking stock receipt
+          }
+        }
+      }
       setProducts((current) => [...(current ?? []), created]);
       setNewProdName("");
       setNewProdSellingPrice("");
       setNewProdWholesalePrice("");
       setNewProdPiecesPerPack("");
+      setNewProdInitialStock("");
       setNewProdPhoto(null);
       setNewProdPhotoPreview(null);
       setShowAddProduct(false);
@@ -703,6 +727,7 @@ export default function Items() {
     );
     setEditProdCategoryId(prod.category_id ?? null);
     setEditProdPublish(prod.is_published);
+    setEditProdAddStock("");
     setEditProdPhoto(null);
     setRemoveExistingPhoto(false);
     setEditProdPhotoPreview(productImages[prod.id] || null);
@@ -796,11 +821,28 @@ export default function Items() {
         }
       }
 
+      if (editProdAddStock.trim()) {
+        const addQty = parseFloat(editProdAddStock.trim());
+        if (!isNaN(addQty) && addQty > 0) {
+          try {
+            await receiveStock(
+              business.id,
+              editingProduct.id,
+              editProdAddStock.trim(),
+              "Stock adjustment during item edit",
+            );
+          } catch {
+            // Non-critical
+          }
+        }
+      }
+
       await load(business.id);
       setEditingProduct(null);
       setEditProdPhoto(null);
       setEditProdPhotoPreview(null);
       setRemoveExistingPhoto(false);
+      setEditProdAddStock("");
       setNotice({ message: `Item "${editProdName.trim()}" updated.`, tone: "good" });
     } catch {
       setNotice({ message: "Could not update item. Please check your values.", tone: "bad" });
@@ -808,6 +850,45 @@ export default function Items() {
       setBusyEditProd(false);
     }
   }
+
+  const openRestockModal = (prod: Product) => {
+    setRestockProduct(prod);
+    setRestockQty("");
+    setRestockNote("");
+  };
+
+  const handleReceiveStock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!business || !restockProduct || !restockQty.trim()) return;
+    const qtyNum = parseFloat(restockQty.trim());
+    if (isNaN(qtyNum) || qtyNum <= 0) {
+      setNotice({ message: "Please enter a valid stock quantity greater than 0.", tone: "bad" });
+      return;
+    }
+    setSavingRestock(true);
+    try {
+      await receiveStock(
+        business.id,
+        restockProduct.id,
+        restockQty.trim(),
+        restockNote.trim() || undefined,
+      );
+      const updatedStock = await listStock(business.id);
+      setStock(updatedStock);
+      const lvl = updatedStock.find((s) => s.product_id === restockProduct.id);
+      setNotice({
+        message: `Received +${restockQty.trim()} units for "${restockProduct.name}". Now ${formatQuantity(lvl?.available_quantity ?? restockQty.trim())} in stock.`,
+        tone: "good",
+      });
+      setRestockProduct(null);
+      setRestockQty("");
+      setRestockNote("");
+    } catch {
+      setNotice({ message: "Could not record stock. Please try again.", tone: "bad" });
+    } finally {
+      setSavingRestock(false);
+    }
+  };
 
   // Deleting category with confirmation safeguards
   async function handleConfirmDeleteCategory() {
@@ -1169,6 +1250,15 @@ export default function Items() {
               optional
               onChange={setNewProdPiecesPerPack}
             />
+            <Field
+              label="Opening stock (quantity on hand, optional)"
+              id="new_product_stock"
+              value={newProdInitialStock}
+              placeholder="e.g. 50 (leaves item ready in stock)"
+              inputMode="numeric"
+              optional
+              onChange={setNewProdInitialStock}
+            />
           </div>
           <div className={styles.photoUploadBox}>
             <span className={styles.photoUploadLabel}>Item Photo (optional)</span>
@@ -1393,16 +1483,34 @@ export default function Items() {
                             {prod.effective_pieces_per_pack ? ` (${prod.effective_pieces_per_pack}/pk)` : ""}
                           </span>
                         ) : null}
-                        <span style={{ fontSize: "11px", color: "var(--ink-3)" }}>
-                          - {formatQuantity(curStock?.available_quantity ?? "0")} in stock
-                          {cat ? ` - in ${cat.name}` : ""}
-                        </span>
+                        {curStock && !curStock.is_out_of_stock && parseFloat(curStock.available_quantity) > 0 ? (
+                          <span className={styles.inStockBadge}>
+                            {formatQuantity(curStock.available_quantity)} in stock
+                          </span>
+                        ) : (
+                          <span className={styles.outOfStockBadge}>
+                            Out of stock (0)
+                          </span>
+                        )}
+                        {cat ? (
+                          <span style={{ fontSize: "11px", color: "var(--ink-3)" }}>
+                            in {cat.name}
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                     {(canManageProducts || canDeleteProducts) ? (
                       <div className={styles.productActions}>
                         {canManageProducts ? (
                           <>
+                            <button
+                              type="button"
+                              className={styles.itemStockBtn}
+                              title={`Receive stock for "${prod.name}"`}
+                              onClick={() => openRestockModal(prod)}
+                            >
+                              + Stock
+                            </button>
                             <button
                               type="button"
                               className={styles.itemEditBtn}
@@ -1518,6 +1626,7 @@ export default function Items() {
                 onStartDeleteCategory={canDeleteCategories ? setDeletingCategory : undefined}
                 onStartMoveCategory={canManageCategories ? setMovingCategory : undefined}
                 onStartEditProduct={canManageProducts ? openEditProduct : undefined}
+                onStartRestockProduct={canManageProducts ? openRestockModal : undefined}
                 onStartDeleteProduct={canDeleteProducts ? setDeletingProduct : undefined}
                 onStartBatchProduct={canManageProducts ? openBatchModal : undefined}
                 onTogglePublish={canManageProducts ? handleTogglePublish : undefined}
@@ -1754,15 +1863,29 @@ export default function Items() {
                               {prod.effective_pieces_per_pack ? ` (${prod.effective_pieces_per_pack}/pk)` : ""}
                             </span>
                           ) : null}
-                          <span style={{ fontSize: "11px", color: "var(--ink-3)" }}>
-                            - {formatQuantity(curStock?.available_quantity ?? "0")} in stock
-                          </span>
+                          {curStock && !curStock.is_out_of_stock && parseFloat(curStock.available_quantity) > 0 ? (
+                            <span className={styles.inStockBadge}>
+                              {formatQuantity(curStock.available_quantity)} in stock
+                            </span>
+                          ) : (
+                            <span className={styles.outOfStockBadge}>
+                              Out of stock (0)
+                            </span>
+                          )}
                         </div>
                       </div>
                       {(canManageProducts || canDeleteProducts) ? (
                         <div className={styles.productActions}>
                           {canManageProducts ? (
                             <>
+                              <button
+                                type="button"
+                                className={styles.itemStockBtn}
+                                title={`Receive stock for "${prod.name}"`}
+                                onClick={() => openRestockModal(prod)}
+                              >
+                                + Stock
+                              </button>
                               <button
                                 type="button"
                                 className={styles.itemEditBtn}
@@ -2419,6 +2542,48 @@ export default function Items() {
                 onChange={setEditProdPiecesPerPack}
               />
 
+              {(() => {
+                const cur = level(editingProduct.id);
+                return (
+                  <div
+                    style={{
+                      padding: "10px 14px",
+                      borderRadius: "var(--radius-sm)",
+                      background: "var(--sand)",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      border: "1px solid var(--line)",
+                    }}
+                  >
+                    <span style={{ fontSize: "12px", color: "var(--ink-2)", fontWeight: 600 }}>
+                      Current stock on hand:
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        color: cur?.is_out_of_stock ? "var(--danger)" : "var(--leaf-dark)",
+                      }}
+                    >
+                      {cur?.is_out_of_stock
+                        ? "Out of stock (0)"
+                        : `${formatQuantity(cur?.available_quantity ?? "0")} available`}
+                    </span>
+                  </div>
+                );
+              })()}
+
+              <Field
+                label="Add more stock (quantity to receive, optional)"
+                id="edit_product_add_stock"
+                value={editProdAddStock}
+                placeholder="e.g. 25 (adds to current inventory on hand)"
+                inputMode="numeric"
+                optional
+                onChange={setEditProdAddStock}
+              />
+
               <div className={styles.photoUploadBox}>
                 <span className={styles.photoUploadLabel}>Item Photo (optional)</span>
                 <div className={styles.photoPreviewRow}>
@@ -2606,6 +2771,98 @@ export default function Items() {
         </div>
       ) : null}
 
+      {/* Restock / Add Stock Modal */}
+      {restockProduct !== null ? (
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="restock-product-title"
+          onClick={() => !savingRestock && setRestockProduct(null)}
+        >
+          <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div>
+                <h2 id="restock-product-title" className={styles.modalTitle}>
+                  Receive Stock for &quot;{restockProduct.name}&quot;
+                </h2>
+                <p className={styles.modalSubtitle}>
+                  Add newly arrived inventory to your active stock count
+                </p>
+              </div>
+              <button
+                type="button"
+                className={styles.modalClose}
+                aria-label="Close modal"
+                disabled={savingRestock}
+                onClick={() => setRestockProduct(null)}
+              >
+                <CloseIcon size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => void handleReceiveStock(e)}>
+              <div className={styles.modalBody}>
+                <div
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: "var(--radius-sm)",
+                    background: "var(--sand)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    border: "1px solid var(--line)",
+                  }}
+                >
+                  <span style={{ fontSize: "12px", color: "var(--ink-2)", fontWeight: 600 }}>
+                    Currently available:
+                  </span>
+                  <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--ink)" }}>
+                    {formatQuantity(level(restockProduct.id)?.available_quantity ?? "0")} units on hand
+                  </span>
+                </div>
+
+                <Field
+                  label="Quantity Arrived / Received"
+                  id="restock_quantity"
+                  value={restockQty}
+                  placeholder="e.g. 50"
+                  inputMode="numeric"
+                  onChange={setRestockQty}
+                />
+
+                <Field
+                  label="Note or Reference (optional)"
+                  id="restock_note"
+                  value={restockNote}
+                  placeholder="e.g. Supplier delivery, Alaba depot shipment"
+                  optional
+                  onChange={setRestockNote}
+                />
+              </div>
+
+              <div className={styles.modalFooter}>
+                <button
+                  type="button"
+                  className={styles.modalCancelBtn}
+                  disabled={savingRestock}
+                  onClick={() => setRestockProduct(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className={styles.modalSaveBtn}
+                  disabled={savingRestock || !restockQty.trim()}
+                >
+                  {savingRestock ? "Saving..." : "Receive Stock"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
       {notice ? (
         <Toast
           message={notice.message}
@@ -2633,6 +2890,7 @@ function FamilyTreeRenderer({
   onStartDeleteCategory,
   onStartMoveCategory,
   onStartEditProduct,
+  onStartRestockProduct,
   onStartDeleteProduct,
   onStartBatchProduct,
   onTogglePublish,
@@ -2652,6 +2910,7 @@ function FamilyTreeRenderer({
   onStartDeleteCategory?: (category: Category) => void;
   onStartMoveCategory?: (category: Category) => void;
   onStartEditProduct?: (product: Product) => void;
+  onStartRestockProduct?: (product: Product) => void;
   onStartDeleteProduct?: (product: Product) => void;
   onStartBatchProduct?: (mode: "copy" | "move", productIds: string[], sourceName?: string) => void;
   onTogglePublish?: (prod: Product) => void;
@@ -2810,6 +3069,7 @@ function FamilyTreeRenderer({
                   onStartDeleteCategory={onStartDeleteCategory}
                   onStartMoveCategory={onStartMoveCategory}
                   onStartEditProduct={onStartEditProduct}
+                  onStartRestockProduct={onStartRestockProduct}
                   onStartDeleteProduct={onStartDeleteProduct}
                   onStartBatchProduct={onStartBatchProduct}
                   onTogglePublish={onTogglePublish}
@@ -2867,13 +3127,29 @@ function FamilyTreeRenderer({
                       {prod.effective_pieces_per_pack ? ` (${prod.effective_pieces_per_pack}/pk)` : ""}
                     </span>
                   ) : null}
-                  <span style={{ fontSize: "11px", color: "var(--ink-3)" }}>
-                    - {formatQuantity(curStock?.available_quantity ?? "0")} in stock
-                  </span>
+                  {curStock && !curStock.is_out_of_stock && parseFloat(curStock.available_quantity) > 0 ? (
+                    <span className={styles.inStockBadge}>
+                      {formatQuantity(curStock.available_quantity)} in stock
+                    </span>
+                  ) : (
+                    <span className={styles.outOfStockBadge}>
+                      Out of stock (0)
+                    </span>
+                  )}
                 </div>
 
-                {(onStartEditProduct || onStartBatchProduct || onStartDeleteProduct) ? (
+                {(onStartEditProduct || onStartRestockProduct || onStartBatchProduct || onStartDeleteProduct) ? (
                   <div className={styles.treeProductFooter}>
+                    {onStartRestockProduct ? (
+                      <button
+                        type="button"
+                        className={styles.itemStockBtn}
+                        onClick={() => onStartRestockProduct(prod)}
+                        title={`Receive stock for ${prod.name}`}
+                      >
+                        + Stock
+                      </button>
+                    ) : null}
                     {onStartEditProduct ? (
                       <button
                         type="button"

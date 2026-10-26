@@ -775,12 +775,23 @@ export default function Dashboard() {
               loading={shelfState === "loading"}
             />
           )}
-          <Stat
-            label="In stock"
-            value={formatCount(products.length)}
-            hint={`${stock.filter((entry) => entry.is_out_of_stock).length} out of stock`}
-            loading={shelfState === "loading" && products.length === 0}
-          />
+          {(() => {
+            const inStockCount = stock.filter((entry) => !entry.is_out_of_stock).length;
+            const outOfStockCount = stock.filter((entry) => entry.is_out_of_stock).length;
+            return (
+              <Stat
+                label="In stock"
+                value={formatCount(inStockCount)}
+                hint={
+                  outOfStockCount > 0
+                    ? `${outOfStockCount} out of ${products.length} unstocked`
+                    : `${products.length} catalog items ready`
+                }
+                tone={inStockCount > 0 ? "good" : "plain"}
+                loading={shelfState === "loading" && products.length === 0}
+              />
+            );
+          })()}
           <Stat
             label="Running out"
             value={formatCount(runningOut.length)}

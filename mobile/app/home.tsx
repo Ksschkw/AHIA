@@ -136,6 +136,7 @@ import {
   listProductImages,
   listProducts,
   listSales,
+  listStock,
   lowStock,
   makeProductImagePrimary,
   productShareSheet,
@@ -165,6 +166,7 @@ import {
   type DailySalesSummary,
   type ExpenseCategory,
   type ExpenseItem,
+  type InventoryLevel,
   type LowStockProduct,
   type Member,
   type MemberRole,
@@ -704,7 +706,9 @@ export default function Home() {
   const [newName, setNewName] = useState("");
   const [newPrice, setNewPrice] = useState("");
   const [newWholesale, setNewWholesale] = useState("");
+  const [newStock, setNewStock] = useState("");
   const [savingProduct, setSavingProduct] = useState(false);
+  const [inventory, setInventory] = useState<Record<string, InventoryLevel>>({});
 
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -1049,6 +1053,7 @@ export default function Home() {
         uProfile,
         sDetails,
         freshLowStock,
+        freshStock,
       ] = await Promise.all([
         listProducts(tenantId).catch(() => cached),
         listCustomerLists(tenantId).catch(() => cachedLists),
@@ -1064,7 +1069,16 @@ export default function Home() {
         currentUser().catch(() => null),
         getStorefront(tenantId).catch(() => null),
         lowStock(tenantId).catch(() => []),
+        listStock(tenantId).catch(() => [] as InventoryLevel[]),
       ]);
+
+      if (Array.isArray(freshStock) && freshStock.length > 0) {
+        const stockMap: Record<string, InventoryLevel> = {};
+        freshStock.forEach((lvl) => {
+          stockMap[lvl.product_id] = lvl;
+        });
+        setInventory(stockMap);
+      }
 
       if (freshProducts.length > 0 || cached.length === 0) {
         setProducts(freshProducts);
@@ -1385,17 +1399,38 @@ export default function Home() {
       const finalSellingPrice = newPrice.trim() || inheritedPrices.normal || null;
       const finalWholesalePrice = newWholesale.trim() || inheritedPrices.wholesale || null;
 
+      const stockTrim = newStock.trim();
       const created = createLocalProduct(activeBusiness.id, {
         name: newName.trim(),
         selling_price: finalSellingPrice,
         wholesale_price: finalWholesalePrice,
         category_id: currentCategoryId,
         image_url: newProductImage.trim() || null,
+        initial_stock: stockTrim || null,
       });
       setProducts((curr) => [...curr, created]);
+      if (stockTrim && parseFloat(stockTrim) > 0) {
+        setInventory((prev) => ({
+          ...prev,
+          [created.id]: {
+            product_id: created.id,
+            product_name: created.name,
+            product_slug: created.slug,
+            sku: null,
+            is_published: true,
+            quantity_on_hand: stockTrim,
+            reserved_quantity: "0",
+            available_quantity: stockTrim,
+            version: 1,
+            is_out_of_stock: false,
+            is_overdrawn: false,
+          },
+        }));
+      }
       setNewName("");
       setNewPrice("");
       setNewWholesale("");
+      setNewStock("");
       setNewProductImage("");
       setShowAddProductModal(false);
       showToast(`Added ${created.name} to shelf!`);
@@ -1704,12 +1739,34 @@ export default function Home() {
   const handleReceiveStock = async () => {
     if (!activeBusiness || !restockProduct || !restockQty.trim()) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const qtyVal = restockQty.trim();
     setSavingRestock(true);
     try {
-      await receiveStock(activeBusiness.id, restockProduct.id, restockQty.trim());
+      await receiveStock(activeBusiness.id, restockProduct.id, qtyVal);
+      setInventory((prev) => {
+        const existing = prev[restockProduct.id];
+        const oldAvail = existing ? parseFloat(existing.available_quantity) : 0;
+        const newAvail = (oldAvail + parseFloat(qtyVal)).toString();
+        return {
+          ...prev,
+          [restockProduct.id]: {
+            product_id: restockProduct.id,
+            product_name: restockProduct.name,
+            product_slug: restockProduct.slug,
+            sku: null,
+            is_published: true,
+            quantity_on_hand: newAvail,
+            reserved_quantity: existing?.reserved_quantity ?? "0",
+            available_quantity: newAvail,
+            version: (existing?.version ?? 0) + 1,
+            is_out_of_stock: parseFloat(newAvail) <= 0,
+            is_overdrawn: false,
+          },
+        };
+      });
       setRestockProduct(null);
       setRestockQty("");
-      showToast(`Received +${restockQty} of ${restockProduct.name}`);
+      showToast(`Received +${qtyVal} of ${restockProduct.name}`);
       void loadData(activeBusiness.id);
     } catch {
       showToast("Could not receive stock.");
@@ -3573,6 +3630,35 @@ export default function Home() {
                                         Wholesale: {formatMoney(wholesaleVal)}
                                       </Text>
                                     )}
+                                  </View>
+                                );
+                              })()}
+                              {(() => {
+                                const stockLvl = inventory[item.id];
+                                const inStock = stockLvl ? !stockLvl.is_out_of_stock && parseFloat(stockLvl.available_quantity) > 0 : false;
+                                const avail = stockLvl ? parseFloat(stockLvl.available_quantity) : 0;
+                                return (
+                                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
+                                    <View
+                                      style={{
+                                        paddingHorizontal: 8,
+                                        paddingVertical: 2,
+                                        borderRadius: 10,
+                                        backgroundColor: inStock ? (themeMode === "dark" ? "#123022" : "#e6f1ea") : (themeMode === "dark" ? "#3d1418" : "#fef2f2"),
+                                        borderWidth: 1,
+                                        borderColor: inStock ? (themeMode === "dark" ? "#22c57e" : "#0b5d3b") : (themeMode === "dark" ? "#f87171" : "#ef4444"),
+                                      }}
+                                    >
+                                      <Text
+                                        style={{
+                                          fontSize: 11,
+                                          fontWeight: "700",
+                                          color: inStock ? (themeMode === "dark" ? "#4ade80" : "#084a2f") : (themeMode === "dark" ? "#f87171" : "#dc2626"),
+                                        }}
+                                      >
+                                        {inStock ? `${avail} in stock` : "Out of stock (0)"}
+                                      </Text>
+                                    </View>
                                   </View>
                                 );
                               })()}
@@ -5478,6 +5564,14 @@ export default function Home() {
                       value={newWholesale}
                       onChangeText={setNewWholesale}
                     />
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="Opening Stock (quantity on hand, optional, e.g. 50)"
+                      placeholderTextColor="#8a928e"
+                      keyboardType="numeric"
+                      value={newStock}
+                      onChangeText={setNewStock}
+                    />
                   </>
                 );
               })()}
@@ -5849,9 +5943,14 @@ export default function Home() {
           >
             <View style={styles.modalCard}>
               <Text style={styles.modalTitle}>Receive Stock for {restockProduct?.name}</Text>
+              {restockProduct && (
+                <Text style={{ fontSize: 13, color: "#8a928e", marginBottom: 12 }}>
+                  Current inventory: {inventory[restockProduct.id] ? `${parseFloat(inventory[restockProduct.id].available_quantity)} units` : "0 units"} on hand
+                </Text>
+              )}
               <TextInput
                 style={styles.modalInput}
-                placeholder="Quantity Received (e.g. 50)"
+                placeholder="Quantity Arrived / Received (e.g. 50)"
                 placeholderTextColor="#8a928e"
                 keyboardType="numeric"
                 value={restockQty}

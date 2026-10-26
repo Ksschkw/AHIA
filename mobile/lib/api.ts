@@ -603,16 +603,35 @@ export function recordExpense(
   });
 }
 
+export interface InventoryLevel {
+  product_id: string;
+  product_name: string;
+  product_slug: string;
+  sku: string | null;
+  is_published: boolean;
+  quantity_on_hand: string;
+  reserved_quantity: string;
+  available_quantity: string;
+  version: number;
+  is_out_of_stock: boolean;
+  is_overdrawn: boolean;
+}
+
+export function listStock(tenantId: string): Promise<InventoryLevel[]> {
+  return request<InventoryLevel[]>(`/api/v1/tenants/${tenantId}/inventory`);
+}
+
 export function receiveStock(
   tenantId: string,
   productId: string,
   quantity: string,
-): Promise<{ id: string; product_id: string; quantity_on_hand: string }> {
-  return request<{ id: string; product_id: string; quantity_on_hand: string }>(
-    `/api/v1/tenants/${tenantId}/inventory/${productId}/receive`,
+  note?: string,
+): Promise<{ inventory: unknown; movement: unknown }> {
+  return request<{ inventory: unknown; movement: unknown }>(
+    `/api/v1/tenants/${tenantId}/inventory/${productId}/receipts`,
     {
       method: "POST",
-      body: { quantity },
+      body: { quantity, note },
     },
   );
 }

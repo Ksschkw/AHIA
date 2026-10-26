@@ -1222,6 +1222,50 @@
   background: var(--card);
 }
 
+.itemStockBtn {
+  background: var(--leaf-soft);
+  border: 1px solid var(--leaf);
+  border-radius: var(--radius-pill);
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--leaf-dark);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.itemStockBtn:hover {
+  background: var(--leaf);
+  color: #ffffff;
+}
+
+.inStockBadge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--leaf-dark);
+  background: var(--leaf-soft);
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+}
+
+.outOfStockBadge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+}
+
 .folderDeleteBtn,
 .itemDeleteBtn {
   background: transparent;
