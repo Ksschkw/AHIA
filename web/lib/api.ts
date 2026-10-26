@@ -429,6 +429,10 @@ export function currentUser(): Promise<UserProfile> {
   if (signedInUser) return Promise.resolve(signedInUser);
   return request<UserProfile>("/api/v1/users/me").then((user) => {
     signedInUser = user;
+    if (typeof window !== "undefined" && user.avatar_url) {
+      window.localStorage.setItem(`ahia.user_avatar.${user.id}`, user.avatar_url);
+      window.localStorage.setItem("ahia.user_avatar", user.avatar_url);
+    }
     return user;
   });
 }
@@ -487,6 +491,18 @@ export function updateProfile(changes: {
   return request<UserProfile>("/api/v1/users/me", {
     method: "PATCH",
     body: changes,
+  }).then((user) => {
+    signedInUser = user;
+    if (typeof window !== "undefined") {
+      if (user.avatar_url) {
+        window.localStorage.setItem(`ahia.user_avatar.${user.id}`, user.avatar_url);
+        window.localStorage.setItem("ahia.user_avatar", user.avatar_url);
+      } else if (changes.avatar_url === null) {
+        window.localStorage.removeItem(`ahia.user_avatar.${user.id}`);
+        window.localStorage.removeItem("ahia.user_avatar");
+      }
+    }
+    return user;
   });
 }
 
@@ -1198,3 +1214,28 @@ export function deleteCustomerList(tenantId: string, requestId: string): Promise
 
 /** Exported so a page can use the generated operation shapes directly when it needs to. */
 export type ApiPaths = paths;
+
+/**
+ * Eagerly prefetch the entire business dataset on login / app frame mount.
+ *
+ * Runs all top-level queries in parallel so that every page in the application
+ * (The Shop, Daily Trading, Items & Stock, Customer Lists, Members, Storefront Studio)
+ * is cached in memory and in persistent local storage. Page transitions are instantaneous.
+ */
+export async function prefetchAllAppData(tenantId: string): Promise<void> {
+  if (!tenantId) return;
+  await Promise.allSettled([
+    listProducts(tenantId),
+    listStock(tenantId),
+    dailySales(tenantId),
+    listSales(tenantId),
+    listExpenses(tenantId),
+    listExpenseCategories(tenantId),
+    listCustomerLists(tenantId),
+    listCategories(tenantId),
+    listMembers(tenantId),
+    getBusiness(tenantId),
+    getStorefront(tenantId),
+    currentUser(),
+  ]);
+}

@@ -129,6 +129,35 @@
   letter-spacing: -0.02em;
 }
 
+.statSkeleton {
+  display: block;
+  height: 28px;
+  width: 65%;
+  border-radius: 6px;
+  background: var(--sand-2);
+  animation: statPulse 1.4s ease-in-out infinite;
+  margin: 3px 0;
+}
+
+.statHintSkeleton {
+  display: block;
+  height: 12px;
+  width: 45%;
+  border-radius: 4px;
+  background: var(--sand-2);
+  animation: statPulse 1.4s ease-in-out infinite;
+  opacity: 0.7;
+}
+
+@keyframes statPulse {
+  0%, 100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
 .statHint {
   font-size: 12px;
   color: var(--ink-3);

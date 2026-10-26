@@ -390,3 +390,88 @@
     margin-top: 10px;
   }
 }
+
+/* Dark Mode Overrides */
+:global([data-theme="dark"]) .stallCard {
+  background: linear-gradient(145deg, #1d2520 0%, #151c17 100%);
+  border-color: var(--border-strong, #3e4d42);
+  box-shadow:
+    0 20px 45px -15px rgba(0, 0, 0, 0.55),
+    0 10px 20px -10px rgba(0, 0, 0, 0.4);
+}
+
+:global([data-theme="dark"]) .stallHeader {
+  border-bottom-color: var(--border, #2d3830);
+}
+
+:global([data-theme="dark"]) .stallName {
+  color: var(--ink, #f0ede6);
+}
+
+:global([data-theme="dark"]) .statusPill {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
+:global([data-theme="dark"]) .itemChip {
+  background: #19211b;
+  border-color: var(--border, #2d3830);
+}
+
+:global([data-theme="dark"]) .itemTitle {
+  color: var(--ink-2, #a8a092);
+}
+
+:global([data-theme="dark"]) .itemPrice {
+  color: #34d399;
+}
+
+:global([data-theme="dark"]) .waybillCard {
+  background: #1a221d;
+  border-color: var(--border-strong, #3e4d42);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+}
+
+:global([data-theme="dark"]) .waybillKicker {
+  color: var(--ink-3, #756e62);
+}
+
+:global([data-theme="dark"]) .waybillRoute {
+  color: var(--ink, #f0ede6);
+}
+
+:global([data-theme="dark"]) .waybillCarrier {
+  color: var(--ink-3, #756e62);
+}
+
+:global([data-theme="dark"]) .waybillItems {
+  color: #34d399;
+  border-top-color: var(--border, #2d3830);
+}
+
+:global([data-theme="dark"]) .whatsappCard {
+  background: #152219;
+  border-color: #10b981;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+}
+
+:global([data-theme="dark"]) .whatsappSender {
+  color: #34d399;
+}
+
+:global([data-theme="dark"]) .whatsappText {
+  color: var(--ink, #f0ede6);
+}
+
+:global([data-theme="dark"]) .whatsappMeta {
+  color: #34d399;
+}
+
+:global([data-theme="dark"]) .whatsappTicks {
+  color: #60a5fa;
+}
+
+:global([data-theme="dark"]) .ambientShadow {
+  background: radial-gradient(ellipse at center, rgba(34, 197, 94, 0.16) 0%, rgba(0, 0, 0, 0) 70%);
+}

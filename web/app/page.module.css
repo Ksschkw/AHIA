@@ -226,10 +226,55 @@
 }
 
 .capability {
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 22px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+:global([data-theme="dark"]) .page {
+  background:
+    radial-gradient(1100px 420px at 12% -8%, rgba(26, 163, 106, 0.12), transparent 60%),
+    radial-gradient(900px 380px at 92% 4%, rgba(224, 109, 52, 0.09), transparent 62%),
+    var(--sand);
+}
+
+:global([data-theme="dark"]) .capability {
+  background: var(--card);
+  border-color: var(--border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+:global([data-theme="dark"]) .navCta {
+  background: var(--leaf);
+  color: #ffffff;
+}
+
+:global([data-theme="dark"]) .navCta:hover {
+  background: var(--leaf-dark);
+}
+
+:global([data-theme="dark"]) .quietCta {
+  border-color: var(--border-strong);
+  color: var(--ink);
+}
+
+:global([data-theme="dark"]) .quietCta:hover {
+  background: var(--sand-2);
+  border-color: var(--leaf);
+}
+
+:global([data-theme="dark"]) .androidCta {
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+:global([data-theme="dark"]) .androidCta:hover {
+  background: var(--sand-2);
+  border-color: var(--leaf);
 }
 
 .capabilityNumber {

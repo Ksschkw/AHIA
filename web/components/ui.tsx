@@ -247,17 +247,27 @@ export function Stat({
   value,
   hint,
   tone = "plain",
+  loading = false,
 }: {
   label: string;
   value: string;
   hint?: string;
   tone?: "plain" | "good" | "warn";
+  loading?: boolean;
 }) {
   return (
     <div className={`${styles.stat} ${styles[`stat_${tone}`]}`}>
       <span className={styles.statLabel}>{label}</span>
-      <span className={`${styles.statValue} tabular`}>{value}</span>
-      {hint ? <span className={styles.statHint}>{hint}</span> : null}
+      {loading ? (
+        <span className={styles.statSkeleton} aria-label="Loading..." />
+      ) : (
+        <span className={`${styles.statValue} tabular`}>{value}</span>
+      )}
+      {loading ? (
+        <span className={styles.statHintSkeleton} />
+      ) : hint ? (
+        <span className={styles.statHint}>{hint}</span>
+      ) : null}
     </div>
   );
 }

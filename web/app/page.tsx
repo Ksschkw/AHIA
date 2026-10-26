@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { BrandMark, Wordmark } from "@/components/brand";
 import { AndroidIcon } from "@/components/icons";
+import { StorefrontThemeToggle } from "@/components/storefront-theme-toggle";
 import { TraderHeroArt } from "@/components/trader-hero-art";
 import styles from "./page.module.css";
 
@@ -49,6 +50,7 @@ export default function Landing() {
           <Wordmark />
         </span>
         <nav className={styles.nav}>
+          <StorefrontThemeToggle />
           <Link className={styles.navLink} href="/start">
             Sign in
           </Link>

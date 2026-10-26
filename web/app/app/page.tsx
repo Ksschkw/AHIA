@@ -749,18 +749,21 @@ export default function Dashboard() {
                 value={formatMoney(todaySalesCountAndRevenue.revenue, currency)}
                 hint={`${formatCount(todaySalesCountAndRevenue.count)} sales`}
                 tone="good"
+                loading={shelfState === "loading" && !today}
               />
               <Stat
                 label="Net Profit"
                 value={formatMoney(todayProfitMetrics.netProfit.toFixed(2), currency)}
                 hint={`${todayProfitMetrics.marginPercent}% margin`}
                 tone={todayProfitMetrics.netProfit >= 0 ? "good" : "warn"}
+                loading={shelfState === "loading" && !today}
               />
               <Stat
                 label="Expenses today"
                 value={formatMoney(todayProfitMetrics.expenses.toFixed(2), currency)}
                 hint={`${allExpenses.filter((e) => !e.is_reversed && (!e.incurred_at || e.incurred_at.slice(0, 10) === new Date().toISOString().slice(0, 10))).length} logged`}
                 tone={todayProfitMetrics.expenses > 0 ? "warn" : "plain"}
+                loading={shelfState === "loading" && !today}
               />
             </>
           ) : (
@@ -769,24 +772,28 @@ export default function Dashboard() {
               value={formatCount(allRecentSales.length)}
               hint="Recorded recently"
               tone="good"
+              loading={shelfState === "loading"}
             />
           )}
           <Stat
             label="In stock"
             value={formatCount(products.length)}
             hint={`${stock.filter((entry) => entry.is_out_of_stock).length} out of stock`}
+            loading={shelfState === "loading" && products.length === 0}
           />
           <Stat
             label="Running out"
             value={formatCount(runningOut.length)}
             hint={runningOut.length > 0 ? "Restock today" : "Nothing urgent"}
             tone={runningOut.length > 0 ? "warn" : "plain"}
+            loading={shelfState === "loading" && products.length === 0}
           />
           <Stat
             label="Unanswered lists"
             value={formatCount(unansweredCount)}
             hint={unansweredCount > 0 ? "Customer orders waiting" : "All caught up"}
             tone={unansweredCount > 0 ? "warn" : "plain"}
+            loading={shelfState === "loading" && customerLists.length === 0}
           />
         </section>
 

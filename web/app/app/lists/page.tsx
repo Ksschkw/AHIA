@@ -37,6 +37,7 @@ import {
 } from "@/components/icons";
 import { Field, Loading, Select, Sheet, Toast } from "@/components/ui";
 import {
+  cachedRead,
   confirmCustomerList,
   deleteCustomerList,
   dispatchCustomerList,
@@ -333,6 +334,16 @@ export default function ListsPage() {
       const chosen = businesses.find((b) => b.id === remembered) ?? businesses[0];
 
       if (chosen) {
+        const rememberedLists = cachedRead<CustomerList[]>(`/api/v1/tenants/${chosen.id}/requests`);
+        const rememberedProds = cachedRead<Product[]>(`/api/v1/tenants/${chosen.id}/products`);
+        const rememberedCats = cachedRead<Category[]>(`/api/v1/tenants/${chosen.id}/categories`);
+        if (rememberedLists) {
+          setLists(rememberedLists);
+          setState("ready");
+        }
+        if (rememberedProds) setProducts(rememberedProds);
+        if (rememberedCats) setCategories(rememberedCats);
+
         const [bizDetail, rawLists, prods, cats, pinExists] = await Promise.all([
           getBusiness(chosen.id).catch(() => null),
           listCustomerLists(chosen.id).catch(() => []),

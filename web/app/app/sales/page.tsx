@@ -111,9 +111,17 @@ export default function Sales() {
         setCurrency(detail.currency);
         // What the browser already holds, painted before anything is asked for.
         const rememberedSales = cachedRead<SaleSummary[]>(`/api/v1/tenants/${chosen.id}/sales`);
+        const rememberedExpenses = cachedRead<ExpenseItem[]>(`/api/v1/tenants/${chosen.id}/expenses`);
+        const rememberedLists = cachedRead<CustomerList[]>(`/api/v1/tenants/${chosen.id}/requests`);
         if (rememberedSales) {
           setSales(rememberedSales);
           setState("ready");
+        }
+        if (rememberedExpenses) {
+          setExpenses(rememberedExpenses);
+        }
+        if (rememberedLists) {
+          setCustomerLists(rememberedLists);
         }
         await load(chosen.id);
       } catch (error) {
@@ -354,7 +362,7 @@ export default function Sales() {
               transition: "all 0.15s ease",
             }}
           >
-            Sales ({allSales.length})
+            Sales {state === "loading" && allSales.length === 0 ? "" : `(${allSales.length})`}
           </button>
           <button
             type="button"
@@ -371,7 +379,7 @@ export default function Sales() {
               transition: "all 0.15s ease",
             }}
           >
-            Expenses ({allExpenses.length})
+            Expenses {state === "loading" && allExpenses.length === 0 ? "" : `(${allExpenses.length})`}
           </button>
         </div>
       </div>

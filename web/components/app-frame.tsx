@@ -15,6 +15,7 @@ import { AppShell } from "@/components/app-shell";
 import {
   currentUser,
   listBusinesses,
+  prefetchAllAppData,
   signOut,
   type TenantSummary,
   type UserProfile,
@@ -35,13 +36,17 @@ export function AppFrame({ children }: { children: ReactNode }) {
       typeof window === "undefined" ? null : window.localStorage.getItem(ACTIVE_BUSINESS_KEY);
     const chosen = found.find((candidate) => candidate.id === remembered) ?? found[0] ?? null;
     setActiveBusinessId(chosen ? chosen.id : null);
+    if (chosen) {
+      void prefetchAllAppData(chosen.id);
+    }
     return chosen;
   }, []);
 
   useEffect(() => {
     void (async () => {
       try {
-        setUser(await currentUser());
+        const u = await currentUser();
+        setUser(u);
         await loadBusinesses();
       } catch {
         // No session: the pages below send the person to sign in, and this frame stays out of the way
@@ -50,6 +55,12 @@ export function AppFrame({ children }: { children: ReactNode }) {
       }
     })();
   }, [loadBusinesses, router]);
+
+  useEffect(() => {
+    if (activeBusinessId) {
+      void prefetchAllAppData(activeBusinessId);
+    }
+  }, [activeBusinessId]);
 
   const switchBusiness = useCallback(
     (businessId: string) => {
@@ -80,8 +91,8 @@ export function AppFrame({ children }: { children: ReactNode }) {
 
   const avatarUrl =
     user?.avatar_url ||
-    (typeof window !== "undefined" && user?.id
-      ? window.localStorage.getItem(`ahia.user_avatar.${user.id}`) ||
+    (typeof window !== "undefined"
+      ? (user?.id ? window.localStorage.getItem(`ahia.user_avatar.${user.id}`) : null) ||
         window.localStorage.getItem("ahia.user_avatar")
       : null);
 

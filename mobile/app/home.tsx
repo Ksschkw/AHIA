@@ -1131,12 +1131,16 @@ export default function Home() {
       }
       if (uProfile) {
         const cached = getCachedProfile();
+        const effectiveAvatar = uProfile.avatar_url || profile?.avatar_url || cached?.avatar_url || null;
         const merged = {
           ...uProfile,
-          avatar_url: profile?.avatar_url || cached?.avatar_url || null,
+          avatar_url: effectiveAvatar,
         };
         setProfile(merged);
         cacheProfile(merged);
+        if (effectiveAvatar && !uProfile.avatar_url) {
+          void updateProfile({ avatar_url: effectiveAvatar }).catch(() => {});
+        }
       }
 
       setRunningOut(freshLowStock);
@@ -1204,12 +1208,16 @@ export default function Home() {
 
         if (freshProfile) {
           const cached = getCachedProfile();
+          const effectiveAvatar = freshProfile.avatar_url || profile?.avatar_url || cached?.avatar_url || null;
           const mergedProfile = {
             ...freshProfile,
-            avatar_url: profile?.avatar_url || cached?.avatar_url || null,
+            avatar_url: effectiveAvatar,
           };
           setProfile(mergedProfile);
           cacheProfile(mergedProfile);
+          if (effectiveAvatar && !freshProfile.avatar_url) {
+            void updateProfile({ avatar_url: effectiveAvatar }).catch(() => {});
+          }
         }
 
         if (found && found.length > 0) {

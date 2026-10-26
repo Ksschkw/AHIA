@@ -4,15 +4,18 @@ import { useEffect, useState } from "react";
 import { MoonIcon, SunIcon } from "@/components/icons";
 import styles from "./storefront-theme-toggle.module.css";
 
-const STORAGE_KEY = "ahia.visitor_theme";
+const THEME_KEY = "ahia.theme";
+const VISITOR_KEY = "ahia.visitor_theme";
 
 export function StorefrontThemeToggle() {
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
+      const stored =
+        window.localStorage.getItem(THEME_KEY) ||
+        window.localStorage.getItem(VISITOR_KEY);
       if (stored === "dark" || stored === "light") {
         setTheme(stored);
         document.documentElement.setAttribute("data-theme", stored);
@@ -20,7 +23,7 @@ export function StorefrontThemeToggle() {
         const rootTheme = document.documentElement.getAttribute("data-theme");
         if (rootTheme === "dark" || rootTheme === "light") {
           setTheme(rootTheme);
-        } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        } else {
           setTheme("dark");
           document.documentElement.setAttribute("data-theme", "dark");
         }
@@ -35,7 +38,8 @@ export function StorefrontThemeToggle() {
     const nextTheme = theme === "dark" ? "light" : "dark";
     setTheme(nextTheme);
     try {
-      window.localStorage.setItem(STORAGE_KEY, nextTheme);
+      window.localStorage.setItem(THEME_KEY, nextTheme);
+      window.localStorage.setItem(VISITOR_KEY, nextTheme);
       document.documentElement.setAttribute("data-theme", nextTheme);
       window.dispatchEvent(new CustomEvent("ahia-theme-change", { detail: nextTheme }));
     } catch {
