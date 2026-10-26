@@ -1,9 +1,13 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import { BrandMark, Wordmark } from "@/components/brand";
 import { AndroidIcon } from "@/components/icons";
 import { StorefrontThemeToggle } from "@/components/storefront-theme-toggle";
 import { TraderHeroArt } from "@/components/trader-hero-art";
+import { currentUser } from "@/lib/api";
 import styles from "./page.module.css";
 
 /**
@@ -42,6 +46,22 @@ const CAPABILITIES = [
 ];
 
 export default function Landing() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return Boolean(
+        window.localStorage.getItem("ahia.business") ||
+        window.localStorage.getItem("ahia.user_avatar")
+      );
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    void currentUser()
+      .then(() => setIsAuthenticated(true))
+      .catch(() => setIsAuthenticated(false));
+  }, []);
+
   return (
     <main className={styles.page}>
       <header className={styles.topbar}>
@@ -51,12 +71,20 @@ export default function Landing() {
         </span>
         <nav className={styles.nav}>
           <StorefrontThemeToggle />
-          <Link className={styles.navLink} href="/start">
-            Sign in
-          </Link>
-          <Link className={styles.navCta} href="/start?intent=create">
-            Open your shop
-          </Link>
+          {isAuthenticated ? (
+            <Link className={styles.navCta} href="/app">
+              Go to shop
+            </Link>
+          ) : (
+            <>
+              <Link className={styles.navLink} href="/start">
+                Sign in
+              </Link>
+              <Link className={styles.navCta} href="/start?intent=create">
+                Open your shop
+              </Link>
+            </>
+          )}
         </nav>
       </header>
 
@@ -76,9 +104,15 @@ export default function Landing() {
             the network drops. Keep your WhatsApp exactly as it is.
           </p>
           <div className={styles.actions}>
-            <Link className={styles.primaryCta} href="/start?intent=create">
-              Open your shop
-            </Link>
+            {isAuthenticated ? (
+              <Link className={styles.primaryCta} href="/app">
+                Go to your shop
+              </Link>
+            ) : (
+              <Link className={styles.primaryCta} href="/start?intent=create">
+                Open your shop
+              </Link>
+            )}
             <a
               className={styles.androidCta}
               href="/download"
@@ -87,9 +121,15 @@ export default function Landing() {
               <AndroidIcon size={20} />
               <span>Install for Android</span>
             </a>
-            <Link className={styles.quietCta} href="/start">
-              I already have an account
-            </Link>
+            {isAuthenticated ? (
+              <Link className={styles.quietCta} href="/app/more">
+                Stall settings
+              </Link>
+            ) : (
+              <Link className={styles.quietCta} href="/start">
+                I already have an account
+              </Link>
+            )}
           </div>
           <ul className={styles.proof}>
             {PROOF.map((item) => (
@@ -114,15 +154,23 @@ export default function Landing() {
       </section>
 
       <section className={styles.closing}>
-        <h2 className={styles.closingTitle}>Opening takes a minute</h2>
+        <h2 className={styles.closingTitle}>
+          {isAuthenticated ? "Your shop is ready" : "Opening takes a minute"}
+        </h2>
         <p className={styles.closingBody}>
-          A name for the business, the things you sell, and you are recording sales. Bring in your
-          salespeople when you are ready - each one signs in with what they are allowed to do.
+          {isAuthenticated
+            ? "Pick what the customer is buying, track waybills, or record the day's money without closing-time arithmetic."
+            : "A name for the business, the things you sell, and you are recording sales. Bring in your salespeople when you are ready - each one signs in with what they are allowed to do."}
         </p>
-        <Link className={styles.primaryCta} href="/start?intent=create">
-          Open your shop
+        <Link
+          className={styles.primaryCta}
+          href={isAuthenticated ? "/app" : "/start?intent=create"}
+        >
+          {isAuthenticated ? "Go to your shop" : "Open your shop"}
         </Link>
-        <p className={styles.closingNote}>Nothing to install to look around.</p>
+        {!isAuthenticated && (
+          <p className={styles.closingNote}>Nothing to install to look around.</p>
+        )}
       </section>
 
       <footer className={styles.footer}>
