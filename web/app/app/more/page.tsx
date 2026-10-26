@@ -3,15 +3,16 @@
 /**
  * The unified More & Settings hub for AHIA.
  *
- * Matches the mobile app's More tab identically:
+ * Matches the mobile app's More tab 1-for-1 identically:
  * - User Profile with Avatar & Account Settings
  * - Everything in AHIA navigation grid with actual SVG icons
+ * - Team & Staff subview (stats, roles, status cycling, WhatsApp invite sharing, permissions guide)
  * - Storefront Studio (publish/draft, live preview link, copy/share)
- * - Team & Staff management (invitations, roles, permissions)
- * - Business profile & logo management
- * - Stall Security PIN & Password reset
+ * - Stall Business profile & logo management
+ * - Stall Security PIN & Password reset in unified Security modal
+ * - Push Notifications (VAPID web push configuration)
  * - Theme selector (Light Ivory / Dark Theme)
- * - Sign out
+ * - Sign out confirmation modal
  */
 
 import Link from "next/link";
@@ -19,14 +20,16 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import {
+  ArrowLeftIcon,
   BoxIcon,
-  BuildingIcon,
-  GlobeIcon,
-  KeyIcon,
   ListIcon,
   LockIcon,
+  PeopleIcon,
+  PlusIcon,
   ReceiptIcon,
+  ShareIcon,
   ShopIcon,
+  TagIcon,
 } from "@/components/icons";
 import { ImageUploadField } from "@/components/image-upload-field";
 import { Field, Loading, Pill, Select, Sheet, Toast } from "@/components/ui";
@@ -66,6 +69,11 @@ import {
   setBusinessPin,
   clearBusinessPin,
 } from "@/lib/pin";
+import {
+  isPushSupported,
+  getPushPermission,
+  subscribeToWebPush,
+} from "@/lib/notifications";
 import styles from "./more.module.css";
 
 function parseStorefrontTheme(description: string | null | undefined) {
@@ -132,6 +140,14 @@ export default function MorePage() {
   const [state, setState] = useState<"loading" | "ready">("loading");
   const [notice, setNotice] = useState<{ message: string; tone: "good" | "bad" } | null>(null);
 
+  // Subview for Team (matching mobile identically)
+  const [activeSubView, setActiveSubView] = useState<"team" | null>(null);
+
+  // Push Notifications State
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushEnabling, setPushEnabling] = useState(false);
+
   // Modals
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [editFirstName, setEditFirstName] = useState("");
@@ -162,6 +178,13 @@ export default function MorePage() {
   const [inviteRole, setInviteRole] = useState<MemberRole>("SALES");
   const [savingInvite, setSavingInvite] = useState(false);
 
+  // Unified Security Modal (Password + PIN sub-tabs)
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [securityTab, setSecurityTab] = useState<"password" | "pin">("password");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinStep, setPinStep] = useState<1 | 2>(1);
   const [firstPin, setFirstPin] = useState("");
@@ -173,11 +196,6 @@ export default function MorePage() {
   const [pinResetPassword, setPinResetPassword] = useState("");
   const [pinResetError, setPinResetError] = useState<string | null>(null);
   const [pinResetVerifying, setPinResetVerifying] = useState(false);
-
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [savingPassword, setSavingPassword] = useState(false);
 
   const [showSignOutModal, setShowSignOutModal] = useState(false);
 
@@ -239,6 +257,12 @@ export default function MorePage() {
         setThemeMode("dark");
       }
     }
+    if (isPushSupported()) {
+      setPushSupported(true);
+      if (getPushPermission() === "granted") {
+        setPushSubscribed(true);
+      }
+    }
   }, [loadData]);
 
   const toggleTheme = (mode: "light" | "dark") => {
@@ -249,6 +273,7 @@ export default function MorePage() {
     }
   };
 
+  const isOwner = userRole.toUpperCase() === "OWNER";
   const isOwnerOrManager =
     !userRole ||
     userRole.toUpperCase() === "OWNER" ||
@@ -391,8 +416,9 @@ export default function MorePage() {
     }
   };
 
-  const handleRemoveStaff = async (member: Member) => {
-    if (!business || !window.confirm(`Remove ${member.full_name || "staff member"} from stall?`)) return;
+  const handleRemoveMember = async (member: Member) => {
+    if (!business) return;
+    if (!window.confirm(`Remove ${member.full_name || "staff member"} from stall?`)) return;
     try {
       await removeMember(business.id, member.id);
       setMembers((prev) => prev.filter((m) => m.id !== member.id));
@@ -402,11 +428,17 @@ export default function MorePage() {
     }
   };
 
-  const handleToggleMemberRole = async (member: Member) => {
+  const handleChangeMemberRole = async (member: Member) => {
     if (!business) return;
-    const roles: MemberRole[] = ["SALES", "INVENTORY", "MANAGER", "OWNER"];
-    const currentIdx = roles.indexOf(member.role_name as MemberRole);
-    const nextRole = roles[(currentIdx + 1) % roles.length];
+    const current = (member.role_name || "SALES").toUpperCase();
+    const nextRole: MemberRole =
+      current === "OWNER"
+        ? "MANAGER"
+        : current === "MANAGER"
+        ? "SALES"
+        : current === "SALES"
+        ? "INVENTORY"
+        : "OWNER";
     try {
       const updated = await changeMemberRole(business.id, member.id, nextRole);
       setMembers((prev) => prev.map((m) => (m.id === member.id ? updated : m)));
@@ -426,6 +458,13 @@ export default function MorePage() {
     } catch (err: unknown) {
       setNotice({ message: (err as Error)?.message || "Could not update status.", tone: "bad" });
     }
+  };
+
+  const handleShareInviteWhatsApp = (inv: MembershipInvitation) => {
+    if (!business) return;
+    const url = `https://useahia-hazel.vercel.app/join/${inv.token}`;
+    const text = `You've been invited to join ${business.name} on AHIA as ${(inv.role_name || "STAFF").toUpperCase()}!\n\nTap to accept: ${url}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
   const handleAcceptMyInvitation = async (inv: PendingInvitation) => {
@@ -491,6 +530,7 @@ export default function MorePage() {
       setSecondPin("");
       setPinError(null);
       setShowPinModal(true);
+      setShowPasswordModal(false);
       setNotice({ message: "Password verified! Please enter your new 4-digit PIN.", tone: "good" });
     } catch {
       setPinResetError("Incorrect account password. Please try again.");
@@ -535,299 +575,201 @@ export default function MorePage() {
     <main className={styles.page}>
       {state === "loading" ? <Loading label="Loading stall settings..." /> : null}
 
-      {/* User Profile Card */}
-      <div className={styles.profileCard}>
-        <div className={styles.avatar}>
-          {avatarUrl ? (
-            <img
-              src={avatarUrl}
-              alt={profile?.first_name || "Profile"}
-              className={styles.avatarImg}
-            />
-          ) : profile?.first_name ? (
-            profile.first_name.slice(0, 1).toUpperCase()
-          ) : (
-            "U"
-          )}
-        </div>
-        <div className={styles.profileInfo}>
-          <h2 className={styles.profileName}>
-            {profile?.first_name} {profile?.last_name ?? ""}
-          </h2>
-          <p className={styles.profilePhone}>{profile?.phone ?? profile?.email ?? "No phone set"}</p>
-          <span className={styles.roleBadge}>
-            {business?.name ?? "Stall"} &bull; {userRole}
-          </span>
-        </div>
-        <button
-          type="button"
-          className={styles.editBtn}
-          onClick={() => {
-            setEditFirstName(profile?.first_name ?? "");
-            setEditLastName(profile?.last_name ?? "");
-            setEditPhone(profile?.phone ?? "");
-            setEditEmail(profile?.email ?? "");
-            setEditAvatarUrl(avatarUrl);
-            setShowProfileModal(true);
-          }}
-        >
-          Edit Profile
-        </button>
-      </div>
-
-      {/* Everything in AHIA Grid */}
-      <h3 className={styles.sectionTitle}>Everything in AHIA</h3>
-      <div className={styles.grid}>
-        <Link href="/app" className={styles.tile}>
-          <span className={styles.tileIcon}>
-            <ShopIcon size={24} style={{ color: "#22c55e" }} />
-          </span>
-          <span className={styles.tileTitle}>The Shop</span>
-          <span className={styles.tileDesc}>Daily counter</span>
-        </Link>
-        <Link href="/app/items" className={styles.tile}>
-          <span className={styles.tileIcon}>
-            <BoxIcon size={24} style={{ color: "#3b82f6" }} />
-          </span>
-          <span className={styles.tileTitle}>Catalog</span>
-          <span className={styles.tileDesc}>Folders & Items</span>
-        </Link>
-        <Link href="/app/lists" className={styles.tile}>
-          <span className={styles.tileIcon}>
-            <ListIcon size={24} style={{ color: "#f59e0b" }} />
-          </span>
-          <span className={styles.tileTitle}>Lists</span>
-          <span className={styles.tileDesc}>Customer orders</span>
-        </Link>
-        <Link href="/app/sales" className={styles.tile}>
-          <span className={styles.tileIcon}>
-            <ReceiptIcon size={24} style={{ color: "#8b5cf6" }} />
-          </span>
-          <span className={styles.tileTitle}>Trading</span>
-          <span className={styles.tileDesc}>Daily ledger</span>
-        </Link>
-        <a
-          href={publicShopUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={styles.tile}
-        >
-          <span className={styles.tileIcon}>
-            <GlobeIcon size={24} style={{ color: "#10b981" }} />
-          </span>
-          <span className={styles.tileTitle}>Storefront</span>
-          <span className={styles.tileDesc}>Public link</span>
-        </a>
-        <button
-          type="button"
-          className={styles.tile}
-          onClick={() => {
-            setEditBizName(business?.name ?? "");
-            setEditBizAddress(business?.address ?? "");
-            setEditBizPhone(business?.phone ?? "");
-            setEditBizLogo(businessLogo);
-            setShowBusinessModal(true);
-          }}
-        >
-          <span className={styles.tileIcon}>
-            <BuildingIcon size={24} style={{ color: "#eab308" }} />
-          </span>
-          <span className={styles.tileTitle}>Stall Profile</span>
-          <span className={styles.tileDesc}>Address & name</span>
-        </button>
-        <button
-          type="button"
-          className={styles.tile}
-          onClick={() => {
-            setFirstPin("");
-            setSecondPin("");
-            setPinError(null);
-            setPinStep(1);
-            setShowPinModal(true);
-          }}
-        >
-          <span className={styles.tileIcon}>
-            <LockIcon size={24} style={{ color: "#ef4444" }} />
-          </span>
-          <span className={styles.tileTitle}>Security PIN</span>
-          <span className={styles.tileDesc}>{hasPin ? "PIN Protected" : "Set PIN"}</span>
-        </button>
-        <button
-          type="button"
-          className={styles.tile}
-          onClick={() => setShowPasswordModal(true)}
-        >
-          <span className={styles.tileIcon}>
-            <KeyIcon size={24} style={{ color: "#ec4899" }} />
-          </span>
-          <span className={styles.tileTitle}>Password</span>
-          <span className={styles.tileDesc}>Account login</span>
-        </button>
-      </div>
-
-      {/* Storefront Studio Card */}
-      {isOwnerOrManager && (
-        <div className={styles.card}>
-          <div className={styles.cardHeader}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <h3 className={styles.cardTitle}>Storefront Studio</h3>
-              <Pill tone={storefront?.is_published ? "good" : "warn"}>
-                {storefront?.is_published ? "PUBLISHED" : "DRAFT"}
-              </Pill>
-            </div>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button
-                type="button"
-                className={styles.secondaryBtn}
-                onClick={handleToggleStorefrontPublish}
-              >
-                {storefront?.is_published ? "Unpublish" : "Go Live"}
-              </button>
-              <button
-                type="button"
-                className={styles.editBtn}
-                onClick={() => {
-                  const parsed = parseStorefrontTheme(storefront?.description);
-                  setStorefrontHeadline(storefront?.headline ?? "");
-                  setStorefrontDesc(parsed.cleanDesc);
-                  setStorefrontPhone(storefront?.contact_phone ?? "");
-                  setStorefrontThemeColor(parsed.themeColor);
-                  setStorefrontThemeBg(parsed.themeBg);
-                  setStorefrontClosing(parsed.closing);
-                  setShowStorefrontModal(true);
-                }}
-              >
-                Edit
-              </button>
-            </div>
-          </div>
-          <p className={styles.cardDesc}>
-            {storefront?.headline || "Your public shop catalog is live on AHIA."}
-          </p>
-          <div className={styles.urlBox}>
-            <span>{publicShopUrl}</span>
+      {/* -------------------------------------------------------------
+          SUBVIEW: TEAM & STAFF (1:1 identical with Mobile)
+          ------------------------------------------------------------- */}
+      {activeSubView === "team" ? (
+        <div>
+          {/* Top Bar with Back & Invite */}
+          <div className={styles.teamTopBar}>
             <button
               type="button"
-              className={styles.editBtn}
-              onClick={() => {
-                void navigator.clipboard.writeText(publicShopUrl);
-                setNotice({ message: "Storefront link copied to clipboard!", tone: "good" });
-              }}
+              className={styles.teamBackBtn}
+              onClick={() => setActiveSubView(null)}
             >
-              Copy Link
+              <ArrowLeftIcon size={18} />
+              <span>Back to More</span>
             </button>
-          </div>
-          <div className={styles.actionRow}>
-            <a
-              href={`https://wa.me/?text=${encodeURIComponent(`Check out our shop on AHIA: ${publicShopUrl}`)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={styles.primaryBtn}
-              style={{ textDecoration: "none" }}
-            >
-              Share Storefront Link on WhatsApp
-            </a>
-          </div>
-        </div>
-      )}
-
-      {/* Team & Staff Management */}
-      {isOwnerOrManager && (
-        <div className={styles.card}>
-          <div className={styles.cardHeader}>
-            <h3 className={styles.cardTitle}>Team & Staff ({members.length})</h3>
             <button
               type="button"
-              className={styles.primaryBtn}
+              className={styles.teamInviteTopBtn}
               onClick={() => setShowInviteModal(true)}
             >
-              + Invite Staff
+              <PlusIcon size={16} />
+              <span>Invite Staff</span>
             </button>
           </div>
-          <p className={styles.cardDesc}>
-            Manage apprentices and managers. Tap a role or status badge to change privileges.
-          </p>
 
-          <div className={styles.memberList}>
-            {members.map((m) => (
-              <div key={m.id} className={styles.memberRow}>
-                <div>
-                  <div className={styles.memberName}>
-                    {m.full_name || "Staff Member"}
-                  </div>
-                  <div className={styles.memberMeta}>
-                    {m.phone || m.email || "Staff Member"} &bull;{" "}
-                    <button
-                      type="button"
-                      onClick={() => handleToggleMemberRole(m)}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        color: "var(--leaf, #238636)",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {m.role_name} &bull; Tap to change
-                    </button>
-                  </div>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleMemberStatus(m)}
-                    style={{
-                      padding: "2px 8px",
-                      borderRadius: "6px",
-                      fontSize: "11px",
-                      fontWeight: 700,
-                      border: "none",
-                      cursor: "pointer",
-                      background: m.status === "active" ? "#dcfce7" : "#fee2e2",
-                      color: m.status === "active" ? "#15803d" : "#b91c1c",
-                    }}
-                  >
-                    {m.status.toUpperCase()}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveStaff(m)}
-                    className={styles.editBtn}
-                    style={{ color: "#cf222e" }}
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ))}
+          {/* Team Banner */}
+          <div className={styles.teamBannerCard}>
+            <div className={styles.teamBannerIconWrap}>
+              <PeopleIcon size={26} />
+            </div>
+            <div>
+              <h3 className={styles.teamBannerTitle}>Team & Staff Management</h3>
+              <p className={styles.teamBannerSub}>
+                {business?.name} - Manage staff members, send WhatsApp invitations, and configure role permissions.
+              </p>
+            </div>
           </div>
 
-          {/* Sent Invitations */}
-          {invitations.length > 0 && (
-            <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--line, #e5e7eb)" }}>
-              <h4 style={{ fontSize: "12px", fontWeight: 700, color: "var(--ink-secondary, #6b7280)", margin: "0 0 8px" }}>
-                SENT INVITATIONS ({invitations.length})
-              </h4>
-              {invitations.map((inv) => (
-                <div key={inv.id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: "12px" }}>
-                  <span>{inv.phone || inv.email}</span>
-                  <span style={{ fontWeight: 600 }}>Role: {inv.role_name}</span>
-                </div>
-              ))}
+          {/* Quick Stats Row (3 boxes) */}
+          <div className={styles.teamStatsRow}>
+            <div className={styles.teamStatBox}>
+              <div className={styles.teamStatValue}>{members.length}</div>
+              <div className={styles.teamStatLabel}>Staff Members</div>
             </div>
-          )}
+            <div className={styles.teamStatBox}>
+              <div className={styles.teamStatValue}>
+                {members.filter((m) => m.status === "active").length}
+              </div>
+              <div className={styles.teamStatLabel}>Active Staff</div>
+            </div>
+            <div className={styles.teamStatBox}>
+              <div className={styles.teamStatValue}>{invitations.length}</div>
+              <div className={styles.teamStatLabel}>Sent Invites</div>
+            </div>
+          </div>
+
+          {/* Active Members Section */}
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <h3 className={styles.cardTitle}>Staff Members ({members.length})</h3>
+              <button
+                type="button"
+                className={styles.primaryBtn}
+                onClick={() => setShowInviteModal(true)}
+              >
+                + Invite
+              </button>
+            </div>
+            <p className={styles.cardDesc}>
+              Tap any staff member&apos;s role badge to cycle their permission level, or tap status to toggle Active / Suspended.
+            </p>
+
+            {members.length === 0 ? (
+              <p style={{ color: "var(--ink-secondary)", fontSize: "13px" }}>No staff members added yet.</p>
+            ) : (
+              members.map((m) => {
+                const displayName = m.full_name || m.phone || m.email || "Staff Member";
+                const displayRole = (m.role_name || "SALES").toUpperCase();
+                const initial = (m.full_name || m.phone || "S").slice(0, 1).toUpperCase();
+                return (
+                  <div key={m.id} className={styles.teamMemberCard}>
+                    <div className={styles.teamMemberAvatar}>{initial}</div>
+                    <div style={{ flex: 1 }}>
+                      <div className={styles.teamMemberName}>{displayName}</div>
+                      <div className={styles.teamMemberMeta}>
+                        {m.phone || m.email || "No contact info"}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "6px" }}>
+                        <button
+                          type="button"
+                          className={styles.memberRoleBadge}
+                          onClick={() => handleChangeMemberRole(m)}
+                          title="Tap to cycle permission role"
+                        >
+                          {displayRole}
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.memberStatusBadge} ${
+                            m.status === "active" ? styles.memberStatusActive : styles.memberStatusSuspended
+                          }`}
+                          onClick={() => handleToggleMemberStatus(m)}
+                        >
+                          {(m.status ?? "ACTIVE").toUpperCase()}
+                        </button>
+                      </div>
+                    </div>
+                    {isOwner && displayRole !== "OWNER" && (
+                      <button
+                        type="button"
+                        className={styles.removeStaffBtn}
+                        onClick={() => handleRemoveMember(m)}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Sent Invitations Section */}
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <h3 className={styles.cardTitle}>Sent Invitations ({invitations.length})</h3>
+              <button
+                type="button"
+                className={styles.primaryBtn}
+                onClick={() => setShowInviteModal(true)}
+              >
+                + Send New
+              </button>
+            </div>
+            <p className={styles.cardDesc}>
+              Track invitations sent to staff. Tap Share to send their invite link directly via WhatsApp.
+            </p>
+
+            {invitations.length === 0 ? (
+              <div className={styles.emptyInviteBox}>
+                <p style={{ margin: 0, fontSize: "13px", color: "var(--ink-secondary)" }}>
+                  No pending staff invitations.
+                </p>
+                <button
+                  type="button"
+                  className={styles.emptyInviteBtn}
+                  onClick={() => setShowInviteModal(true)}
+                >
+                  Invite your first staff member
+                </button>
+              </div>
+            ) : (
+              invitations.map((inv) => {
+                const roleLabel = (inv.role_name || "STAFF").toUpperCase();
+                return (
+                  <div key={inv.id} className={styles.sentInviteCard}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span className={styles.sentInviteTarget}>
+                          {inv.phone || inv.email || "Invited Staff"}
+                        </span>
+                        <span className={styles.sentInviteRolePill}>{roleLabel}</span>
+                      </div>
+                      <div className={styles.sentInviteStatus}>
+                        Status: PENDING &bull; Created: {new Date(inv.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.inviteShareWhatsAppBtn}
+                      onClick={() => handleShareInviteWhatsApp(inv)}
+                    >
+                      <ShareIcon size={14} />
+                      <span>Share</span>
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
 
           {/* Invitations Waiting For You */}
           {myInvitations.length > 0 && (
-            <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--line, #e5e7eb)" }}>
-              <h4 style={{ fontSize: "12px", fontWeight: 700, color: "var(--leaf, #238636)", margin: "0 0 8px" }}>
-                INVITATIONS WAITING FOR YOU ({myInvitations.length})
-              </h4>
+            <div className={styles.card}>
+              <h3 className={styles.cardTitle} style={{ color: "var(--leaf)" }}>
+                Invitations Waiting for You ({myInvitations.length})
+              </h3>
+              <p className={styles.cardDesc}>
+                Other businesses have invited you to join their team on AHIA:
+              </p>
               {myInvitations.map((inv) => (
-                <div key={inv.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0" }}>
+                <div key={inv.id} className={styles.sentInviteCard}>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: "13px" }}>{inv.tenant_name}</div>
-                    <div style={{ fontSize: "11px", color: "var(--ink-secondary, #6b7280)" }}>Role: {inv.role_name}</div>
+                    <div style={{ fontSize: "11px", color: "var(--ink-secondary)" }}>Role: {inv.role_name}</div>
                   </div>
                   <button
                     type="button"
@@ -840,139 +782,494 @@ export default function MorePage() {
               ))}
             </div>
           )}
-        </div>
-      )}
 
-      {/* Business Profile Card */}
-      <div className={styles.card}>
-        <div className={styles.cardHeader}>
-          <h3 className={styles.cardTitle}>Business Profile</h3>
-          {isOwnerOrManager && (
+          {/* Role Permissions Guide */}
+          <div className={styles.card}>
+            <h3 className={styles.cardTitle}>Role Permissions Guide</h3>
+            <p className={styles.cardDesc}>
+              Summary of privileges for each stall role:
+            </p>
+            <div className={styles.roleGuideList}>
+              <div className={styles.roleGuideItem}>
+                <div className={styles.roleGuideName}>Owner</div>
+                <div className={styles.roleGuideDesc}>
+                  Full stall ownership, financial records, team management, business security PIN, and storefront settings.
+                </div>
+              </div>
+              <div className={styles.roleGuideItem}>
+                <div className={styles.roleGuideName}>Manager</div>
+                <div className={styles.roleGuideDesc}>
+                  Sales recording, inventory & shelf categories, order lists, and staff management.
+                </div>
+              </div>
+              <div className={styles.roleGuideItem}>
+                <div className={styles.roleGuideName}>Sales / Cashier</div>
+                <div className={styles.roleGuideDesc}>
+                  Record customer sales, print/send customer WhatsApp receipts, search products and prices.
+                </div>
+              </div>
+              <div className={styles.roleGuideItem}>
+                <div className={styles.roleGuideName}>Inventory</div>
+                <div className={styles.roleGuideDesc}>
+                  Manage categories and products, update stock quantities, view stock alerts.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* -------------------------------------------------------------
+           MAIN MORE VIEW
+           ------------------------------------------------------------- */
+        <div>
+          {/* User Profile Card */}
+          <div className={styles.profileCard}>
+            <div className={styles.avatar}>
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt={profile?.first_name || "Profile"}
+                  className={styles.avatarImg}
+                />
+              ) : profile?.first_name ? (
+                profile.first_name.slice(0, 1).toUpperCase()
+              ) : (
+                "U"
+              )}
+            </div>
+            <div className={styles.profileInfo}>
+              <h2 className={styles.profileName}>
+                {profile?.first_name} {profile?.last_name ?? ""}
+              </h2>
+              <p className={styles.profilePhone}>{profile?.phone ?? profile?.email ?? "No phone set"}</p>
+              <span className={styles.roleBadge}>
+                {business?.name ?? "Stall"} &bull; {userRole}
+              </span>
+            </div>
             <button
               type="button"
               className={styles.editBtn}
               onClick={() => {
-                setEditBizName(business?.name ?? "");
-                setEditBizAddress(business?.address ?? "");
-                setEditBizPhone(business?.phone ?? "");
-                setEditBizLogo(businessLogo);
-                setShowBusinessModal(true);
+                setEditFirstName(profile?.first_name ?? "");
+                setEditLastName(profile?.last_name ?? "");
+                setEditPhone(profile?.phone ?? "");
+                setEditEmail(profile?.email ?? "");
+                setEditAvatarUrl(avatarUrl);
+                setShowProfileModal(true);
               }}
             >
-              Edit
+              Edit Profile
             </button>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
-          {businessLogo ? (
-            <img
-              src={businessLogo}
-              alt={business?.name || "Business Logo"}
-              style={{ width: "56px", height: "56px", borderRadius: "10px", objectFit: "cover", border: "1px solid var(--line)" }}
-            />
-          ) : null}
-          <div>
-            <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--ink, #111)" }}>{business?.name}</div>
-            <div style={{ fontSize: "13px", color: "var(--ink-secondary, #6b7280)", marginTop: "2px" }}>
-              Address: {business?.address || "Alaba International Market"}
-            </div>
-            <div style={{ fontSize: "13px", color: "var(--ink-secondary, #6b7280)", marginTop: "2px" }}>
-              Phone: {business?.phone || "Not set"}
-            </div>
           </div>
-        </div>
-      </div>
 
-      {/* Stall Security & PIN Management */}
-      <div className={styles.card}>
-        <div className={styles.cardHeader}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <h3 className={styles.cardTitle}>Stall Security & PIN</h3>
-            <Pill tone={hasPin ? "good" : "warn"}>
-              {hasPin ? "ACTIVE & PROTECTED" : "NO PIN SET"}
-            </Pill>
-          </div>
-          <button
-            type="button"
-            className={styles.primaryBtn}
-            onClick={() => {
-              setFirstPin("");
-              setSecondPin("");
-              setPinError(null);
-              setPinStep(1);
-              setShowPinModal(true);
-            }}
-          >
-            {hasPin ? "Change 4-Digit PIN" : "Set Security PIN"}
-          </button>
-        </div>
-        <p className={styles.cardDesc}>
-          Protects order confirmations, stock voids, and financial numbers from apprentices on the floor.
-        </p>
-        {hasPin && (
-          <div style={{ display: "flex", gap: "10px" }}>
+          {/* Everything in AHIA Grid (1:1 identical to Mobile) */}
+          <h3 className={styles.sectionTitle}>Everything in AHIA</h3>
+          <div className={styles.grid}>
+            <Link href="/app" className={styles.tile}>
+              <span className={styles.tileIcon}>
+                <ShopIcon size={24} style={{ color: "#22c55e" }} />
+              </span>
+              <span className={styles.tileTitle}>The Shop</span>
+              <span className={styles.tileDesc}>Daily counter</span>
+            </Link>
+            <Link href="/app/items" className={styles.tile}>
+              <span className={styles.tileIcon}>
+                <BoxIcon size={24} style={{ color: "#3b82f6" }} />
+              </span>
+              <span className={styles.tileTitle}>Catalog</span>
+              <span className={styles.tileDesc}>Folders & Items</span>
+            </Link>
+            <Link href="/app/lists" className={styles.tile}>
+              <span className={styles.tileIcon}>
+                <ListIcon size={24} style={{ color: "#f59e0b" }} />
+              </span>
+              <span className={styles.tileTitle}>Waybills</span>
+              <span className={styles.tileDesc}>Customer lists</span>
+            </Link>
+            <Link href="/app/sales" className={styles.tile}>
+              <span className={styles.tileIcon}>
+                <ReceiptIcon size={24} style={{ color: "#8b5cf6" }} />
+              </span>
+              <span className={styles.tileTitle}>Trading</span>
+              <span className={styles.tileDesc}>Daily ledger</span>
+            </Link>
+            {isOwnerOrManager && (
+              <button
+                type="button"
+                className={styles.tile}
+                onClick={() => {
+                  const parsed = parseStorefrontTheme(storefront?.description);
+                  setStorefrontHeadline(storefront?.headline ?? "");
+                  setStorefrontDesc(parsed.cleanDesc);
+                  setStorefrontPhone(storefront?.contact_phone ?? "");
+                  setStorefrontThemeColor(parsed.themeColor);
+                  setStorefrontThemeBg(parsed.themeBg);
+                  setStorefrontClosing(parsed.closing);
+                  setShowStorefrontModal(true);
+                }}
+              >
+                <span className={styles.tileIcon}>
+                  <ShareIcon size={24} style={{ color: "#10b981" }} />
+                </span>
+                <span className={styles.tileTitle}>Storefront</span>
+                <span className={styles.tileDesc}>WhatsApp link</span>
+              </button>
+            )}
+            {isOwnerOrManager && (
+              <button
+                type="button"
+                className={styles.tile}
+                onClick={() => setActiveSubView("team")}
+              >
+                <span className={styles.tileIcon}>
+                  <PeopleIcon size={24} style={{ color: "#38bdf8" }} />
+                </span>
+                <span className={styles.tileTitle}>Team & Staff</span>
+                <span className={styles.tileDesc}>Manage team & invites</span>
+              </button>
+            )}
+            {isOwnerOrManager && (
+              <button
+                type="button"
+                className={styles.tile}
+                onClick={() => {
+                  setEditBizName(business?.name ?? "");
+                  setEditBizAddress(business?.address ?? "");
+                  setEditBizPhone(business?.phone ?? "");
+                  setEditBizLogo(businessLogo);
+                  setShowBusinessModal(true);
+                }}
+              >
+                <span className={styles.tileIcon}>
+                  <TagIcon size={24} style={{ color: "#fbbf24" }} />
+                </span>
+                <span className={styles.tileTitle}>Stall Profile</span>
+                <span className={styles.tileDesc}>Address & name</span>
+              </button>
+            )}
             <button
               type="button"
-              className={styles.secondaryBtn}
+              className={styles.tile}
               onClick={() => {
-                setShowPinResetFlow(true);
-                setPinResetPassword("");
-                setPinResetError(null);
+                setSecurityTab("password");
+                setShowPasswordModal(true);
               }}
             >
-              Forgot PIN? Reset with Account Password
-            </button>
-            <button
-              type="button"
-              className={styles.secondaryBtn}
-              style={{ color: "#cf222e" }}
-              onClick={async () => {
-                if (!business || !window.confirm("Remove stall PIN protection?")) return;
-                await clearBusinessPin(business.id);
-                setHasPin(false);
-                setNotice({ message: "Stall PIN removed.", tone: "good" });
-              }}
-            >
-              Remove PIN
+              <span className={styles.tileIcon}>
+                <LockIcon size={24} style={{ color: "#ec4899" }} />
+              </span>
+              <span className={styles.tileTitle}>Security</span>
+              <span className={styles.tileDesc}>PIN & password</span>
             </button>
           </div>
-        )}
-      </div>
 
-      {/* App Appearance / Theme */}
-      <div className={styles.card}>
-        <h3 className={styles.cardTitle}>App Appearance</h3>
-        <p className={styles.cardDesc}>
-          Choose your preferred visual theme for the market floor.
-        </p>
-        <div className={styles.themeWrap}>
+          {/* Storefront Studio Card */}
+          {isOwnerOrManager && (
+            <div className={styles.card}>
+              <div className={styles.cardHeader}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <h3 className={styles.cardTitle}>Storefront Studio</h3>
+                  <Pill tone={storefront?.is_published ? "good" : "warn"}>
+                    {storefront?.is_published ? "PUBLISHED" : "DRAFT"}
+                  </Pill>
+                </div>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    type="button"
+                    className={styles.secondaryBtn}
+                    onClick={handleToggleStorefrontPublish}
+                  >
+                    {storefront?.is_published ? "Unpublish" : "Go Live"}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.editBtn}
+                    onClick={() => {
+                      const parsed = parseStorefrontTheme(storefront?.description);
+                      setStorefrontHeadline(storefront?.headline ?? "");
+                      setStorefrontDesc(parsed.cleanDesc);
+                      setStorefrontPhone(storefront?.contact_phone ?? "");
+                      setStorefrontThemeColor(parsed.themeColor);
+                      setStorefrontThemeBg(parsed.themeBg);
+                      setStorefrontClosing(parsed.closing);
+                      setShowStorefrontModal(true);
+                    }}
+                  >
+                    Edit
+                  </button>
+                </div>
+              </div>
+              <p className={styles.cardDesc}>
+                {storefront?.headline || "Your public shop catalog is live on AHIA."}
+              </p>
+              <div className={styles.urlBox}>
+                <span>{publicShopUrl}</span>
+                <button
+                  type="button"
+                  className={styles.editBtn}
+                  onClick={() => {
+                    void navigator.clipboard.writeText(publicShopUrl);
+                    setNotice({ message: "Storefront link copied to clipboard!", tone: "good" });
+                  }}
+                >
+                  Copy Link
+                </button>
+              </div>
+              <div className={styles.actionRow}>
+                <a
+                  href={`https://wa.me/?text=${encodeURIComponent(`Check out our shop on AHIA: ${publicShopUrl}`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.primaryBtn}
+                  style={{ textDecoration: "none" }}
+                >
+                  Share Storefront Link on WhatsApp
+                </a>
+              </div>
+            </div>
+          )}
+
+          {/* Team & Staff Management (Inline Summary) */}
+          {isOwnerOrManager && (
+            <div className={styles.card}>
+              <div className={styles.cardHeader}>
+                <h3 className={styles.cardTitle}>Team & Staff ({members.length})</h3>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    type="button"
+                    className={styles.secondaryBtn}
+                    onClick={() => setActiveSubView("team")}
+                  >
+                    Full View
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.primaryBtn}
+                    onClick={() => setShowInviteModal(true)}
+                  >
+                    + Invite Staff
+                  </button>
+                </div>
+              </div>
+              <p className={styles.cardDesc}>
+                Manage apprentices and managers. Tap a role or status badge to change privileges.
+              </p>
+
+              <div className={styles.memberList}>
+                {members.map((m) => (
+                  <div key={m.id} className={styles.memberRow}>
+                    <div>
+                      <div className={styles.memberName}>
+                        {m.full_name || "Staff Member"}
+                      </div>
+                      <div className={styles.memberMeta}>
+                        {m.phone || m.email || "Staff Member"} &bull;{" "}
+                        <button
+                          type="button"
+                          onClick={() => handleChangeMemberRole(m)}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "var(--leaf, #238636)",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {m.role_name} &bull; Tap to change
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleMemberStatus(m)}
+                        style={{
+                          padding: "2px 8px",
+                          borderRadius: "6px",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          border: "none",
+                          cursor: "pointer",
+                          background: m.status === "active" ? "#dcfce7" : "#fee2e2",
+                          color: m.status === "active" ? "#15803d" : "#b91c1c",
+                        }}
+                      >
+                        {m.status.toUpperCase()}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMember(m)}
+                        className={styles.editBtn}
+                        style={{ color: "#cf222e" }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Sent Invitations */}
+              {invitations.length > 0 && (
+                <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--line, #e5e7eb)" }}>
+                  <h4 style={{ fontSize: "12px", fontWeight: 700, color: "var(--ink-secondary, #6b7280)", margin: "0 0 8px" }}>
+                    SENT INVITATIONS ({invitations.length})
+                  </h4>
+                  {invitations.map((inv) => (
+                    <div key={inv.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", fontSize: "12px" }}>
+                      <span>{inv.phone || inv.email} (Role: {inv.role_name})</span>
+                      <button
+                        type="button"
+                        className={styles.inviteShareWhatsAppBtn}
+                        style={{ padding: "4px 10px", fontSize: "11px" }}
+                        onClick={() => handleShareInviteWhatsApp(inv)}
+                      >
+                        <ShareIcon size={12} />
+                        <span>Share</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Invitations Waiting For You */}
+              {myInvitations.length > 0 && (
+                <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--line, #e5e7eb)" }}>
+                  <h4 style={{ fontSize: "12px", fontWeight: 700, color: "var(--leaf, #238636)", margin: "0 0 8px" }}>
+                    INVITATIONS WAITING FOR YOU ({myInvitations.length})
+                  </h4>
+                  {myInvitations.map((inv) => (
+                    <div key={inv.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0" }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: "13px" }}>{inv.tenant_name}</div>
+                        <div style={{ fontSize: "11px", color: "var(--ink-secondary, #6b7280)" }}>Role: {inv.role_name}</div>
+                      </div>
+                      <button
+                        type="button"
+                        className={styles.primaryBtn}
+                        onClick={() => handleAcceptMyInvitation(inv)}
+                      >
+                        Accept
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Business Profile Card */}
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <h3 className={styles.cardTitle}>Business Profile</h3>
+              {isOwnerOrManager && (
+                <button
+                  type="button"
+                  className={styles.editBtn}
+                  onClick={() => {
+                    setEditBizName(business?.name ?? "");
+                    setEditBizAddress(business?.address ?? "");
+                    setEditBizPhone(business?.phone ?? "");
+                    setEditBizLogo(businessLogo);
+                    setShowBusinessModal(true);
+                  }}
+                >
+                  Edit
+                </button>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+              {businessLogo ? (
+                <img
+                  src={businessLogo}
+                  alt={business?.name || "Business Logo"}
+                  style={{ width: "56px", height: "56px", borderRadius: "10px", objectFit: "cover", border: "1px solid var(--line)" }}
+                />
+              ) : null}
+              <div>
+                <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--ink, #111)" }}>{business?.name}</div>
+                <div style={{ fontSize: "13px", color: "var(--ink-secondary, #6b7280)", marginTop: "2px" }}>
+                  Address: {business?.address || "Alaba International Market"}
+                </div>
+                <div style={{ fontSize: "13px", color: "var(--ink-secondary, #6b7280)", marginTop: "2px" }}>
+                  Phone: {business?.phone || "Not set"}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Push Notifications Card */}
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <h3 className={styles.cardTitle}>Push Notifications</h3>
+                <Pill tone={pushSubscribed ? "good" : "warn"}>
+                  {pushSubscribed ? "ACTIVE (VAPID)" : "NOT ENABLED"}
+                </Pill>
+              </div>
+              {pushSupported && !pushSubscribed && (
+                <button
+                  type="button"
+                  className={styles.primaryBtn}
+                  disabled={pushEnabling}
+                  onClick={async () => {
+                    if (!business) return;
+                    setPushEnabling(true);
+                    const res = await subscribeToWebPush(business.id);
+                    setPushEnabling(false);
+                    if (res.success) {
+                      setPushSubscribed(true);
+                      setNotice({ message: "Push notifications successfully enabled!", tone: "good" });
+                    } else {
+                      setNotice({ message: res.message, tone: "bad" });
+                    }
+                  }}
+                >
+                  {pushEnabling ? "Enabling..." : "Enable Push Notifications"}
+                </button>
+              )}
+            </div>
+            <p className={styles.cardDesc}>
+              Receive instant browser and device alerts whenever customers submit orders, dispatch waybills, or stock runs low. Configured with VAPID key pairs and registered to <code>kookafor893@gmail.com</code>.
+            </p>
+          </div>
+
+          {/* App Appearance / Theme */}
+          <div className={styles.card}>
+            <h3 className={styles.cardTitle}>App Appearance</h3>
+            <p className={styles.cardDesc}>
+              Choose your preferred visual theme for the market floor.
+            </p>
+            <div className={styles.themeWrap}>
+              <button
+                type="button"
+                className={`${styles.themeBtn} ${themeMode === "light" ? styles.themeBtnActive : ""}`}
+                onClick={() => toggleTheme("light")}
+              >
+                Light Ivory
+              </button>
+              <button
+                type="button"
+                className={`${styles.themeBtn} ${themeMode === "dark" ? styles.themeBtnActive : ""}`}
+                onClick={() => toggleTheme("dark")}
+              >
+                Dark Theme (Default)
+              </button>
+            </div>
+          </div>
+
+          {/* Sign Out Button */}
           <button
             type="button"
-            className={`${styles.themeBtn} ${themeMode === "light" ? styles.themeBtnActive : ""}`}
-            onClick={() => toggleTheme("light")}
+            className={styles.signOutBtn}
+            onClick={() => setShowSignOutModal(true)}
           >
-            Light Ivory (Default)
-          </button>
-          <button
-            type="button"
-            className={`${styles.themeBtn} ${themeMode === "dark" ? styles.themeBtnActive : ""}`}
-            onClick={() => toggleTheme("dark")}
-          >
-            Dark Theme
+            Sign Out of AHIA
           </button>
         </div>
-      </div>
+      )}
 
-      {/* Sign Out Button */}
-      <button
-        type="button"
-        className={styles.signOutBtn}
-        onClick={() => setShowSignOutModal(true)}
-      >
-        Sign Out of AHIA
-      </button>
-
-      {/* ---------------- MODALS / SHEETS ---------------- */}
+      {/* ---------------- MODALS / SHEETS (1:1 with Mobile) ---------------- */}
 
       {/* Edit Profile Sheet */}
       <Sheet open={showProfileModal} title="Edit User Profile" onClose={() => setShowProfileModal(false)}>
@@ -1098,7 +1395,215 @@ export default function MorePage() {
         </div>
       </Sheet>
 
-      {/* Security PIN Sheet */}
+      {/* Unified Security & Stall Protection Modal (1:1 with Mobile) */}
+      <Sheet open={showPasswordModal} title="Security & Stall Protection" onClose={() => setShowPasswordModal(false)}>
+        {/* Sub-tabs: Account Password vs Stall Security PIN */}
+        <div className={styles.securityTabRow}>
+          <button
+            type="button"
+            className={`${styles.securityTabBtn} ${securityTab === "password" ? styles.securityTabBtnActive : ""}`}
+            onClick={() => setSecurityTab("password")}
+          >
+            Account Password
+          </button>
+          {isOwner && (
+            <button
+              type="button"
+              className={`${styles.securityTabBtn} ${securityTab === "pin" ? styles.securityTabBtnActive : ""}`}
+              onClick={() => setSecurityTab("pin")}
+            >
+              Stall PIN (Owner)
+            </button>
+          )}
+        </div>
+
+        {securityTab === "password" ? (
+          <div>
+            <p className={styles.cardDesc}>
+              Update your personal account password used to sign into AHIA.
+            </p>
+            <Field
+              label="Current Password"
+              id="current-password"
+              type="password"
+              value={currentPassword}
+              onChange={setCurrentPassword}
+            />
+            <Field
+              label="New Password"
+              id="new-password"
+              type="password"
+              value={newPassword}
+              onChange={setNewPassword}
+              hint="Must be at least 8 characters long."
+            />
+            {newPassword.length > 0 && (
+              <div className={styles.passwordMeterBox}>
+                <div className={styles.passwordStrengthRow}>
+                  <span className={styles.passwordStrengthLabel}>Strength:</span>
+                  <span
+                    className={
+                      newPassword.length >= 8 && /\d/.test(newPassword)
+                        ? styles.strengthStrong
+                        : newPassword.length >= 8
+                        ? styles.strengthMedium
+                        : styles.strengthWeak
+                    }
+                  >
+                    {newPassword.length >= 8 && /\d/.test(newPassword)
+                      ? "Strong"
+                      : newPassword.length >= 8
+                      ? "Medium"
+                      : "Too Short"}
+                  </span>
+                </div>
+                <div className={styles.strengthBarWrap}>
+                  <div
+                    className={`${styles.strengthBar} ${
+                      newPassword.length >= 8 && /\d/.test(newPassword)
+                        ? styles.barStrong
+                        : newPassword.length >= 8
+                        ? styles.barMedium
+                        : styles.barWeak
+                    }`}
+                  />
+                </div>
+                <div className={styles.pwdChecklistText}>
+                  {newPassword.length >= 8 ? "[OK]" : "[ ]"} Minimum 8 characters
+                </div>
+                <div className={styles.pwdChecklistText}>
+                  {/\d/.test(newPassword) ? "[OK]" : "[ ]"} Contains a number
+                </div>
+              </div>
+            )}
+            <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
+              <button
+                type="button"
+                className={styles.secondaryBtn}
+                onClick={() => setShowPasswordModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={styles.primaryBtn}
+                onClick={handleChangeAccountPassword}
+                disabled={savingPassword || !currentPassword || newPassword.length < 8}
+              >
+                {savingPassword ? "Changing..." : "Change Password"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <p className={styles.cardDesc}>
+              The Business Security PIN is linked directly to this stall. Only the Business Owner can set or change it. It protects sensitive owner actions (price changes, deleting items, and staff removal).
+            </p>
+            <div className={styles.pinStatusBox}>
+              <LockIcon size={16} style={{ color: hasPin ? "#15803d" : "#d97706" }} />
+              <span className={styles.pinStatusText} style={{ color: hasPin ? "#15803d" : "#d97706" }}>
+                {hasPin ? "Stall Security PIN is Active" : "No PIN Set for this Stall"}
+              </span>
+            </div>
+
+            {hasPin && !showPinResetFlow && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
+                <button
+                  type="button"
+                  className={styles.secondaryBtn}
+                  onClick={() => {
+                    setFirstPin("");
+                    setSecondPin("");
+                    setPinError(null);
+                    setPinStep(1);
+                    setShowPinModal(true);
+                    setShowPasswordModal(false);
+                  }}
+                >
+                  Change 4-Digit PIN
+                </button>
+                <button
+                  type="button"
+                  className={styles.secondaryBtn}
+                  onClick={() => {
+                    setShowPinResetFlow(true);
+                    setPinResetPassword("");
+                    setPinResetError(null);
+                  }}
+                >
+                  Forgot PIN? Reset with Account Password
+                </button>
+                <button
+                  type="button"
+                  className={styles.secondaryBtn}
+                  style={{ color: "#cf222e" }}
+                  onClick={async () => {
+                    if (!business || !window.confirm("Remove stall PIN protection?")) return;
+                    await clearBusinessPin(business.id);
+                    setHasPin(false);
+                    setNotice({ message: "Stall PIN removed.", tone: "good" });
+                    setShowPasswordModal(false);
+                  }}
+                >
+                  Remove PIN
+                </button>
+              </div>
+            )}
+
+            {!hasPin && (
+              <div style={{ marginTop: "12px" }}>
+                <button
+                  type="button"
+                  className={styles.primaryBtn}
+                  onClick={() => {
+                    setFirstPin("");
+                    setSecondPin("");
+                    setPinError(null);
+                    setPinStep(1);
+                    setShowPinModal(true);
+                    setShowPasswordModal(false);
+                  }}
+                >
+                  Set 4-Digit Security PIN
+                </button>
+              </div>
+            )}
+
+            {showPinResetFlow && (
+              <div style={{ marginTop: "16px", padding: "14px", borderRadius: "8px", background: "var(--sand)" }}>
+                <h4 style={{ margin: "0 0 8px 0", fontSize: "13px" }}>Reset PIN with Account Password</h4>
+                <Field
+                  label="Enter your Account Password"
+                  id="pin-reset-pass"
+                  type="password"
+                  value={pinResetPassword}
+                  onChange={setPinResetPassword}
+                  error={pinResetError || undefined}
+                />
+                <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                  <button
+                    type="button"
+                    className={styles.secondaryBtn}
+                    onClick={() => setShowPinResetFlow(false)}
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.primaryBtn}
+                    disabled={pinResetVerifying || !pinResetPassword}
+                    onClick={handleVerifyPasswordForPinReset}
+                  >
+                    {pinResetVerifying ? "Verifying..." : "Verify & Set New PIN"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Sheet>
+
+      {/* Security PIN Setup Sheet */}
       <Sheet open={showPinModal} title="Stall Security PIN" onClose={() => setShowPinModal(false)}>
         {pinStep === 1 ? (
           <div>
@@ -1141,65 +1646,6 @@ export default function MorePage() {
             disabled={savingPin}
           >
             {savingPin ? "Saving..." : pinStep === 1 ? "Next" : "Save Security PIN"}
-          </button>
-        </div>
-      </Sheet>
-
-      {/* Forgot PIN / Reset via Password Sheet */}
-      <Sheet open={showPinResetFlow} title="Reset PIN with Account Password" onClose={() => setShowPinResetFlow(false)}>
-        <p style={{ fontSize: "13px", color: "var(--ink-secondary)", marginBottom: "12px" }}>
-          Verify your AHIA account password to unlock PIN reset:
-        </p>
-        <Field
-          label="Account Password"
-          id="pin-reset-pass"
-          type="password"
-          value={pinResetPassword}
-          onChange={setPinResetPassword}
-        />
-        {pinResetError ? <p style={{ color: "#cf222e", fontSize: "13px", margin: "8px 0" }}>{pinResetError}</p> : null}
-        <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
-          <button type="button" className={styles.secondaryBtn} onClick={() => setShowPinResetFlow(false)}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className={styles.primaryBtn}
-            onClick={handleVerifyPasswordForPinReset}
-            disabled={pinResetVerifying || !pinResetPassword.trim()}
-          >
-            {pinResetVerifying ? "Verifying..." : "Verify & Reset PIN"}
-          </button>
-        </div>
-      </Sheet>
-
-      {/* Account Password Change Sheet */}
-      <Sheet open={showPasswordModal} title="Change Account Password" onClose={() => setShowPasswordModal(false)}>
-        <Field
-          label="Current Password"
-          id="cur-pass"
-          type="password"
-          value={currentPassword}
-          onChange={setCurrentPassword}
-        />
-        <Field
-          label="New Password"
-          id="new-pass"
-          type="password"
-          value={newPassword}
-          onChange={setNewPassword}
-        />
-        <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
-          <button type="button" className={styles.secondaryBtn} onClick={() => setShowPasswordModal(false)}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className={styles.primaryBtn}
-            onClick={handleChangeAccountPassword}
-            disabled={savingPassword || !currentPassword.trim() || !newPassword.trim()}
-          >
-            {savingPassword ? "Updating..." : "Update Password"}
           </button>
         </div>
       </Sheet>

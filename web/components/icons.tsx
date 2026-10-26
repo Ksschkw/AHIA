@@ -540,3 +540,24 @@ export function ShareIcon(props: IconProps) {
     </Frame>
   );
 }
+
+/** People / Team icon. */
+export function PeopleIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+    </Frame>
+  );
+}
+
+/** Price tag / Stall Profile icon. */
+export function TagIcon(props: IconProps) {
+  return (
+    <Frame {...props}>
+      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+      <line x1="7" y1="7" x2="7.01" y2="7" />
+    </Frame>
+  );
+}

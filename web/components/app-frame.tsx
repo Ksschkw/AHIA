@@ -20,6 +20,7 @@ import {
   type TenantSummary,
   type UserProfile,
 } from "@/lib/api";
+import { subscribeToWebPush } from "@/lib/notifications";
 
 export const ACTIVE_BUSINESS_KEY = "ahia.business";
 
@@ -59,6 +60,13 @@ export function AppFrame({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (activeBusinessId) {
       void prefetchAllAppData(activeBusinessId);
+      if (
+        typeof window !== "undefined" &&
+        "Notification" in window &&
+        Notification.permission === "granted"
+      ) {
+        void subscribeToWebPush(activeBusinessId).catch(() => {});
+      }
     }
   }, [activeBusinessId]);
 

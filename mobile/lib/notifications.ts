@@ -4,7 +4,13 @@
  * Provides safe device token registration and unread notification state management.
  */
 
-import { getUnreadNotificationCount, getNotifications, markNotificationRead, type AppNotification } from "./api";
+import {
+  getUnreadNotificationCount,
+  getNotifications,
+  markNotificationRead,
+  request,
+  type AppNotification,
+} from "./api";
 
 export interface PushTokenPayload {
   token: string;
@@ -20,6 +26,24 @@ export function getActivePushToken(): string | null {
 
 export function setActivePushToken(token: string | null): void {
   activePushToken = token;
+}
+
+/**
+ * Register push token with the backend notification service.
+ */
+export async function registerPushToken(
+  tenantId: string,
+  payload: PushTokenPayload,
+): Promise<boolean> {
+  try {
+    await request(`/api/v1/tenants/${tenantId}/notifications/push-subscription`, {
+      method: "POST",
+      body: payload,
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

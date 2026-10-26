@@ -301,3 +301,436 @@
 .signOutBtn:hover {
   background: rgba(207, 34, 46, 0.12);
 }
+
+/* -------------------------------------------------------------------------
+   Team & Staff Subview Styling (1:1 with Mobile)
+   ------------------------------------------------------------------------- */
+
+.teamTopBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.teamBackBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink, #111827);
+  cursor: pointer;
+  padding: 6px 0;
+}
+
+.teamInviteTopBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--leaf, #238636);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.teamInviteTopBtn:hover {
+  opacity: 0.9;
+}
+
+.teamBannerCard {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: var(--card, #ffffff);
+  border: 1px solid var(--line, #e5e7eb);
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.teamBannerIconWrap {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  background: rgba(35, 134, 54, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--leaf, #238636);
+  flex-shrink: 0;
+}
+
+.teamBannerTitle {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--ink, #111827);
+  margin: 0 0 4px 0;
+}
+
+.teamBannerSub {
+  font-size: 13px;
+  color: var(--ink-secondary, #6b7280);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.teamStatsRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.teamStatBox {
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--card, #ffffff);
+  border: 1px solid var(--line, #e5e7eb);
+  text-align: center;
+}
+
+.teamStatValue {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--ink, #111827);
+  margin-bottom: 2px;
+}
+
+.teamStatLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-secondary, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.teamMemberCard {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line, #e5e7eb);
+  background: var(--paper, #ffffff);
+  margin-bottom: 8px;
+}
+
+.teamMemberAvatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(35, 134, 54, 0.14);
+  color: var(--leaf, #238636);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.teamMemberName {
+  font-size: 14px;
+  font-weight: 750;
+  color: var(--ink, #111827);
+  margin-bottom: 2px;
+}
+
+.teamMemberMeta {
+  font-size: 12px;
+  color: var(--ink-secondary, #6b7280);
+}
+
+.memberRoleBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(35, 134, 54, 0.1);
+  color: var(--leaf, #238636);
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.15s ease;
+}
+
+.memberRoleBadge:hover {
+  opacity: 0.85;
+}
+
+.memberStatusBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.15s ease;
+}
+
+.memberStatusActive {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.memberStatusSuspended {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.removeStaffBtn {
+  background: none;
+  border: 1px solid rgba(207, 34, 46, 0.3);
+  color: #cf222e;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.removeStaffBtn:hover {
+  background: rgba(207, 34, 46, 0.08);
+}
+
+.sentInviteCard {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line, #e5e7eb);
+  background: var(--paper, #ffffff);
+  margin-bottom: 8px;
+  gap: 12px;
+}
+
+.sentInviteTarget {
+  font-size: 13px;
+  font-weight: 750;
+  color: var(--ink, #111827);
+}
+
+.sentInviteRolePill {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--sand-2, #f3ece1);
+  font-size: 10px;
+  font-weight: 750;
+  color: var(--ink-2, #5c5549);
+  text-transform: uppercase;
+}
+
+.sentInviteStatus {
+  font-size: 11px;
+  color: var(--ink-secondary, #6b7280);
+  margin-top: 3px;
+}
+
+.inviteShareWhatsAppBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: #25d366;
+  color: #ffffff;
+  border: none;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+.inviteShareWhatsAppBtn:hover {
+  opacity: 0.9;
+}
+
+.emptyInviteBox {
+  padding: 24px 16px;
+  text-align: center;
+  border-radius: 10px;
+  border: 1px dashed var(--line, #e5e7eb);
+  background: var(--sand, #fbf7f0);
+}
+
+.emptyInviteBtn {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: var(--leaf, #238636);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+}
+
+.roleGuideList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.roleGuideItem {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--sand, #fbf7f0);
+  border: 1px solid var(--line, #e5e7eb);
+}
+
+.roleGuideName {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink, #111827);
+  margin-bottom: 2px;
+}
+
+.roleGuideDesc {
+  font-size: 12px;
+  color: var(--ink-secondary, #6b7280);
+  line-height: 1.4;
+  margin: 0;
+}
+
+/* -------------------------------------------------------------------------
+   Security Modal Sub-tabs & Password Strength Meter
+   ------------------------------------------------------------------------- */
+
+.securityTabRow {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--sand, #fbf7f0);
+  border: 1px solid var(--line, #e5e7eb);
+}
+
+.securityTabBtn {
+  flex: 1;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--ink-secondary, #6b7280);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+.securityTabBtnActive {
+  background: var(--card, #ffffff);
+  color: var(--leaf, #238636);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.passwordMeterBox {
+  margin: 12px 0 16px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--sand, #fbf7f0);
+  border: 1px solid var(--line, #e5e7eb);
+}
+
+.passwordStrengthRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.passwordStrengthLabel {
+  font-weight: 600;
+  color: var(--ink-secondary, #6b7280);
+}
+
+.passwordStrengthValue {
+  font-weight: 800;
+}
+
+.strengthWeak {
+  color: #cf222e;
+}
+
+.strengthMedium {
+  color: #d97706;
+}
+
+.strengthStrong {
+  color: #15803d;
+}
+
+.strengthBarWrap {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--sand-2, #e5e7eb);
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.strengthBar {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.25s ease, background-color 0.25s ease;
+}
+
+.barWeak {
+  width: 25%;
+  background-color: #cf222e;
+}
+
+.barMedium {
+  width: 60%;
+  background-color: #d97706;
+}
+
+.barStrong {
+  width: 100%;
+  background-color: #15803d;
+}
+
+.pwdChecklistText {
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--ink-secondary, #6b7280);
+  margin-top: 2px;
+}
+
+.pinStatusBox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--sand, #fbf7f0);
+  border: 1px solid var(--line, #e5e7eb);
+  margin: 10px 0 14px;
+}
+
+.pinStatusText {
+  font-size: 13px;
+  font-weight: 750;
+}
