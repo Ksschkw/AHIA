@@ -983,3 +983,189 @@
   letter-spacing: 0;
   text-transform: none;
 }
+
+/* -------------------------------------------------------------------------
+   Stock Health, Audit & Blame Modal Styles
+   ------------------------------------------------------------------------- */
+
+.auditBtn {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--leaf);
+  background: var(--leaf-soft);
+  border: 1px solid transparent;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.auditBtn:hover {
+  border-color: var(--leaf);
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.modalBox {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.modalTitle {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--ink);
+  margin: 0;
+}
+
+.modalSubtitle {
+  font-size: 13px;
+  color: var(--ink-2);
+  margin-top: 3px;
+}
+
+.closeCircleBtn {
+  background: var(--sand-2);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: var(--ink-2);
+  flex-shrink: 0;
+}
+
+.closeCircleBtn:hover {
+  color: var(--ink);
+  border-color: var(--leaf);
+}
+
+.blameCard {
+  background: var(--sand-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.blameRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.blameLabel {
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.blameValue {
+  font-weight: 700;
+  color: var(--ink);
+  text-align: right;
+}
+
+.stockHealthStats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.stockHealthStat {
+  background: var(--sand-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  text-align: center;
+}
+
+.stockHealthVal {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.stockHealthLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-2);
+  margin-top: 2px;
+  text-transform: uppercase;
+}
+
+.urgentAlertCard {
+  background: var(--clay-soft);
+  border: 1px solid var(--clay);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+
+.urgentAlertHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--clay);
+  margin-bottom: 8px;
+}
+
+.fullCatalogBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--leaf-soft);
+  color: var(--leaf);
+  border: 1px solid var(--leaf);
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  margin-top: 14px;
+  transition: all 0.15s ease;
+}
+
+.fullCatalogBtn:hover {
+  background: var(--leaf);
+  color: #ffffff;
+}

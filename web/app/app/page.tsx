@@ -18,12 +18,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Brand, Wordmark } from "@/components/brand";
 import {
+  BoxIcon,
   ChartIcon,
   ChevronDownIcon,
+  CloseIcon,
   ExpenseIcon,
   Icon,
   ItemBoxIcon,
+  PlusIcon,
   ProductIcon,
+  ReceiptIcon,
   SaleIcon,
   SearchIcon,
   StockIcon,
@@ -61,6 +65,7 @@ import {
   listCustomerLists,
   listExpenseCategories,
   listExpenses,
+  listMembers,
   listProductImages,
   cachedRead,
   rememberedBusinessId,
@@ -81,6 +86,7 @@ import {
   type ExpenseItem,
   type Category,
   type ExpenseCategoryList,
+  type Member,
   type PaymentMethod,
   type InventoryLevel,
   type LowStockProduct,
@@ -111,10 +117,37 @@ const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
   { value: "OTHER", label: "Other" },
 ];
 
+function getSaleDisplayTitle(
+  s: SaleSummary,
+  user: UserProfile | null,
+  members: Member[],
+  customerLists: CustomerList[]
+): string {
+  if (user && s.seller_id === user.id) return "Sale by You";
+  const member = members.find((m) => m.user_id === s.seller_id);
+  if (member) {
+    if (member.full_name) return `Sale by ${member.full_name}`;
+    if (member.role_name) return `Sale by ${member.role_name}`;
+  }
+  const linkedList = customerLists.find(
+    (l) =>
+      l.id === s.customer_id ||
+      s.receipt_number.includes(l.id.slice(0, 8)) ||
+      (s.receipt_number.startsWith("PAY-") && s.receipt_number.slice(4).startsWith(l.id.slice(0, 8))) ||
+      l.lines.some((line) => line.id === s.id)
+  );
+  if (linkedList) {
+    const cust = linkedList.customer_phone || linkedList.customer_name || "Customer List";
+    return `Order: ${cust}`;
+  }
+  return s.seller_id ? `Sale by Staff (${s.seller_id.slice(0, 8)})` : "Counter Checkout";
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const [sessionResolved, setSessionResolved] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
   const [businesses, setBusinesses] = useState<TenantSummary[]>([]);
   const [businessDetail, setBusinessDetail] = useState<Tenant | null>(null);
   const [businessId, setBusinessId] = useState<string | null>(() => rememberedBusinessId());
@@ -137,7 +170,8 @@ export default function Dashboard() {
   const [runningOut, setRunningOut] = useState<LowStockProduct[]>([]);
   const [categories, setCategories] = useState<ExpenseCategoryList | null>(null);
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
-  const [showTimelineChart, setShowTimelineChart] = useState(false);
+  const [showTimelineChart, setShowTimelineChart] = useState(true);
+  const [selectedSaleAudit, setSelectedSaleAudit] = useState<SaleSummary | null>(null);
 
   const todayProfitMetrics = useMemo(() => {
     const todayRevenue = Number(today?.total_revenue || 0);
@@ -219,7 +253,7 @@ export default function Dashboard() {
       setCustomerLists(rememberedLists);
     }
 
-    const [foundProducts, foundStock, summary, sales, low, expenseCategories, foundLists, foundExpenses] = await Promise.all([
+    const [foundProducts, foundStock, summary, sales, low, expenseCategories, foundLists, foundExpenses, foundMembers] = await Promise.all([
       listProducts(tenantId).catch(() => []),
       listStock(tenantId).catch(() => []),
       dailySales(tenantId).catch(() => null),
@@ -228,6 +262,7 @@ export default function Dashboard() {
       listExpenseCategories(tenantId).catch(() => null),
       listCustomerLists(tenantId).catch(() => []),
       listExpenses(tenantId).catch(() => []),
+      listMembers(tenantId).catch(() => []),
     ]);
     setProducts(foundProducts);
     // Ready only now: everything above this line is a request in flight, and a shelf that says it is
@@ -244,6 +279,7 @@ export default function Dashboard() {
     setCategories(expenseCategories);
     setCustomerLists(foundLists);
     setExpenses(foundExpenses);
+    setMembers(foundMembers);
   }, []);
 
   /**
@@ -608,27 +644,27 @@ export default function Dashboard() {
                 alignItems: "center",
                 padding: "12px 18px",
                 borderRadius: "12px",
-                border: "1px solid var(--border, #e5e7eb)",
-                background: "var(--paper, #ffffff)",
+                border: "1px solid var(--line, #2d3830)",
+                background: "var(--card, #1e2620)",
                 cursor: "pointer",
                 marginBottom: showTimelineChart ? "12px" : "0",
                 transition: "all 0.15s ease",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <ChartIcon size={20} style={{ color: "var(--leaf, #238636)" }} />
+                <ChartIcon size={20} style={{ color: "var(--leaf, #1aa36a)" }} />
                 <div style={{ textAlign: "left" }}>
-                  <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--ink, #111827)" }}>
+                  <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--ink, #f0ede6)" }}>
                     Sales & Profit Progress Timeline
                   </div>
-                  <div style={{ fontSize: "12px", color: "var(--ink-secondary, #6b7280)" }}>
+                  <div style={{ fontSize: "12px", color: "var(--ink-2, #a8a092)" }}>
                     {showTimelineChart
                       ? "Click to collapse visual charts"
                       : "Click to view 7d / 14d / 30d visual trends & daily performance"}
                   </div>
                 </div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", fontWeight: 700, color: "var(--leaf, #238636)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", fontWeight: 700, color: "var(--leaf, #1aa36a)" }}>
                 <span>{showTimelineChart ? "Hide Chart" : "Show Chart"}</span>
                 <ChevronDownIcon size={16} style={{ transform: showTimelineChart ? "rotate(180deg)" : "none", transition: "transform 0.2s ease" }} />
               </div>
@@ -649,190 +685,51 @@ export default function Dashboard() {
           </div>
         ) : null}
 
-        <div className={styles.columns}>
-          <Card
-            title="Your stock"
-            action={
-              <button className={styles.linkButton} onClick={() => setSheet("product")}>
-                Add product
-              </button>
-            }
-          >
-            {!businessId ? (
-              <Empty>
-                Name your business first -{" "}
-                <button className={styles.linkButton} onClick={() => setSheet("business")}>
-                  choose a name
-                </button>
-                .
-              </Empty>
-            ) : shelfState === "loading" ? (
-              // "No products yet" before the answer arrives is a lie, and the trader caught it: he
-              // added something, and the screen had already told him it was not there. An empty list
-              // and a list nobody has fetched are different states and have to read differently.
-              <Loading label="Fetching your shelf..." />
-            ) : products.length === 0 ? (
-              <Empty
-                illustration={<EmptyShelfIllustration size={100} />}
-                action={
-                  <button className={styles.linkButton} onClick={() => setSheet("product")}>
-                    + Add First Product
-                  </button>
-                }
-              >
-                No products yet. Add the first thing you sell.
-              </Empty>
-            ) : (
-              <>
-                {/* Shelf search - only shown once there are items to search through */}
-                {products.length > 5 ? (
-                  <div className={styles.shelfFilterWrap}>
-                    <SearchIcon size={16} className={styles.shelfFilterIcon} />
-                    <input
-                      className={styles.shelfFilterInput}
-                      type="search"
-                      value={shelfQuery}
-                      onChange={(e) => setShelfQuery(e.target.value)}
-                      placeholder="Search your stock..."
-                      aria-label="Filter shelf items"
-                    />
-                    {shelfQuery ? (
-                      <button
-                        className={styles.shelfFilterClear}
-                        onClick={() => setShelfQuery("")}
-                        aria-label="Clear filter"
-                      >
-                        Clear
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-                {filteredShelf.length === 0 && shelfQuery ? (
-                  <p className={styles.shelfEmptySearch}>
-                    Nothing on your shelf matches &ldquo;{shelfQuery}&rdquo;.
-                  </p>
-                ) : shelfQuery.trim() ? (
-                  /* Flat list when searching - headings add noise, the result is already small */
-                  <ul className={styles.shelf}>
-                    {filteredShelf.map((product) => {
-                      const level = levelFor(product.id);
-                      const quantity = Number(level?.available_quantity ?? "0");
-                      const out = level?.is_out_of_stock ?? false;
-                      const cover = coverPhoto(photos[product.id]);
-                      return <ShelfRow
-                        key={product.id}
-                        product={product}
-                        level={level}
-                        quantity={quantity}
-                        out={out}
-                        cover={cover}
-                        busy={busy}
-                        photosAvailable={photosAvailable}
-                        currency={currency}
-                        styles={styles}
-                        onPhoto={() => setPhotoProduct(product)}
-                        onSell={() => {
-                          void run(async () => {
-                            if (!businessId) return;
-                            const receipt = await recordSale(businessId, {
-                              discount_amount: "0.00",
-                              lines: [{ product_id: product.id, quantity: "1.000", discount_amount: "0.00" }],
-                              payments: [{ amount: product.effective_normal_price ?? "0.00", method: "CASH" }],
-                            });
-                            await refresh();
-                            setNotice({ message: `Sold one ${product.name} - ${receipt.sale.receipt_number} for ${formatMoney(receipt.sale.total_amount, currency)}`, tone: "good" });
-                          });
-                        }}
-                        onTogglePublish={() => {
-                          void runShop(async () => {
-                            if (!businessId) return;
-                            const wasPublished = product.is_published;
-                            setProducts((current) => current.map((c) => c.id === product.id ? { ...c, is_published: !wasPublished } : c));
-                            try {
-                              if (wasPublished) { await unpublishProduct(businessId, product.id); }
-                              else { await publishProduct(businessId, product.id); }
-                            } catch (error) {
-                              setProducts((current) => current.map((c) => c.id === product.id ? { ...c, is_published: wasPublished } : c));
-                              throw error;
-                            }
-                            await refresh();
-                            setNotice({ message: product.is_published ? `${product.name} is hidden from the shop.` : `${product.name} is now in your shop.`, tone: "good" });
-                          });
-                        }}
-                      />;
-                    })}
-                  </ul>
-                ) : (
-                  /* Grouped view - categories as headings, products nested beneath */
-                  <div className={styles.shelfGrouped}>
-                    {shelfGroups.map((group) => (
-                      <div key={group.categoryId ?? "__none__"} className={styles.shelfGroup}>
-                        <h3
-                          className={styles.shelfGroupHeading}
-                          style={{ paddingLeft: `${group.depth * 12}px` }}
-                        >
-                          {group.label}
-                          <span className={styles.shelfGroupCount}>{group.items.length}</span>
-                        </h3>
-                        <ul className={styles.shelf}>
-                          {group.items.map((product) => {
-                            const level = levelFor(product.id);
-                            const quantity = Number(level?.available_quantity ?? "0");
-                            const out = level?.is_out_of_stock ?? false;
-                            const cover = coverPhoto(photos[product.id]);
-                            return <ShelfRow
-                              key={product.id}
-                              product={product}
-                              level={level}
-                              quantity={quantity}
-                              out={out}
-                              cover={cover}
-                              busy={busy}
-                              photosAvailable={photosAvailable}
-                              currency={currency}
-                              styles={styles}
-                              onPhoto={() => setPhotoProduct(product)}
-                              onSell={() => {
-                                void run(async () => {
-                                  if (!businessId) return;
-                                  const receipt = await recordSale(businessId, {
-                                    discount_amount: "0.00",
-                                    lines: [{ product_id: product.id, quantity: "1.000", discount_amount: "0.00" }],
-                                    payments: [{ amount: product.effective_normal_price ?? "0.00", method: "CASH" }],
-                                  });
-                                  await refresh();
-                                  setNotice({ message: `Sold one ${product.name} - ${receipt.sale.receipt_number} for ${formatMoney(receipt.sale.total_amount, currency)}`, tone: "good" });
-                                });
-                              }}
-                              onTogglePublish={() => {
-                                void runShop(async () => {
-                                  if (!businessId) return;
-                                  const wasPublished = product.is_published;
-                                  setProducts((current) => current.map((c) => c.id === product.id ? { ...c, is_published: !wasPublished } : c));
-                                  try {
-                                    if (wasPublished) { await unpublishProduct(businessId, product.id); }
-                                    else { await publishProduct(businessId, product.id); }
-                                  } catch (error) {
-                                    setProducts((current) => current.map((c) => c.id === product.id ? { ...c, is_published: wasPublished } : c));
-                                    throw error;
-                                  }
-                                  await refresh();
-                                  setNotice({ message: product.is_published ? `${product.name} is hidden from the shop.` : `${product.name} is now in your shop.`, tone: "good" });
-                                });
-                              }}
-                            />;
-                          })}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </Card>
+        {/* Quick Actions Bar */}
+        <section className={styles.actions} style={{ marginBottom: "20px" }}>
+          <ActionTile
+            label="Record a sale"
+            hint="Money in"
+            glyph="sale"
+            onClick={() => setSheet("sale")}
+            disabled={!businessId || products.length === 0}
+          />
+          <ActionTile
+            label="Add a product"
+            hint="New line on the shelf"
+            glyph="product"
+            onClick={() => setSheet("product")}
+            disabled={!businessId}
+          />
+          <ActionTile
+            label="Stock in"
+            hint="Goods received"
+            glyph="stock"
+            onClick={() => setSheet("stock")}
+            disabled={!businessId || products.length === 0}
+          />
+          {isOwnerOrManager ? (
+            <ActionTile
+              label="Record spending"
+              hint="Money out"
+              glyph="expense"
+              onClick={() => setSheet("expense")}
+              disabled={!businessId}
+            />
+          ) : null}
+        </section>
 
+        <div className={styles.columns}>
+          {/* Left Column: Recent Sales & Online Storefront */}
           <div className={styles.sideColumn}>
-            <Card title="Recent sales">
+            <Card
+              title="Recent sales"
+              action={
+                <button className={styles.linkButton} onClick={() => setSheet("sale")}>
+                  + Record Sale
+                </button>
+              }
+            >
               {recentSales.length === 0 ? (
                 <Empty
                   illustration={<EmptySalesIllustration size={90} />}
@@ -853,14 +750,25 @@ export default function Dashboard() {
                           className={styles.rowName}
                           style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
                         >
-                          <SaleIcon size={15} style={{ color: "var(--leaf)", flexShrink: 0 }} />
-                          <span>{sale.receipt_number}</span>
+                          <ReceiptIcon size={16} style={{ color: "var(--leaf)", flexShrink: 0 }} />
+                          <span>{getSaleDisplayTitle(sale, user, members, customerLists)}</span>
                         </span>
-                        <span className={styles.rowMeta}>{sale.payment_status}</span>
+                        <span className={styles.rowMeta}>
+                          {sale.receipt_number} &bull; {((sale as unknown as { payment_method?: string }).payment_method ?? sale.payment_status).toUpperCase()}
+                        </span>
                       </div>
-                      <span className={`${styles.amount} tabular`}>
-                        {formatMoney(sale.total_amount, currency)}
-                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <span className={`${styles.amount} tabular`}>
+                          {formatMoney(sale.total_amount, currency)}
+                        </span>
+                        <button
+                          type="button"
+                          className={styles.auditBtn}
+                          onClick={() => setSelectedSaleAudit(sale)}
+                        >
+                          Audit &amp; Blame &rsaquo;
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -944,58 +852,400 @@ export default function Dashboard() {
                 </>
               )}
             </Card>
+          </div>
 
-            <Card title="Running out">
-              {runningOut.length === 0 ? (
-                <Empty>Everything is stocked.</Empty>
-              ) : (
-                <ul className={styles.list}>
-                  {runningOut.map((entry) => (
-                    <li key={entry.product_id} className={styles.row}>
-                      <span className={styles.rowName}>{entry.product_name}</span>
-                      <Pill tone={entry.is_out_of_stock ? "bad" : "warn"}>
-                        {formatQuantity(entry.quantity_on_hand)} left
-                      </Pill>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
+          {/* Right Column: Stock & Inventory Health */}
+          <Card
+            title="Stock & Inventory Health"
+            action={
+              <button className={styles.linkButton} onClick={() => setSheet("product")}>
+                + Add product
+              </button>
+            }
+          >
+            {!businessId ? (
+              <Empty>
+                Name your business first -{" "}
+                <button className={styles.linkButton} onClick={() => setSheet("business")}>
+                  choose a name
+                </button>
+                .
+              </Empty>
+            ) : shelfState === "loading" ? (
+              <Loading label="Fetching your shelf..." />
+            ) : products.length === 0 ? (
+              <Empty
+                illustration={<EmptyShelfIllustration size={100} />}
+                action={
+                  <button className={styles.linkButton} onClick={() => setSheet("product")}>
+                    + Add First Product
+                  </button>
+                }
+              >
+                No products yet. Add the first thing you sell.
+              </Empty>
+            ) : (
+              <div>
+                {/* 3 Metric Summary Pills */}
+                <div className={styles.stockHealthStats}>
+                  <div className={styles.stockHealthStat}>
+                    <div className={styles.stockHealthVal}>{products.length}</div>
+                    <div className={styles.stockHealthLabel}>On Shelf</div>
+                  </div>
+                  <div className={styles.stockHealthStat}>
+                    <div
+                      className={styles.stockHealthVal}
+                      style={{ color: runningOut.length > 0 ? "var(--clay)" : "var(--ink)" }}
+                    >
+                      {runningOut.length}
+                    </div>
+                    <div className={styles.stockHealthLabel}>Low Stock</div>
+                  </div>
+                  <div className={styles.stockHealthStat}>
+                    <div
+                      className={styles.stockHealthVal}
+                      style={{
+                        color:
+                          stock.filter((e) => e.is_out_of_stock).length > 0
+                            ? "var(--danger)"
+                            : "var(--ink)",
+                      }}
+                    >
+                      {stock.filter((e) => e.is_out_of_stock).length}
+                    </div>
+                    <div className={styles.stockHealthLabel}>Out of Stock</div>
+                  </div>
+                </div>
+
+                {/* Urgent Low Stock Alert Card */}
+                {runningOut.length > 0 && (
+                  <div className={styles.urgentAlertCard}>
+                    <div className={styles.urgentAlertHeader}>
+                      <span>Restock Urgently ({runningOut.length} items low)</span>
+                      <button
+                        type="button"
+                        className={styles.linkButton}
+                        style={{ fontSize: "11px", color: "var(--clay)" }}
+                        onClick={() => setSheet("stock")}
+                      >
+                        + Receive stock
+                      </button>
+                    </div>
+                    <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "6px" }}>
+                      {runningOut.slice(0, 4).map((item) => (
+                        <li key={item.product_id} style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
+                          <span style={{ fontWeight: 600, color: "var(--ink)" }}>{item.product_name}</span>
+                          <span style={{ color: "var(--clay)", fontWeight: 700 }}>
+                            {formatQuantity(item.quantity_on_hand)} left
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Instant Stock Search */}
+                <div className={styles.shelfFilterWrap}>
+                  <SearchIcon size={16} className={styles.shelfFilterIcon} />
+                  <input
+                    className={styles.shelfFilterInput}
+                    type="search"
+                    value={shelfQuery}
+                    onChange={(e) => setShelfQuery(e.target.value)}
+                    placeholder="Search price & stock of any item..."
+                    aria-label="Filter shelf items"
+                  />
+                  {shelfQuery ? (
+                    <button
+                      className={styles.shelfFilterClear}
+                      onClick={() => setShelfQuery("")}
+                      aria-label="Clear filter"
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
+
+                {shelfQuery.trim() ? (
+                  filteredShelf.length === 0 ? (
+                    <p className={styles.shelfEmptySearch}>
+                      No stock matches &ldquo;{shelfQuery}&rdquo;.
+                    </p>
+                  ) : (
+                    <ul className={styles.shelf} style={{ maxHeight: "320px", overflowY: "auto" }}>
+                      {filteredShelf.slice(0, 10).map((product) => {
+                        const level = levelFor(product.id);
+                        const quantity = Number(level?.available_quantity ?? "0");
+                        const out = level?.is_out_of_stock ?? false;
+                        const cover = coverPhoto(photos[product.id]);
+                        return (
+                          <ShelfRow
+                            key={product.id}
+                            product={product}
+                            level={level}
+                            quantity={quantity}
+                            out={out}
+                            cover={cover}
+                            busy={busy}
+                            photosAvailable={photosAvailable}
+                            currency={currency}
+                            styles={styles}
+                            onPhoto={() => setPhotoProduct(product)}
+                            onSell={() => {
+                              void run(async () => {
+                                if (!businessId) return;
+                                const receipt = await recordSale(businessId, {
+                                  discount_amount: "0.00",
+                                  lines: [
+                                    {
+                                      product_id: product.id,
+                                      quantity: "1.000",
+                                      discount_amount: "0.00",
+                                    },
+                                  ],
+                                  payments: [
+                                    {
+                                      amount: product.effective_normal_price ?? "0.00",
+                                      method: "CASH",
+                                    },
+                                  ],
+                                });
+                                await refresh();
+                                setNotice({
+                                  message: `Sold one ${product.name} - ${receipt.sale.receipt_number} for ${formatMoney(receipt.sale.total_amount, currency)}`,
+                                  tone: "good",
+                                });
+                              });
+                            }}
+                            onTogglePublish={() => {
+                              void runShop(async () => {
+                                if (!businessId) return;
+                                const wasPublished = product.is_published;
+                                setProducts((current) =>
+                                  current.map((c) =>
+                                    c.id === product.id ? { ...c, is_published: !wasPublished } : c,
+                                  ),
+                                );
+                                try {
+                                  if (wasPublished) {
+                                    await unpublishProduct(businessId, product.id);
+                                  } else {
+                                    await publishProduct(businessId, product.id);
+                                  }
+                                } catch (error) {
+                                  setProducts((current) =>
+                                    current.map((c) =>
+                                      c.id === product.id ? { ...c, is_published: wasPublished } : c,
+                                    ),
+                                  );
+                                  throw error;
+                                }
+                                await refresh();
+                                setNotice({
+                                  message: product.is_published
+                                    ? `${product.name} is hidden from the shop.`
+                                    : `${product.name} is now in your shop.`,
+                                  tone: "good",
+                                });
+                              });
+                            }}
+                          />
+                        );
+                      })}
+                    </ul>
+                  )
+                ) : (
+                  <div>
+                    <p className={styles.hint} style={{ marginBottom: "12px" }}>
+                      Manage products, categories, wholesale/retail dual pricing, and stock in the full catalog.
+                    </p>
+                  </div>
+                )}
+
+                {/* Direct Link to Full Catalog */}
+                <Link href="/app/items" className={styles.fullCatalogBtn}>
+                  <BoxIcon size={16} />
+                  <span>Manage Full Shelf &amp; Catalog &rsaquo;</span>
+                </Link>
+              </div>
+            )}
+          </Card>
+        </div>
+      </div>
+
+      {/* Sale Audit & Blame Modal */}
+      {selectedSaleAudit ? (
+        <div className={styles.modalOverlay} onClick={() => setSelectedSaleAudit(null)}>
+          <div className={styles.modalBox} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div>
+                <h3 className={styles.modalTitle}>Sale Audit &amp; Blame</h3>
+                <div className={styles.modalSubtitle}>Receipt #{selectedSaleAudit.receipt_number}</div>
+              </div>
+              <button
+                type="button"
+                className={styles.closeCircleBtn}
+                onClick={() => setSelectedSaleAudit(null)}
+                aria-label="Close"
+              >
+                <CloseIcon size={16} />
+              </button>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "14px 16px",
+                background: "var(--sand-2)",
+                borderRadius: "12px",
+                border: "1px solid var(--line)",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    color: "var(--ink-2)",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  TRANSACTION TOTAL
+                </div>
+                <div
+                  style={{
+                    fontSize: "22px",
+                    fontWeight: 800,
+                    color: selectedSaleAudit.cancelled_at ? "var(--danger)" : "var(--leaf)",
+                    marginTop: "2px",
+                  }}
+                >
+                  {formatMoney(selectedSaleAudit.total_amount, currency)}
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--ink-2)", marginTop: "2px" }}>
+                  {new Date(selectedSaleAudit.occurred_at).toLocaleString([], {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <span
+                  style={{
+                    display: "inline-block",
+                    padding: "3px 8px",
+                    borderRadius: "999px",
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    background: selectedSaleAudit.cancelled_at
+                      ? "var(--danger-soft)"
+                      : "var(--leaf-soft)",
+                    color: selectedSaleAudit.cancelled_at ? "var(--danger)" : "var(--leaf)",
+                    marginBottom: "4px",
+                  }}
+                >
+                  {selectedSaleAudit.cancelled_at
+                    ? "RETURNED / VOIDED"
+                    : selectedSaleAudit.payment_status.toUpperCase()}
+                </span>
+                <div style={{ fontSize: "11px", color: "var(--ink-2)", fontWeight: 600 }}>
+                  via {((selectedSaleAudit as unknown as { payment_method?: string }).payment_method ?? selectedSaleAudit.payment_status).toUpperCase()}
+                </div>
+              </div>
+            </div>
+
+            {/* Git-Style Blame Box */}
+            <div className={styles.blameCard}>
+              <div
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  color: "var(--ink-2)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                }}
+              >
+                COMMIT AUTHOR &amp; BLAME
+              </div>
+              <div className={styles.blameRow}>
+                <span className={styles.blameLabel}>Seller / Recorded By:</span>
+                <span className={styles.blameValue}>
+                  {(() => {
+                    const isSelf = user && selectedSaleAudit.seller_id === user.id;
+                    const m = members.find((x) => x.user_id === selectedSaleAudit.seller_id);
+                    if (isSelf) {
+                      return (
+                        [user?.first_name, user?.last_name].filter(Boolean).join(" ") ||
+                        "You (Account Owner)"
+                      );
+                    }
+                    if (m) {
+                      return m.full_name || m.role_name || "Stall Staff";
+                    }
+                    return selectedSaleAudit.seller_id
+                      ? `Staff (${selectedSaleAudit.seller_id.slice(0, 8)})`
+                      : "Counter Checkout";
+                  })()}
+                </span>
+              </div>
+              <div className={styles.blameRow}>
+                <span className={styles.blameLabel}>Role / Permission:</span>
+                <span className={styles.blameValue}>
+                  {(() => {
+                    const isSelf = user && selectedSaleAudit.seller_id === user.id;
+                    const m = members.find((x) => x.user_id === selectedSaleAudit.seller_id);
+                    if (isSelf) return "Owner / Trader Admin";
+                    return m?.role_name || "Sales Representative";
+                  })()}
+                </span>
+              </div>
+              <div className={styles.blameRow}>
+                <span className={styles.blameLabel}>Seller ID:</span>
+                <span
+                  className={styles.blameValue}
+                  style={{ fontFamily: "monospace", fontSize: "11px" }}
+                >
+                  {selectedSaleAudit.seller_id || "system"}
+                </span>
+              </div>
+              <div className={styles.blameRow}>
+                <span className={styles.blameLabel}>Origin Channel:</span>
+                <span className={styles.blameValue}>
+                  {(() => {
+                    const linked = customerLists.find(
+                      (l) =>
+                        l.id === selectedSaleAudit.customer_id ||
+                        selectedSaleAudit.receipt_number.includes(l.id.slice(0, 8)) ||
+                        (selectedSaleAudit.receipt_number.startsWith("PAY-") &&
+                          selectedSaleAudit.receipt_number
+                            .slice(4)
+                            .startsWith(l.id.slice(0, 8))),
+                    );
+                    if (linked) {
+                      return `Customer Order (${linked.customer_phone || linked.customer_name || "Online Request"})`;
+                    }
+                    return "In-Stall POS Direct Sale";
+                  })()}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className={styles.fullCatalogBtn}
+              onClick={() => setSelectedSaleAudit(null)}
+              style={{ marginTop: "4px" }}
+            >
+              Done &amp; Close Audit
+            </button>
           </div>
         </div>
-        <section className={styles.actions}>
-          <ActionTile
-            label="Record a sale"
-            hint="Money in"
-            glyph="sale"
-            onClick={() => setSheet("sale")}
-            disabled={!businessId || products.length === 0}
-          />
-          <ActionTile
-            label="Add a product"
-            hint="New line on the shelf"
-            glyph="product"
-            onClick={() => setSheet("product")}
-            disabled={!businessId}
-          />
-          <ActionTile
-            label="Stock in"
-            hint="Goods received"
-            glyph="stock"
-            onClick={() => setSheet("stock")}
-            disabled={!businessId || products.length === 0}
-          />
-          {isOwnerOrManager ? (
-            <ActionTile
-              label="Record spending"
-              hint="Money out"
-              glyph="expense"
-              onClick={() => setSheet("expense")}
-              disabled={!businessId}
-            />
-          ) : null}
-        </section>
-      </div>
+      ) : null}
 
       <SaleSheet
         open={sheet === "sale"}

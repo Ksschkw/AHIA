@@ -91,17 +91,17 @@ export function AppShell({
     return () => window.removeEventListener("ahia:inflight", listener);
   }, []);
 
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const saved = window.localStorage.getItem("ahia.theme");
-    if (saved === "dark") {
-      setTheme("dark");
-      document.documentElement.setAttribute("data-theme", "dark");
-    } else {
+    if (saved === "light") {
       setTheme("light");
       document.documentElement.setAttribute("data-theme", "light");
+    } else {
+      setTheme("dark");
+      document.documentElement.setAttribute("data-theme", "dark");
     }
   }, []);
 

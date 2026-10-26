@@ -146,12 +146,12 @@ export function SalesTimelineChart({
   return (
     <section
       style={{
-        background: "var(--paper, #ffffff)",
-        border: "1px solid var(--border, #e5e7eb)",
+        background: "var(--card, #1e2620)",
+        border: "1px solid var(--line, #2d3830)",
         borderRadius: "16px",
         padding: "20px",
         marginBottom: "20px",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+        boxShadow: "var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.2))",
       }}
     >
       {/* Top Header */}
@@ -170,7 +170,7 @@ export function SalesTimelineChart({
             style={{
               fontSize: "17px",
               fontWeight: 700,
-              color: "var(--ink, #111827)",
+              color: "var(--ink, #f0ede6)",
               margin: 0,
               letterSpacing: "-0.01em",
             }}
@@ -180,7 +180,7 @@ export function SalesTimelineChart({
           <p
             style={{
               fontSize: "12px",
-              color: "var(--ink-secondary, #6b7280)",
+              color: "var(--ink-2, #a8a092)",
               margin: "3px 0 0 0",
             }}
           >
@@ -202,9 +202,9 @@ export function SalesTimelineChart({
                 fontWeight: periodDays === p ? 700 : 500,
                 cursor: "pointer",
                 border: "1px solid",
-                borderColor: periodDays === p ? "var(--leaf, #238636)" : "var(--border, #e5e7eb)",
-                background: periodDays === p ? "var(--leaf, #238636)" : "transparent",
-                color: periodDays === p ? "#ffffff" : "var(--ink, #374151)",
+                borderColor: periodDays === p ? "var(--leaf, #1aa36a)" : "var(--line, #2d3830)",
+                background: periodDays === p ? "var(--leaf, #1aa36a)" : "var(--sand-2, #1a211c)",
+                color: periodDays === p ? "#ffffff" : "var(--ink, #f0ede6)",
                 transition: "all 0.15s ease",
               }}
             >
@@ -220,45 +220,45 @@ export function SalesTimelineChart({
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
           gap: "10px",
-          background: "var(--wash, #f9fafb)",
-          border: "1px solid var(--border, #e5e7eb)",
+          background: "var(--sand-2, #1a211c)",
+          border: "1px solid var(--line, #2d3830)",
           borderRadius: "12px",
           padding: "12px 16px",
           marginBottom: "20px",
         }}
       >
         <div>
-          <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--ink-secondary, #6b7280)", textTransform: "uppercase" }}>
+          <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--ink-2, #a8a092)", textTransform: "uppercase" }}>
             Total Revenue
           </div>
-          <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--ink, #111827)", marginTop: "2px" }}>
+          <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--ink, #f0ede6)", marginTop: "2px" }}>
             {formatCompact(aggregateMetrics.totalRev, currency)}
           </div>
         </div>
 
         <div>
-          <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--ink-secondary, #6b7280)", textTransform: "uppercase" }}>
+          <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--ink-2, #a8a092)", textTransform: "uppercase" }}>
             Est. Net Profit
           </div>
-          <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--leaf, #238636)", marginTop: "2px" }}>
+          <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--leaf, #1aa36a)", marginTop: "2px" }}>
             {formatCompact(aggregateMetrics.totalProfit, currency)}
           </div>
         </div>
 
         <div>
-          <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--ink-secondary, #6b7280)", textTransform: "uppercase" }}>
+          <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--ink-2, #a8a092)", textTransform: "uppercase" }}>
             Completed Sales
           </div>
-          <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--ink, #111827)", marginTop: "2px" }}>
+          <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--ink, #f0ede6)", marginTop: "2px" }}>
             {aggregateMetrics.totalSales} transactions
           </div>
         </div>
 
         <div>
-          <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--ink-secondary, #6b7280)", textTransform: "uppercase" }}>
+          <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--ink-2, #a8a092)", textTransform: "uppercase" }}>
             Daily Average
           </div>
-          <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--ink, #111827)", marginTop: "2px" }}>
+          <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--ink, #f0ede6)", marginTop: "2px" }}>
             {formatCompact(aggregateMetrics.avgDailyRev, currency)}
           </div>
         </div>
@@ -273,7 +273,7 @@ export function SalesTimelineChart({
           gap: periodDays === 30 ? "4px" : "10px",
           height: "150px",
           padding: "10px 4px 0 4px",
-          borderBottom: "1px solid var(--border, #e5e7eb)",
+          borderBottom: "1px solid var(--line, #2d3830)",
           overflowX: "auto",
         }}
       >
@@ -305,7 +305,7 @@ export function SalesTimelineChart({
                 cursor: "pointer",
                 padding: "2px",
                 borderRadius: "6px",
-                background: isSelected ? "rgba(35, 134, 54, 0.08)" : "transparent",
+                background: isSelected ? "var(--leaf-soft)" : "transparent",
                 transition: "background 0.15s ease",
               }}
             >
@@ -314,13 +314,14 @@ export function SalesTimelineChart({
                 style={{
                   width: periodDays === 30 ? "10px" : "18px",
                   height: "105px",
-                  background: "var(--wash, #f3f4f6)",
+                  background: "var(--sand-2, #1a211c)",
                   borderRadius: "6px",
                   overflow: "hidden",
                   display: "flex",
                   flexDirection: "column",
                   justifyContent: "flex-end",
                   position: "relative",
+                  border: "1px solid var(--line, #2d3830)",
                 }}
               >
                 {day.revenue > 0 ? (
@@ -328,8 +329,8 @@ export function SalesTimelineChart({
                     style={{
                       width: "100%",
                       height: `${revHeight}%`,
-                      background: "var(--leaf, #238636)",
-                      borderRadius: "6px",
+                      background: "var(--leaf, #1aa36a)",
+                      borderRadius: "5px",
                       position: "relative",
                       display: "flex",
                       flexDirection: "column",
@@ -341,7 +342,7 @@ export function SalesTimelineChart({
                       style={{
                         width: "100%",
                         height: `${(profitHeight / revHeight) * 100}%`,
-                        background: "#3fb950",
+                        background: "#34d399",
                         borderTopLeftRadius: "4px",
                         borderTopRightRadius: "4px",
                       }}
@@ -352,7 +353,7 @@ export function SalesTimelineChart({
                     style={{
                       height: "3px",
                       width: "100%",
-                      background: "var(--border, #cbd5e1)",
+                      background: "var(--line-strong, #3e4d42)",
                     }}
                   />
                 )}
@@ -363,7 +364,7 @@ export function SalesTimelineChart({
                 style={{
                   fontSize: periodDays === 30 ? "9px" : "11px",
                   fontWeight: day.isToday ? 700 : 500,
-                  color: day.isToday ? "var(--leaf, #238636)" : "var(--ink-secondary, #6b7280)",
+                  color: day.isToday ? "var(--leaf, #1aa36a)" : "var(--ink-2, #a8a092)",
                   marginTop: "6px",
                   whiteSpace: "nowrap",
                 }}
@@ -382,8 +383,8 @@ export function SalesTimelineChart({
             marginTop: "16px",
             padding: "12px 16px",
             borderRadius: "12px",
-            background: "var(--wash, #f9fafb)",
-            border: "1px solid var(--border, #e5e7eb)",
+            background: "var(--sand-2, #1a211c)",
+            border: "1px solid var(--line, #2d3830)",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
@@ -392,32 +393,32 @@ export function SalesTimelineChart({
           }}
         >
           <div>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--ink, #111827)" }}>
+            <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--ink, #f0ede6)" }}>
               {activeDay.fullDate} {activeDay.isToday ? "(Today)" : ""}
             </div>
-            <div style={{ fontSize: "12px", color: "var(--ink-secondary, #6b7280)", marginTop: "2px" }}>
+            <div style={{ fontSize: "12px", color: "var(--ink-2, #a8a092)", marginTop: "2px" }}>
               {activeDay.saleCount} completed sales
             </div>
           </div>
 
           <div style={{ display: "flex", gap: "24px" }}>
             <div>
-              <div style={{ fontSize: "11px", color: "var(--ink-secondary, #6b7280)", fontWeight: 600 }}>REVENUE</div>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--ink, #111827)" }}>
+              <div style={{ fontSize: "11px", color: "var(--ink-2, #a8a092)", fontWeight: 600 }}>REVENUE</div>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--ink, #f0ede6)" }}>
                 {formatMoney(activeDay.revenue.toFixed(2), currency)}
               </div>
             </div>
 
             <div>
-              <div style={{ fontSize: "11px", color: "var(--ink-secondary, #6b7280)", fontWeight: 600 }}>EST. PROFIT</div>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--leaf, #238636)" }}>
+              <div style={{ fontSize: "11px", color: "var(--ink-2, #a8a092)", fontWeight: 600 }}>EST. PROFIT</div>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--leaf, #1aa36a)" }}>
                 {formatMoney(activeDay.profit.toFixed(2), currency)}
               </div>
             </div>
 
             <div>
-              <div style={{ fontSize: "11px", color: "var(--ink-secondary, #6b7280)", fontWeight: 600 }}>MARGIN</div>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--ink, #111827)" }}>
+              <div style={{ fontSize: "11px", color: "var(--ink-2, #a8a092)", fontWeight: 600 }}>MARGIN</div>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--ink, #f0ede6)" }}>
                 {activeDay.revenue > 0 ? `${Math.round(marginRatio * 100)}%` : "0%"}
               </div>
             </div>

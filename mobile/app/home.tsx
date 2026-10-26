@@ -781,10 +781,13 @@ export default function Home() {
     return null;
   }, [pricingLine, customerLists, products, categories]);
 
-  // Section collapse state for grouped lists
+  // Section collapse state for grouped lists (collapsed by default unless tapped)
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const toggleSectionCollapse = (key: string) => {
-    setCollapsedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+    setCollapsedSections((prev) => ({
+      ...prev,
+      [key]: prev[key] === false ? true : false,
+    }));
   };
 
   // Official Invoice modal state
@@ -853,7 +856,7 @@ export default function Home() {
   // Collapsible list cards & payment history
   const [expandedListIds, setExpandedListIds] = useState<Set<string>>(() => new Set());
   const [expandedPaymentListIds, setExpandedPaymentListIds] = useState<Set<string>>(() => new Set());
-  const [showTimelineChart, setShowTimelineChart] = useState(false);
+  const [showTimelineChart, setShowTimelineChart] = useState(true);
 
   // Sale Audit & Blame state
   const [selectedSaleAudit, setSelectedSaleAudit] = useState<SaleSummary | null>(null);
@@ -951,7 +954,7 @@ export default function Home() {
   const [activeSubView, setActiveSubView] = useState<"team" | null>(null);
   const [unreadCount, setUnreadCount] = useState<number>(0);
 
-  const [themeMode, setThemeMode] = useState<ThemeMode>("light");
+  const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const theme = useMemo(() => getTheme(themeMode), [themeMode]);
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -4062,10 +4065,10 @@ export default function Home() {
                         </Pressable>
                       </View>
 
-                  {/* Hierarchical Groupings with Collapsible Sections */}
+                  {/* Hierarchical Groupings with Collapsible Sections (Collapsed by default) */}
                   {sections.map((sec, idx) => {
                     const sectionKey = `${item.id}_${sec.root}`;
-                    const isCollapsed = Boolean(collapsedSections[sectionKey]);
+                    const isCollapsed = collapsedSections[sectionKey] !== false;
                     const secItemCount = sec.subs.reduce((acc, s) => acc + s.lines.length, 0);
 
                     return (
@@ -4090,7 +4093,7 @@ export default function Home() {
 
                         {!isCollapsed && sec.subs.map((sub, sIdx) => {
                           const subKey = `${item.id}_${sec.root}_${sub.sub ?? "__direct__"}`;
-                          const isSubCollapsed = sub.sub ? Boolean(collapsedSections[subKey]) : false;
+                          const isSubCollapsed = sub.sub ? (collapsedSections[subKey] !== false) : false;
 
                           return (
                             <View key={sIdx} style={styles.subSectionBox}>
@@ -5294,7 +5297,7 @@ export default function Home() {
                       themeMode === "light" && styles.themeToggleBtnTextActive,
                     ]}
                   >
-                    Light Ivory (Default)
+                    Light Ivory
                   </Text>
                 </Pressable>
                 <Pressable
@@ -5310,7 +5313,7 @@ export default function Home() {
                       themeMode === "dark" && styles.themeToggleBtnTextActive,
                     ]}
                   >
-                    Dark Theme
+                    Dark Theme (Default)
                   </Text>
                 </Pressable>
               </View>

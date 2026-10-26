@@ -435,7 +435,10 @@ export default function ListsPage() {
   }, [lists, deletedListIds, listFilterTab, workedSubFilter, isListWorked]);
 
   const toggleSectionCollapse = (key: string) => {
-    setCollapsedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+    setCollapsedSections((prev) => ({
+      ...prev,
+      [key]: prev[key] === false ? true : false,
+    }));
   };
 
   const handleCycleLineState = async (listId: string, lineId: string, currentState: ListLineState) => {
@@ -1079,10 +1082,10 @@ export default function ListsPage() {
                   </button>
                 </div>
 
-                {/* Hierarchical Collapsible Category Sections */}
+                {/* Hierarchical Collapsible Category Sections (Collapsed by default) */}
                 {sections.map((sec, idx) => {
                   const sectionKey = `${item.id}_${sec.root}`;
-                  const isCollapsed = Boolean(collapsedSections[sectionKey]);
+                  const isCollapsed = collapsedSections[sectionKey] !== false;
                   const secItemCount = sec.subs.reduce((acc, s) => acc + s.lines.length, 0);
 
                   return (
@@ -1113,7 +1116,7 @@ export default function ListsPage() {
                       {!isCollapsed &&
                         sec.subs.map((sub, sIdx) => {
                           const subKey = `${item.id}_${sec.root}_${sub.sub ?? "__direct__"}`;
-                          const isSubCollapsed = sub.sub ? Boolean(collapsedSections[subKey]) : false;
+                          const isSubCollapsed = sub.sub ? (collapsedSections[subKey] !== false) : false;
 
                           return (
                             <div key={sIdx} className={styles.subSectionBox}>

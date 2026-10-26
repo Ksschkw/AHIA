@@ -82,10 +82,10 @@ const THEME_KEY = "ahia.mobile_theme";
 export async function getSavedThemeMode(): Promise<ThemeMode> {
   try {
     const saved = await SecureStore.getItemAsync(THEME_KEY);
-    if (saved === "dark") return "dark";
-    return "light";
+    if (saved === "light") return "light";
+    return "dark";
   } catch {
-    return "light";
+    return "dark";
   }
 }
 

@@ -125,7 +125,7 @@ export default function MorePage() {
   const [myInvitations, setMyInvitations] = useState<PendingInvitation[]>([]);
   const [storefront, setStorefront] = useState<Storefront | null>(null);
   const [hasPin, setHasPin] = useState(false);
-  const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
+  const [themeMode, setThemeMode] = useState<"light" | "dark">("dark");
   const [state, setState] = useState<"loading" | "ready">("loading");
   const [notice, setNotice] = useState<{ message: string; tone: "good" | "bad" } | null>(null);
 
@@ -230,7 +230,11 @@ export default function MorePage() {
     void loadData();
     if (typeof window !== "undefined") {
       const savedTheme = window.localStorage.getItem("ahia.theme");
-      if (savedTheme === "dark") setThemeMode("dark");
+      if (savedTheme === "light") {
+        setThemeMode("light");
+      } else {
+        setThemeMode("dark");
+      }
     }
   }, [loadData]);
 
