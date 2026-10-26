@@ -200,6 +200,7 @@ def test_response_serialisation_contains_no_credentials() -> None:
         "created_at",
         "updated_at",
         "last_login_at",
+        "avatar_url",
     }
 
 

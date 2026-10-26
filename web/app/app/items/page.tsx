@@ -31,6 +31,7 @@ import {
 } from "@/components/icons";
 import { EmptyShelfIllustration } from "@/components/illustrations";
 import { Empty, Field, Loading, Toast } from "@/components/ui";
+import { ImageUploadField } from "@/components/image-upload-field";
 import {
   cachedRead,
   firstPaint,
@@ -55,6 +56,7 @@ import {
   listProductImages,
   uploadProductImage,
   removeProductImage,
+  uploadTenantMedia,
   type Category,
   type InventoryLevel,
   type Product,
@@ -1084,13 +1086,18 @@ export default function Items() {
               optional
               onChange={setNewCatPiecesPerPack}
             />
-            <Field
-              label="Category Image URL (optional)"
-              id="new_category_image"
+            <ImageUploadField
+              label="Category Image / Icon"
               value={newCatImageUrl}
-              placeholder="https://... image link"
+              shape="square"
+              onChange={(url) => setNewCatImageUrl(url || "")}
+              onUpload={async (file) => {
+                if (!business) throw new Error("No stall selected.");
+                const res = await uploadTenantMedia(business.id, file, "category");
+                return res.delivery_url;
+              }}
+              hint="Optional category photo or thumbnail"
               optional
-              onChange={setNewCatImageUrl}
             />
           </div>
           <div className={styles.formActions}>
@@ -2139,13 +2146,18 @@ export default function Items() {
                 onChange={setEditCatPiecesPerPack}
               />
 
-              <Field
-                label="Category Image URL (optional)"
-                id="edit_category_image"
+              <ImageUploadField
+                label="Category Image / Icon"
                 value={editCatImageUrl}
-                placeholder="https://... image link"
+                shape="square"
+                onChange={(url) => setEditCatImageUrl(url || "")}
+                onUpload={async (file) => {
+                  if (!business) throw new Error("No stall selected.");
+                  const res = await uploadTenantMedia(business.id, file, "category");
+                  return res.delivery_url;
+                }}
+                hint="Optional category photo or thumbnail"
                 optional
-                onChange={setEditCatImageUrl}
               />
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "12px" }}>

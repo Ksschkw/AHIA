@@ -80,6 +80,7 @@ class UserModel:
     email_verified_at: datetime | None = None
     phone_verified_at: datetime | None = None
     last_login_at: datetime | None = None
+    avatar_url: str | None = None
 
     def __post_init__(self) -> None:
         _require_aware(self.created_at, field_name="created_at", user_id=self.id)
@@ -184,6 +185,7 @@ class UserModel:
         email: str | None = None,
         phone: str | None = None,
         password_hash: str | None = None,
+        avatar_url: str | None = None,
     ) -> UserModel:
         """Create a new user, normalizing the contact fields.
 
@@ -197,6 +199,7 @@ class UserModel:
             email=normalize_email(email),
             phone=normalize_phone(phone),
             password_hash=password_hash,
+            avatar_url=avatar_url.strip() if avatar_url else None,
             is_active=True,
             created_at=now,
             updated_at=now,
@@ -246,6 +249,7 @@ class UserModel:
         last_name: str | None = None,
         email: str | None = None,
         phone: str | None = None,
+        avatar_url: str | None = None,
         at: datetime,
     ) -> UserModel:
         """Return the user with profile fields changed.
@@ -255,12 +259,17 @@ class UserModel:
         expressed by changing the channel to another value, not by omission, so
         a request cannot silently remove the only way to reach an account.
         """
+        resolved_avatar = self.avatar_url
+        if avatar_url is not None:
+            resolved_avatar = avatar_url.strip() if avatar_url.strip() else None
+
         candidate = replace(
             self,
             first_name=first_name.strip() if first_name is not None else self.first_name,
             last_name=last_name.strip() if last_name is not None else self.last_name,
             email=normalize_email(email) if email is not None else self.email,
             phone=normalize_phone(phone) if phone is not None else self.phone,
+            avatar_url=resolved_avatar,
             updated_at=at,
         )
         return candidate

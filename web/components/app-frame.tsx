@@ -78,6 +78,13 @@ export function AppFrame({ children }: { children: ReactNode }) {
     router.replace("/start");
   }, [router]);
 
+  const avatarUrl =
+    user?.avatar_url ||
+    (typeof window !== "undefined" && user?.id
+      ? window.localStorage.getItem(`ahia.user_avatar.${user.id}`) ||
+        window.localStorage.getItem("ahia.user_avatar")
+      : null);
+
   return (
     <AppShell
       businesses={businesses.map((business) => ({
@@ -86,7 +93,8 @@ export function AppFrame({ children }: { children: ReactNode }) {
         role_name: business.role_name,
       }))}
       activeBusinessId={activeBusinessId}
-      personName={user ? `${user.first_name} ${user.last_name}` : ""}
+      personName={user ? `${user.first_name} ${user.last_name || ""}`.trim() : ""}
+      avatarUrl={avatarUrl}
       onSwitchBusiness={switchBusiness}
       onSignOut={handleSignOut}
     >

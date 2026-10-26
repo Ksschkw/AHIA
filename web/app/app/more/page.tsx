@@ -28,6 +28,7 @@ import {
   ReceiptIcon,
   ShopIcon,
 } from "@/components/icons";
+import { ImageUploadField } from "@/components/image-upload-field";
 import { Field, Loading, Pill, Select, Sheet, Toast } from "@/components/ui";
 import {
   acceptInvitation,
@@ -50,6 +51,8 @@ import {
   updateBusiness,
   updateProfile,
   updateStorefront,
+  uploadTenantMedia,
+  uploadUserAvatar,
   type Member,
   type MemberRole,
   type MembershipInvitation,
@@ -256,14 +259,15 @@ export default function MorePage() {
     if (!profile) return;
     setSavingProfile(true);
     try {
+      const trimmedAvatar = editAvatarUrl.trim();
       const updated = await updateProfile({
         first_name: editFirstName.trim(),
         last_name: editLastName.trim() || undefined,
         phone: editPhone.trim() || undefined,
         email: editEmail.trim() || undefined,
+        avatar_url: trimmedAvatar || null,
       });
 
-      const trimmedAvatar = editAvatarUrl.trim();
       if (typeof window !== "undefined") {
         if (trimmedAvatar) {
           window.localStorage.setItem(`ahia.user_avatar.${updated.id}`, trimmedAvatar);
@@ -976,12 +980,16 @@ export default function MorePage() {
         <Field label="Last Name" id="edit-last-name" value={editLastName} onChange={setEditLastName} optional />
         <Field label="Phone Number" id="edit-phone" value={editPhone} onChange={setEditPhone} optional />
         <Field label="Email Address" id="edit-email" value={editEmail} onChange={setEditEmail} optional />
-        <Field
-          label="Profile Avatar / Photo URL"
-          id="edit-avatar"
+        <ImageUploadField
+          label="Profile Avatar / Photo"
           value={editAvatarUrl}
-          onChange={setEditAvatarUrl}
-          hint="Direct web link to your avatar photo"
+          shape="circle"
+          onChange={(url) => setEditAvatarUrl(url || "")}
+          onUpload={async (file) => {
+            const updated = await uploadUserAvatar(file);
+            return updated.avatar_url || "";
+          }}
+          hint="Accepts any photo format; converted and stored securely"
           optional
         />
         <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
@@ -1004,7 +1012,19 @@ export default function MorePage() {
         <Field label="Stall Name" id="edit-biz-name" value={editBizName} onChange={setEditBizName} />
         <Field label="Physical Address" id="edit-biz-address" value={editBizAddress} onChange={setEditBizAddress} optional />
         <Field label="Contact Phone" id="edit-biz-phone" value={editBizPhone} onChange={setEditBizPhone} optional />
-        <Field label="Logo URL" id="edit-biz-logo" value={editBizLogo} onChange={setEditBizLogo} hint="URL to your business logo image" optional />
+        <ImageUploadField
+          label="Stall / Business Logo"
+          value={editBizLogo}
+          shape="square"
+          onChange={(url) => setEditBizLogo(url || "")}
+          onUpload={async (file) => {
+            if (!business) throw new Error("No business selected.");
+            const res = await uploadTenantMedia(business.id, file, "logo");
+            return res.delivery_url;
+          }}
+          hint="Accepts any image format; displayed on shop and receipts"
+          optional
+        />
         <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
           <button type="button" className={styles.secondaryBtn} onClick={() => setShowBusinessModal(false)}>
             Cancel

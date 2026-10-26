@@ -66,6 +66,7 @@ class UserProfileUpdateSchema(BaseModel):
     last_name: FamilyName | None = None
     email: EmailAddress | None = None
     phone: PhoneNumber | None = None
+    avatar_url: str | None = None
 
     def to_entity_changes(self) -> dict[str, str | None]:
         """Return the fields the caller actually sent.
@@ -99,6 +100,7 @@ class UserResponseSchema(BaseModel):
     created_at: datetime
     updated_at: datetime
     last_login_at: datetime | None
+    avatar_url: str | None = None
 
     @classmethod
     def from_entity(cls, user: UserModel) -> UserResponseSchema:
@@ -115,6 +117,7 @@ class UserResponseSchema(BaseModel):
             created_at=user.created_at,
             updated_at=user.updated_at,
             last_login_at=user.last_login_at,
+            avatar_url=user.avatar_url,
         )
 
 

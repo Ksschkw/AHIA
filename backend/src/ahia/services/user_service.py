@@ -37,7 +37,7 @@ _USER_SERVICE_LOGGER_NAME: Final[str] = "ahia.services.user"
 #: The profile fields a caller may change on their own account. An allowlist, so
 #: a new column cannot become externally writable by being added to the entity.
 _EDITABLE_PROFILE_FIELDS: Final[frozenset[str]] = frozenset(
-    {"first_name", "last_name", "email", "phone"}
+    {"first_name", "last_name", "email", "phone", "avatar_url"}
 )
 
 
@@ -126,6 +126,7 @@ class UserService:
                 last_name=changes.get("last_name"),
                 email=changes.get("email"),
                 phone=changes.get("phone"),
+                avatar_url=changes.get("avatar_url"),
                 at=datetime.now(UTC),
             )
             stored = await user_crud.update(session, updated)

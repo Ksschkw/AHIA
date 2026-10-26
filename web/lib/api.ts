@@ -482,11 +482,69 @@ export function updateProfile(changes: {
   last_name?: string;
   email?: string;
   phone?: string;
+  avatar_url?: string | null;
 }): Promise<UserProfile> {
   return request<UserProfile>("/api/v1/users/me", {
     method: "PATCH",
-    body: changes satisfies Schemas["UserProfileUpdateSchema"],
+    body: changes,
   });
+}
+
+export async function uploadUserAvatar(chosen: File | Blob): Promise<UserProfile> {
+  const fileToUpload = chosen instanceof File ? (await normaliseImage(chosen)).file : chosen;
+  const response = await fetch(`${API_BASE_URL}/api/v1/users/me/avatar`, {
+    method: "POST",
+    headers: { "Content-Type": fileToUpload.type || "image/webp" },
+    body: fileToUpload,
+    credentials: "include",
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: { message?: string }; detail?: string } | null;
+    throw new Error(payload?.error?.message || payload?.detail || "Could not upload profile avatar.");
+  }
+  const user = (await response.json()) as UserProfile;
+  if (typeof window !== "undefined" && user.avatar_url) {
+    window.localStorage.setItem(`ahia.user_avatar.${user.id}`, user.avatar_url);
+    window.localStorage.setItem("ahia.user_avatar", user.avatar_url);
+  }
+  signedInUser = user;
+  return user;
+}
+
+export async function deleteUserAvatar(): Promise<UserProfile> {
+  const user = await request<UserProfile>("/api/v1/users/me/avatar", {
+    method: "DELETE",
+  });
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(`ahia.user_avatar.${user.id}`);
+    window.localStorage.removeItem("ahia.user_avatar");
+  }
+  signedInUser = user;
+  return user;
+}
+
+export async function uploadTenantMedia(
+  tenantId: string,
+  chosen: File | Blob,
+  assetType: "logo" | "category" | "banner" | "general" = "general",
+): Promise<{ url: string; delivery_url: string; size_bytes: number; asset_type: string }> {
+  const fileToUpload = chosen instanceof File ? (await normaliseImage(chosen)).file : chosen;
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/tenants/${tenantId}/media/upload?asset_type=${encodeURIComponent(assetType)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": fileToUpload.type || "image/webp" },
+      body: fileToUpload,
+      credentials: "include",
+      signal: AbortSignal.timeout(60_000),
+    },
+  );
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: { message?: string }; detail?: string } | null;
+    throw new Error(payload?.error?.message || payload?.detail || "Could not upload image.");
+  }
+  return response.json();
 }
 
 export function changePassword(input: {

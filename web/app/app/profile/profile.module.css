@@ -69,6 +69,40 @@
   letter-spacing: 0.02em;
 }
 
+.avatarImg {
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 2px solid var(--border);
+}
+
+.avatarWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.changeAvatarBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.changeAvatarBtn:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
 .name {
   font-size: 22px;
   letter-spacing: -0.01em;

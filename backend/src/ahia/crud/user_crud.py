@@ -68,6 +68,7 @@ class UserRecord(Base):
         DateTime(timezone=True), nullable=True
     )
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -85,6 +86,7 @@ def to_entity(record: UserRecord) -> UserModel:
         email_verified_at=record.email_verified_at,
         phone_verified_at=record.phone_verified_at,
         last_login_at=record.last_login_at,
+        avatar_url=record.avatar_url,
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
@@ -101,6 +103,7 @@ def apply_entity(record: UserRecord, entity: UserModel) -> None:
     record.email_verified_at = entity.email_verified_at
     record.phone_verified_at = entity.phone_verified_at
     record.last_login_at = entity.last_login_at
+    record.avatar_url = entity.avatar_url
     record.created_at = entity.created_at
     record.updated_at = entity.updated_at
 

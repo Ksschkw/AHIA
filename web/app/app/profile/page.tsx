@@ -27,10 +27,13 @@ import {
   updateBusiness,
   updateProfile,
   updateStorefront,
+  uploadTenantMedia,
+  uploadUserAvatar,
   type Tenant,
   type TenantSummary,
   type UserProfile,
 } from "@/lib/api";
+import { ImageUploadField } from "@/components/image-upload-field";
 import { explainFailure, type Explained } from "@/lib/errors";
 import { formatMoney } from "@/lib/format";
 import {
@@ -98,6 +101,9 @@ export default function Profile() {
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
   const [isAppearanceExpanded, setIsAppearanceExpanded] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // Baseline appearance for dirty check
   const [initialAppearance, setInitialAppearance] = useState({
@@ -140,6 +146,13 @@ export default function Profile() {
       try {
         const [profile, found] = await Promise.all([currentUser(), listBusinesses()]);
         setUser(profile);
+        const effectiveAvatar =
+          profile.avatar_url ||
+          (typeof window !== "undefined"
+            ? window.localStorage.getItem(`ahia.user_avatar.${profile.id}`) ||
+              window.localStorage.getItem("ahia.user_avatar")
+            : null);
+        setAvatarUrl(effectiveAvatar);
         setFirstName(profile.first_name);
         setLastName(profile.last_name ?? "");
         setPhone(profile.phone ?? "");
@@ -300,6 +313,26 @@ export default function Profile() {
     router.replace("/start");
   };
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    setNotice(null);
+    try {
+      const updated = await uploadUserAvatar(file);
+      setUser(updated);
+      setAvatarUrl(updated.avatar_url || null);
+      setNotice({ message: "Profile photo updated successfully!", tone: "good" });
+    } catch (err: unknown) {
+      setNotice({ message: (err as Error)?.message || "Could not upload profile photo.", tone: "bad" });
+    } finally {
+      setUploadingAvatar(false);
+      if (avatarInputRef.current) {
+        avatarInputRef.current.value = "";
+      }
+    }
+  };
+
   const strength = passwordStrength(newPassword);
   const checks = passwordChecks(newPassword);
   const passwordsMatch = confirmation.length > 0 && confirmation === newPassword;
@@ -317,10 +350,35 @@ export default function Profile() {
         </Link>
 
         <div className={styles.identity}>
-          <span className={styles.avatar} aria-hidden>
-            {(user.first_name[0] ?? "").toUpperCase()}
-            {(user.last_name ?? "").slice(0, 1).toUpperCase()}
-          </span>
+          <div className={styles.avatarWrapper}>
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={`${user.first_name} ${user.last_name || ""}`}
+                className={styles.avatarImg}
+              />
+            ) : (
+              <span className={styles.avatar} aria-hidden>
+                {(user.first_name[0] ?? "").toUpperCase()}
+                {(user.last_name ?? "").slice(0, 1).toUpperCase()}
+              </span>
+            )}
+            <button
+              type="button"
+              className={styles.changeAvatarBtn}
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={uploadingAvatar}
+            >
+              {uploadingAvatar ? "Uploading..." : "Change Photo"}
+            </button>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={handleAvatarUpload}
+            />
+          </div>
           <div>
             <h1 className={styles.name}>
               {user.first_name} {user.last_name}
@@ -793,39 +851,18 @@ export default function Profile() {
                     hint="Custom note displayed below the catalog on your public shop."
                   />
                   <div>
-                    <Field
-                      label="Background Image URL"
-                      id="shop_bg_image"
-                      value={themeBgImage.startsWith("data:") ? "(Uploaded image ready)" : themeBgImage}
-                      onChange={(val) => setThemeBgImage(val)}
-                      placeholder="https://... (direct image link)"
+                    <ImageUploadField
+                      label="Shop Background Image"
+                      value={themeBgImage}
+                      onChange={(val) => setThemeBgImage(val || "")}
+                      onUpload={async (file) => {
+                        if (!business) throw new Error("No stall selected.");
+                        const res = await uploadTenantMedia(business.id, file, "banner");
+                        return res.delivery_url;
+                      }}
+                      hint="Displayed behind your shop's header and products on the public shop."
                       optional
-                      hint="Enter a link or choose a photo below."
                     />
-                    <div className={styles.uploadRow}>
-                      <label className={styles.fileInputLabel}>
-                        <span>Upload photo</span>
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept="image/*"
-                          className={styles.hiddenFileInput}
-                          onChange={handleImageFileChange}
-                        />
-                      </label>
-                      {themeBgImage ? (
-                        <button
-                          type="button"
-                          className={styles.secondaryAction}
-                          onClick={() => {
-                            setThemeBgImage("");
-                            if (fileInputRef.current) fileInputRef.current.value = "";
-                          }}
-                        >
-                          Clear photo
-                        </button>
-                      ) : null}
-                    </div>
                   </div>
                 </div>
 

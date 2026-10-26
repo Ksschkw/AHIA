@@ -716,13 +716,91 @@ export function updateProfile(data: {
   last_name?: string;
   phone?: string;
   email?: string;
-  avatar_url?: string;
+  avatar_url?: string | null;
 }): Promise<UserProfile> {
-  const { avatar_url: _ignored, ...body } = data;
   return request<UserProfile>("/api/v1/users/me", {
     method: "PATCH",
-    body,
+    body: data,
   });
+}
+
+export async function uploadUserAvatar(uri: string): Promise<UserProfile> {
+  let token = currentAccessToken();
+  if (!token) {
+    token = await readStoredAccessToken();
+  }
+  const blobRes = await fetch(uri);
+  const blob = await blobRes.blob();
+  const send = async (bearerToken: string | null) =>
+    fetch(`${BASE_URL}/api/v1/users/me/avatar`, {
+      method: "POST",
+      headers: {
+        "Content-Type": blob.type || "image/jpeg",
+        "Accept": "application/json",
+        ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
+      },
+      body: blob,
+    });
+
+  let response = await send(token);
+  if (response.status === 401 && (await refreshOnce())) {
+    token = currentAccessToken();
+    response = await send(token);
+  }
+  const payload = (await response.json().catch(() => null)) as
+    | UserProfile
+    | { error?: { message?: string } }
+    | null;
+  if (!response.ok) {
+    throw new ApiError(
+      response.status,
+      (payload as { error?: { message?: string } })?.error?.message ?? "Could not upload avatar photo.",
+    );
+  }
+  return payload as UserProfile;
+}
+
+export async function uploadTenantMedia(
+  tenantId: string,
+  uri: string,
+  assetType: "logo" | "category" | "banner" | "general" = "general",
+): Promise<{ url: string; delivery_url: string }> {
+  let token = currentAccessToken();
+  if (!token) {
+    token = await readStoredAccessToken();
+  }
+  const blobRes = await fetch(uri);
+  const blob = await blobRes.blob();
+  const send = async (bearerToken: string | null) =>
+    fetch(
+      `${BASE_URL}/api/v1/tenants/${tenantId}/media/upload?asset_type=${encodeURIComponent(assetType)}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": blob.type || "image/jpeg",
+          "Accept": "application/json",
+          ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
+        },
+        body: blob,
+      },
+    );
+
+  let response = await send(token);
+  if (response.status === 401 && (await refreshOnce())) {
+    token = currentAccessToken();
+    response = await send(token);
+  }
+  const payload = (await response.json().catch(() => null)) as
+    | { url: string; delivery_url: string }
+    | { error?: { message?: string } }
+    | null;
+  if (!response.ok) {
+    throw new ApiError(
+      response.status,
+      (payload as { error?: { message?: string } })?.error?.message ?? "Could not upload image.",
+    );
+  }
+  return payload as { url: string; delivery_url: string };
 }
 
 export interface TenantDetails {

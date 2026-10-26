@@ -409,6 +409,67 @@
   border-top: 1px solid var(--line);
 }
 
+.railUserRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: inherit;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s ease;
+}
+
+.railUserRow:hover {
+  background: var(--surface-2, rgba(255, 255, 255, 0.05));
+}
+
+.railAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+}
+
+.railAvatarInitials {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--leaf, #047857);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.topbarAvatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+}
+
+.topbarAvatarInitials {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--leaf, #047857);
+  color: #fff;
+  font-weight: 700;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .railSignOutBtn {
   display: inline-flex;
   align-items: center;

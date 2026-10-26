@@ -1,0 +1,179 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.labelRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-foreground, #111827);
+}
+
+.optional {
+  font-size: 11px;
+  color: var(--color-muted, #6b7280);
+}
+
+.previewCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--color-card, #ffffff);
+}
+
+.thumbnailWrapper {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  background: var(--color-surface, #f3f4f6);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border, #e5e7eb);
+}
+
+.thumbnailCircle {
+  border-radius: 50%;
+}
+
+.thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.previewDetails {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.previewActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.actionBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, #d1d5db);
+  background: var(--color-surface, #f9fafb);
+  color: var(--color-foreground, #374151);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.actionBtn:hover:not(:disabled) {
+  background: var(--color-border, #e5e7eb);
+}
+
+.removeBtn {
+  color: #dc2626;
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.removeBtn:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px 16px;
+  border: 2px dashed var(--color-border, #d1d5db);
+  border-radius: 8px;
+  background: var(--color-surface, #f9fafb);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+  text-align: center;
+}
+
+.dropzone:hover {
+  border-color: var(--color-brand, #047857);
+  background: var(--color-surface-hover, #f3f4f6);
+}
+
+.dropzoneActive {
+  border-color: var(--color-brand, #047857);
+  background: rgba(4, 120, 87, 0.05);
+}
+
+.dropzoneIcon {
+  width: 32px;
+  height: 32px;
+  color: var(--color-muted, #6b7280);
+}
+
+.dropzoneText {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-foreground, #374151);
+}
+
+.dropzoneHint {
+  font-size: 11px;
+  color: var(--color-muted, #6b7280);
+}
+
+.spinnerRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--color-brand, #047857);
+  font-weight: 500;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(4, 120, 87, 0.2);
+  border-top-color: var(--color-brand, #047857);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.errorBanner {
+  font-size: 12px;
+  color: #dc2626;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.hiddenInput {
+  display: none;
+}

@@ -28,6 +28,7 @@ export interface AppShellProps {
   businesses: ShellBusiness[];
   activeBusinessId: string | null;
   personName: string;
+  avatarUrl?: string | null;
   onSwitchBusiness: (businessId: string) => void;
   onSignOut?: () => void;
 }
@@ -60,6 +61,7 @@ export function AppShell({
   businesses,
   activeBusinessId,
   personName,
+  avatarUrl,
   onSwitchBusiness,
   onSignOut,
 }: AppShellProps) {
@@ -205,11 +207,20 @@ export function AppShell({
         </button>
 
         <div className={styles.railFootWrap}>
-          <p className={styles.railFoot}>
-            Signed in as
-            <br />
-            <strong>{personName}</strong>
-          </p>
+          <Link href="/app/profile" className={styles.railUserRow} title="Manage Profile">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={personName} className={styles.railAvatar} />
+            ) : (
+              <span className={styles.railAvatarInitials}>
+                {(personName[0] ?? "U").toUpperCase()}
+              </span>
+            )}
+            <p className={styles.railFoot}>
+              Signed in as
+              <br />
+              <strong>{personName}</strong>
+            </p>
+          </Link>
           {onSignOut ? (
             <button
               type="button"
@@ -230,6 +241,15 @@ export function AppShell({
             <Wordmark />
           </Link>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Link href="/app/profile" title="View Profile" style={{ display: "flex", alignItems: "center" }}>
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={personName} className={styles.topbarAvatar} />
+              ) : (
+                <span className={styles.topbarAvatarInitials}>
+                  {(personName[0] ?? "U").toUpperCase()}
+                </span>
+              )}
+            </Link>
             <button
               type="button"
               className={styles.themeToggleTopbar}

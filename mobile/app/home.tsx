@@ -155,6 +155,8 @@ import {
   updateProduct,
   updateProfile,
   updateStorefront,
+  uploadTenantMedia,
+  uploadUserAvatar,
   verifyUserPassword,
   workListLine,
   type Category,
@@ -1723,7 +1725,10 @@ export default function Home() {
     }
   };
 
-  const handlePickDeviceImage = async (onSelected: (uri: string) => void) => {
+  const handlePickDeviceImage = async (
+    onSelected: (uri: string) => void,
+    options?: { uploadType?: "avatar" | "logo" | "category" | "general"; tenantId?: string },
+  ) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -1735,7 +1740,7 @@ export default function Home() {
         mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.5,
+        quality: 0.8,
         base64: true,
       });
       if (!result.canceled && result.assets[0]) {
@@ -1747,6 +1752,30 @@ export default function Home() {
         }
         onSelected(uri);
         showToast("Photo selected from device.");
+
+        if (options?.uploadType === "avatar") {
+          void uploadUserAvatar(uri)
+            .then((updated) => {
+              if (updated.avatar_url) {
+                onSelected(updated.avatar_url);
+                showToast("Avatar saved to cloud storage!");
+              }
+            })
+            .catch(() => {
+              // Local photo preview remains
+            });
+        } else if (options?.tenantId && options.uploadType) {
+          void uploadTenantMedia(options.tenantId, uri, options.uploadType)
+            .then((res) => {
+              if (res.delivery_url) {
+                onSelected(res.delivery_url);
+                showToast("Image saved to cloud storage!");
+              }
+            })
+            .catch(() => {
+              // Local photo preview remains
+            });
+        }
       }
     } catch {
       showToast("Could not open photo library.");
@@ -2318,10 +2347,11 @@ export default function Home() {
         last_name: editLastName.trim() || undefined,
         phone: editPhone.trim() || undefined,
         email: editEmail.trim() || undefined,
+        avatar_url: editAvatarUrl.trim() || profile?.avatar_url || null,
       });
       const fullProfile = {
         ...updated,
-        avatar_url: editAvatarUrl.trim() || profile?.avatar_url || null,
+        avatar_url: editAvatarUrl.trim() || updated.avatar_url || profile?.avatar_url || null,
       };
       setProfile(fullProfile);
       cacheProfile(fullProfile);
@@ -5454,7 +5484,7 @@ export default function Home() {
                     <View style={{ flexDirection: "row", gap: 8 }}>
                       <Pressable
                         style={styles.imagePickerActionBtn}
-                        onPress={() => handlePickDeviceImage((uri) => setNewProductImage(uri))}
+                        onPress={() => handlePickDeviceImage((uri) => setNewProductImage(uri), { uploadType: "general", tenantId: activeBusiness?.id })}
                       >
                         <Text style={styles.imagePickerActionBtnText}>Change</Text>
                       </Pressable>
@@ -5470,7 +5500,7 @@ export default function Home() {
               ) : (
                 <Pressable
                   style={styles.imagePickerButton}
-                  onPress={() => handlePickDeviceImage((uri) => setNewProductImage(uri))}
+                  onPress={() => handlePickDeviceImage((uri) => setNewProductImage(uri), { uploadType: "general", tenantId: activeBusiness?.id })}
                 >
                   <CameraIcon size={20} color="#4ade80" />
                   <Text style={styles.imagePickerButtonText}>Choose Photo from Phone</Text>
@@ -5546,7 +5576,7 @@ export default function Home() {
                     <View style={{ flexDirection: "row", gap: 8 }}>
                       <Pressable
                         style={styles.imagePickerActionBtn}
-                        onPress={() => handlePickDeviceImage((uri) => setNewCategoryIcon(uri))}
+                        onPress={() => handlePickDeviceImage((uri) => setNewCategoryIcon(uri), { uploadType: "category", tenantId: activeBusiness?.id })}
                       >
                         <Text style={styles.imagePickerActionBtnText}>Change</Text>
                       </Pressable>
@@ -5562,7 +5592,7 @@ export default function Home() {
               ) : (
                 <Pressable
                   style={styles.imagePickerButton}
-                  onPress={() => handlePickDeviceImage((uri) => setNewCategoryIcon(uri))}
+                  onPress={() => handlePickDeviceImage((uri) => setNewCategoryIcon(uri), { uploadType: "category", tenantId: activeBusiness?.id })}
                 >
                   <CameraIcon size={20} color="#4ade80" />
                   <Text style={styles.imagePickerButtonText}>Choose Category Icon / Photo</Text>
@@ -5636,7 +5666,7 @@ export default function Home() {
                     <View style={{ flexDirection: "row", gap: 8 }}>
                       <Pressable
                         style={styles.imagePickerActionBtn}
-                        onPress={() => handlePickDeviceImage((uri) => setEditCategoryIcon(uri))}
+                        onPress={() => handlePickDeviceImage((uri) => setEditCategoryIcon(uri), { uploadType: "category", tenantId: activeBusiness?.id })}
                       >
                         <Text style={styles.imagePickerActionBtnText}>Change</Text>
                       </Pressable>
@@ -5652,7 +5682,7 @@ export default function Home() {
               ) : (
                 <Pressable
                   style={styles.imagePickerButton}
-                  onPress={() => handlePickDeviceImage((uri) => setEditCategoryIcon(uri))}
+                  onPress={() => handlePickDeviceImage((uri) => setEditCategoryIcon(uri), { uploadType: "category", tenantId: activeBusiness?.id })}
                 >
                   <CameraIcon size={20} color="#4ade80" />
                   <Text style={styles.imagePickerButtonText}>Choose Category Icon / Photo</Text>
@@ -5755,7 +5785,7 @@ export default function Home() {
                     <View style={{ flexDirection: "row", gap: 8 }}>
                       <Pressable
                         style={styles.imagePickerActionBtn}
-                        onPress={() => handlePickDeviceImage((uri) => setEditProductImage(uri))}
+                        onPress={() => handlePickDeviceImage((uri) => setEditProductImage(uri), { uploadType: "general", tenantId: activeBusiness?.id })}
                       >
                         <Text style={styles.imagePickerActionBtnText}>Change</Text>
                       </Pressable>
@@ -5771,7 +5801,7 @@ export default function Home() {
               ) : (
                 <Pressable
                   style={styles.imagePickerButton}
-                  onPress={() => handlePickDeviceImage((uri) => setEditProductImage(uri))}
+                  onPress={() => handlePickDeviceImage((uri) => setEditProductImage(uri), { uploadType: "general", tenantId: activeBusiness?.id })}
                 >
                   <CameraIcon size={20} color="#4ade80" />
                   <Text style={styles.imagePickerButtonText}>Choose Photo from Phone</Text>
@@ -7411,7 +7441,7 @@ export default function Home() {
               <Text style={styles.modalFieldLabel}>+ Attach Photo to Gallery</Text>
               <Pressable
                 style={[styles.imagePickerButton, { marginBottom: 8 }]}
-                onPress={() => handlePickDeviceImage((uri) => setNewPhotoUrl(uri))}
+                onPress={() => handlePickDeviceImage((uri) => setNewPhotoUrl(uri), { uploadType: "general", tenantId: activeBusiness?.id })}
               >
                 <CameraIcon size={18} color="#4ade80" />
                 <Text style={styles.imagePickerButtonText}>Choose Photo from Phone</Text>
@@ -7615,7 +7645,7 @@ export default function Home() {
                     <View style={{ flexDirection: "row", gap: 8 }}>
                       <Pressable
                         style={styles.imagePickerActionBtn}
-                        onPress={() => handlePickDeviceImage((uri) => setEditBizLogo(uri))}
+                        onPress={() => handlePickDeviceImage((uri) => setEditBizLogo(uri), { uploadType: "logo", tenantId: activeBusiness?.id })}
                       >
                         <Text style={styles.imagePickerActionBtnText}>Change</Text>
                       </Pressable>
@@ -7631,7 +7661,7 @@ export default function Home() {
               ) : (
                 <Pressable
                   style={styles.imagePickerButton}
-                  onPress={() => handlePickDeviceImage((uri) => setEditBizLogo(uri))}
+                  onPress={() => handlePickDeviceImage((uri) => setEditBizLogo(uri), { uploadType: "logo", tenantId: activeBusiness?.id })}
                 >
                   <CameraIcon size={20} color="#4ade80" />
                   <Text style={styles.imagePickerButtonText}>Choose Stall Logo from Phone</Text>
@@ -7989,7 +8019,7 @@ export default function Home() {
                     <View style={{ flexDirection: "row", gap: 8 }}>
                       <Pressable
                         style={styles.imagePickerActionBtn}
-                        onPress={() => handlePickDeviceImage((uri) => setEditAvatarUrl(uri))}
+                        onPress={() => handlePickDeviceImage((uri) => setEditAvatarUrl(uri), { uploadType: "avatar" })}
                       >
                         <Text style={styles.imagePickerActionBtnText}>Change</Text>
                       </Pressable>
@@ -8005,7 +8035,7 @@ export default function Home() {
               ) : (
                 <Pressable
                   style={styles.imagePickerButton}
-                  onPress={() => handlePickDeviceImage((uri) => setEditAvatarUrl(uri))}
+                  onPress={() => handlePickDeviceImage((uri) => setEditAvatarUrl(uri), { uploadType: "avatar" })}
                 >
                   <CameraIcon size={20} color="#4ade80" />
                   <Text style={styles.imagePickerButtonText}>Choose Profile Photo from Phone</Text>

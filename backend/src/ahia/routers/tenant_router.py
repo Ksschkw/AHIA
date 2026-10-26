@@ -13,12 +13,15 @@ CLI command obtains the same proof by calling the same method.
 from __future__ import annotations
 
 from typing import Annotated, Final
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
+from pydantic import BaseModel
 
 from ahia.core.authentication import Principal
+from ahia.core.ports.storage_port import StorageCategory, StorageObjectKey, StorageUploadRequest
 from ahia.core.tenant_context import TenantContext
+from ahia.routers.product_image_router import declared_content_type, read_body_within_limit
 from ahia.routers.user_router import require_principal
 from ahia.schemas.tenant_schema import (
     TenantCreateSchema,
@@ -165,6 +168,95 @@ async def update_stock_policy(
     """
     tenant = await service.update_negative_stock_policy(tenant_context, policy=payload.policy)
     return TenantResponseSchema.from_entity(tenant)
+
+
+class TenantMediaUploadResponseSchema(BaseModel):
+    url: str
+    delivery_url: str
+    size_bytes: int
+    asset_type: str
+
+
+@router.post(
+    "/{tenant_id}/media/upload",
+    response_model=TenantMediaUploadResponseSchema,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload an image asset for the tenant (logo, banner, category, etc.)",
+)
+async def upload_tenant_media(
+    tenant_id: UUID,
+    request: Request,
+    tenant_context: TenantContextDependency,
+    asset_type: Annotated[
+        str, Query(description="The asset category: logo, banner, category, general")
+    ] = "general",
+) -> TenantMediaUploadResponseSchema:
+    """Upload any image asset to Cloudinary under the business scope.
+
+    Normalizes the image to WebP, verifies quota limits, and returns the public delivery URL.
+    """
+    settings = request.app.state.settings
+    media = request.app.state.container.media
+    storage = request.app.state.container.storage
+    quota_service = request.app.state.container.storage_quota_service
+
+    content = await read_body_within_limit(
+        request, limit_bytes=settings.storage_limits().max_upload_bytes
+    )
+    content_type = declared_content_type(request) or "image/jpeg"
+
+    optimized = await media.optimize(
+        content=content,
+        declared_content_type=content_type,
+        maximum_size_bytes=settings.storage_limits().max_image_bytes,
+    )
+
+    reservation = await quota_service.reserve(
+        tenant_context,
+        incoming_bytes=optimized.size_bytes,
+        operation="tenant_media_upload",
+    )
+
+    safe_asset_type = asset_type if asset_type in ("logo", "banner", "category") else "general"
+    random_suffix = uuid4().hex[:12]
+    key = StorageObjectKey(
+        tenant_id=str(tenant_context.tenant_id),
+        category=StorageCategory.STOREFRONT,
+        resource_id=safe_asset_type,
+        filename=f"{random_suffix}.webp",
+    )
+
+    try:
+        stored = await storage.upload(
+            StorageUploadRequest(
+                key=key.value,
+                content=optimized.content,
+                mime_type=optimized.mime_type,
+                tenant_id=str(tenant_context.tenant_id),
+                filename=key.filename,
+            )
+        )
+        delivery_url = stored.delivery_url or await storage.build_delivery_url(
+            key=key.value, is_public=True
+        )
+        await quota_service.commit_reservation(
+            reservation,
+            operation="tenant_media_upload",
+        )
+    except Exception:
+        await quota_service.release_reservation(
+            reservation,
+            reason="upload_failed",
+            operation="tenant_media_upload",
+        )
+        raise
+
+    return TenantMediaUploadResponseSchema(
+        url=delivery_url,
+        delivery_url=delivery_url,
+        size_bytes=optimized.size_bytes,
+        asset_type=safe_asset_type,
+    )
 
 
 @router.delete(

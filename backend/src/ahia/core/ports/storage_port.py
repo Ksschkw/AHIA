@@ -45,6 +45,8 @@ class StorageCategory(StrEnum):
     INVOICES = "invoices"
     REPORTS = "reports"
     DOCUMENTS = "documents"
+    AVATARS = "avatars"
+    MEDIA = "media"
 
 
 _SEGMENT_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")

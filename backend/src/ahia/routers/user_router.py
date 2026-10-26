@@ -22,6 +22,8 @@ from fastapi import APIRouter, Depends, Request, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from ahia.core.authentication import Principal, authenticate_request
+from ahia.core.ports.storage_port import StorageCategory, StorageObjectKey, StorageUploadRequest
+from ahia.routers.product_image_router import declared_content_type, read_body_within_limit
 from ahia.schemas.user_schema import UserProfileUpdateSchema, UserResponseSchema
 from ahia.services.user_service import UserService
 
@@ -100,6 +102,77 @@ async def update_own_profile(
 ) -> UserResponseSchema:
     """Apply a partial update to the caller's own profile."""
     user = await service.update_own_profile(principal, changes=payload.to_entity_changes())
+    return UserResponseSchema.from_entity(user)
+
+
+@router.post(
+    "/me/avatar",
+    response_model=UserResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Upload and update the authenticated user's profile avatar",
+)
+async def upload_own_avatar(
+    request: Request,
+    principal: PrincipalDependency,
+    service: UserServiceDependency,
+) -> UserResponseSchema:
+    """Upload a new profile avatar photo.
+
+    Decodes and normalizes the image, uploads to storage, and persists the
+    resulting avatar URL on the user account.
+    """
+    settings = request.app.state.settings
+    media = request.app.state.container.media
+    storage = request.app.state.container.storage
+
+    content = await read_body_within_limit(
+        request, limit_bytes=settings.storage_limits().max_upload_bytes
+    )
+    content_type = declared_content_type(request) or "image/jpeg"
+
+    optimized = await media.optimize(
+        content=content,
+        declared_content_type=content_type,
+        maximum_size_bytes=settings.storage_limits().max_image_bytes,
+    )
+
+    key = StorageObjectKey(
+        tenant_id="users",
+        category=StorageCategory.AVATARS,
+        resource_id=str(principal.user_id),
+        filename="avatar.webp",
+    )
+
+    stored = await storage.upload(
+        StorageUploadRequest(
+            key=key.value,
+            content=optimized.content,
+            mime_type=optimized.mime_type,
+            tenant_id="users",
+            filename=key.filename,
+        )
+    )
+
+    delivery_url = stored.delivery_url or await storage.build_delivery_url(
+        key=key.value, is_public=True
+    )
+
+    user = await service.update_own_profile(principal, changes={"avatar_url": delivery_url})
+    return UserResponseSchema.from_entity(user)
+
+
+@router.delete(
+    "/me/avatar",
+    response_model=UserResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Remove the authenticated user's profile avatar",
+)
+async def remove_own_avatar(
+    principal: PrincipalDependency,
+    service: UserServiceDependency,
+) -> UserResponseSchema:
+    """Clear the user's profile avatar."""
+    user = await service.update_own_profile(principal, changes={"avatar_url": ""})
     return UserResponseSchema.from_entity(user)
 
 
