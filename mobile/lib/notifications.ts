@@ -4,6 +4,7 @@
  * Provides safe device token registration and unread notification state management.
  */
 
+import { isRunningInExpoGo } from "expo";
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import { Platform } from "react-native";
 
@@ -15,16 +16,28 @@ import {
   type AppNotification,
 } from "./api";
 
-const isExpoGo =
-  Constants.appOwnership === "expo" ||
-  Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+/**
+ * Check if running inside Expo Go.
+ * Uses official isRunningInExpoGo() from 'expo', with Constants fallback.
+ */
+export function isExpoGoClient(): boolean {
+  try {
+    if (isRunningInExpoGo()) return true;
+  } catch {
+    // ignore
+  }
+  return (
+    Constants.appOwnership === "expo" ||
+    Constants.executionEnvironment === ExecutionEnvironment.StoreClient
+  );
+}
 
 /**
  * Expo Go on Android removed remote notification native modules (SDK 53+).
  * Safely load expo-notifications only when supported to prevent ExpoTopicSubscriptionModule crashes.
  */
 function getNotificationsModule(): typeof import("expo-notifications") | null {
-  if (Platform.OS === "android" && isExpoGo) {
+  if (Platform.OS === "android" && isExpoGoClient()) {
     return null;
   }
   try {
@@ -34,10 +47,11 @@ function getNotificationsModule(): typeof import("expo-notifications") | null {
   }
 }
 
-// Configure how notifications appear when app is foregrounded
-try {
-  const notif = getNotificationsModule();
-  if (notif) {
+let handlerConfigured = false;
+function ensureHandlerConfigured(notif: typeof import("expo-notifications")) {
+  if (handlerConfigured) return;
+  handlerConfigured = true;
+  try {
     notif.setNotificationHandler({
       handleNotification: async () => ({
         shouldShowAlert: true,
@@ -47,13 +61,13 @@ try {
         shouldShowList: true,
       }),
     });
+  } catch {
+    // Fallback if native handler setup fails
   }
-} catch {
-  // Fallback if native module is unlinked
 }
 
 export function isPushNotificationSupported(): boolean {
-  if (Platform.OS === "android" && isExpoGo) {
+  if (Platform.OS === "android" && isExpoGoClient()) {
     return false;
   }
   return true;
@@ -89,6 +103,8 @@ export async function registerForPushNotificationsAsync(
       error: "Remote push notifications require a standalone APK/development build (unavailable in Expo Go on Android).",
     };
   }
+
+  ensureHandlerConfigured(notif);
 
   try {
     if (Platform.OS === "android") {
