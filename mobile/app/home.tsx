@@ -63,13 +63,14 @@ import { SalesTimelineChart } from "@/components/SalesTimelineChart";
 import { getTheme, getSavedThemeMode, saveThemeMode, type ThemeMode, type ThemePalette } from "@/lib/theme";
 import { hasBusinessPin, setBusinessPin, verifyBusinessPin, clearBusinessPin } from "@/lib/pin";
 import { useAppLifecycle } from "@/lib/lifecycle";
-import * as Notifications from "expo-notifications";
 import {
   fetchUnreadCount,
   sendMobileTestPush,
   getActivePushToken,
   registerPushToken,
   registerForPushNotificationsAsync,
+  addNotificationResponseListener,
+  isPushNotificationSupported,
 } from "@/lib/notifications";
 import {
   ArrowLeftIcon,
@@ -1266,7 +1267,7 @@ export default function Home() {
 
   // Handle tapping on a push notification (deep linking)
   useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+    const sub = addNotificationResponseListener((response) => {
       const data = response.notification.request.content.data;
       if (data?.business_id) {
         const targetBiz = (businesses ?? []).find((b) => b.id === data.business_id);
@@ -5179,11 +5180,15 @@ export default function Home() {
                   <Text style={styles.moreCardTitle}>Push Notifications</Text>
                   <View style={{ backgroundColor: getActivePushToken() ? theme.badgeBg : "#78350f", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
                     <Text style={{ fontSize: 11, fontWeight: "700", color: getActivePushToken() ? theme.accent : "#fbbf24" }}>
-                      {getActivePushToken() ? "ACTIVE" : "NOT ENABLED"}
+                      {getActivePushToken()
+                        ? "ACTIVE"
+                        : !isPushNotificationSupported()
+                          ? "EXPO GO"
+                          : "NOT ENABLED"}
                     </Text>
                   </View>
                 </View>
-                {!getActivePushToken() && (
+                {!getActivePushToken() && isPushNotificationSupported() && (
                   <Pressable
                     style={styles.addStaffBtn}
                     onPress={async () => {
@@ -5201,7 +5206,9 @@ export default function Home() {
                 )}
               </View>
               <Text style={styles.moreCardDesc}>
-                Receive instant alerts whenever customers submit orders, upload payment receipts, or stock runs low.
+                {!isPushNotificationSupported()
+                  ? "Push notifications require a standalone APK on Android. In-app alerts and real-time syncing remain active in Expo Go."
+                  : "Receive instant alerts whenever customers submit orders, upload payment receipts, or stock runs low."}
               </Text>
               {getActivePushToken() ? (
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>

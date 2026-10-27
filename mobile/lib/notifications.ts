@@ -4,8 +4,8 @@
  * Provides safe device token registration and unread notification state management.
  */
 
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import { Platform } from "react-native";
-import * as Notifications from "expo-notifications";
 
 import {
   getUnreadNotificationCount,
@@ -15,19 +15,48 @@ import {
   type AppNotification,
 } from "./api";
 
+const isExpoGo =
+  Constants.appOwnership === "expo" ||
+  Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+/**
+ * Expo Go on Android removed remote notification native modules (SDK 53+).
+ * Safely load expo-notifications only when supported to prevent ExpoTopicSubscriptionModule crashes.
+ */
+function getNotificationsModule(): typeof import("expo-notifications") | null {
+  if (Platform.OS === "android" && isExpoGo) {
+    return null;
+  }
+  try {
+    return require("expo-notifications");
+  } catch {
+    return null;
+  }
+}
+
 // Configure how notifications appear when app is foregrounded
 try {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
+  const notif = getNotificationsModule();
+  if (notif) {
+    notif.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  }
 } catch {
   // Fallback if native module is unlinked
+}
+
+export function isPushNotificationSupported(): boolean {
+  if (Platform.OS === "android" && isExpoGo) {
+    return false;
+  }
+  return true;
 }
 
 export interface PushTokenPayload {
@@ -53,27 +82,35 @@ export function setActivePushToken(token: string | null): void {
 export async function registerForPushNotificationsAsync(
   tenantIds: string[],
 ): Promise<{ success: boolean; token?: string; error?: string }> {
+  const notif = getNotificationsModule();
+  if (!notif) {
+    return {
+      success: false,
+      error: "Remote push notifications require a standalone APK/development build (unavailable in Expo Go on Android).",
+    };
+  }
+
   try {
     if (Platform.OS === "android") {
-      await Notifications.setNotificationChannelAsync("default", {
+      await notif.setNotificationChannelAsync("default", {
         name: "default",
-        importance: Notifications.AndroidImportance.MAX,
+        importance: notif.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: "#084a2f",
       });
     }
 
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    const { status: existingStatus } = await notif.getPermissionsAsync();
     let finalStatus = existingStatus;
     if (existingStatus !== "granted") {
-      const { status } = await Notifications.requestPermissionsAsync();
+      const { status } = await notif.requestPermissionsAsync();
       finalStatus = status;
     }
     if (finalStatus !== "granted") {
       return { success: false, error: "Notification permission not granted" };
     }
 
-    const tokenData = await Notifications.getExpoPushTokenAsync().catch(() => null);
+    const tokenData = await notif.getExpoPushTokenAsync().catch(() => null);
     if (!tokenData?.data) {
       return { success: false, error: "Failed to generate push token" };
     }
@@ -93,6 +130,31 @@ export async function registerForPushNotificationsAsync(
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : "Error initializing push notifications";
     return { success: false, error: errorMsg };
+  }
+}
+
+/**
+ * Listen for user tapping a push notification.
+ */
+export function addNotificationResponseListener(
+  callback: (response: {
+    notification: {
+      request: {
+        content: {
+          data?: Record<string, unknown>;
+        };
+      };
+    };
+  }) => void,
+): { remove: () => void } {
+  const notif = getNotificationsModule();
+  if (!notif) {
+    return { remove: () => {} };
+  }
+  try {
+    return notif.addNotificationResponseReceivedListener(callback as never);
+  } catch {
+    return { remove: () => {} };
   }
 }
 
