@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { ListBuilder, type ListShop } from "@/components/list-builder";
+import { extractStorefrontTheme } from "@/lib/api";
 import { fetchPublicShop } from "@/lib/server-api";
 
 /**
@@ -37,11 +38,14 @@ export default async function ListPage({ params }: Params) {
     notFound();
   }
 
+  const sfTheme = extractStorefrontTheme(shop.description);
+
   const builderShop: ListShop = {
     tenant_slug: shop.tenant_slug,
     business_name: shop.business_name,
     headline: shop.headline,
     contact_phone: shop.contact_phone,
+    logo_url: sfTheme.logoUrl,
     products: (shop.products ?? []).map((product) => ({
       product_slug: product.product_slug,
       name: product.name,

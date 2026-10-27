@@ -208,13 +208,29 @@ export function AppShell({
 
         <div className={styles.railFootWrap}>
           <Link href="/app/profile" className={styles.railUserRow} title="Manage Profile">
-            {avatarUrl ? (
-              <img src={avatarUrl} alt={personName} className={styles.railAvatar} />
-            ) : (
-              <span className={styles.railAvatarInitials}>
-                {(personName[0] ?? "U").toUpperCase()}
-              </span>
-            )}
+            {avatarUrl && (avatarUrl.startsWith("http://") || avatarUrl.startsWith("https://")) ? (
+              <img
+                src={avatarUrl}
+                alt={personName}
+                className={styles.railAvatar}
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                  const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
+                  if (fallback) fallback.style.display = "flex";
+                }}
+              />
+            ) : null}
+            <span
+              className={styles.railAvatarInitials}
+              style={{
+                display:
+                  avatarUrl && (avatarUrl.startsWith("http://") || avatarUrl.startsWith("https://"))
+                    ? "none"
+                    : "flex",
+              }}
+            >
+              {(personName[0] ?? "U").toUpperCase()}
+            </span>
             <p className={styles.railFoot}>
               Signed in as
               <br />
@@ -242,13 +258,29 @@ export function AppShell({
           </Link>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <Link href="/app/profile" title="View Profile" style={{ display: "flex", alignItems: "center" }}>
-              {avatarUrl ? (
-                <img src={avatarUrl} alt={personName} className={styles.topbarAvatar} />
-              ) : (
-                <span className={styles.topbarAvatarInitials}>
-                  {(personName[0] ?? "U").toUpperCase()}
-                </span>
-              )}
+              {avatarUrl && (avatarUrl.startsWith("http://") || avatarUrl.startsWith("https://")) ? (
+                <img
+                  src={avatarUrl}
+                  alt={personName}
+                  className={styles.topbarAvatar}
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                    const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
+                    if (fallback) fallback.style.display = "flex";
+                  }}
+                />
+              ) : null}
+              <span
+                className={styles.topbarAvatarInitials}
+                style={{
+                  display:
+                    avatarUrl && (avatarUrl.startsWith("http://") || avatarUrl.startsWith("https://"))
+                      ? "none"
+                      : "flex",
+                }}
+              >
+                {(personName[0] ?? "U").toUpperCase()}
+              </span>
             </Link>
             <button
               type="button"

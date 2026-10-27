@@ -261,7 +261,11 @@ class UserModel:
         """
         resolved_avatar = self.avatar_url
         if avatar_url is not None:
-            resolved_avatar = avatar_url.strip() if avatar_url.strip() else None
+            stripped = avatar_url.strip()
+            if stripped and not (stripped.startswith("http://") or stripped.startswith("https://")):
+                resolved_avatar = self.avatar_url
+            else:
+                resolved_avatar = stripped if stripped else None
 
         candidate = replace(
             self,

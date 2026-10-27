@@ -33,10 +33,12 @@ export function LiveList({
   initial,
   slug,
   token,
+  logoUrl,
 }: {
   initial: PublicList;
   slug: string;
   token: string;
+  logoUrl?: string | null;
 }) {
   const [list, setList] = useState<PublicList>(initial);
   const [checkedAt, setCheckedAt] = useState<Date | null>(null);
@@ -144,8 +146,19 @@ export function LiveList({
         </Link>
       </div>
       <header className={styles.header}>
-        <p className={styles.kicker}>Order tracking for</p>
-        <h1 className={styles.shopName}>{list.business_name}</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "4px" }}>
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt={list.business_name}
+              style={{ width: "48px", height: "48px", borderRadius: "10px", objectFit: "cover", border: "1px solid var(--line, #e2dcd2)" }}
+            />
+          ) : null}
+          <div>
+            <p className={styles.kicker}>Order tracking for</p>
+            <h1 className={styles.shopName}>{list.business_name}</h1>
+          </div>
+        </div>
         <p className={styles.status}>
           {list.status === "confirmed"
             ? "Confirmed - the shop is packing your goods."

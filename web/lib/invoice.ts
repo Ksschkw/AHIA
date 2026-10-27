@@ -30,7 +30,7 @@ function buildCategoryPath(catId: string, allCategories: Category[]): string {
 
 export function buildInvoiceHtml(
   business: { name: string; slug?: string; logo_url?: string | null },
-  details: Tenant | null,
+  details: (Tenant & { logo_url?: string | null }) | null,
   list: CustomerList,
   allProducts: Product[] = [],
   allCategories: Category[] = []
@@ -474,7 +474,7 @@ export function buildInvoiceHtml(
 
 export function printInvoice(
   business: { name: string; slug?: string; logo_url?: string | null },
-  details: Tenant | null,
+  details: (Tenant & { logo_url?: string | null }) | null,
   list: CustomerList,
   allProducts: Product[] = [],
   allCategories: Category[] = []

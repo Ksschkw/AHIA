@@ -57,6 +57,10 @@ USE_CASE_MODULES: frozenset[str] = frozenset(
         # The scheduled evaluation of low stock: it applies the report service's rule on a timer and
         # owns no table, so naming it after a table would be a lie about what it does.
         "services/low_stock_alert_service.py",
+        # Push notifications: manages cross-device Web Push and Mobile push
+        # subscriptions and token cleanup.
+        "crud/push_subscription_crud.py",
+        "services/push_dispatcher_service.py",
     }
 )
 

@@ -29,7 +29,7 @@ from fastapi import APIRouter, Depends, Query, Request, status
 
 from ahia.core.tenant_context import TenantContext
 from ahia.routers.tenant_router import require_tenant_context
-from ahia.routers.upload_support import declared_content_type, read_body_within_limit
+from ahia.routers.upload_support import extract_upload_content_and_type
 from ahia.schemas.product_image_schema import (
     ProductImageOrderSchema,
     ProductImageReconciliationResponseSchema,
@@ -72,14 +72,14 @@ async def attach_product_image(
     upload if the two disagree.
     """
     settings = request.app.state.settings
-    content = await read_body_within_limit(
+    content, content_type = await extract_upload_content_and_type(
         request, limit_bytes=settings.storage_limits().max_upload_bytes
     )
     image = await service.attach_image(
         tenant_context,
         product_id=product_id,
         content=content,
-        declared_content_type=declared_content_type(request),
+        declared_content_type=content_type,
         is_primary=is_primary,
     )
     return ProductImageResponseSchema.from_entity(

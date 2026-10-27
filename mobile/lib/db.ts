@@ -486,8 +486,16 @@ export function cacheBusinesses(businesses: Array<BusinessMembership | TenantSum
       for (const b of businesses) {
         const isActiveVal = b.is_active === false ? 0 : 1;
         db.runSync(
-          `INSERT OR REPLACE INTO cached_businesses (id, name, slug, currency, role_name, is_active, logo_url, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO cached_businesses (id, name, slug, currency, role_name, is_active, logo_url, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             name = excluded.name,
+             slug = excluded.slug,
+             currency = excluded.currency,
+             role_name = excluded.role_name,
+             is_active = excluded.is_active,
+             logo_url = COALESCE(excluded.logo_url, cached_businesses.logo_url),
+             updated_at = excluded.updated_at`,
           [b.id, b.name, b.slug, b.currency || "NGN", b.role_name || "OWNER", isActiveVal, b.logo_url ?? null, now],
         );
       }
@@ -609,8 +617,17 @@ export function cacheBusinessDetails(tenantId: string, details: TenantDetails): 
     if (!db) return;
     const now = new Date().toISOString();
     db.runSync(
-      `INSERT OR REPLACE INTO cached_business_details (id, name, slug, phone, address, city, state, logo_url, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO cached_business_details (id, name, slug, phone, address, city, state, logo_url, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         name = excluded.name,
+         slug = excluded.slug,
+         phone = excluded.phone,
+         address = excluded.address,
+         city = excluded.city,
+         state = excluded.state,
+         logo_url = COALESCE(excluded.logo_url, cached_business_details.logo_url),
+         updated_at = excluded.updated_at`,
       [
         tenantId,
         details.name,

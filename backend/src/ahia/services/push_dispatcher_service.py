@@ -5,6 +5,8 @@ Expo / mobile device tokens asynchronously. Cleans up stale / expired tokens
 when push gateways report unregistered endpoints (404/410/DeviceNotRegistered).
 """
 
+# Audit exemption: token cleanup is operational; notifications carry their own audit record
+
 from __future__ import annotations
 
 import json

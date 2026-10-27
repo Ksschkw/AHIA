@@ -204,13 +204,15 @@ export default function MorePage() {
   const loadData = useCallback(async () => {
     try {
       const user = await currentUser();
-      const storedAvatar =
+      const stored =
         typeof window !== "undefined"
           ? window.localStorage.getItem(`ahia.user_avatar.${user.id}`) ||
             window.localStorage.getItem("ahia.user_avatar") ||
             ""
           : "";
-      const effectiveAvatar = user.avatar_url || storedAvatar;
+      const validStored = stored.startsWith("http") ? stored : "";
+      const validUserAvatar = user.avatar_url && user.avatar_url.startsWith("http") ? user.avatar_url : "";
+      const effectiveAvatar = validUserAvatar || validStored;
       setAvatarUrl(effectiveAvatar);
       setProfile({ ...user, avatar_url: effectiveAvatar || null });
 
@@ -337,6 +339,22 @@ export default function MorePage() {
           window.localStorage.removeItem(`ahia.business_logo.${business.id}`);
         }
         setBusinessLogo("");
+      }
+
+      // Also persist logo into storefront metadata so mobile and public shop have it
+      try {
+        const parsed = parseStorefrontTheme(storefront?.description);
+        const themeMeta = { ...parsed, logoUrl: trimmedLogo || undefined };
+        const cleanDesc = (storefront?.description || "").replace(/<!--\s*ahia-theme:[\s\S]*?-->/, "").trim();
+        const nextDesc = `${cleanDesc}\n<!-- ahia-theme:${JSON.stringify(themeMeta)} -->`.trim();
+        const updatedSf = await updateStorefront(business.id, {
+          description: nextDesc,
+          headline: storefront?.headline,
+          contact_phone: storefront?.contact_phone,
+        });
+        setStorefront(updatedSf);
+      } catch {
+        // Non-blocking
       }
 
       setShowBusinessModal(false);
@@ -827,11 +845,12 @@ export default function MorePage() {
           {/* User Profile Card */}
           <div className={styles.profileCard}>
             <div className={styles.avatar}>
-              {avatarUrl ? (
+              {avatarUrl && (avatarUrl.startsWith("http://") || avatarUrl.startsWith("https://")) ? (
                 <img
                   src={avatarUrl}
                   alt={profile?.first_name || "Profile"}
                   className={styles.avatarImg}
+                  onError={() => setAvatarUrl("")}
                 />
               ) : profile?.first_name ? (
                 profile.first_name.slice(0, 1).toUpperCase()

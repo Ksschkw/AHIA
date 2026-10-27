@@ -377,6 +377,11 @@ class Settings(BaseSettings):
     storage_provider: StorageProviderName = StorageProviderName.R2
     storage_signed_url_ttl_seconds: int = Field(default=900, ge=30, le=86_400)
 
+    # -- Web push / VAPID notifications ------------------------------------
+    vapid_public_key: str = ""
+    vapid_private_key: SecretStr | None = None
+    vapid_admin_email: str = "mailto:admin@ahia.app"
+
     # -- Media and quota limits --------------------------------------------
     max_upload_size_mb: int = Field(default=5, ge=1, le=100)
     max_product_image_size_mb: int = Field(default=5, ge=1, le=100)

@@ -18,7 +18,6 @@ Every handler parses, calls one service method and shapes the response.
 
 from __future__ import annotations
 
-import os
 from typing import Annotated, Any, Final
 from uuid import UUID
 
@@ -129,9 +128,10 @@ async def mark_all_notifications_read(
     "/notifications/vapid-public-key",
     summary="Get VAPID public key for web push notifications",
 )
-async def get_vapid_public_key() -> dict[str, str]:
+async def get_vapid_public_key(request: Request) -> dict[str, str]:
     """Return the VAPID public key for Web Push client subscription."""
-    key = os.getenv("VAPID_PUBLIC_KEY", "")
+    settings = request.app.state.settings
+    key = getattr(settings, "vapid_public_key", "")
     return {"public_key": key}
 
 

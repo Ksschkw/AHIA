@@ -23,7 +23,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from ahia.core.authentication import Principal, authenticate_request
 from ahia.core.ports.storage_port import StorageCategory, StorageObjectKey, StorageUploadRequest
-from ahia.routers.upload_support import declared_content_type, read_body_within_limit
+from ahia.routers.upload_support import extract_upload_content_and_type
 from ahia.schemas.user_schema import UserProfileUpdateSchema, UserResponseSchema
 from ahia.services.user_service import UserService
 
@@ -125,10 +125,9 @@ async def upload_own_avatar(
     media = request.app.state.container.media
     storage = request.app.state.container.storage
 
-    content = await read_body_within_limit(
+    content, content_type = await extract_upload_content_and_type(
         request, limit_bytes=settings.storage_limits().max_upload_bytes
     )
-    content_type = declared_content_type(request) or "image/jpeg"
 
     optimized = await media.optimize(
         content=content,

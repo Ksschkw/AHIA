@@ -518,7 +518,7 @@ export default function Sales() {
                           className={styles.row}
                           onClick={() => setSelectedSaleAudit(sale)}
                           style={{ cursor: "pointer", transition: "background 0.15s ease" }}
-                          title="Click to view staff audit and waybill details"
+                          title="Click to view sale details, receipt and waybill"
                         >
                           <span className={styles.rowMain}>
                             <span
@@ -610,7 +610,7 @@ export default function Sales() {
       {/* Sale Detail & Audit Sheet Dialog */}
       <Sheet
         open={selectedSaleAudit !== null}
-        title={selectedSaleAudit ? `Transaction Audit - #${selectedSaleAudit.receipt_number}` : "Sale Audit"}
+        title={selectedSaleAudit ? `Sale & Receipt Details - #${selectedSaleAudit.receipt_number}` : "Sale Details"}
         onClose={() => setSelectedSaleAudit(null)}
       >
         {selectedSaleAudit ? (() => {
@@ -668,7 +668,7 @@ export default function Sales() {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", fontWeight: 800, color: "var(--ink, #111)", marginBottom: "10px", letterSpacing: "0.5px" }}>
-                  <SearchIcon size={14} /> STAFF & CONFIRMATION AUDIT
+                  <SearchIcon size={14} /> SELLER & CONFIRMATION DETAILS
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border, #f3f4f6)", fontSize: "13px" }}>

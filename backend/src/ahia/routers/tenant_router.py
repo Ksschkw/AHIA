@@ -21,7 +21,7 @@ from pydantic import BaseModel
 from ahia.core.authentication import Principal
 from ahia.core.ports.storage_port import StorageCategory, StorageObjectKey, StorageUploadRequest
 from ahia.core.tenant_context import TenantContext
-from ahia.routers.upload_support import declared_content_type, read_body_within_limit
+from ahia.routers.upload_support import extract_upload_content_and_type
 from ahia.routers.user_router import require_principal
 from ahia.schemas.tenant_schema import (
     TenantCreateSchema,
@@ -191,7 +191,7 @@ async def upload_tenant_media(
         str, Query(description="The asset category: logo, banner, category, general")
     ] = "general",
 ) -> TenantMediaUploadResponseSchema:
-    """Upload any image asset to Cloudinary under the business scope.
+    """Upload any image asset to storage under the business scope.
 
     Normalizes the image to WebP, verifies quota limits, and returns the public delivery URL.
     """
@@ -200,10 +200,9 @@ async def upload_tenant_media(
     storage = request.app.state.container.storage
     quota_service = request.app.state.container.storage_quota_service
 
-    content = await read_body_within_limit(
+    content, content_type = await extract_upload_content_and_type(
         request, limit_bytes=settings.storage_limits().max_upload_bytes
     )
-    content_type = declared_content_type(request) or "image/jpeg"
 
     optimized = await media.optimize(
         content=content,

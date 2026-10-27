@@ -146,12 +146,16 @@ export default function Profile() {
       try {
         const [profile, found] = await Promise.all([currentUser(), listBusinesses()]);
         setUser(profile);
-        const effectiveAvatar =
-          profile.avatar_url ||
-          (typeof window !== "undefined"
+        const stored =
+          typeof window !== "undefined"
             ? window.localStorage.getItem(`ahia.user_avatar.${profile.id}`) ||
               window.localStorage.getItem("ahia.user_avatar")
-            : null);
+            : null;
+        const validStored = stored && (stored.startsWith("http://") || stored.startsWith("https://")) ? stored : null;
+        const effectiveAvatar =
+          profile.avatar_url && (profile.avatar_url.startsWith("http://") || profile.avatar_url.startsWith("https://"))
+            ? profile.avatar_url
+            : validStored;
         setAvatarUrl(effectiveAvatar);
         setFirstName(profile.first_name);
         setLastName(profile.last_name ?? "");
@@ -351,11 +355,12 @@ export default function Profile() {
 
         <div className={styles.identity}>
           <div className={styles.avatarWrapper}>
-            {avatarUrl ? (
+            {avatarUrl && (avatarUrl.startsWith("http://") || avatarUrl.startsWith("https://")) ? (
               <img
                 src={avatarUrl}
                 alt={`${user.first_name} ${user.last_name || ""}`}
                 className={styles.avatarImg}
+                onError={() => setAvatarUrl(null)}
               />
             ) : (
               <span className={styles.avatar} aria-hidden>

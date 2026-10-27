@@ -180,12 +180,24 @@ export function AppFrame({ children }: { children: ReactNode }) {
     setPromptType(null);
   }, [promptType]);
 
-  const avatarUrl =
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const legacy = window.localStorage.getItem("ahia.user_avatar");
+    if (legacy && !legacy.startsWith("http")) {
+      window.localStorage.removeItem("ahia.user_avatar");
+    }
+  }, []);
+
+  const rawAvatarUrl =
     user?.avatar_url ||
     (typeof window !== "undefined"
       ? (user?.id ? window.localStorage.getItem(`ahia.user_avatar.${user.id}`) : null) ||
         window.localStorage.getItem("ahia.user_avatar")
       : null);
+  const avatarUrl =
+    rawAvatarUrl && (rawAvatarUrl.startsWith("http://") || rawAvatarUrl.startsWith("https://"))
+      ? rawAvatarUrl
+      : null;
 
   return (
     <AppShell

@@ -66,6 +66,7 @@ export interface ListShop {
   business_name: string;
   headline: string | null;
   contact_phone: string | null;
+  logo_url?: string | null;
   products: ListShopProduct[];
   groups: ListShopGroup[];
 }
@@ -666,6 +667,22 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
 
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (shop.logo_url) {
+      try {
+        const logoImg = new window.Image();
+        logoImg.crossOrigin = "anonymous";
+        await new Promise<void>((resolve, reject) => {
+          logoImg.onload = () => resolve();
+          logoImg.onerror = () => reject();
+          logoImg.src = shop.logo_url!;
+        });
+        context.drawImage(logoImg, width - 48 - 64, 48, 64, 64);
+      } catch {
+        // Fallback silently if remote logo fails to load
+      }
+    }
+
     context.fillStyle = "#1e1b16";
     context.font = "bold 34px system-ui, sans-serif";
     context.fillText(shop.business_name, 48, 88);
@@ -1066,9 +1083,18 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
           </Link>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
-          <div>
-            <p className={styles.kicker}>Sending a list to</p>
-            <h1 className={styles.shopName}>{shop.business_name}</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {shop.logo_url ? (
+              <img
+                src={shop.logo_url}
+                alt={shop.business_name}
+                style={{ width: "48px", height: "48px", borderRadius: "10px", objectFit: "cover", border: "1px solid var(--line, #e2dcd2)" }}
+              />
+            ) : null}
+            <div>
+              <p className={styles.kicker}>Sending a list to</p>
+              <h1 className={styles.shopName}>{shop.business_name}</h1>
+            </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <button

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { ListNotFound } from "@/components/list-not-found";
 import { LiveList } from "@/components/live-list";
+import { extractStorefrontTheme } from "@/lib/api";
 import { fetchPublicList, fetchPublicShop } from "@/lib/server-api";
 
 /**
@@ -37,12 +38,15 @@ export const revalidate = 10;
 export default async function ListPage({ params }: Params) {
   try {
     const { slug, token } = await params;
-    const list = await fetchPublicList(slug, token);
+    const [list, shop] = await Promise.all([
+      fetchPublicList(slug, token),
+      fetchPublicShop(slug).catch(() => null),
+    ]);
     if (!list) {
-      const shop = await fetchPublicShop(slug).catch(() => null);
       return <ListNotFound slug={slug} businessName={shop?.business_name} />;
     }
-    return <LiveList initial={list} slug={slug} token={token} />;
+    const sfTheme = extractStorefrontTheme(shop?.description);
+    return <LiveList initial={list} slug={slug} token={token} logoUrl={sfTheme.logoUrl} />;
   } catch {
     return <ListNotFound slug="" businessName="AHIA Shop" />;
   }

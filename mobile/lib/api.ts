@@ -743,22 +743,20 @@ export function updateProfile(data: {
   });
 }
 
-export async function uploadUserAvatar(uri: string): Promise<UserProfile> {
+export async function uploadUserAvatar(uriOrBase64: string): Promise<UserProfile> {
   let token = currentAccessToken();
   if (!token) {
     token = await readStoredAccessToken();
   }
-  const blobRes = await fetch(uri);
-  const blob = await blobRes.blob();
   const send = async (bearerToken: string | null) =>
     fetch(`${BASE_URL}/api/v1/users/me/avatar`, {
       method: "POST",
       headers: {
-        "Content-Type": blob.type || "image/jpeg",
+        "Content-Type": "application/json",
         "Accept": "application/json",
         ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
       },
-      body: blob,
+      body: JSON.stringify({ image_base64: uriOrBase64 }),
     });
 
   let response = await send(token);
@@ -781,26 +779,24 @@ export async function uploadUserAvatar(uri: string): Promise<UserProfile> {
 
 export async function uploadTenantMedia(
   tenantId: string,
-  uri: string,
+  uriOrBase64: string,
   assetType: "logo" | "category" | "banner" | "general" = "general",
 ): Promise<{ url: string; delivery_url: string }> {
   let token = currentAccessToken();
   if (!token) {
     token = await readStoredAccessToken();
   }
-  const blobRes = await fetch(uri);
-  const blob = await blobRes.blob();
   const send = async (bearerToken: string | null) =>
     fetch(
       `${BASE_URL}/api/v1/tenants/${tenantId}/media/upload?asset_type=${encodeURIComponent(assetType)}`,
       {
         method: "POST",
         headers: {
-          "Content-Type": blob.type || "image/jpeg",
+          "Content-Type": "application/json",
           "Accept": "application/json",
           ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
         },
-        body: blob,
+        body: JSON.stringify({ image_base64: uriOrBase64 }),
       },
     );
 

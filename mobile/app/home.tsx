@@ -1147,20 +1147,33 @@ export default function Home() {
         setExpenses(freshExpenses);
         cacheExpenses(tenantId, freshExpenses);
       }
+      const effectiveBizLogo = sDetails?.logo_url || cachedDetails?.logo_url || activeBusiness?.logo_url || null;
       if (bDetails) {
-        setBusinessDetails(bDetails);
-        cacheBusinessDetails(tenantId, bDetails);
+        const mergedDetails = {
+          ...bDetails,
+          logo_url: effectiveBizLogo,
+        };
+        setBusinessDetails(mergedDetails);
+        cacheBusinessDetails(tenantId, mergedDetails);
+      }
+      if (effectiveBizLogo) {
+        updateCachedBusiness(tenantId, { logo_url: effectiveBizLogo });
+        setActiveBusiness((curr) => (curr && curr.id === tenantId ? { ...curr, logo_url: effectiveBizLogo } : curr));
+        setBusinesses((curr) => (curr ? curr.map((b) => (b.id === tenantId ? { ...b, logo_url: effectiveBizLogo } : b)) : curr));
       }
       if (uProfile) {
         const cached = getCachedProfile();
-        const effectiveAvatar = uProfile.avatar_url || profile?.avatar_url || cached?.avatar_url || null;
+        const cachedAvatar = cached?.avatar_url && cached.avatar_url.startsWith("http") ? cached.avatar_url : null;
+        const validRemoteAvatar = uProfile.avatar_url && uProfile.avatar_url.startsWith("http") ? uProfile.avatar_url : null;
+        const currentAvatar = profile?.avatar_url && profile.avatar_url.startsWith("http") ? profile.avatar_url : null;
+        const effectiveAvatar = validRemoteAvatar || currentAvatar || cachedAvatar || null;
         const merged = {
           ...uProfile,
           avatar_url: effectiveAvatar,
         };
         setProfile(merged);
         cacheProfile(merged);
-        if (effectiveAvatar && !uProfile.avatar_url) {
+        if (effectiveAvatar && effectiveAvatar.startsWith("http") && !uProfile.avatar_url) {
           void updateProfile({ avatar_url: effectiveAvatar }).catch(() => {});
         }
       }
@@ -1211,6 +1224,9 @@ export default function Home() {
       const cachedDetails = getCachedBusinessDetails(initial.id);
       if (cachedDetails) {
         setBusinessDetails(cachedDetails);
+        if (cachedDetails.logo_url && !initial.logo_url) {
+          initial.logo_url = cachedDetails.logo_url;
+        }
       }
       const cachedStats = getCachedDailyStats(initial.id);
       if (cachedStats) {
@@ -1230,23 +1246,31 @@ export default function Home() {
 
         if (freshProfile) {
           const cached = getCachedProfile();
-          const effectiveAvatar = freshProfile.avatar_url || profile?.avatar_url || cached?.avatar_url || null;
+          const cachedAvatar = cached?.avatar_url && cached.avatar_url.startsWith("http") ? cached.avatar_url : null;
+          const validRemoteAvatar = freshProfile.avatar_url && freshProfile.avatar_url.startsWith("http") ? freshProfile.avatar_url : null;
+          const currentAvatar = profile?.avatar_url && profile.avatar_url.startsWith("http") ? profile.avatar_url : null;
+          const effectiveAvatar = validRemoteAvatar || currentAvatar || cachedAvatar || null;
           const mergedProfile = {
             ...freshProfile,
             avatar_url: effectiveAvatar,
           };
           setProfile(mergedProfile);
           cacheProfile(mergedProfile);
-          if (effectiveAvatar && !freshProfile.avatar_url) {
+          if (effectiveAvatar && effectiveAvatar.startsWith("http") && !freshProfile.avatar_url) {
             void updateProfile({ avatar_url: effectiveAvatar }).catch(() => {});
           }
         }
 
         if (found && found.length > 0) {
-          setBusinesses(found);
-          cacheBusinesses(found);
+          const cachedMap = new Map(cachedBiz.map((b) => [b.id, b]));
+          const mergedFound = found.map((b) => ({
+            ...b,
+            logo_url: b.logo_url ?? cachedMap.get(b.id)?.logo_url ?? (b.id === activeBusiness?.id ? activeBusiness?.logo_url : null) ?? null,
+          }));
+          setBusinesses(mergedFound);
+          cacheBusinesses(mergedFound);
           const currentId = activeBusiness?.id ?? lastActiveId ?? cachedBiz[0]?.id;
-          const initial = found.find((b) => b.id === currentId) ?? found[0];
+          const initial = mergedFound.find((b) => b.id === currentId) ?? mergedFound[0];
           setActiveBusiness(initial);
           setAppSetting("last_active_tenant_id", initial.id);
           await loadData(initial.id);
@@ -1843,35 +1867,43 @@ export default function Home() {
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
         let uri = asset.uri;
+        let base64Payload = "";
         if (asset.base64) {
           const mime = asset.mimeType || "image/jpeg";
-          uri = `data:${mime};base64,${asset.base64}`;
+          base64Payload = `data:${mime};base64,${asset.base64}`;
+          uri = base64Payload;
         }
-        onSelected(uri);
-        showToast("Photo selected from device.");
 
         if (options?.uploadType === "avatar") {
-          void uploadUserAvatar(uri)
-            .then((updated) => {
-              if (updated.avatar_url) {
-                onSelected(updated.avatar_url);
-                showToast("Avatar saved to cloud storage!");
-              }
-            })
-            .catch(() => {
-              // Local photo preview remains
-            });
+          showToast("Uploading avatar to cloud storage...");
+          try {
+            const updated = await uploadUserAvatar(base64Payload || uri);
+            if (updated.avatar_url) {
+              onSelected(updated.avatar_url);
+              setProfile((curr) => (curr ? { ...curr, avatar_url: updated.avatar_url } : curr));
+              cacheProfile({
+                ...(profile || updated),
+                ...updated,
+              });
+              showToast("Avatar saved to cloud storage!");
+            }
+          } catch {
+            showToast("Cloud upload failed. Check connection.");
+          }
         } else if (options?.tenantId && options.uploadType) {
-          void uploadTenantMedia(options.tenantId, uri, options.uploadType)
-            .then((res) => {
-              if (res.delivery_url) {
-                onSelected(res.delivery_url);
-                showToast("Image saved to cloud storage!");
-              }
-            })
-            .catch(() => {
-              // Local photo preview remains
-            });
+          showToast("Uploading image to cloud storage...");
+          try {
+            const res = await uploadTenantMedia(options.tenantId, base64Payload || uri, options.uploadType);
+            if (res.delivery_url) {
+              onSelected(res.delivery_url);
+              showToast("Image saved to cloud storage!");
+            }
+          } catch {
+            showToast("Cloud upload failed. Check connection.");
+          }
+        } else {
+          onSelected(uri);
+          showToast("Photo selected from device.");
         }
       }
     } catch {
@@ -2153,14 +2185,15 @@ export default function Home() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setExportingPdf(true);
     showToast("Generating official business invoice PDF...");
+    const effectiveLogo = businessDetails?.logo_url || activeBusiness.logo_url || storefrontDetails?.logo_url || null;
     try {
       await generateAndSharePdfInvoice(
         {
           name: businessDetails?.name || activeBusiness.name,
           slug: activeBusiness.slug,
-          logo_url: businessDetails?.logo_url || activeBusiness.logo_url,
+          logo_url: effectiveLogo,
         },
-        businessDetails,
+        businessDetails ? { ...businessDetails, logo_url: effectiveLogo } : null,
         item,
         products,
         categories
@@ -2179,14 +2212,15 @@ export default function Home() {
   const handlePrintPdfInvoice = async (item: CustomerList) => {
     if (!activeBusiness) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const effectiveLogo = businessDetails?.logo_url || activeBusiness.logo_url || storefrontDetails?.logo_url || null;
     try {
       await printInvoice(
         {
           name: businessDetails?.name || activeBusiness.name,
           slug: activeBusiness.slug,
-          logo_url: businessDetails?.logo_url || activeBusiness.logo_url,
+          logo_url: effectiveLogo,
         },
-        businessDetails,
+        businessDetails ? { ...businessDetails, logo_url: effectiveLogo } : null,
         item,
         products,
         categories
@@ -2439,16 +2473,22 @@ export default function Home() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSavingProfile(true);
     try {
+      const validEditAvatar =
+        editAvatarUrl.trim().startsWith("http")
+          ? editAvatarUrl.trim()
+          : profile?.avatar_url && profile.avatar_url.startsWith("http")
+          ? profile.avatar_url
+          : null;
       const updated = await updateProfile({
         first_name: editFirstName.trim(),
         last_name: editLastName.trim() || undefined,
         phone: editPhone.trim() || undefined,
         email: editEmail.trim() || undefined,
-        avatar_url: editAvatarUrl.trim() || profile?.avatar_url || null,
+        avatar_url: validEditAvatar,
       });
       const fullProfile = {
         ...updated,
-        avatar_url: editAvatarUrl.trim() || updated.avatar_url || profile?.avatar_url || null,
+        avatar_url: validEditAvatar || updated.avatar_url || null,
       };
       setProfile(fullProfile);
       cacheProfile(fullProfile);
@@ -3343,7 +3383,7 @@ export default function Home() {
                   </View>
                   <View style={{ alignItems: "flex-end", gap: 2 }}>
                     <Text style={styles.saleAmount}>{formatMoney(sale.total_amount)}</Text>
-                    <Text style={{ fontSize: 10, color: "#238636", fontWeight: "600" }}>Audit Staff &rsaquo;</Text>
+                    <Text style={{ fontSize: 10, color: "#238636", fontWeight: "600" }}>Sale Details & Receipt &rsaquo;</Text>
                   </View>
                 </Pressable>
               ))
@@ -4765,7 +4805,7 @@ export default function Home() {
                               via {(s.payment_method || "CASH").toUpperCase()}
                             </Text>
                             <Text style={{ fontSize: 10, color: "#238636", fontWeight: "600", marginTop: 2 }}>
-                              Audit staff, waybill & receipt &rsaquo;
+                              View Details, Receipt & Waybill &rsaquo;
                             </Text>
                           </View>
                         </View>
@@ -6499,33 +6539,34 @@ export default function Home() {
       {/* Official Invoice Modal */}
       <Modal statusBarTranslucent visible={invoiceModalList !== null} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { maxHeight: "90%", padding: 16 }]}>
-            <View style={styles.invoiceModalHeader}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, paddingRight: 8 }}>
-                {(businessDetails?.logo_url || activeBusiness?.logo_url) ? (
-                  <Image
-                    source={{ uri: businessDetails?.logo_url || activeBusiness?.logo_url || "" }}
-                    style={{ width: 44, height: 44, borderRadius: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }}
-                    resizeMode="cover"
-                  />
-                ) : null}
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.modalTitle}>{businessDetails?.name || activeBusiness?.name || "Official Invoice"}</Text>
-                  <Text style={styles.modalSubtitle}>
-                    Order #{invoiceModalList ? invoiceModalList.id.slice(0, 8) : ""}
-                  </Text>
+          <View style={[styles.modalCard, { height: "88%", maxHeight: "90%", padding: 16 }]}>
+            <View style={{ flex: 1 }}>
+              <View style={styles.invoiceModalHeader}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, paddingRight: 8 }}>
+                  {(businessDetails?.logo_url || activeBusiness?.logo_url || storefrontDetails?.logo_url) ? (
+                    <Image
+                      source={{ uri: businessDetails?.logo_url || activeBusiness?.logo_url || storefrontDetails?.logo_url || "" }}
+                      style={{ width: 44, height: 44, borderRadius: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }}
+                      resizeMode="cover"
+                    />
+                  ) : null}
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.modalTitle}>{businessDetails?.name || activeBusiness?.name || "Official Invoice"}</Text>
+                    <Text style={styles.modalSubtitle}>
+                      Order #{invoiceModalList ? invoiceModalList.id.slice(0, 8) : ""}
+                    </Text>
+                  </View>
                 </View>
+                <Pressable
+                  style={styles.closeCircleBtn}
+                  onPress={() => setInvoiceModalList(null)}
+                >
+                  <CloseIcon size={18} color="#64748b" />
+                </Pressable>
               </View>
-              <Pressable
-                style={styles.closeCircleBtn}
-                onPress={() => setInvoiceModalList(null)}
-              >
-                <CloseIcon size={18} color="#64748b" />
-              </Pressable>
-            </View>
 
-            {invoiceModalList && (
-              <ScrollView style={{ marginTop: 10 }} showsVerticalScrollIndicator={false}>
+              {invoiceModalList && (
+                <ScrollView style={{ flex: 1, marginTop: 10 }} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
                 {/* Customer Meta */}
                 <View style={styles.invoiceClientBox}>
                   <View>
@@ -6728,14 +6769,15 @@ export default function Home() {
                 </View>
               </ScrollView>
             )}
+            </View>
           </View>
         </View>
       </Modal>
 
-      {/* Sale Detail & Staff Audit Modal */}
+      {/* Sale Detail & Receipt Modal */}
       <Modal statusBarTranslucent visible={selectedSaleAudit !== null} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { maxHeight: "90%", padding: 18 }]}>
+          <View style={[styles.modalCard, { height: "88%", maxHeight: "90%", padding: 18 }]}>
             {selectedSaleAudit && (() => {
               const isCancelled = Boolean(selectedSaleAudit.cancelled_at);
               const linkedList = customerLists.find(
@@ -6770,7 +6812,7 @@ export default function Home() {
                   {/* Modal Header */}
                   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                     <View style={{ flex: 1, paddingRight: 8 }}>
-                      <Text style={styles.modalTitle}>Sale Audit & Details</Text>
+                      <Text style={styles.modalTitle}>Sale & Receipt Details</Text>
                       <Text style={styles.modalSubtitle}>Receipt #{selectedSaleAudit.receipt_number}</Text>
                     </View>
                     <Pressable
@@ -6781,7 +6823,7 @@ export default function Home() {
                     </Pressable>
                   </View>
 
-                  <ScrollView showsVerticalScrollIndicator={false}>
+                  <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
                     {/* Amount & Status Card */}
                     <View
                       style={{

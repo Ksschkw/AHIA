@@ -433,7 +433,7 @@ export function currentUser(): Promise<UserProfile> {
   if (signedInUser) return Promise.resolve(signedInUser);
   return request<UserProfile>("/api/v1/users/me").then((user) => {
     signedInUser = user;
-    if (typeof window !== "undefined" && user.avatar_url) {
+    if (typeof window !== "undefined" && user.avatar_url && user.avatar_url.startsWith("http")) {
       window.localStorage.setItem(`ahia.user_avatar.${user.id}`, user.avatar_url);
       window.localStorage.setItem("ahia.user_avatar", user.avatar_url);
     }
@@ -1023,6 +1023,43 @@ export function updateStorefront(
     method: "PATCH",
     body: changes satisfies Schemas["StorefrontUpdateSchema"],
   });
+}
+
+export function extractStorefrontTheme(description: string | null | undefined): {
+  cleanDescription: string;
+  themeColor: string;
+  themeBg: string;
+  themeBgImage: string;
+  closingMessage: string;
+  logoUrl: string | null;
+} {
+  const defaultTheme = {
+    cleanDescription: description ?? "",
+    themeColor: "#084a2f",
+    themeBg: "#fbf7f0",
+    themeBgImage: "",
+    closingMessage: "",
+    logoUrl: null,
+  };
+  if (!description) return defaultTheme;
+
+  const match = description.match(/<!--\s*ahia-theme:(\{[\s\S]*?\})\s*-->/);
+  if (!match) return defaultTheme;
+
+  try {
+    const parsed = JSON.parse(match[1]);
+    const clean = description.replace(/<!--\s*ahia-theme:[\s\S]*?-->/, "").trim();
+    return {
+      cleanDescription: clean,
+      themeColor: parsed.color || defaultTheme.themeColor,
+      themeBg: parsed.bg || defaultTheme.themeBg,
+      themeBgImage: parsed.bgImage || "",
+      closingMessage: parsed.closing || "",
+      logoUrl: parsed.logoUrl || null,
+    };
+  } catch {
+    return defaultTheme;
+  }
 }
 
 /** The public URL, the QR payload and the WhatsApp link for one product. */

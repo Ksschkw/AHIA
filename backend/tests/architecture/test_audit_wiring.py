@@ -40,6 +40,9 @@ EXEMPT_SERVICES: dict[str, str] = {
     # A notification is a message to a person, and the row is the record of it. The action that
     # noticed something is what a trail entry describes.
     "notification_service.py": "a notification is a message; the row is its own record",
+    "push_dispatcher_service.py": (
+        "token cleanup is operational; notifications carry their own audit record"
+    ),
 }
 
 

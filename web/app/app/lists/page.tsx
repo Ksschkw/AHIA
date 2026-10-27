@@ -41,7 +41,9 @@ import {
   confirmCustomerList,
   deleteCustomerList,
   dispatchCustomerList,
+  extractStorefrontTheme,
   getBusiness,
+  getStorefront,
   listBusinesses,
   listCategories,
   listCustomerLists,
@@ -257,6 +259,7 @@ function computeCustomerListPaid(list: CustomerList): number {
 
 export default function ListsPage() {
   const [business, setBusiness] = useState<Tenant | null>(null);
+  const [businessLogo, setBusinessLogo] = useState<string>("");
   const [lists, setLists] = useState<CustomerList[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -353,13 +356,23 @@ export default function ListsPage() {
         if (rememberedProds) setProducts(rememberedProds);
         if (rememberedCats) setCategories(rememberedCats);
 
-        const [bizDetail, rawLists, prods, cats, pinExists] = await Promise.all([
+        const storedLogo =
+          typeof window !== "undefined"
+            ? window.localStorage.getItem(`ahia.business_logo.${chosen.id}`) || ""
+            : "";
+
+        const [bizDetail, rawLists, prods, cats, pinExists, sf] = await Promise.all([
           getBusiness(chosen.id).catch(() => null),
           listCustomerLists(chosen.id).catch(() => []),
           listProducts(chosen.id).catch(() => []),
           listCategories(chosen.id).catch(() => []),
           hasBusinessPin(chosen.id),
+          getStorefront(chosen.id).catch(() => null),
         ]);
+
+        const sfTheme = extractStorefrontTheme(sf?.description);
+        const effectiveLogo = storedLogo || sfTheme.logoUrl || "";
+        setBusinessLogo(effectiveLogo);
 
         // Hydrate local payments
         const hydratedLists = rawLists.map((l) => {
@@ -1673,11 +1686,20 @@ export default function ListsPage() {
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "2px solid var(--leaf)", paddingBottom: "10px", marginBottom: "12px" }}>
-                <div>
-                  <div style={{ fontSize: "18px", fontWeight: 800, color: "var(--leaf-dark)" }}>
-                    {business?.name || "Stall"}
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  {businessLogo ? (
+                    <img
+                      src={businessLogo}
+                      alt={business?.name || "Logo"}
+                      style={{ width: "40px", height: "40px", borderRadius: "6px", objectFit: "cover" }}
+                    />
+                  ) : null}
+                  <div>
+                    <div style={{ fontSize: "18px", fontWeight: 800, color: "var(--leaf-dark)" }}>
+                      {business?.name || "Stall"}
+                    </div>
+                    <div style={{ fontSize: "12px", color: "var(--ink-2)" }}>{business?.phone || "Commercial Merchant"}</div>
                   </div>
-                  <div style={{ fontSize: "12px", color: "var(--ink-2)" }}>{business?.phone || "Commercial Merchant"}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: "16px", fontWeight: 800 }}>INVOICE</div>
@@ -1718,7 +1740,13 @@ export default function ListsPage() {
                 className={styles.quickPasteBtn}
                 onClick={() => {
                   if (!business) return;
-                  printInvoice(business, business, invoiceModalList, products, categories);
+                  printInvoice(
+                    { ...business, logo_url: businessLogo },
+                    { ...business, logo_url: businessLogo },
+                    invoiceModalList,
+                    products,
+                    categories
+                  );
                 }}
               >
                 <ReceiptIcon size={14} />
