@@ -11,7 +11,12 @@
 export const DEPLOYED_API = "https://p01--ahia-api--qw5xhkblp8hy.code.run";
 
 export function resolveApiBaseUrl(): string {
-  const target = (process.env.API_PROXY_TARGET || process.env.NEXT_PUBLIC_API_BASE_URL || "").trim().replace(/\/+$/, "");
+  const target = (
+    process.env.API_PROXY_TARGET ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    ""
+  ).trim().replace(/\/+$/, "");
   if (!target) {
     return process.env.NODE_ENV === "production" || process.env.VERCEL || !process.env.LOCAL_DEV
       ? DEPLOYED_API

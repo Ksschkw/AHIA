@@ -77,7 +77,11 @@ export type ProductShareSheet = Schemas["ProductShareSheetSchema"];
  * directly - a mobile build, for instance - and remember that a browser then needs CORS and a
  * cross-site cookie policy.
  */
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+export const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  ""
+).trim().replace(/\/+$/, "");
 
 /**
  * No request may hang the interface.

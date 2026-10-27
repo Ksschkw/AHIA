@@ -48,7 +48,12 @@ function withScheme(target: string): string {
     : withProtocol;
 }
 
-const API_PROXY_TARGET = withScheme(process.env.API_PROXY_TARGET ?? "http://127.0.0.1:8000");
+const API_PROXY_TARGET = withScheme(
+  process.env.API_PROXY_TARGET ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  ""
+);
 
 const nextConfig: NextConfig = {
   // The floating development indicator is a tool for the person writing the code, and it sits on top
