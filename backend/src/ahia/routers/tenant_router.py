@@ -21,7 +21,7 @@ from pydantic import BaseModel
 from ahia.core.authentication import Principal
 from ahia.core.ports.storage_port import StorageCategory, StorageObjectKey, StorageUploadRequest
 from ahia.core.tenant_context import TenantContext
-from ahia.routers.product_image_router import declared_content_type, read_body_within_limit
+from ahia.routers.upload_support import declared_content_type, read_body_within_limit
 from ahia.routers.user_router import require_principal
 from ahia.schemas.tenant_schema import (
     TenantCreateSchema,

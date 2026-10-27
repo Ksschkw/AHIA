@@ -23,7 +23,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from ahia.core.authentication import Principal, authenticate_request
 from ahia.core.ports.storage_port import StorageCategory, StorageObjectKey, StorageUploadRequest
-from ahia.routers.product_image_router import declared_content_type, read_body_within_limit
+from ahia.routers.upload_support import declared_content_type, read_body_within_limit
 from ahia.schemas.user_schema import UserProfileUpdateSchema, UserResponseSchema
 from ahia.services.user_service import UserService
 
