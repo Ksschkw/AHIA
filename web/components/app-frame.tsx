@@ -29,18 +29,33 @@ export function AppFrame({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [businesses, setBusinesses] = useState<TenantSummary[]>([]);
   const [activeBusinessId, setActiveBusinessId] = useState<string | null>(null);
-  const [showPushPrompt, setShowPushPrompt] = useState(false);
+  const [promptType, setPromptType] = useState<"ask" | "blocked" | "ios_tip" | null>(null);
   const [pushEnabling, setPushEnabling] = useState(false);
 
   // Auto-prompt check on load: If push is supported and not yet prompted/enabled
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (
-      isPushSupported() &&
-      Notification.permission === "default" &&
-      !window.sessionStorage.getItem("ahia.push_prompt_dismissed")
+
+    if (!isPushSupported()) {
+      const isIOS =
+        /iPad|iPhone|iPod/.test(navigator.userAgent) &&
+        !(window as unknown as { MSStream?: unknown }).MSStream;
+      const isStandalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        Boolean((navigator as unknown as { standalone?: boolean }).standalone);
+      if (isIOS && !isStandalone && !window.sessionStorage.getItem("ahia.ios_push_dismissed")) {
+        setPromptType("ios_tip");
+      }
+      return;
+    }
+
+    if (Notification.permission === "default") {
+      setPromptType("ask");
+    } else if (
+      Notification.permission === "denied" &&
+      !window.sessionStorage.getItem("ahia.push_blocked_dismissed")
     ) {
-      setShowPushPrompt(true);
+      setPromptType("blocked");
     }
   }, []);
 
@@ -129,25 +144,41 @@ export function AppFrame({ children }: { children: ReactNode }) {
     try {
       const activeBiz = activeBusinessId || businesses[0]?.id;
       if (activeBiz) {
-        await subscribeToWebPush(activeBiz);
-        for (const b of businesses) {
-          if (b.id !== activeBiz) {
-            void subscribeToWebPush(b.id).catch(() => {});
+        const res = await subscribeToWebPush(activeBiz);
+        if (res.success) {
+          for (const b of businesses) {
+            if (b.id !== activeBiz) {
+              void subscribeToWebPush(b.id).catch(() => {});
+            }
           }
+          setPromptType(null);
+        } else if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "denied") {
+          setPromptType("blocked");
+        } else {
+          setPromptType(null);
         }
       }
     } finally {
       setPushEnabling(false);
-      setShowPushPrompt(false);
     }
   }, [activeBusinessId, businesses]);
 
   const handleDismissPush = useCallback(() => {
-    setShowPushPrompt(false);
-    if (typeof window !== "undefined") {
-      window.sessionStorage.setItem("ahia.push_prompt_dismissed", "1");
+    if (promptType === "ask") {
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("ahia.push_prompt_dismissed", "1");
+      }
+    } else if (promptType === "blocked") {
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("ahia.push_blocked_dismissed", "1");
+      }
+    } else if (promptType === "ios_tip") {
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("ahia.ios_push_dismissed", "1");
+      }
     }
-  }, []);
+    setPromptType(null);
+  }, [promptType]);
 
   const avatarUrl =
     user?.avatar_url ||
@@ -169,7 +200,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
       onSwitchBusiness={switchBusiness}
       onSignOut={handleSignOut}
     >
-      {showPushPrompt && (
+      {promptType === "ask" && (
         <aside
           role="region"
           aria-label="Push notifications prompt"
@@ -249,6 +280,144 @@ export function AppFrame({ children }: { children: ReactNode }) {
               }}
             >
               Later
+            </button>
+          </div>
+        </aside>
+      )}
+
+      {promptType === "blocked" && (
+        <aside
+          role="region"
+          aria-label="Notifications blocked notice"
+          style={{
+            position: "sticky",
+            top: 0,
+            zIndex: 90,
+            background: "#7c2d12",
+            color: "#ffffff",
+            padding: "12px 16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            flexWrap: "wrap",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.25)",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.15)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: "1 1 280px" }}>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "32px",
+                height: "32px",
+                borderRadius: "50%",
+                background: "rgba(255,255,255,0.18)",
+                flexShrink: 0,
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: "14px", lineHeight: "1.2" }}>
+                Notifications Are Blocked in Your Browser
+              </div>
+              <div style={{ fontSize: "12px", opacity: 0.9, marginTop: "2px", lineHeight: "1.3" }}>
+                Click the lock/settings icon in your browser URL bar, set Notifications to "Allow", and reload to get shop alerts.
+              </div>
+            </div>
+          </div>
+          <div>
+            <button
+              type="button"
+              onClick={handleDismissPush}
+              style={{
+                backgroundColor: "#ffffff",
+                color: "#7c2d12",
+                border: "none",
+                fontWeight: 700,
+                fontSize: "13px",
+                padding: "8px 14px",
+                borderRadius: "8px",
+                cursor: "pointer",
+              }}
+            >
+              Got It
+            </button>
+          </div>
+        </aside>
+      )}
+
+      {promptType === "ios_tip" && (
+        <aside
+          role="region"
+          aria-label="iOS notification tip"
+          style={{
+            position: "sticky",
+            top: 0,
+            zIndex: 90,
+            background: "#1e293b",
+            color: "#ffffff",
+            padding: "12px 16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            flexWrap: "wrap",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.25)",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.15)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: "1 1 280px" }}>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "32px",
+                height: "32px",
+                borderRadius: "50%",
+                background: "rgba(255,255,255,0.18)",
+                flexShrink: 0,
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                <polyline points="16 6 12 2 8 6" />
+                <line x1="12" y1="2" x2="12" y2="15" />
+              </svg>
+            </span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: "14px", lineHeight: "1.2" }}>
+                Get Instant Shop Alerts on iPhone
+              </div>
+              <div style={{ fontSize: "12px", opacity: 0.9, marginTop: "2px", lineHeight: "1.3" }}>
+                Apple requires adding AHIA to your Home Screen: Tap the Share button in Safari, then tap "Add to Home Screen".
+              </div>
+            </div>
+          </div>
+          <div>
+            <button
+              type="button"
+              onClick={handleDismissPush}
+              style={{
+                backgroundColor: "#ffffff",
+                color: "#1e293b",
+                border: "none",
+                fontWeight: 700,
+                fontSize: "13px",
+                padding: "8px 14px",
+                borderRadius: "8px",
+                cursor: "pointer",
+              }}
+            >
+              Got It
             </button>
           </div>
         </aside>

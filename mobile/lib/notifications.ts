@@ -4,6 +4,9 @@
  * Provides safe device token registration and unread notification state management.
  */
 
+import { Platform } from "react-native";
+import * as Notifications from "expo-notifications";
+
 import {
   getUnreadNotificationCount,
   getNotifications,
@@ -11,6 +14,21 @@ import {
   request,
   type AppNotification,
 } from "./api";
+
+// Configure how notifications appear when app is foregrounded
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+} catch {
+  // Fallback if native module is unlinked
+}
 
 export interface PushTokenPayload {
   token: string;
@@ -26,6 +44,56 @@ export function getActivePushToken(): string | null {
 
 export function setActivePushToken(token: string | null): void {
   activePushToken = token;
+}
+
+/**
+ * Request notification permissions and register the Expo push token
+ * across all businesses the user has access to.
+ */
+export async function registerForPushNotificationsAsync(
+  tenantIds: string[],
+): Promise<{ success: boolean; token?: string; error?: string }> {
+  try {
+    if (Platform.OS === "android") {
+      await Notifications.setNotificationChannelAsync("default", {
+        name: "default",
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: "#084a2f",
+      });
+    }
+
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== "granted") {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== "granted") {
+      return { success: false, error: "Notification permission not granted" };
+    }
+
+    const tokenData = await Notifications.getExpoPushTokenAsync().catch(() => null);
+    if (!tokenData?.data) {
+      return { success: false, error: "Failed to generate push token" };
+    }
+
+    const token = tokenData.data;
+    setActivePushToken(token);
+
+    const osPlatform = Platform.OS === "ios" ? "ios" : "android";
+    for (const tenantId of tenantIds) {
+      void registerPushToken(tenantId, {
+        token,
+        platform: osPlatform,
+      });
+    }
+
+    return { success: true, token };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : "Error initializing push notifications";
+    return { success: false, error: errorMsg };
+  }
 }
 
 /**

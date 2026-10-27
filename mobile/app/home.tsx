@@ -63,11 +63,13 @@ import { SalesTimelineChart } from "@/components/SalesTimelineChart";
 import { getTheme, getSavedThemeMode, saveThemeMode, type ThemeMode, type ThemePalette } from "@/lib/theme";
 import { hasBusinessPin, setBusinessPin, verifyBusinessPin, clearBusinessPin } from "@/lib/pin";
 import { useAppLifecycle } from "@/lib/lifecycle";
+import * as Notifications from "expo-notifications";
 import {
   fetchUnreadCount,
   sendMobileTestPush,
   getActivePushToken,
   registerPushToken,
+  registerForPushNotificationsAsync,
 } from "@/lib/notifications";
 import {
   ArrowLeftIcon,
@@ -1248,13 +1250,8 @@ export default function Home() {
           setAppSetting("last_active_tenant_id", initial.id);
           await loadData(initial.id);
 
-          const pushTok = getActivePushToken();
-          if (pushTok) {
-            const osPlatform = Platform.OS === "ios" ? "ios" : "android";
-            for (const biz of found) {
-              void registerPushToken(biz.id, { token: pushTok, platform: osPlatform });
-            }
-          }
+          // Automatically request notification permissions and register push token across all shops
+          void registerForPushNotificationsAsync(found.map((b) => b.id));
         } else {
           setLoading(false);
         }
@@ -1266,6 +1263,23 @@ export default function Home() {
       }
     })();
   }, [loadData]);
+
+  // Handle tapping on a push notification (deep linking)
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data;
+      if (data?.business_id) {
+        const targetBiz = (businesses ?? []).find((b) => b.id === data.business_id);
+        if (targetBiz) {
+          setActiveBusiness(targetBiz);
+        }
+      }
+      if (data?.list_id) {
+        setActiveTab("lists");
+      }
+    });
+    return () => sub.remove();
+  }, [businesses]);
 
   // Periodic background auto-sync and new orders poller every 8 seconds
   useEffect(() => {
@@ -5158,6 +5172,76 @@ export default function Home() {
               </Pressable>
             </View>
 
+            {/* Push Notifications Card */}
+            <View style={styles.moreCard}>
+              <View style={styles.sectionHeaderRow}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Text style={styles.moreCardTitle}>Push Notifications</Text>
+                  <View style={{ backgroundColor: getActivePushToken() ? theme.badgeBg : "#78350f", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: getActivePushToken() ? theme.accent : "#fbbf24" }}>
+                      {getActivePushToken() ? "ACTIVE" : "NOT ENABLED"}
+                    </Text>
+                  </View>
+                </View>
+                {!getActivePushToken() && (
+                  <Pressable
+                    style={styles.addStaffBtn}
+                    onPress={async () => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      const res = await registerForPushNotificationsAsync((businesses ?? []).map((b) => b.id));
+                      if (res.success) {
+                        showToast("Push notifications successfully enabled!");
+                      } else {
+                        showToast(res.error || "Could not enable push notifications");
+                      }
+                    }}
+                  >
+                    <Text style={styles.addStaffBtnText}>Enable Alerts</Text>
+                  </Pressable>
+                )}
+              </View>
+              <Text style={styles.moreCardDesc}>
+                Receive instant alerts whenever customers submit orders, upload payment receipts, or stock runs low.
+              </Text>
+              {getActivePushToken() ? (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                  <Pressable
+                    style={[styles.themeToggleBtn, { paddingHorizontal: 12, paddingVertical: 8 }]}
+                    onPress={async () => {
+                      if (!activeBusiness) return;
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      const res = await sendMobileTestPush(activeBusiness.id, "brief");
+                      showToast(res.message);
+                    }}
+                  >
+                    <Text style={styles.themeToggleBtnText}>Test Order Alert</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.themeToggleBtn, { paddingHorizontal: 12, paddingVertical: 8 }]}
+                    onPress={async () => {
+                      if (!activeBusiness) return;
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      const res = await sendMobileTestPush(activeBusiness.id, "detailed");
+                      showToast(res.message);
+                    }}
+                  >
+                    <Text style={styles.themeToggleBtnText}>Test Payment Alert</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.themeToggleBtn, { paddingHorizontal: 12, paddingVertical: 8 }]}
+                    onPress={async () => {
+                      if (!activeBusiness) return;
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      const res = await sendMobileTestPush(activeBusiness.id, "multimedia");
+                      showToast(res.message);
+                    }}
+                  >
+                    <Text style={styles.themeToggleBtnText}>Test Restock Alert</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
+
             {/* Everything in AHIA Grid */}
             <Text style={styles.sectionHeading}>Everything in AHIA</Text>
             <View style={styles.everythingGrid}>
@@ -5412,56 +5496,6 @@ export default function Home() {
               <Text style={styles.profileDetail}>Name: {businessDetails?.name ?? activeBusiness?.name}</Text>
               <Text style={styles.profileDetail}>Address: {businessDetails?.address ?? "Alaba International Market"}</Text>
               <Text style={styles.profileDetail}>Phone: {businessDetails?.phone ?? "Not set"}</Text>
-            </View>
-
-            {/* Push Notifications Card */}
-            <View style={styles.moreCard}>
-              <View style={styles.sectionHeaderRow}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Text style={styles.moreCardTitle}>Push Notifications</Text>
-                  <View style={{ backgroundColor: theme.badgeBg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: theme.accent }}>DEVICE ENABLED</Text>
-                  </View>
-                </View>
-              </View>
-              <Text style={styles.moreCardDesc}>
-                Receive instant alerts whenever customers submit orders, dispatch waybills, or stock runs low.
-              </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-                <Pressable
-                  style={[styles.themeToggleBtn, { paddingHorizontal: 12, paddingVertical: 8 }]}
-                  onPress={async () => {
-                    if (!activeBusiness) return;
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    const res = await sendMobileTestPush(activeBusiness.id, "brief");
-                    showToast(res.message);
-                  }}
-                >
-                  <Text style={styles.themeToggleBtnText}>Brief Alert</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.themeToggleBtn, { paddingHorizontal: 12, paddingVertical: 8 }]}
-                  onPress={async () => {
-                    if (!activeBusiness) return;
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    const res = await sendMobileTestPush(activeBusiness.id, "detailed");
-                    showToast(res.message);
-                  }}
-                >
-                  <Text style={styles.themeToggleBtnText}>Detailed Alert</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.themeToggleBtn, { paddingHorizontal: 12, paddingVertical: 8 }]}
-                  onPress={async () => {
-                    if (!activeBusiness) return;
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    const res = await sendMobileTestPush(activeBusiness.id, "multimedia");
-                    showToast(res.message);
-                  }}
-                >
-                  <Text style={styles.themeToggleBtnText}>Multi-Media</Text>
-                </Pressable>
-              </View>
             </View>
 
             {/* App Appearance / Theme Selector */}
