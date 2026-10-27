@@ -329,9 +329,18 @@ export default function ListsPage() {
   const loadData = useCallback(async () => {
     try {
       const businesses = await listBusinesses();
-      const remembered =
-        typeof window === "undefined" ? null : window.localStorage.getItem("ahia.business");
-      const chosen = businesses.find((b) => b.id === remembered) ?? businesses[0];
+      let targetBizId: string | null = null;
+      if (typeof window !== "undefined") {
+        const urlParams = new URLSearchParams(window.location.search);
+        const fromUrl = urlParams.get("business");
+        if (fromUrl && businesses.some((b) => b.id === fromUrl)) {
+          targetBizId = fromUrl;
+          window.localStorage.setItem("ahia.business", fromUrl);
+        } else {
+          targetBizId = window.localStorage.getItem("ahia.business");
+        }
+      }
+      const chosen = businesses.find((b) => b.id === targetBizId) ?? businesses[0];
 
       if (chosen) {
         const rememberedLists = cachedRead<CustomerList[]>(`/api/v1/tenants/${chosen.id}/requests`);
@@ -375,13 +384,22 @@ export default function ListsPage() {
         setCategories(cats);
         setHasPin(pinExists);
 
-        // Auto-expand first unworked list if none expanded
-        const firstUnworked = hydratedLists.find((l) => {
-          const items = l.lines.filter((x) => x.note !== "heading");
-          return l.status !== "confirmed" && items.some((x) => !x.shop_price);
-        });
-        if (firstUnworked) {
-          setExpandedListIds(new Set([firstUnworked.id]));
+        // Auto-expand targeted list from notification URL, or first unworked list
+        const urlListId =
+          typeof window !== "undefined"
+            ? new URLSearchParams(window.location.search).get("list")
+            : null;
+        if (urlListId) {
+          setExpandedListIds(new Set([urlListId]));
+          setListFilterTab("all");
+        } else {
+          const firstUnworked = hydratedLists.find((l) => {
+            const items = l.lines.filter((x) => x.note !== "heading");
+            return l.status !== "confirmed" && items.some((x) => !x.shop_price);
+          });
+          if (firstUnworked) {
+            setExpandedListIds(new Set([firstUnworked.id]));
+          }
         }
       }
       setState("ready");

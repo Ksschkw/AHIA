@@ -33,9 +33,18 @@ export function AppFrame({ children }: { children: ReactNode }) {
   const loadBusinesses = useCallback(async () => {
     const found = await listBusinesses();
     setBusinesses(found);
-    const remembered =
-      typeof window === "undefined" ? null : window.localStorage.getItem(ACTIVE_BUSINESS_KEY);
-    const chosen = found.find((candidate) => candidate.id === remembered) ?? found[0] ?? null;
+    let targetId: string | null = null;
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlBiz = urlParams.get("business");
+      if (urlBiz && found.some((candidate) => candidate.id === urlBiz)) {
+        targetId = urlBiz;
+        window.localStorage.setItem(ACTIVE_BUSINESS_KEY, urlBiz);
+      } else {
+        targetId = window.localStorage.getItem(ACTIVE_BUSINESS_KEY);
+      }
+    }
+    const chosen = found.find((candidate) => candidate.id === targetId) ?? found[0] ?? null;
     setActiveBusinessId(chosen ? chosen.id : null);
     if (chosen) {
       void prefetchAllAppData(chosen.id);
@@ -60,15 +69,19 @@ export function AppFrame({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (activeBusinessId) {
       void prefetchAllAppData(activeBusinessId);
-      if (
-        typeof window !== "undefined" &&
-        "Notification" in window &&
-        Notification.permission === "granted"
-      ) {
-        void subscribeToWebPush(activeBusinessId).catch(() => {});
+    }
+    // Subscribe all businesses the user has access to for multi-stall notifications
+    if (
+      typeof window !== "undefined" &&
+      "Notification" in window &&
+      Notification.permission === "granted" &&
+      businesses.length > 0
+    ) {
+      for (const biz of businesses) {
+        void subscribeToWebPush(biz.id).catch(() => {});
       }
     }
-  }, [activeBusinessId]);
+  }, [activeBusinessId, businesses]);
 
   const switchBusiness = useCallback(
     (businessId: string) => {

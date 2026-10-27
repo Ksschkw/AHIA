@@ -17,7 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from ahia.core.database import UnitOfWork
 from ahia.core.logging import StructuredLogger, get_logger
-from ahia.crud import push_subscription_crud
+from ahia.crud import push_subscription_crud, tenant_crud
 
 _LOGGER_NAME: Final[str] = "ahia.services.push_dispatcher"
 _EXPO_PUSH_URL: Final[str] = "https://exp.host/--/api/v2/push/send"
@@ -71,16 +71,17 @@ class PushDispatcherService:
     def _resolve_target_url(
         self,
         *,
+        tenant_id: UUID,
         entity_type: str | None,
         entity_id: UUID | None,
     ) -> str:
         if entity_type == "customer_list" and entity_id:
-            return f"/app/lists/{entity_id}"
+            return f"/app/lists?business={tenant_id}&list={entity_id}"
         if entity_type == "product" and entity_id:
-            return "/app/inventory"
+            return f"/app/items?business={tenant_id}&product={entity_id}"
         if entity_type == "sale" and entity_id:
-            return f"/app/sales/{entity_id}"
-        return "/app/notifications"
+            return f"/app/sales?business={tenant_id}&sale={entity_id}"
+        return f"/app/more?business={tenant_id}"
 
     async def _send_expo(
         self,
@@ -136,6 +137,8 @@ class PushDispatcherService:
         """Send a push notification to all registered endpoints of a recipient."""
         unit_of_work = self._unit_of_work_factory()
         async with unit_of_work:
+            tenant = await tenant_crud.get_by_id(unit_of_work.session_handle, tenant_id)
+            tenant_name = tenant.name if tenant else "AHIA"
             subscriptions = await push_subscription_crud.list_for_recipient(
                 unit_of_work.session_handle,
                 tenant_id=tenant_id,
@@ -146,7 +149,13 @@ class PushDispatcherService:
         if not endpoints:
             return 0
 
-        target_url = self._resolve_target_url(entity_type=entity_type, entity_id=entity_id)
+        display_title = title
+        if not title.startswith(f"[{tenant_name}]") and not title.startswith(f"{tenant_name}:"):
+            display_title = f"[{tenant_name}] {title}"
+
+        target_url = self._resolve_target_url(
+            tenant_id=tenant_id, entity_type=entity_type, entity_id=entity_id
+        )
         delivered = 0
 
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -157,12 +166,15 @@ class PushDispatcherService:
                 if is_expo:
                     expo_payload: dict[str, object] = {
                         "to": endpoint,
-                        "title": title,
+                        "title": display_title,
                         "body": body,
                         "sound": "default",
                         "priority": "high",
+                        "channelId": f"stall-{tenant_id}",
+                        "categoryId": "business_alerts",
                         "data": {
                             "tenant_id": str(tenant_id),
+                            "tenant_name": tenant_name,
                             "entity_type": entity_type,
                             "entity_id": str(entity_id) if entity_id else None,
                             "url": target_url,
@@ -175,14 +187,16 @@ class PushDispatcherService:
                 elif endpoint.startswith("http://") or endpoint.startswith("https://"):
                     web_payload = json.dumps(
                         {
-                            "title": title,
+                            "title": display_title,
                             "body": body,
                             "icon": "/icon-192.png",
                             "badge": "/icon-192.png",
                             "image": image_url,
+                            "tag": f"ahia-{tenant_id}",
                             "data": {
                                 "url": target_url,
                                 "tenant_id": str(tenant_id),
+                                "tenant_name": tenant_name,
                                 "entity_type": entity_type,
                                 "entity_id": str(entity_id) if entity_id else None,
                             },

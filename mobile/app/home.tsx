@@ -63,7 +63,12 @@ import { SalesTimelineChart } from "@/components/SalesTimelineChart";
 import { getTheme, getSavedThemeMode, saveThemeMode, type ThemeMode, type ThemePalette } from "@/lib/theme";
 import { hasBusinessPin, setBusinessPin, verifyBusinessPin, clearBusinessPin } from "@/lib/pin";
 import { useAppLifecycle } from "@/lib/lifecycle";
-import { fetchUnreadCount, sendMobileTestPush } from "@/lib/notifications";
+import {
+  fetchUnreadCount,
+  sendMobileTestPush,
+  getActivePushToken,
+  registerPushToken,
+} from "@/lib/notifications";
 import {
   ArrowLeftIcon,
   BoxIcon,
@@ -1242,6 +1247,14 @@ export default function Home() {
           setActiveBusiness(initial);
           setAppSetting("last_active_tenant_id", initial.id);
           await loadData(initial.id);
+
+          const pushTok = getActivePushToken();
+          if (pushTok) {
+            const osPlatform = Platform.OS === "ios" ? "ios" : "android";
+            for (const biz of found) {
+              void registerPushToken(biz.id, { token: pushTok, platform: osPlatform });
+            }
+          }
         } else {
           setLoading(false);
         }
