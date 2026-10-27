@@ -131,10 +131,7 @@ async def mark_all_notifications_read(
 )
 async def get_vapid_public_key() -> dict[str, str]:
     """Return the VAPID public key for Web Push client subscription."""
-    key = os.getenv(
-        "VAPID_PUBLIC_KEY",
-        "BMR0ZSLnVC3ZuNfc6AX1knAnwrmqgacdqfCHvXqUog-c68uI0P-F2ndaBuKu72IERp8PQpLbRm3Jzy1xtIjtWcE",
-    )
+    key = os.getenv("VAPID_PUBLIC_KEY", "")
     return {"public_key": key}
 
 

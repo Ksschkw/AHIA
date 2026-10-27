@@ -1230,7 +1230,7 @@ export default function MorePage() {
               )}
             </div>
             <p className={styles.cardDesc}>
-              Receive instant browser and device alerts whenever customers submit orders, dispatch waybills, or stock runs low. Configured with VAPID key pairs and registered to <code>kookafor893@gmail.com</code>.
+              Receive instant browser and device alerts whenever customers submit orders, dispatch waybills, or stock runs low. Protected with end-to-end VAPID encryption.
             </p>
           </div>
 
