@@ -5,6 +5,10 @@
 
 .shell {
   min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
   display: block;
 }
 
@@ -33,6 +37,9 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .topbar {
@@ -45,8 +52,11 @@
   gap: var(--space-3);
   height: var(--topbar-height);
   padding: 0 var(--space-4);
+  padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
   background: var(--sand);
   backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
 }
 
@@ -72,7 +82,7 @@
 }
 
 .main {
-  padding: var(--space-4) var(--space-4) calc(var(--bottombar-height) + var(--space-5));
+  padding: var(--space-4) var(--space-4) calc(var(--bottombar-height) + env(safe-area-inset-bottom, 0px) + var(--space-5));
   max-width: 1100px;
   width: 100%;
   margin: 0 auto;
@@ -83,16 +93,25 @@
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 40;
-  height: var(--bottombar-height);
+  width: 100%;
+  max-width: 100%;
+  z-index: 80;
+  min-height: calc(var(--bottombar-height) + env(safe-area-inset-bottom, 0px));
+  height: calc(var(--bottombar-height) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: max(0px, env(safe-area-inset-left, 0px));
+  padding-right: max(0px, env(safe-area-inset-right, 0px));
+  box-sizing: border-box;
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
-  align-items: center;
+  align-items: start;
   background: var(--card);
   border-top: 1px solid var(--line);
   box-shadow: 0 -2px 12px rgba(30, 27, 22, 0.06);
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: transform;
 }
 
 .bottombarLink {
@@ -101,7 +120,7 @@
   align-items: center;
   justify-content: center;
   gap: 3px;
-  height: 100%;
+  height: var(--bottombar-height);
   text-decoration: none;
   color: var(--ink-3);
   font-size: var(--text-xs);
@@ -111,6 +130,7 @@
   cursor: pointer;
   padding: 0;
   transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .bottombarIconWrap {
@@ -332,7 +352,7 @@
   left: 0;
   right: 0;
   height: 2px;
-  z-index: 80;
+  z-index: 85;
   pointer-events: none;
   background: transparent;
 }

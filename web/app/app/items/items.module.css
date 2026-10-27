@@ -929,7 +929,7 @@
 /* Samsung File Manager Style Sticky Selection Toolbar */
 .selectionToolbar {
   position: fixed;
-  bottom: 24px;
+  bottom: calc(var(--bottombar-height) + env(safe-area-inset-bottom, 0px) + 16px);
   left: 50%;
   transform: translateX(-50%);
   width: calc(100% - 32px);
@@ -945,6 +945,12 @@
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
   z-index: 950;
   backdrop-filter: blur(8px);
+}
+
+@media (min-width: 900px) {
+  .selectionToolbar {
+    bottom: 24px;
+  }
 }
 
 .selectionCountBadge {

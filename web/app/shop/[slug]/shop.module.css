@@ -545,11 +545,16 @@
   bottom: 0;
   left: 0;
   right: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   z-index: 90;
-  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
   background: var(--card);
   border-top: 1px solid var(--line);
   box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
   gap: 10px;
 }
 
