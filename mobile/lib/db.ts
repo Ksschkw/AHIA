@@ -858,28 +858,50 @@ export function getPendingSalesCount(tenantId: string): number {
   }
 }
 
-export async function flushOutbox(tenantId: string): Promise<number> {
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function flushOutbox(tenantId: string): Promise<{ synced: number; failed: number }> {
   try {
     const db = getDb();
-    if (!db) return 0;
+    if (!db) return { synced: 0, failed: 0 };
     const pending = db.getAllSync<{
       id: string;
       product_id: string;
+      product_name: string;
       quantity: string;
       unit_price: string;
       payment_method: string;
     }>(
-      "SELECT id, product_id, quantity, unit_price, payment_method FROM sale_outbox WHERE tenant_id = ? AND status IN ('pending', 'failed')",
+      "SELECT id, product_id, product_name, quantity, unit_price, payment_method FROM sale_outbox WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at ASC",
       [tenantId],
     );
 
     let synced = 0;
+    let failed = 0;
     for (const item of pending) {
       try {
+        let prodId = item.product_id;
+        if (!UUID_REGEX.test(prodId)) {
+          // Attempt to resolve temp ID to real server UUID from cached products
+          const matched = db.getFirstSync<{ id: string }>(
+            "SELECT id FROM cached_products WHERE tenant_id = ? AND (id = ? OR name = ?) AND id NOT LIKE 'prod-%'",
+            [tenantId, prodId, item.product_name],
+          );
+          if (matched && UUID_REGEX.test(matched.id)) {
+            prodId = matched.id;
+            db.runSync("UPDATE sale_outbox SET product_id = ? WHERE id = ?", [matched.id, item.id]);
+          } else {
+            // Cannot resolve to real product on backend
+            db.runSync("UPDATE sale_outbox SET status = 'failed' WHERE id = ?", [item.id]);
+            failed++;
+            continue;
+          }
+        }
+
         await recordSale(tenantId, {
           lines: [
             {
-              product_id: item.product_id,
+              product_id: prodId,
               quantity: item.quantity,
               unit_price: item.unit_price,
             },
@@ -893,15 +915,16 @@ export async function flushOutbox(tenantId: string): Promise<number> {
           // Unrecoverable client error (e.g. 400 Bad Request, 404 Not Found, 422 Invalid value)
           // Mark as failed so it does not block the sync queue forever
           db.runSync("UPDATE sale_outbox SET status = 'failed' WHERE id = ?", [item.id]);
+          failed++;
           continue;
         }
         // Stays pending if network stalls / 5xx
         break;
       }
     }
-    return synced;
+    return { synced, failed };
   } catch {
-    return 0;
+    return { synced: 0, failed: 0 };
   }
 }
 
@@ -942,11 +965,11 @@ export function getPendingOutboxCount(tenantId: string): number {
     const db = getDb();
     if (!db) return 0;
     const saleRow = db.getFirstSync<{ count: number }>(
-      "SELECT COUNT(*) as count FROM sale_outbox WHERE tenant_id = ? AND status IN ('pending', 'failed')",
+      "SELECT COUNT(*) as count FROM sale_outbox WHERE tenant_id = ? AND status = 'pending'",
       [tenantId],
     );
     const syncRow = db.getFirstSync<{ count: number }>(
-      "SELECT COUNT(*) as count FROM sync_outbox WHERE tenant_id = ? AND status IN ('pending', 'failed')",
+      "SELECT COUNT(*) as count FROM sync_outbox WHERE tenant_id = ? AND status = 'pending'",
       [tenantId],
     );
     return (saleRow?.count ?? 0) + (syncRow?.count ?? 0);
@@ -1239,14 +1262,27 @@ export function deleteLocalProduct(tenantId: string, productId: string): void {
   });
 }
 
-/** Flush both sales outbox and catalog mutation outbox. */
-export async function flushSyncOutbox(tenantId: string): Promise<{ sales: number; mutations: number }> {
-  const salesCount = await flushOutbox(tenantId);
+/** Flush both catalog mutation outbox and sales outbox. */
+export async function flushSyncOutbox(
+  tenantId: string,
+): Promise<{ sales: number; mutations: number; failed: number }> {
   let mutationsCount = 0;
+  let failedCount = 0;
 
   try {
     const db = getDb();
-    if (!db) return { sales: salesCount, mutations: 0 };
+    if (!db) {
+      const salesRes = await flushOutbox(tenantId);
+      return { sales: salesRes.synced, mutations: 0, failed: salesRes.failed };
+    }
+
+    // Purge unrecoverable failed items older than 3 days
+    try {
+      db.runSync("DELETE FROM sale_outbox WHERE status = 'failed' AND created_at < datetime('now', '-3 days')");
+      db.runSync("DELETE FROM sync_outbox WHERE status = 'failed' AND created_at < datetime('now', '-3 days')");
+    } catch {
+      // Non-fatal
+    }
 
     const pending = db.getAllSync<{
       id: string;
@@ -1254,7 +1290,7 @@ export async function flushSyncOutbox(tenantId: string): Promise<{ sales: number
       entity_type: string;
       payload_json: string;
     }>(
-      "SELECT id, action, entity_type, payload_json FROM sync_outbox WHERE tenant_id = ? AND status IN ('pending', 'failed') ORDER BY created_at ASC",
+      "SELECT id, action, entity_type, payload_json FROM sync_outbox WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at ASC",
       [tenantId],
     );
 
@@ -1274,20 +1310,52 @@ export async function flushSyncOutbox(tenantId: string): Promise<{ sales: number
             created.id,
             payload.temp_id,
           ]);
+          // Propagate real category ID to remaining sync_outbox payloads
+          if (payload.temp_id) {
+            db.runSync(
+              "UPDATE sync_outbox SET payload_json = replace(payload_json, ?, ?) WHERE tenant_id = ?",
+              [payload.temp_id, created.id, tenantId],
+            );
+          }
         } else if (item.action === "UPDATE_CATEGORY") {
-          await updateCategory(tenantId, payload.category_id, {
+          let catId = payload.category_id;
+          if (!UUID_REGEX.test(catId)) {
+            const matchedCat = db.getFirstSync<{ id: string }>(
+              "SELECT id FROM cached_categories WHERE tenant_id = ? AND (id = ? OR name = ?) AND id NOT LIKE 'cat-%'",
+              [tenantId, catId, payload.name],
+            );
+            if (matchedCat && UUID_REGEX.test(matchedCat.id)) {
+              catId = matchedCat.id;
+            } else {
+              db.runSync("UPDATE sync_outbox SET status = 'failed' WHERE id = ?", [item.id]);
+              failedCount++;
+              continue;
+            }
+          }
+          await updateCategory(tenantId, catId, {
             name: payload.name,
             default_normal_price: payload.default_normal_price,
             default_wholesale_price: payload.default_wholesale_price,
           });
         } else if (item.action === "DELETE_CATEGORY") {
-          await deleteCategory(tenantId, payload.category_id);
+          if (UUID_REGEX.test(payload.category_id)) {
+            await deleteCategory(tenantId, payload.category_id);
+          }
         } else if (item.action === "CREATE_PRODUCT") {
+          let catId = payload.category_id;
+          if (catId && !UUID_REGEX.test(catId)) {
+            const matchedCat = db.getFirstSync<{ id: string }>(
+              "SELECT id FROM cached_categories WHERE tenant_id = ? AND (id = ? OR id NOT LIKE 'cat-%')",
+              [tenantId, catId],
+            );
+            catId = matchedCat?.id && UUID_REGEX.test(matchedCat.id) ? matchedCat.id : null;
+          }
+
           const created = await createProduct(tenantId, {
             name: payload.name,
             selling_price: payload.selling_price,
             wholesale_price: payload.wholesale_price,
-            category_id: payload.category_id,
+            category_id: catId,
             description: payload.description,
           });
           // Replace temp id in local cache
@@ -1295,6 +1363,17 @@ export async function flushSyncOutbox(tenantId: string): Promise<{ sales: number
             created.id,
             payload.temp_id,
           ]);
+          // Propagate real product ID to remaining sync_outbox and sale_outbox
+          if (payload.temp_id) {
+            db.runSync(
+              "UPDATE sync_outbox SET payload_json = replace(payload_json, ?, ?) WHERE tenant_id = ?",
+              [payload.temp_id, created.id, tenantId],
+            );
+            db.runSync(
+              "UPDATE sale_outbox SET product_id = ? WHERE product_id = ? AND tenant_id = ?",
+              [created.id, payload.temp_id, tenantId],
+            );
+          }
           if (payload.initial_stock && parseFloat(String(payload.initial_stock)) > 0) {
             try {
               await receiveStock(tenantId, created.id, String(payload.initial_stock), "Opening stock");
@@ -1303,14 +1382,30 @@ export async function flushSyncOutbox(tenantId: string): Promise<{ sales: number
             }
           }
         } else if (item.action === "UPDATE_PRODUCT") {
-          await updateProduct(tenantId, payload.product_id, {
+          let prodId = payload.product_id;
+          if (!UUID_REGEX.test(prodId)) {
+            const matchedProd = db.getFirstSync<{ id: string }>(
+              "SELECT id FROM cached_products WHERE tenant_id = ? AND (id = ? OR name = ?) AND id NOT LIKE 'prod-%'",
+              [tenantId, prodId, payload.name],
+            );
+            if (matchedProd && UUID_REGEX.test(matchedProd.id)) {
+              prodId = matchedProd.id;
+            } else {
+              db.runSync("UPDATE sync_outbox SET status = 'failed' WHERE id = ?", [item.id]);
+              failedCount++;
+              continue;
+            }
+          }
+          await updateProduct(tenantId, prodId, {
             name: payload.name,
             selling_price: payload.selling_price,
             wholesale_price: payload.wholesale_price,
-            category_id: payload.category_id,
+            category_id: payload.category_id && UUID_REGEX.test(payload.category_id) ? payload.category_id : null,
           });
         } else if (item.action === "DELETE_PRODUCT") {
-          await deleteProduct(tenantId, payload.product_id);
+          if (UUID_REGEX.test(payload.product_id)) {
+            await deleteProduct(tenantId, payload.product_id);
+          }
         } else if (item.action === "RECORD_EXPENSE") {
           await recordExpense(tenantId, {
             amount: payload.amount,
@@ -1319,9 +1414,23 @@ export async function flushSyncOutbox(tenantId: string): Promise<{ sales: number
             payment_method: payload.payment_method,
           });
         } else if (item.action === "RECEIVE_STOCK") {
+          let prodId = payload.product_id as string;
+          if (!UUID_REGEX.test(prodId)) {
+            const matchedProd = db.getFirstSync<{ id: string }>(
+              "SELECT id FROM cached_products WHERE tenant_id = ? AND id = ? AND id NOT LIKE 'prod-%'",
+              [tenantId, prodId],
+            );
+            if (matchedProd && UUID_REGEX.test(matchedProd.id)) {
+              prodId = matchedProd.id;
+            } else {
+              db.runSync("UPDATE sync_outbox SET status = 'failed' WHERE id = ?", [item.id]);
+              failedCount++;
+              continue;
+            }
+          }
           await receiveStock(
             tenantId,
-            payload.product_id as string,
+            prodId,
             String(payload.quantity),
             payload.note as string | undefined,
           );
@@ -1333,6 +1442,7 @@ export async function flushSyncOutbox(tenantId: string): Promise<{ sales: number
         if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
           // Unrecoverable client error - mark as failed so it does not block the sync queue forever
           db.runSync("UPDATE sync_outbox SET status = 'failed' WHERE id = ?", [item.id]);
+          failedCount++;
           continue;
         }
         // Stop on first failure (network stall / offline) - remaining mutations stay pending
@@ -1343,7 +1453,13 @@ export async function flushSyncOutbox(tenantId: string): Promise<{ sales: number
     // Non-fatal
   }
 
-  return { sales: salesCount, mutations: mutationsCount };
+  // Flush sales AFTER catalog mutations so created products exist on the server
+  const salesResult = await flushOutbox(tenantId);
+  return {
+    sales: salesResult.synced,
+    mutations: mutationsCount,
+    failed: failedCount + salesResult.failed,
+  };
 }
 
 

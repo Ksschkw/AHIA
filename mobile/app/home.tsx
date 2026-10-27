@@ -1367,12 +1367,16 @@ export default function Home() {
       if (res.sales > 0 || res.mutations > 0) {
         showToast(`Synced ${res.sales} sales & ${res.mutations} updates!`);
       } else if (remaining === 0) {
-        showToast("Shop data refreshed & up to date.");
+        if (res.failed > 0) {
+          showToast(`Cleaned up ${res.failed} invalid entries. Data is up to date.`);
+        } else {
+          showToast("Shop data refreshed & up to date.");
+        }
       } else {
-        showToast("Saved safely on device. Will sync once connected.");
+        showToast(`${remaining} pending changes. Will sync once connected.`);
       }
     } catch {
-      showToast("Saved safely on device. Will sync once connected.");
+      showToast("Could not reach server. Will sync once connected.");
     } finally {
       setIsSyncing(false);
     }
