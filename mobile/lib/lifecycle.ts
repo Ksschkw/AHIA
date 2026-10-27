@@ -15,7 +15,7 @@ export interface LifecycleCallbacks {
  * - onPause / onStop: App entered background or inactive state
  */
 export function useAppLifecycle(callbacks: LifecycleCallbacks): void {
-  const appState = useRef<AppStateStatus>(AppState.currentState);
+  const appState = useRef<AppStateStatus>((AppState.currentState ?? "active") as AppStateStatus);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextAppState: AppStateStatus) => {

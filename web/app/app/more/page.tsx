@@ -10,7 +10,7 @@
  * - Storefront Studio (publish/draft, live preview link, copy/share)
  * - Stall Business profile & logo management
  * - Stall Security PIN & Password reset in unified Security modal
- * - Push Notifications (VAPID web push configuration)
+ * - Push Notifications (instant shop alerts for orders, payments, and stock)
  * - Theme selector (Light Ivory / Dark Theme)
  * - Sign out confirmation modal
  */
@@ -864,6 +864,88 @@ export default function MorePage() {
             </button>
           </div>
 
+          {/* Push Notifications Card */}
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <h3 className={styles.cardTitle}>Push Notifications</h3>
+                <Pill tone={pushSubscribed ? "good" : "warn"}>
+                  {pushSubscribed ? "ACTIVE" : "NOT ENABLED"}
+                </Pill>
+              </div>
+              {pushSupported && !pushSubscribed && (
+                <button
+                  type="button"
+                  className={styles.primaryBtn}
+                  disabled={pushEnabling}
+                  onClick={async () => {
+                    if (!business) return;
+                    setPushEnabling(true);
+                    const res = await subscribeToWebPush(business.id);
+                    setPushEnabling(false);
+                    if (res.success) {
+                      setPushSubscribed(true);
+                      setNotice({ message: "Push notifications successfully enabled!", tone: "good" });
+                    } else {
+                      setNotice({ message: res.message, tone: "bad" });
+                    }
+                  }}
+                >
+                  {pushEnabling ? "Enabling..." : "Enable Push Notifications"}
+                </button>
+              )}
+            </div>
+            <p className={styles.cardDesc}>
+              Receive instant alerts whenever customers submit orders, upload payment receipts, or stock runs low.
+            </p>
+            {pushSubscribed && (
+              <div style={{ marginTop: "12px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                <button
+                  type="button"
+                  className={styles.secondaryBtn}
+                  disabled={testingPush}
+                  onClick={async () => {
+                    if (!business) return;
+                    setTestingPush(true);
+                    const res = await sendTestPush(business.id, "brief");
+                    setTestingPush(false);
+                    setNotice({ message: res.message, tone: res.success ? "good" : "bad" });
+                  }}
+                >
+                  {testingPush ? "Sending..." : "Test Order Alert"}
+                </button>
+                <button
+                  type="button"
+                  className={styles.secondaryBtn}
+                  disabled={testingPush}
+                  onClick={async () => {
+                    if (!business) return;
+                    setTestingPush(true);
+                    const res = await sendTestPush(business.id, "detailed");
+                    setTestingPush(false);
+                    setNotice({ message: res.message, tone: res.success ? "good" : "bad" });
+                  }}
+                >
+                  Test Payment Alert
+                </button>
+                <button
+                  type="button"
+                  className={styles.secondaryBtn}
+                  disabled={testingPush}
+                  onClick={async () => {
+                    if (!business) return;
+                    setTestingPush(true);
+                    const res = await sendTestPush(business.id, "multimedia");
+                    setTestingPush(false);
+                    setNotice({ message: res.message, tone: res.success ? "good" : "bad" });
+                  }}
+                >
+                  Test Restock Alert
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Everything in AHIA Grid (1:1 identical to Mobile) */}
           <h3 className={styles.sectionTitle}>Everything in AHIA</h3>
           <div className={styles.grid}>
@@ -1198,88 +1280,6 @@ export default function MorePage() {
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* Push Notifications Card */}
-          <div className={styles.card}>
-            <div className={styles.cardHeader}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <h3 className={styles.cardTitle}>Push Notifications</h3>
-                <Pill tone={pushSubscribed ? "good" : "warn"}>
-                  {pushSubscribed ? "ACTIVE (VAPID)" : "NOT ENABLED"}
-                </Pill>
-              </div>
-              {pushSupported && !pushSubscribed && (
-                <button
-                  type="button"
-                  className={styles.primaryBtn}
-                  disabled={pushEnabling}
-                  onClick={async () => {
-                    if (!business) return;
-                    setPushEnabling(true);
-                    const res = await subscribeToWebPush(business.id);
-                    setPushEnabling(false);
-                    if (res.success) {
-                      setPushSubscribed(true);
-                      setNotice({ message: "Push notifications successfully enabled!", tone: "good" });
-                    } else {
-                      setNotice({ message: res.message, tone: "bad" });
-                    }
-                  }}
-                >
-                  {pushEnabling ? "Enabling..." : "Enable Push Notifications"}
-                </button>
-              )}
-            </div>
-            <p className={styles.cardDesc}>
-              Receive instant browser and device alerts whenever customers submit orders, dispatch waybills, or stock runs low. Protected with end-to-end VAPID encryption.
-            </p>
-            {pushSubscribed && (
-              <div style={{ marginTop: "12px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                <button
-                  type="button"
-                  className={styles.secondaryBtn}
-                  disabled={testingPush}
-                  onClick={async () => {
-                    if (!business) return;
-                    setTestingPush(true);
-                    const res = await sendTestPush(business.id, "brief");
-                    setTestingPush(false);
-                    setNotice({ message: res.message, tone: res.success ? "good" : "bad" });
-                  }}
-                >
-                  {testingPush ? "Sending..." : "Test Brief Alert"}
-                </button>
-                <button
-                  type="button"
-                  className={styles.secondaryBtn}
-                  disabled={testingPush}
-                  onClick={async () => {
-                    if (!business) return;
-                    setTestingPush(true);
-                    const res = await sendTestPush(business.id, "detailed");
-                    setTestingPush(false);
-                    setNotice({ message: res.message, tone: res.success ? "good" : "bad" });
-                  }}
-                >
-                  Test Detailed Alert
-                </button>
-                <button
-                  type="button"
-                  className={styles.secondaryBtn}
-                  disabled={testingPush}
-                  onClick={async () => {
-                    if (!business) return;
-                    setTestingPush(true);
-                    const res = await sendTestPush(business.id, "multimedia");
-                    setTestingPush(false);
-                    setNotice({ message: res.message, tone: res.success ? "good" : "bad" });
-                  }}
-                >
-                  Test Multi-Media Alert
-                </button>
-              </div>
-            )}
           </div>
 
           {/* App Appearance / Theme */}

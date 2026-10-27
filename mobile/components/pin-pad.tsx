@@ -31,7 +31,7 @@ export function PinPad({
   onClear,
 }: PinPadProps) {
   const [pin, setPin] = useState("");
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<React.ElementRef<typeof TextInput>>(null);
 
   useEffect(() => {
     if (error) {

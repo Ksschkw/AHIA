@@ -20,7 +20,7 @@ import {
   type TenantSummary,
   type UserProfile,
 } from "@/lib/api";
-import { subscribeToWebPush } from "@/lib/notifications";
+import { isPushSupported, subscribeToWebPush } from "@/lib/notifications";
 
 export const ACTIVE_BUSINESS_KEY = "ahia.business";
 
@@ -29,6 +29,20 @@ export function AppFrame({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [businesses, setBusinesses] = useState<TenantSummary[]>([]);
   const [activeBusinessId, setActiveBusinessId] = useState<string | null>(null);
+  const [showPushPrompt, setShowPushPrompt] = useState(false);
+  const [pushEnabling, setPushEnabling] = useState(false);
+
+  // Auto-prompt check on load: If push is supported and not yet prompted/enabled
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (
+      isPushSupported() &&
+      Notification.permission === "default" &&
+      !window.sessionStorage.getItem("ahia.push_prompt_dismissed")
+    ) {
+      setShowPushPrompt(true);
+    }
+  }, []);
 
   const loadBusinesses = useCallback(async () => {
     const found = await listBusinesses();
@@ -110,6 +124,31 @@ export function AppFrame({ children }: { children: ReactNode }) {
     router.replace("/start");
   }, [router]);
 
+  const handleEnablePush = useCallback(async () => {
+    setPushEnabling(true);
+    try {
+      const activeBiz = activeBusinessId || businesses[0]?.id;
+      if (activeBiz) {
+        await subscribeToWebPush(activeBiz);
+        for (const b of businesses) {
+          if (b.id !== activeBiz) {
+            void subscribeToWebPush(b.id).catch(() => {});
+          }
+        }
+      }
+    } finally {
+      setPushEnabling(false);
+      setShowPushPrompt(false);
+    }
+  }, [activeBusinessId, businesses]);
+
+  const handleDismissPush = useCallback(() => {
+    setShowPushPrompt(false);
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem("ahia.push_prompt_dismissed", "1");
+    }
+  }, []);
+
   const avatarUrl =
     user?.avatar_url ||
     (typeof window !== "undefined"
@@ -130,6 +169,90 @@ export function AppFrame({ children }: { children: ReactNode }) {
       onSwitchBusiness={switchBusiness}
       onSignOut={handleSignOut}
     >
+      {showPushPrompt && (
+        <aside
+          role="region"
+          aria-label="Push notifications prompt"
+          style={{
+            position: "sticky",
+            top: 0,
+            zIndex: 90,
+            background: "linear-gradient(135deg, #0b5d3b 0%, #064028 100%)",
+            color: "#ffffff",
+            padding: "12px 16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            flexWrap: "wrap",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.25)",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.15)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: "1 1 280px" }}>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "32px",
+                height: "32px",
+                borderRadius: "50%",
+                background: "rgba(255,255,255,0.18)",
+                flexShrink: 0,
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+            </span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: "14px", lineHeight: "1.2" }}>
+                Enable Instant Shop Alerts
+              </div>
+              <div style={{ fontSize: "12px", opacity: 0.9, marginTop: "2px", lineHeight: "1.3" }}>
+                Get notified on this device when customers submit orders, upload payment receipts, or stock finishes.
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <button
+              type="button"
+              onClick={handleEnablePush}
+              disabled={pushEnabling}
+              style={{
+                backgroundColor: "#ffffff",
+                color: "#064028",
+                border: "none",
+                fontWeight: 700,
+                fontSize: "13px",
+                padding: "8px 14px",
+                borderRadius: "8px",
+                cursor: "pointer",
+              }}
+            >
+              {pushEnabling ? "Enabling..." : "Turn On Alerts"}
+            </button>
+            <button
+              type="button"
+              onClick={handleDismissPush}
+              style={{
+                backgroundColor: "transparent",
+                color: "rgba(255, 255, 255, 0.85)",
+                border: "1px solid rgba(255, 255, 255, 0.35)",
+                fontWeight: 500,
+                fontSize: "13px",
+                padding: "7px 12px",
+                borderRadius: "8px",
+                cursor: "pointer",
+              }}
+            >
+              Later
+            </button>
+          </div>
+        </aside>
+      )}
       {children}
     </AppShell>
   );
