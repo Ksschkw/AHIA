@@ -34,6 +34,7 @@ from decimal import Decimal
 from typing import Final
 from uuid import UUID, uuid4
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ahia.core.database import UnitOfWork
@@ -50,8 +51,10 @@ from ahia.crud import (
     request_line_crud,
     storefront_crud,
     tenant_crud,
+    tenant_membership_crud,
 )
 from ahia.models.entities.category_model import CategoryModel
+from ahia.models.entities.notification_model import NotificationType
 from ahia.models.entities.phone_number import canonical_phone_number
 from ahia.models.entities.product_model import ProductModel
 from ahia.models.entities.request_line_model import RequestLineModel
@@ -69,6 +72,7 @@ from ahia.schemas.request_schema import (
     RequestResponseSchema,
 )
 from ahia.services.audit_event_service import AuditEventService
+from ahia.services.notification_service import NotificationRequest, NotificationService
 from ahia.services.sale_service import SaleLineRequest, SalesService
 
 _REQUEST_LOGGER_NAME: Final[str] = "ahia.services.request"
@@ -215,6 +219,7 @@ class RequestService:
         default_phone_country_code: str = "+234",
         audit_event_service: AuditEventService | None = None,
         sales_service: SalesService | None = None,
+        notification_service: NotificationService | None = None,
         logger: StructuredLogger | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
@@ -231,6 +236,7 @@ class RequestService:
         #: everybody's lists.
         self._tokens = token_service
         self._sales = sales_service
+        self._notification_service = notification_service
         self._logger = (logger or get_logger(_REQUEST_LOGGER_NAME)).bind(
             component="request_service", layer="service"
         )
@@ -320,6 +326,36 @@ class RequestService:
             await request_crud.create(session, request)
             stored_lines = await request_line_crud.create_many(session, lines)
             await unit_of_work.commit()
+
+        if self._notification_service is not None:
+            try:
+                uow_notif = self._unit_of_work_factory()
+                async with uow_notif:
+                    memberships = await tenant_membership_crud.list_for_tenant(
+                        uow_notif.session_handle, tenant.id
+                    )
+                active_users = [m.user_id for m in memberships if m.grants_access]
+                order_caller = payload.customer_name or payload.customer_phone
+                clean_id = str(request.id).replace("-", "_")
+                requests_to_raise = [
+                    NotificationRequest(
+                        notification_type=NotificationType.NEW_ORDER,
+                        title=f"New Order from {order_caller}",
+                        body=f"{len(stored_lines)} item(s) received via storefront.",
+                        entity_type="customer_list",
+                        entity_id=request.id,
+                        dedupe_key=f"order_{clean_id}",
+                    )
+                ]
+                for user_id in active_users:
+                    await self._notification_service.raise_many(
+                        tenant_id=tenant.id,
+                        recipient_user_id=user_id,
+                        notifications=requests_to_raise,
+                        now=now,
+                    )
+            except (AhiaError, SQLAlchemyError) as notify_err:
+                self._logger.warning("notify_new_order_failed", error=str(notify_err))
 
         self._logger.info(
             "customer_list_received",
@@ -653,6 +689,37 @@ class RequestService:
             req_record.note = (existing_note.strip() + proof_comment).strip()
             await session.flush()
             await unit_of_work.commit()
+
+        if self._notification_service is not None:
+            try:
+                now_proof = datetime.now(UTC)
+                uow_proof = self._unit_of_work_factory()
+                async with uow_proof:
+                    memberships = await tenant_membership_crud.list_for_tenant(
+                        uow_proof.session_handle, tenant.id
+                    )
+                active_users = [m.user_id for m in memberships if m.grants_access]
+                clean_id = str(request_id).replace("-", "_")
+                ts = int(now_proof.timestamp())
+                proof_requests = [
+                    NotificationRequest(
+                        notification_type=NotificationType.PAYMENT_RECEIVED,
+                        title="Payment Proof Uploaded",
+                        body=f"Receipt of N{amount} attached for order by {customer_phone}.",
+                        entity_type="customer_list",
+                        entity_id=request_id,
+                        dedupe_key=f"payment_{clean_id}_{ts}",
+                    )
+                ]
+                for user_id in active_users:
+                    await self._notification_service.raise_many(
+                        tenant_id=tenant.id,
+                        recipient_user_id=user_id,
+                        notifications=proof_requests,
+                        now=now_proof,
+                    )
+            except (AhiaError, SQLAlchemyError) as notify_err:
+                self._logger.warning("notify_payment_proof_failed", error=str(notify_err))
 
     # ------------------------------------------------------------------
     # What the trader does

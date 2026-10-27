@@ -63,7 +63,7 @@ import { SalesTimelineChart } from "@/components/SalesTimelineChart";
 import { getTheme, getSavedThemeMode, saveThemeMode, type ThemeMode, type ThemePalette } from "@/lib/theme";
 import { hasBusinessPin, setBusinessPin, verifyBusinessPin, clearBusinessPin } from "@/lib/pin";
 import { useAppLifecycle } from "@/lib/lifecycle";
-import { fetchUnreadCount } from "@/lib/notifications";
+import { fetchUnreadCount, sendMobileTestPush } from "@/lib/notifications";
 import {
   ArrowLeftIcon,
   BoxIcon,
@@ -5399,6 +5399,56 @@ export default function Home() {
               <Text style={styles.profileDetail}>Name: {businessDetails?.name ?? activeBusiness?.name}</Text>
               <Text style={styles.profileDetail}>Address: {businessDetails?.address ?? "Alaba International Market"}</Text>
               <Text style={styles.profileDetail}>Phone: {businessDetails?.phone ?? "Not set"}</Text>
+            </View>
+
+            {/* Push Notifications Card */}
+            <View style={styles.moreCard}>
+              <View style={styles.sectionHeaderRow}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Text style={styles.moreCardTitle}>Push Notifications</Text>
+                  <View style={{ backgroundColor: theme.badgeBg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: theme.accent }}>DEVICE ENABLED</Text>
+                  </View>
+                </View>
+              </View>
+              <Text style={styles.moreCardDesc}>
+                Receive instant alerts whenever customers submit orders, dispatch waybills, or stock runs low.
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                <Pressable
+                  style={[styles.themeToggleBtn, { paddingHorizontal: 12, paddingVertical: 8 }]}
+                  onPress={async () => {
+                    if (!activeBusiness) return;
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    const res = await sendMobileTestPush(activeBusiness.id, "brief");
+                    showToast(res.message);
+                  }}
+                >
+                  <Text style={styles.themeToggleBtnText}>Brief Alert</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.themeToggleBtn, { paddingHorizontal: 12, paddingVertical: 8 }]}
+                  onPress={async () => {
+                    if (!activeBusiness) return;
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    const res = await sendMobileTestPush(activeBusiness.id, "detailed");
+                    showToast(res.message);
+                  }}
+                >
+                  <Text style={styles.themeToggleBtnText}>Detailed Alert</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.themeToggleBtn, { paddingHorizontal: 12, paddingVertical: 8 }]}
+                  onPress={async () => {
+                    if (!activeBusiness) return;
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    const res = await sendMobileTestPush(activeBusiness.id, "multimedia");
+                    showToast(res.message);
+                  }}
+                >
+                  <Text style={styles.themeToggleBtnText}>Multi-Media</Text>
+                </Pressable>
+              </View>
             </View>
 
             {/* App Appearance / Theme Selector */}

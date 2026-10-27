@@ -432,3 +432,46 @@ async def test_an_unauthenticated_inbox_request_is_refused(database: Database) -
         response = await client.get(notifications_path(tenant["id"]))
 
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_push_subscription_registration_and_test_dispatch(database: Database) -> None:
+    async with running_application() as (client, _application):
+        owner, tenant = await owner_with_business(client)
+
+        # 1. Register a web push subscription
+        sub_resp = await client.post(
+            f"/api/v1/tenants/{tenant['id']}/notifications/push-subscription",
+            headers=auth(owner),
+            json={
+                "platform": "web",
+                "subscription": {
+                    "endpoint": "https://fcm.googleapis.com/fcm/send/fake-test-endpoint",
+                    "keys": {
+                        "p256dh": "dummy-p256dh-public-key-value",
+                        "auth": "dummy-auth-secret",
+                    },
+                },
+            },
+        )
+        assert sub_resp.status_code == 200
+        assert sub_resp.json()["status"] == "ok"
+
+        # 2. Trigger test push (brief)
+        test_brief = await client.post(
+            f"/api/v1/tenants/{tenant['id']}/notifications/test-push",
+            headers=auth(owner),
+            json={"type": "brief"},
+        )
+        assert test_brief.status_code == 200
+        assert test_brief.json()["status"] == "ok"
+
+        # 3. Trigger test push (multimedia)
+        test_media = await client.post(
+            f"/api/v1/tenants/{tenant['id']}/notifications/test-push",
+            headers=auth(owner),
+            json={"type": "multimedia", "image_url": "https://example.com/item.jpg"},
+        )
+        assert test_media.status_code == 200
+        assert test_media.json()["variant"] == "multimedia"

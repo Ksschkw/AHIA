@@ -79,6 +79,7 @@ EXPECTED_TABLES = frozenset(
         # exists".
         "requests",
         "request_lines",
+        "push_subscriptions",
     }
 )
 

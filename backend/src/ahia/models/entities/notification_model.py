@@ -56,6 +56,10 @@ class NotificationType(StrEnum):
 
     LOW_STOCK = "LOW_STOCK"
     STOCK_OUT = "STOCK_OUT"
+    NEW_ORDER = "NEW_ORDER"
+    PAYMENT_RECEIVED = "PAYMENT_RECEIVED"
+    TEAM_INVITE = "TEAM_INVITE"
+    RESTOCK = "RESTOCK"
 
 
 @dataclass(frozen=True, slots=True)

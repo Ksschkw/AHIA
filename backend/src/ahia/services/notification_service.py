@@ -27,10 +27,11 @@ notification, so an inbox ordered by three clocks inside one second is an inbox 
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Final
+from typing import TYPE_CHECKING, Final
 from uuid import UUID, uuid4
 
 from ahia.core.database import UnitOfWork
@@ -42,6 +43,9 @@ from ahia.models.entities.notification_model import (
     NotificationModel,
     NotificationType,
 )
+
+if TYPE_CHECKING:
+    from ahia.services.push_dispatcher_service import PushDispatcherService
 
 _NOTIFICATION_LOGGER_NAME: Final[str] = "ahia.services.notification"
 
@@ -77,9 +81,12 @@ class NotificationService:
         self,
         *,
         unit_of_work_factory: Callable[[], UnitOfWork],
+        push_dispatcher: PushDispatcherService | None = None,
         logger: StructuredLogger | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
+        self._push_dispatcher = push_dispatcher
+        self._background_tasks: set[asyncio.Task[object]] = set()
         self._logger = (logger or get_logger(_NOTIFICATION_LOGGER_NAME)).bind(
             component="notification_service", layer="service"
         )
@@ -141,6 +148,20 @@ class NotificationService:
                     {notification.notification_type.value for notification in raised}
                 ),
             )
+            if self._push_dispatcher is not None:
+                for item in raised:
+                    task = asyncio.create_task(
+                        self._push_dispatcher.dispatch_to_user(
+                            tenant_id=tenant_id,
+                            recipient_user_id=recipient_user_id,
+                            title=item.title,
+                            body=item.body,
+                            entity_type=item.entity_type,
+                            entity_id=item.entity_id,
+                        )
+                    )
+                    self._background_tasks.add(task)
+                    task.add_done_callback(self._background_tasks.discard)
         return RaisedNotifications(raised=raised, skipped_duplicates=skipped)
 
     # ------------------------------------------------------------------
@@ -221,3 +242,49 @@ class NotificationService:
                 await notification_crud.mark_read(session, notification.mark_read(at=now))
             await unit_of_work.commit()
         return len(unread)
+
+    # ------------------------------------------------------------------
+    # Push subscriptions and testing
+    # ------------------------------------------------------------------
+
+    async def register_push_subscription(
+        self,
+        *,
+        tenant_id: UUID,
+        user_id: UUID,
+        platform: str,
+        endpoint: str,
+        p256dh: str | None = None,
+        auth: str | None = None,
+    ) -> None:
+        """Register client push token or browser subscription."""
+        if self._push_dispatcher is not None:
+            await self._push_dispatcher.register_subscription(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                platform=platform,
+                endpoint=endpoint,
+                p256dh=p256dh,
+                auth=auth,
+            )
+
+    async def dispatch_test_push(
+        self,
+        *,
+        tenant_id: UUID,
+        user_id: UUID,
+        title: str = "Test Notification",
+        body: str = "This is a test notification from AHIA.",
+        image_url: str | None = None,
+    ) -> int:
+        """Dispatch a test notification to caller's registered endpoints."""
+        if self._push_dispatcher is None:
+            return 0
+        return await self._push_dispatcher.dispatch_to_user(
+            tenant_id=tenant_id,
+            recipient_user_id=user_id,
+            title=title,
+            body=body,
+            entity_type="test",
+            image_url=image_url,
+        )

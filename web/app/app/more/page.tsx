@@ -73,6 +73,7 @@ import {
   isPushSupported,
   getPushPermission,
   subscribeToWebPush,
+  sendTestPush,
 } from "@/lib/notifications";
 import styles from "./more.module.css";
 
@@ -147,6 +148,7 @@ export default function MorePage() {
   const [pushSupported, setPushSupported] = useState(false);
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [pushEnabling, setPushEnabling] = useState(false);
+  const [testingPush, setTestingPush] = useState(false);
 
   // Modals
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -1232,6 +1234,52 @@ export default function MorePage() {
             <p className={styles.cardDesc}>
               Receive instant browser and device alerts whenever customers submit orders, dispatch waybills, or stock runs low. Protected with end-to-end VAPID encryption.
             </p>
+            {pushSubscribed && (
+              <div style={{ marginTop: "12px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                <button
+                  type="button"
+                  className={styles.secondaryBtn}
+                  disabled={testingPush}
+                  onClick={async () => {
+                    if (!business) return;
+                    setTestingPush(true);
+                    const res = await sendTestPush(business.id, "brief");
+                    setTestingPush(false);
+                    setNotice({ message: res.message, tone: res.success ? "good" : "bad" });
+                  }}
+                >
+                  {testingPush ? "Sending..." : "Test Brief Alert"}
+                </button>
+                <button
+                  type="button"
+                  className={styles.secondaryBtn}
+                  disabled={testingPush}
+                  onClick={async () => {
+                    if (!business) return;
+                    setTestingPush(true);
+                    const res = await sendTestPush(business.id, "detailed");
+                    setTestingPush(false);
+                    setNotice({ message: res.message, tone: res.success ? "good" : "bad" });
+                  }}
+                >
+                  Test Detailed Alert
+                </button>
+                <button
+                  type="button"
+                  className={styles.secondaryBtn}
+                  disabled={testingPush}
+                  onClick={async () => {
+                    if (!business) return;
+                    setTestingPush(true);
+                    const res = await sendTestPush(business.id, "multimedia");
+                    setTestingPush(false);
+                    setNotice({ message: res.message, tone: res.success ? "good" : "bad" });
+                  }}
+                >
+                  Test Multi-Media Alert
+                </button>
+              </div>
+            )}
           </div>
 
           {/* App Appearance / Theme */}

@@ -96,3 +96,28 @@ export async function subscribeToWebPush(
     return { success: false, message };
   }
 }
+
+export async function sendTestPush(
+  tenantId: string,
+  variant: "brief" | "detailed" | "multimedia" = "brief",
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/tenants/${tenantId}/notifications/test-push`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ type: variant }),
+    });
+    if (!res.ok) {
+      throw new Error(`Test push request failed with HTTP ${res.status}`);
+    }
+    const data = (await res.json()) as { delivered_endpoints?: number };
+    return {
+      success: true,
+      message: `Test notification sent (${data.delivered_endpoints ?? 0} endpoints notified)!`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to trigger test push.";
+    return { success: false, message };
+  }
+}

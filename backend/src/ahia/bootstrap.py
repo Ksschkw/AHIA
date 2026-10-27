@@ -59,6 +59,7 @@ from ahia.services.notification_service import NotificationService
 from ahia.services.permission_service import PermissionService
 from ahia.services.product_image_service import ProductImageService
 from ahia.services.product_service import ProductService
+from ahia.services.push_dispatcher_service import PushDispatcherService
 from ahia.services.report_service import ReportService
 from ahia.services.request_service import RequestService
 from ahia.services.sale_service import SalesService
@@ -112,6 +113,7 @@ class ApplicationContainer:
     share_link_service: ShareLinkService
     report_service: ReportService
     notification_service: NotificationService
+    push_dispatcher: PushDispatcherService
     sharing_port: SharingPort
     customer_service: CustomerService
     expense_service: ExpenseService
@@ -307,8 +309,14 @@ def build_application_container(
         logger=logger,
     )
 
+    push_dispatcher = PushDispatcherService(
+        unit_of_work_factory=database.unit_of_work_factory(),
+        logger=logger,
+    )
+
     notification_service = NotificationService(
         unit_of_work_factory=database.unit_of_work_factory(),
+        push_dispatcher=push_dispatcher,
         logger=logger,
     )
 
@@ -328,6 +336,7 @@ def build_application_container(
         default_phone_country_code=settings.default_phone_country_code,
         audit_event_service=audit_event_service,
         sales_service=sales_service,
+        notification_service=notification_service,
         logger=logger,
     )
 
@@ -373,6 +382,7 @@ def build_application_container(
         share_link_service=share_link_service,
         report_service=report_service,
         notification_service=notification_service,
+        push_dispatcher=push_dispatcher,
         sharing_port=sharing_port,
         customer_service=customer_service,
         expense_service=expense_service,

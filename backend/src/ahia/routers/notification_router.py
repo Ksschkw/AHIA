@@ -19,7 +19,7 @@ Every handler parses, calls one service method and shapes the response.
 from __future__ import annotations
 
 import os
-from typing import Annotated, Final
+from typing import Annotated, Any, Final
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -140,8 +140,79 @@ async def get_vapid_public_key() -> dict[str, str]:
     summary="Register a push subscription (VAPID / Web Push or Native token)",
 )
 async def register_push_subscription(
-    payload: dict,
+    payload: dict[str, Any],
     tenant_context: TenantContextDependency,
+    service: NotificationServiceDependency,
 ) -> dict[str, str]:
     """Register client push token or browser subscription."""
+    platform = str(payload.get("platform", "web"))
+    endpoint = ""
+    p256dh = None
+    auth = None
+
+    if "subscription" in payload and isinstance(payload["subscription"], dict):
+        sub = payload["subscription"]
+        endpoint = str(sub.get("endpoint", ""))
+        keys = sub.get("keys", {})
+        if isinstance(keys, dict):
+            p256dh = keys.get("p256dh")
+            auth = keys.get("auth")
+    elif "token" in payload:
+        endpoint = str(payload["token"])
+    elif "endpoint" in payload:
+        endpoint = str(payload["endpoint"])
+        p256dh = payload.get("p256dh")
+        auth = payload.get("auth")
+
+    if endpoint:
+        await service.register_push_subscription(
+            tenant_id=tenant_context.tenant_id,
+            user_id=tenant_context.user_id,
+            platform=platform,
+            endpoint=endpoint,
+            p256dh=str(p256dh) if p256dh else None,
+            auth=str(auth) if auth else None,
+        )
     return {"status": "ok", "message": "Push subscription registered"}
+
+
+@router.post(
+    "/notifications/test-push",
+    summary="Send a test push notification to caller's registered devices",
+)
+async def send_test_push(
+    payload: dict[str, Any],
+    tenant_context: TenantContextDependency,
+    service: NotificationServiceDependency,
+) -> dict[str, Any]:
+    """Dispatch a brief, detailed, or multimedia test notification."""
+    variant = str(payload.get("type", "brief"))
+    title = payload.get("title")
+    body = payload.get("body")
+    image_url = payload.get("image_url")
+
+    if variant == "detailed":
+        title = title or "Detailed Alert: Customer Order #1042"
+        body = body or "Emeka submitted 4 items (approx N65,000). Delivery to Trade Fair Complex."
+    elif variant == "multimedia":
+        title = title or "Rich Media: Premium Stock Arrived"
+        body = body or "Nike Air Max 90 restocked (24 pairs). Tap to view catalog entry."
+        image_url = image_url or "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600"
+    else:
+        title = title or "Test Notification"
+        body = body or "Push notifications are working properly on this device!"
+
+    delivered = await service.dispatch_test_push(
+        tenant_id=tenant_context.tenant_id,
+        user_id=tenant_context.user_id,
+        title=str(title),
+        body=str(body),
+        image_url=str(image_url) if image_url else None,
+    )
+    return {
+        "status": "ok",
+        "delivered_endpoints": delivered,
+        "variant": variant,
+        "title": title,
+        "body": body,
+    }

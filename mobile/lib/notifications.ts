@@ -80,3 +80,28 @@ export async function acknowledgeNotification(tenantId: string, notificationId: 
     return false;
   }
 }
+
+/**
+ * Send a test push notification to this device.
+ */
+export async function sendMobileTestPush(
+  tenantId: string,
+  variant: "brief" | "detailed" | "multimedia" = "brief",
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await request<{ status: string; delivered_endpoints?: number }>(
+      `/api/v1/tenants/${tenantId}/notifications/test-push`,
+      {
+        method: "POST",
+        body: { type: variant },
+      },
+    );
+    return {
+      success: true,
+      message: `Test push sent (${res.delivered_endpoints ?? 0} endpoint notified)!`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to trigger test push.";
+    return { success: false, message };
+  }
+}
