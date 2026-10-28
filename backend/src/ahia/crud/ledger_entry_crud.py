@@ -211,8 +211,9 @@ async def total_signed_amount(
     if since is not None:
         statement = statement.where(LedgerEntryRecord.occurred_at >= since)
 
-    total = (await session.execute(statement)).scalar_one()
-    return Decimal(total)
+    result = await session.execute(statement)
+    raw_total: int | Decimal = result.scalar_one()
+    return Decimal(raw_total)
 
 
 async def count_for_tenant(session: AsyncSession, tenant_id: UUID) -> int:

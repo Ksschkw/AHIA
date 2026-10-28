@@ -426,4 +426,4 @@ async def reparent_category_products(
         .where(ProductRecord.category_id == old_category_id)
         .values(category_id=new_category_id)
     )
-    return result.rowcount  # type: ignore[return-value]
+    return int(getattr(result, "rowcount", 0) or 0)

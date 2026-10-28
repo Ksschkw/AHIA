@@ -112,12 +112,12 @@ if [[ "${mode}" == "relock" ]]; then
   #   requirements.prod.lock  runtime closure only (container image, deploy)
   # Hashes are recorded so installation can run in --require-hashes mode.
   "${VENV_DIR}/bin/uv" pip compile "${PYPROJECT}" \
-    --extra dev --python-version 3.12 --no-header --generate-hashes \
+    --extra dev --python-version 3.12 --no-header --generate-hashes --upgrade \
     --output-file "${LOCKFILE}"
   log "wrote ${LOCKFILE}"
 
   "${VENV_DIR}/bin/uv" pip compile "${PYPROJECT}" \
-    --python-version 3.12 --no-header --generate-hashes \
+    --python-version 3.12 --no-header --generate-hashes --upgrade \
     --output-file "${PRODUCTION_LOCKFILE}"
   log "wrote ${PRODUCTION_LOCKFILE}"
 fi

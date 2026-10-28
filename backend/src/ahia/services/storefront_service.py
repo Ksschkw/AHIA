@@ -193,11 +193,12 @@ class StorefrontService:
             resource_id=str(tenant_context.tenant_id),
             logger=self._logger,
         )
-        unit_of_work = self._unit_of_work_factory()
-        async with unit_of_work:
-            stored = await storefront_crud.get_for_tenant(
-                unit_of_work.session_handle, tenant_context.tenant_id
-            )
+        with tenant_scope(tenant_context.tenant_id):
+            unit_of_work = self._unit_of_work_factory()
+            async with unit_of_work:
+                stored = await storefront_crud.get_for_tenant(
+                    unit_of_work.session_handle, tenant_context.tenant_id
+                )
         return stored or StorefrontModel.open_shop(
             storefront_id=uuid4(),
             tenant_id=tenant_context.tenant_id,
@@ -223,34 +224,35 @@ class StorefrontService:
         self._require_publishing_enabled(operation="publish_storefront")
 
         now = datetime.now(UTC)
-        unit_of_work = self._unit_of_work_factory()
-        async with unit_of_work:
-            session = unit_of_work.session_handle
-            existing = await storefront_crud.get_for_tenant(session, tenant_context.tenant_id)
-            shop = existing or StorefrontModel.open_shop(
-                storefront_id=uuid4(), tenant_id=tenant_context.tenant_id, now=now
-            )
-            stored = await storefront_crud.update(
-                session,
-                shop.published(
-                    at=now,
-                    headline=headline,
-                    description=description,
-                    contact_phone=self._canonical_or_refuse(
-                        contact_phone, operation="publish_storefront"
+        with tenant_scope(tenant_context.tenant_id):
+            unit_of_work = self._unit_of_work_factory()
+            async with unit_of_work:
+                session = unit_of_work.session_handle
+                existing = await storefront_crud.get_for_tenant(session, tenant_context.tenant_id)
+                shop = existing or StorefrontModel.open_shop(
+                    storefront_id=uuid4(), tenant_id=tenant_context.tenant_id, now=now
+                )
+                stored = await storefront_crud.update(
+                    session,
+                    shop.published(
+                        at=now,
+                        headline=headline,
+                        description=description,
+                        contact_phone=self._canonical_or_refuse(
+                            contact_phone, operation="publish_storefront"
+                        ),
                     ),
-                ),
-            )
-            await self._audit.record_audit_event(
-                session,
-                tenant_context,
-                action="publish_storefront",
-                entity_type="storefront",
-                entity_id=stored.id,
-                now=now,
-                detail=stored.describe_for_audit(),
-            )
-            await unit_of_work.commit()
+                )
+                await self._audit.record_audit_event(
+                    session,
+                    tenant_context,
+                    action="publish_storefront",
+                    entity_type="storefront",
+                    entity_id=stored.id,
+                    now=now,
+                    detail=stored.describe_for_audit(),
+                )
+                await unit_of_work.commit()
 
         self._logger.info(
             "storefront_published",
@@ -297,30 +299,31 @@ class StorefrontService:
         )
 
         now = datetime.now(UTC)
-        unit_of_work = self._unit_of_work_factory()
-        async with unit_of_work:
-            session = unit_of_work.session_handle
-            existing = await storefront_crud.get_for_tenant(session, tenant_context.tenant_id)
-            shop = existing or StorefrontModel.open_shop(
-                storefront_id=uuid4(), tenant_id=tenant_context.tenant_id, now=now
-            )
-            # An open shop is re-published with the new text so the publication moment is
-            # preserved; a closed one keeps being closed. `published` is idempotent for the
-            # fields it is not given.
-            updated = shop.published(
-                at=now, headline=headline, description=description, contact_phone=contact_phone
-            )
-            stored = await storefront_crud.update(session, updated)
-            await self._audit.record_audit_event(
-                session,
-                tenant_context,
-                action="update_storefront",
-                entity_type="storefront",
-                entity_id=stored.id,
-                now=now,
-                detail=stored.describe_for_audit(),
-            )
-            await unit_of_work.commit()
+        with tenant_scope(tenant_context.tenant_id):
+            unit_of_work = self._unit_of_work_factory()
+            async with unit_of_work:
+                session = unit_of_work.session_handle
+                existing = await storefront_crud.get_for_tenant(session, tenant_context.tenant_id)
+                shop = existing or StorefrontModel.open_shop(
+                    storefront_id=uuid4(), tenant_id=tenant_context.tenant_id, now=now
+                )
+                # An open shop is re-published with the new text so the publication moment is
+                # preserved; a closed one keeps being closed. `published` is idempotent for the
+                # fields it is not given.
+                updated = shop.published(
+                    at=now, headline=headline, description=description, contact_phone=contact_phone
+                )
+                stored = await storefront_crud.update(session, updated)
+                await self._audit.record_audit_event(
+                    session,
+                    tenant_context,
+                    action="update_storefront",
+                    entity_type="storefront",
+                    entity_id=stored.id,
+                    now=now,
+                    detail=stored.describe_for_audit(),
+                )
+                await unit_of_work.commit()
 
         self._logger.info(
             "storefront_updated",
@@ -343,24 +346,25 @@ class StorefrontService:
         self._require_publishing_enabled(operation="unpublish_storefront")
 
         now = datetime.now(UTC)
-        unit_of_work = self._unit_of_work_factory()
-        async with unit_of_work:
-            session = unit_of_work.session_handle
-            existing = await storefront_crud.get_for_tenant(session, tenant_context.tenant_id)
-            shop = existing or StorefrontModel.open_shop(
-                storefront_id=uuid4(), tenant_id=tenant_context.tenant_id, now=now
-            )
-            stored = await storefront_crud.update(session, shop.unpublished(at=now))
-            await self._audit.record_audit_event(
-                session,
-                tenant_context,
-                action="unpublish_storefront",
-                entity_type="storefront",
-                entity_id=stored.id,
-                now=now,
-                detail=stored.describe_for_audit(),
-            )
-            await unit_of_work.commit()
+        with tenant_scope(tenant_context.tenant_id):
+            unit_of_work = self._unit_of_work_factory()
+            async with unit_of_work:
+                session = unit_of_work.session_handle
+                existing = await storefront_crud.get_for_tenant(session, tenant_context.tenant_id)
+                shop = existing or StorefrontModel.open_shop(
+                    storefront_id=uuid4(), tenant_id=tenant_context.tenant_id, now=now
+                )
+                stored = await storefront_crud.update(session, shop.unpublished(at=now))
+                await self._audit.record_audit_event(
+                    session,
+                    tenant_context,
+                    action="unpublish_storefront",
+                    entity_type="storefront",
+                    entity_id=stored.id,
+                    now=now,
+                    detail=stored.describe_for_audit(),
+                )
+                await unit_of_work.commit()
 
         self._logger.warning(
             "storefront_unpublished",

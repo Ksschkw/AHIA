@@ -1,6 +1,7 @@
 import { Platform } from "react-native";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+import * as FileSystem from "expo-file-system/legacy";
 import { type CustomerList, type TenantDetails, type Product, type Category } from "@/lib/api";
 
 function formatMoney(amount: string | null | undefined): string {
@@ -488,9 +489,27 @@ export async function generateAndSharePdfInvoice(
     if (file && file.uri) {
       const isAvailable = await Sharing.isAvailableAsync().catch(() => false);
       if (isAvailable) {
-        await Sharing.shareAsync(file.uri, {
+        let shareUri = file.uri;
+        const targetDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+        if (targetDir) {
+          const sanitizedCustomer = customerName.replace(/[^a-zA-Z0-9_-]/g, "_");
+          const safeFilename = `Invoice_${list.id.slice(0, 8)}_${sanitizedCustomer || "Customer"}.pdf`;
+          const destinationUri = `${targetDir}${safeFilename}`;
+          try {
+            await FileSystem.copyAsync({
+              from: file.uri,
+              to: destinationUri,
+            });
+            shareUri = destinationUri;
+          } catch (copyErr) {
+            console.warn("Could not copy invoice to scoped directory, attempting direct uri:", copyErr);
+          }
+        }
+
+        await Sharing.shareAsync(shareUri, {
           mimeType: "application/pdf",
           dialogTitle: `Share Invoice - ${customerName}`,
+          UTI: "com.adobe.pdf",
         });
         return;
       }

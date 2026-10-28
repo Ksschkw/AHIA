@@ -71,13 +71,16 @@ fi
 
 log "auditing $(wc -l <"${LOCKFILE}") pinned distributions from ${LOCKFILE}"
 
+audit_stderr="$(mktemp)"
+trap 'rm -f "${audit_stderr}"' EXIT
+
 audit_exit_code=0
 audit_output="$("${PIP_AUDIT_BIN}" \
   --requirement "${LOCKFILE}" \
   --progress-spinner off \
   --strict \
   --format json \
-  "${ignore_arguments[@]}" 2>&1)" || audit_exit_code=$?
+  "${ignore_arguments[@]}" 2>"${audit_stderr}")" || audit_exit_code=$?
 
 if (( audit_exit_code == 0 )); then
   printf '[OK] dependency audit: no unignored vulnerabilities\n'
@@ -94,7 +97,9 @@ if [[ "${audit_verdict}" == "findings" ]]; then
   printf '[FAIL] dependency audit: vulnerabilities found\n' >&2
   printf '       fix by upgrading the package, or add a dated entry to\n' >&2
   printf '       %s with a reason and a remediation plan\n' "${IGNORE_FILE}" >&2
-  printf '%s\n' "${audit_output}" | tail -40 >&2
+  if [[ -s "${audit_stderr}" ]]; then
+    cat "${audit_stderr}" >&2
+  fi
   exit 1
 fi
 
@@ -103,5 +108,7 @@ printf '       pip-audit exited %s without reporting a dependency set, so nothin
   "${audit_exit_code}" >&2
 printf '       This is an environment failure (network, index, or a temporary build), not a finding.\n' >&2
 printf '       Re-run: bash %s/scripts/audit_dependencies.sh\n' "${BACKEND_DIR}" >&2
-printf '%s\n' "${audit_output}" | tail -20 >&2
+if [[ -s "${audit_stderr}" ]]; then
+  cat "${audit_stderr}" >&2
+fi
 exit 1

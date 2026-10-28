@@ -283,7 +283,7 @@ async def reparent_children(
         .where(CategoryRecord.parent_id == old_parent_id)
         .values(parent_id=new_parent_id)
     )
-    return result.rowcount  # type: ignore[return-value]
+    return int(getattr(result, "rowcount", 0) or 0)
 
 
 async def delete(
@@ -298,4 +298,5 @@ async def delete(
         .where(CategoryRecord.id == category_id)
         .where(CategoryRecord.tenant_id == tenant_id)
     )
-    return bool(result.rowcount and result.rowcount > 0)
+    rows = int(getattr(result, "rowcount", 0) or 0)
+    return rows > 0

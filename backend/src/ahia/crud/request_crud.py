@@ -196,7 +196,7 @@ async def delete(session: AsyncSession, *, tenant_id: UUID, request_id: UUID) ->
         .where(RequestRecord.tenant_id == tenant_id)
     )
     result = await session.execute(statement)
-    if result.rowcount == 0:
+    if int(getattr(result, "rowcount", 0) or 0) == 0:
         raise NotFoundError(
             operation="delete_request",
             entity="request",

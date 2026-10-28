@@ -274,7 +274,7 @@ class CategoryService:
         tenant_context: TenantContext,
         *,
         category_id: UUID,
-        changes: Mapping[str, str | Decimal | int | None],
+        changes: Mapping[str, str | Decimal | int | UUID | None],
     ) -> CategoryModel:
         """Apply a partial edit to a category.
 
@@ -418,12 +418,12 @@ class CategoryService:
             )
 
             child_categories_count = await category_crud.count_children(
-                session,  # type: ignore[arg-type]
+                session,
                 tenant_id=tenant_context.tenant_id,
                 category_id=category_id,
             )
             products_count = await product_crud.count_by_category(
-                session,  # type: ignore[arg-type]
+                session,
                 tenant_id=tenant_context.tenant_id,
                 category_id=category_id,
             )
@@ -440,33 +440,33 @@ class CategoryService:
             if strategy == "move_up":
                 target_parent = category.parent_id
                 await category_crud.reparent_children(
-                    session,  # type: ignore[arg-type]
+                    session,
                     tenant_id=tenant_context.tenant_id,
                     old_parent_id=category_id,
                     new_parent_id=target_parent,
                 )
                 await product_crud.reparent_category_products(
-                    session,  # type: ignore[arg-type]
+                    session,
                     tenant_id=tenant_context.tenant_id,
                     old_category_id=category_id,
                     new_category_id=target_parent,
                 )
             elif strategy == "cascade":
                 await product_crud.reparent_category_products(
-                    session,  # type: ignore[arg-type]
+                    session,
                     tenant_id=tenant_context.tenant_id,
                     old_category_id=category_id,
                     new_category_id=None,
                 )
                 await category_crud.reparent_children(
-                    session,  # type: ignore[arg-type]
+                    session,
                     tenant_id=tenant_context.tenant_id,
                     old_parent_id=category_id,
                     new_parent_id=None,
                 )
 
             await category_crud.delete(
-                session,  # type: ignore[arg-type]
+                session,
                 tenant_id=tenant_context.tenant_id,
                 category_id=category_id,
             )

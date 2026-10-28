@@ -46,9 +46,9 @@ dependencies = [
 
   # Server-side media processing: decode, validate, resize, re-encode and strip
   # metadata. Mandatory for every upload, so it is a runtime dependency.
-  # 12.3.0 is the first release with fixes for the PYSEC advisories that the
+  # 13.0.0 is the first release with fixes for the PYSEC advisories that the
   # dependency audit fails the build on.
-  "pillow>=12.3,<13.0",
+  "pillow>=13.0,<14.0",
 ]
 
 [project.optional-dependencies]
