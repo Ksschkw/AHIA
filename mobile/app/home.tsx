@@ -828,11 +828,101 @@ export default function Home() {
   const [confirmRemoveMember, setConfirmRemoveMember] = useState<Member | null>(null);
   const [confirmDeleteList, setConfirmDeleteList] = useState<CustomerList | null>(null);
 
+  // Synthesize direct shelf sales with customer list payments, deposits, and confirmed orders
+  const allSales = useMemo(() => {
+    const list: SaleSummary[] = [...sales];
+    const seenIds = new Set(list.map((s) => s.id));
+    const seenReceipts = new Set(list.map((s) => s.receipt_number));
+
+    for (const cl of customerLists) {
+      if (deletedListIds.has(cl.id)) continue;
+
+      // 1. Check for itemized payments (from cl.payments or advance)
+      let payments: Array<ListPayment> = cl.payments || [];
+      const priorAdvance = Number(cl.amount_paid || cl.advance_payment || 0);
+      if (payments.length === 0 && priorAdvance > 0) {
+        payments = [
+          {
+            id: `pay-advance-${cl.id}`,
+            amount: priorAdvance.toString(),
+            date: cl.created_at || new Date().toISOString(),
+            note: "Advance Deposit",
+            payment_method: "cash",
+          },
+        ];
+      }
+
+      let paymentsTotal = 0;
+      for (const p of payments) {
+        const amt = Number(p.amount || 0);
+        if (amt <= 0) continue;
+        paymentsTotal += amt;
+        const pId = `sale-${p.id || cl.id}`;
+        const customerName = cl.customer_name || cl.customer_phone || "Customer";
+        const pReceipt = p.note ? `${customerName}: ${p.note}` : `${customerName} (Payment)`;
+        if (!seenIds.has(pId) && !seenReceipts.has(pReceipt)) {
+          list.push({
+            id: pId,
+            receipt_number: pReceipt,
+            customer_id: null,
+            seller_id: (profile?.id || cl.id) as string,
+            total_amount: amt.toFixed(2),
+            payment_status: "paid",
+            payment_method: p.payment_method ? p.payment_method.toUpperCase() : "CASH",
+            created_at: p.date || cl.created_at || new Date().toISOString(),
+            occurred_at: p.date || cl.created_at || new Date().toISOString(),
+            cancelled_at: null,
+          });
+          seenIds.add(pId);
+          seenReceipts.add(pReceipt);
+        }
+      }
+
+      // 2. Confirmed customer lists that have no payments recorded yet
+      if (cl.status === "confirmed" && paymentsTotal === 0) {
+        const listTotal = cl.lines.reduce((sum, line) => {
+          if (line.note === "heading") return sum;
+          const price = Number(line.shop_price || 0);
+          const qty = Number(line.quantity || 1);
+          return sum + (Number(line.line_total) || price * qty);
+        }, 0);
+
+        if (listTotal > 0) {
+          const ordId = `sale-ord-${cl.id}`;
+          const customerName = cl.customer_name || cl.customer_phone || "Customer";
+          const ordReceipt = `${customerName}: Confirmed Order`;
+          if (!seenIds.has(ordId) && !seenReceipts.has(ordReceipt)) {
+            list.push({
+              id: ordId,
+              receipt_number: ordReceipt,
+              customer_id: null,
+              seller_id: (profile?.id || cl.id) as string,
+              total_amount: listTotal.toFixed(2),
+              payment_status: "paid",
+              payment_method: "TRANSFER",
+              created_at: cl.created_at || new Date().toISOString(),
+              occurred_at: cl.created_at || new Date().toISOString(),
+              cancelled_at: null,
+            });
+            seenIds.add(ordId);
+            seenReceipts.add(ordReceipt);
+          }
+        }
+      }
+    }
+
+    return list.sort((a, b) => {
+      const da = new Date(a.occurred_at || (a as any).created_at || 0).getTime();
+      const db = new Date(b.occurred_at || (b as any).created_at || 0).getTime();
+      return db - da;
+    });
+  }, [sales, customerLists, deletedListIds, profile?.id]);
+
   // Real-time today's sales count and revenue (guarantees newly recorded sales update immediately)
   const todaySalesCountAndRevenue = useMemo(() => {
     const todayStr = getLocalDateString();
     const now = new Date();
-    const todaySales = sales.filter((s) => {
+    const todaySales = allSales.filter((s) => {
       if (s.cancelled_at || s.payment_status === "cancelled") return false;
       const dateStr = s.created_at || (s as any).occurred_at;
       if (!dateStr) return false;
@@ -854,7 +944,7 @@ export default function Home() {
       revenue: bestRevenue,
       count: bestCount,
     };
-  }, [sales, dailyStats]);
+  }, [allSales, dailyStats]);
 
   // Dispatch Waybill modal state
   const [dispatchModalList, setDispatchModalList] = useState<CustomerList | null>(null);
@@ -957,7 +1047,19 @@ export default function Home() {
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
-  const [hasPin, setHasPin] = useState(false);
+  const [hasPin, setHasPin] = useState(() => {
+    try {
+      const lastActiveId = getAppSetting("last_active_tenant_id");
+      const b = getCachedBusinesses();
+      const targetId = (lastActiveId ? b.find((x) => x.id === lastActiveId) : null)?.id ?? b[0]?.id;
+      if (targetId && (getAppSetting(`ahia.biz_pin.${targetId}`) || getAppSetting("ahia.biz_pin"))) {
+        return true;
+      }
+      return Boolean(getAppSetting("ahia.biz_pin"));
+    } catch {
+      return false;
+    }
+  });
   const [businessPinInput, setBusinessPinInput] = useState("");
   const [businessPinConfirm, setBusinessPinConfirm] = useState("");
   const [savingPin, setSavingPin] = useState(false);
@@ -3200,7 +3302,7 @@ export default function Home() {
                 <>
                   <View style={[styles.kpiCard, styles.kpiCardHighlight]}>
                     <Text style={styles.kpiLabel}>Recent Sales</Text>
-                    <Text style={styles.kpiValue}>{sales.length}</Text>
+                    <Text style={styles.kpiValue}>{allSales.length}</Text>
                     <Text style={styles.kpiMeta}>Recorded by staff</Text>
                   </View>
 
@@ -3290,7 +3392,7 @@ export default function Home() {
                 {showTimelineChart && (
                   <SalesTimelineChart
                     days={dailyStats?.days ?? []}
-                    sales={sales}
+                    sales={allSales}
                     currency={activeBusiness?.currency || "NGN"}
                     marginRatio={
                       todayProfitMetrics.revenue > 0
@@ -3368,13 +3470,13 @@ export default function Home() {
               </Pressable>
             </View>
 
-            {sales.length === 0 ? (
+            {allSales.length === 0 ? (
               <View style={styles.emptyBox}>
                 <Text style={styles.emptyTitle}>No sales recorded yet</Text>
                 <Text style={styles.emptySubtitle}>Tap Sell 1 on any shelf item to start.</Text>
               </View>
             ) : (
-              sales.slice(0, 5).map((sale) => (
+              allSales.slice(0, 5).map((sale) => (
                 <Pressable
                   key={sale.id}
                   style={styles.saleRow}
@@ -4548,6 +4650,7 @@ export default function Home() {
                             setPinConfirmList(item);
                             setPinValue("");
                             setConfirmError(null);
+                            void hasBusinessPin(activeBusiness?.id).then((has) => setHasPin(has));
                           }}
                         >
                           <CheckMarkIcon size={14} color="#ffffff" />
@@ -4626,7 +4729,7 @@ export default function Home() {
                       tradingSubTab === "sales" && styles.tradingPillTextActive,
                     ]}
                   >
-                    Sales ({sales.length})
+                    Sales ({allSales.length})
                   </Text>
                 </Pressable>
 
@@ -4675,7 +4778,7 @@ export default function Home() {
             {tradingSubTab === "sales" && isOwnerOrManager && (
               <SalesTimelineChart
                 days={dailyStats?.days ?? []}
-                sales={sales}
+                sales={allSales}
                 currency={activeBusiness?.currency || "NGN"}
                 marginRatio={
                   todayProfitMetrics.revenue > 0
@@ -4690,7 +4793,7 @@ export default function Home() {
             {tradingSubTab === "sales" ? (
               <View>
                 {/* Search & Filter Sales to track past sales and staff audit */}
-                {sales.length > 0 && (
+                {allSales.length > 0 && (
                   <View style={{ marginBottom: 12, gap: 8 }}>
                     <View style={styles.searchBoxWrap}>
                       <SearchIcon size={16} color="#8a928e" />
@@ -4712,10 +4815,10 @@ export default function Home() {
                       {(["all", "paid", "returned"] as const).map((filter) => {
                         const count =
                           filter === "all"
-                            ? sales.length
+                            ? allSales.length
                             : filter === "paid"
-                            ? sales.filter((s) => !s.cancelled_at).length
-                            : sales.filter((s) => Boolean(s.cancelled_at)).length;
+                            ? allSales.filter((s) => !s.cancelled_at).length
+                            : allSales.filter((s) => Boolean(s.cancelled_at)).length;
                         return (
                           <Pressable
                             key={filter}
@@ -4740,7 +4843,7 @@ export default function Home() {
                   </View>
                 )}
 
-                {sales.length === 0 ? (
+                {allSales.length === 0 ? (
                   <View style={styles.emptyBox}>
                     <ReceiptIcon size={32} color="#6e7681" />
                     <Text style={styles.emptyTitle}>No sales recorded yet</Text>
@@ -4749,7 +4852,7 @@ export default function Home() {
                     </Text>
                   </View>
                 ) : (() => {
-                  const filteredSales = sales.filter((s) => {
+                  const filteredSales = allSales.filter((s) => {
                     if (salesFilterStatus === "paid" && s.cancelled_at) return false;
                     if (salesFilterStatus === "returned" && !s.cancelled_at) return false;
                     if (!historySearchQuery.trim()) return true;
@@ -6792,6 +6895,10 @@ export default function Home() {
               const linkedList = customerLists.find(
                 (l) =>
                   l.id === selectedSaleAudit.customer_id ||
+                  selectedSaleAudit.id.includes(l.id) ||
+                  (selectedSaleAudit.id.startsWith("sale-ord-") && selectedSaleAudit.id.slice(9) === l.id) ||
+                  (selectedSaleAudit.id.startsWith("sale-pay-") && selectedSaleAudit.id.includes(l.id)) ||
+                  selectedSaleAudit.receipt_number.includes(l.customer_name || "") ||
                   selectedSaleAudit.receipt_number.includes(l.id.slice(0, 8)) ||
                   (selectedSaleAudit.receipt_number.startsWith("PAY-") && selectedSaleAudit.receipt_number.slice(4).startsWith(l.id.slice(0, 8))) ||
                   l.lines.some((line) => line.id === selectedSaleAudit.id)

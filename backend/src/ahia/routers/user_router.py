@@ -132,7 +132,7 @@ async def upload_own_avatar(
     optimized = await media.optimize(
         content=content,
         declared_content_type=content_type,
-        maximum_size_bytes=settings.storage_limits().max_image_bytes,
+        maximum_size_bytes=settings.storage_limits().max_product_image_bytes,
     )
 
     key = StorageObjectKey(

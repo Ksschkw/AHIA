@@ -219,6 +219,11 @@ class StorageLimits:
     strip_metadata: bool
     allowed_content_types: tuple[str, ...]
 
+    @property
+    def max_image_bytes(self) -> int:
+        """Alias for max_product_image_bytes for generic image uploads."""
+        return self.max_product_image_bytes
+
     def as_log_fields(self) -> dict[str, str]:
         """Return the limits for startup logging. No secrets are involved."""
         return {

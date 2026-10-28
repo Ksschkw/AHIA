@@ -207,7 +207,7 @@ async def upload_tenant_media(
     optimized = await media.optimize(
         content=content,
         declared_content_type=content_type,
-        maximum_size_bytes=settings.storage_limits().max_image_bytes,
+        maximum_size_bytes=settings.storage_limits().max_product_image_bytes,
     )
 
     reservation = await quota_service.reserve(
