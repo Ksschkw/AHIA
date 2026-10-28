@@ -166,7 +166,9 @@ def test_request_response_enriches_products_and_excludes_headings() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_confirm_request_triggers_complete_sale_for_catalogue_items() -> None:
+async def test_confirm_request_triggers_complete_sale_for_catalogue_items(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     tenant_id = uuid4()
     user_id = uuid4()
     device_id = uuid4()
@@ -233,13 +235,15 @@ async def test_confirm_request_triggers_complete_sale_for_catalogue_items() -> N
         sales_service=mock_sales,
     )
 
-    # Mock CRUD calls
-    request_crud.require_by_id = AsyncMock(return_value=request)  # type: ignore[method-assign]
-    request_line_crud.list_for_request = AsyncMock(return_value=[heading, line])  # type: ignore[method-assign]
-    customer_crud.find_by_phone = AsyncMock(return_value=[])  # type: ignore[method-assign]
-    request_crud.update = AsyncMock(return_value=request.confirmed(at=NOW))  # type: ignore[method-assign]
-    product_crud.list_by_ids = AsyncMock(return_value=[])  # type: ignore[method-assign]
-    category_crud.list_for_tenant = AsyncMock(return_value=[])  # type: ignore[method-assign]
+    # Mock CRUD calls with monkeypatch to prevent state pollution
+    monkeypatch.setattr(request_crud, "require_by_id", AsyncMock(return_value=request))
+    monkeypatch.setattr(
+        request_line_crud, "list_for_request", AsyncMock(return_value=[heading, line])
+    )
+    monkeypatch.setattr(customer_crud, "find_by_phone", AsyncMock(return_value=[]))
+    monkeypatch.setattr(request_crud, "update", AsyncMock(return_value=request.confirmed(at=NOW)))
+    monkeypatch.setattr(product_crud, "list_by_ids", AsyncMock(return_value=[]))
+    monkeypatch.setattr(category_crud, "list_for_tenant", AsyncMock(return_value=[]))
 
     resp = await service.confirm_request(tenant_context, request_id=req_id)
     assert resp.status == RequestStatus.CONFIRMED
@@ -257,7 +261,9 @@ async def test_confirm_request_triggers_complete_sale_for_catalogue_items() -> N
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_list_customer_history_returns_summaries_and_lines() -> None:
+async def test_list_customer_history_returns_summaries_and_lines(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     tenant_id = uuid4()
     req_id = uuid4()
     prod_id = uuid4()
@@ -309,11 +315,11 @@ async def test_list_customer_history_returns_summaries_and_lines() -> None:
         updated_at=NOW,
     )
 
-    tenant_crud.get_by_slug = AsyncMock(return_value=mock_tenant)  # type: ignore[method-assign]
-    request_crud.list_for_tenant = AsyncMock(return_value=[mock_req])  # type: ignore[method-assign]
-    category_crud.list_for_tenant = AsyncMock(return_value=[])  # type: ignore[method-assign]
-    request_line_crud.list_for_request = AsyncMock(return_value=[mock_line])  # type: ignore[method-assign]
-    product_crud.list_by_ids = AsyncMock(return_value=[mock_prod])  # type: ignore[method-assign]
+    monkeypatch.setattr(tenant_crud, "get_by_slug", AsyncMock(return_value=mock_tenant))
+    monkeypatch.setattr(request_crud, "list_for_tenant", AsyncMock(return_value=[mock_req]))
+    monkeypatch.setattr(category_crud, "list_for_tenant", AsyncMock(return_value=[]))
+    monkeypatch.setattr(request_line_crud, "list_for_request", AsyncMock(return_value=[mock_line]))
+    monkeypatch.setattr(product_crud, "list_by_ids", AsyncMock(return_value=[mock_prod]))
 
     summaries = await service.list_customer_history(
         tenant_slug="kosi-s-pot",
@@ -330,7 +336,7 @@ async def test_list_customer_history_returns_summaries_and_lines() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_unconfirmed_request() -> None:
+async def test_delete_unconfirmed_request(monkeypatch: pytest.MonkeyPatch) -> None:
     tenant_id = uuid4()
     req_id = uuid4()
 
@@ -357,8 +363,9 @@ async def test_delete_unconfirmed_request() -> None:
         customer_phone="08031234567",
         now=NOW,
     )
-    request_crud.require_by_id = AsyncMock(return_value=mock_req)  # type: ignore[method-assign]
-    request_crud.delete = AsyncMock(return_value=None)  # type: ignore[method-assign]
+    mock_delete = AsyncMock(return_value=None)
+    monkeypatch.setattr(request_crud, "require_by_id", AsyncMock(return_value=mock_req))
+    monkeypatch.setattr(request_crud, "delete", mock_delete)
 
     tenant_context = TenantContext(
         tenant_id=tenant_id,
@@ -367,12 +374,12 @@ async def test_delete_unconfirmed_request() -> None:
         permissions=frozenset({sales_permissions.SALES_CREATE}),
     )
     await service.delete_request(tenant_context, request_id=req_id)
-    request_crud.delete.assert_awaited_once()
+    mock_delete.assert_awaited_once()
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_confirmed_request_refused() -> None:
+async def test_delete_confirmed_request_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     tenant_id = uuid4()
     req_id = uuid4()
 
@@ -395,7 +402,7 @@ async def test_delete_confirmed_request_refused() -> None:
         customer_phone="08031234567",
         now=NOW,
     ).confirmed(at=NOW)
-    request_crud.require_by_id = AsyncMock(return_value=mock_req)  # type: ignore[method-assign]
+    monkeypatch.setattr(request_crud, "require_by_id", AsyncMock(return_value=mock_req))
 
     tenant_context = TenantContext(
         tenant_id=tenant_id,

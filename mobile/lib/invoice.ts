@@ -2,6 +2,7 @@ import { Platform } from "react-native";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system/legacy";
+import { Paths } from "expo-file-system";
 import { type CustomerList, type TenantDetails, type Product, type Category } from "@/lib/api";
 
 function formatMoney(amount: string | null | undefined): string {
@@ -483,26 +484,48 @@ export async function generateAndSharePdfInvoice(
   try {
     const file = await Print.printToFileAsync({
       html,
-      base64: false,
+      base64: true,
     });
 
-    if (file && file.uri) {
+    if (file && (file.uri || file.base64)) {
       const isAvailable = await Sharing.isAvailableAsync().catch(() => false);
       if (isAvailable) {
         let shareUri = file.uri;
-        const targetDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+        let targetDir: string | null = null;
+        try {
+          if (Paths?.cache?.uri) targetDir = Paths.cache.uri;
+        } catch {}
+        try {
+          if (!targetDir && Paths?.document?.uri) targetDir = Paths.document.uri;
+        } catch {}
+        try {
+          if (!targetDir && FileSystem?.cacheDirectory) targetDir = FileSystem.cacheDirectory;
+        } catch {}
+        try {
+          if (!targetDir && FileSystem?.documentDirectory) targetDir = FileSystem.documentDirectory;
+        } catch {}
+
         if (targetDir) {
           const sanitizedCustomer = customerName.replace(/[^a-zA-Z0-9_-]/g, "_");
           const safeFilename = `Invoice_${list.id.slice(0, 8)}_${sanitizedCustomer || "Customer"}.pdf`;
-          const destinationUri = `${targetDir}${safeFilename}`;
+          const destinationUri = targetDir.endsWith("/")
+            ? `${targetDir}${safeFilename}`
+            : `${targetDir}/${safeFilename}`;
           try {
-            await FileSystem.copyAsync({
-              from: file.uri,
-              to: destinationUri,
-            });
-            shareUri = destinationUri;
-          } catch (copyErr) {
-            console.warn("Could not copy invoice to scoped directory, attempting direct uri:", copyErr);
+            if (file.base64 && FileSystem.writeAsStringAsync) {
+              await FileSystem.writeAsStringAsync(destinationUri, file.base64, {
+                encoding: FileSystem.EncodingType.Base64,
+              });
+              shareUri = destinationUri;
+            } else if (file.uri && FileSystem.copyAsync) {
+              await FileSystem.copyAsync({
+                from: file.uri,
+                to: destinationUri,
+              });
+              shareUri = destinationUri;
+            }
+          } catch (writeErr) {
+            console.warn("Could not write invoice to scoped directory, attempting direct uri:", writeErr);
           }
         }
 
