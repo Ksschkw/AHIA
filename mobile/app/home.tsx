@@ -247,10 +247,19 @@ function getSaleDisplayTitle(
   members: Member[],
   customerLists: CustomerList[]
 ): string {
-  if (profile && s.seller_id === profile.id) return "Sale by You";
-  const member = members.find((m) => m.user_id === s.seller_id);
+  if (profile && (!s.seller_id || String(s.seller_id).toLowerCase() === String(profile.id).toLowerCase())) {
+    const myName = [profile.first_name, profile.last_name].filter(Boolean).join(" ");
+    return myName ? `Sale by ${myName}` : "Sale by You";
+  }
+  const member = s.seller_id
+    ? members.find(
+        (m) =>
+          String(m.user_id).toLowerCase() === String(s.seller_id).toLowerCase() ||
+          String(m.id).toLowerCase() === String(s.seller_id).toLowerCase()
+      )
+    : null;
   if (member) {
-    const name = [member.first_name, member.last_name].filter(Boolean).join(" ");
+    const name = member.full_name || [member.first_name, member.last_name].filter(Boolean).join(" ");
     if (name) return `Sale by ${name}`;
     if (member.phone) return `Sale by ${member.phone}`;
   }
@@ -1861,7 +1870,7 @@ export default function Home() {
         mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8,
+        quality: 0.5,
         base64: true,
       });
       if (!result.canceled && result.assets[0]) {
@@ -1887,8 +1896,8 @@ export default function Home() {
               });
               showToast("Avatar saved to cloud storage!");
             }
-          } catch {
-            showToast("Cloud upload failed. Check connection.");
+          } catch (err: any) {
+            showToast(err?.message || "Cloud upload failed. Please try again.");
           }
         } else if (options?.tenantId && options.uploadType) {
           showToast("Uploading image to cloud storage...");
@@ -1898,8 +1907,8 @@ export default function Home() {
               onSelected(res.delivery_url);
               showToast("Image saved to cloud storage!");
             }
-          } catch {
-            showToast("Cloud upload failed. Check connection.");
+          } catch (err: any) {
+            showToast(err?.message || "Cloud upload failed. Please try again.");
           }
         } else {
           onSelected(uri);
@@ -6789,21 +6798,43 @@ export default function Home() {
               );
 
               // Find author / seller
-              const isSelf = profile && selectedSaleAudit.seller_id === profile.id;
-              const sellerMember = members.find((m) => m.user_id === selectedSaleAudit.seller_id);
+              const isSelf = Boolean(
+                profile && (
+                  !selectedSaleAudit.seller_id ||
+                  String(selectedSaleAudit.seller_id).toLowerCase() === String(profile.id).toLowerCase()
+                )
+              );
+              const sellerMember = !isSelf && selectedSaleAudit.seller_id
+                ? members.find(
+                    (m) =>
+                      String(m.user_id).toLowerCase() === String(selectedSaleAudit.seller_id).toLowerCase() ||
+                      String(m.id).toLowerCase() === String(selectedSaleAudit.seller_id).toLowerCase()
+                  )
+                : null;
+
+              const selfName = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") || "Account Owner";
+              const memberName = sellerMember?.full_name || [sellerMember?.first_name, sellerMember?.last_name].filter(Boolean).join(" ");
               const sellerName = isSelf
-                ? [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") || "You (Account Owner)"
-                : sellerMember
-                ? [sellerMember.first_name, sellerMember.last_name].filter(Boolean).join(" ") || "Stall Staff"
-                : selectedSaleAudit.seller_id
-                ? `Staff (ID: ${selectedSaleAudit.seller_id.slice(0, 8)})`
-                : "Counter Checkout";
+                ? selfName
+                : memberName || (selectedSaleAudit.seller_id ? `Staff (ID: ${selectedSaleAudit.seller_id.slice(0, 8)})` : selfName);
+
+              const formatRoleName = (r?: string | null) => {
+                if (!r) return "Stall Owner";
+                const upper = r.toUpperCase();
+                if (upper === "OWNER") return "Stall Owner";
+                if (upper === "MANAGER") return "Shop Manager";
+                if (upper === "CASHIER") return "Cashier / Counter";
+                if (upper === "SALES" || upper === "SALES_REPRESENTATIVE") return "Sales Representative";
+                return r.charAt(0).toUpperCase() + r.slice(1).toLowerCase();
+              };
+
               const sellerRole = isSelf
-                ? "Owner / Trader Admin"
-                : sellerMember?.role || "Sales Representative";
+                ? formatRoleName(activeBusiness?.role_name || "OWNER")
+                : formatRoleName(sellerMember?.role_name || sellerMember?.role || "SALES");
+
               const sellerPhone = isSelf
                 ? profile?.phone || profile?.email || "Current Device"
-                : sellerMember?.phone || "Staff Phone Not Set";
+                : sellerMember?.phone || sellerMember?.email || "Staff Phone Not Set";
 
               const cleanCustomerPhone = linkedList?.customer_phone ? formatWaNumber(linkedList.customer_phone) : null;
 

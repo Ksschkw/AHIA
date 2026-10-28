@@ -1409,7 +1409,75 @@ export default function MorePage() {
         <Field label="Shop Headline" id="sf-headline" value={storefrontHeadline} onChange={setStorefrontHeadline} optional />
         <Field label="Description" id="sf-desc" value={storefrontDesc} onChange={setStorefrontDesc} optional />
         <Field label="Contact Phone" id="sf-phone" value={storefrontPhone} onChange={setStorefrontPhone} optional />
-        <Field label="Theme Color" id="sf-color" value={storefrontThemeColor} onChange={setStorefrontThemeColor} optional />
+        <div style={{ marginBottom: "14px" }}>
+          <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "var(--ink-2)", marginBottom: "6px" }}>
+            Storefront Theme Color
+          </label>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "8px", marginBottom: "8px" }}>
+            {[
+              { name: "Forest Green", color: "#084a2f" },
+              { name: "Deep Navy", color: "#1e3a8a" },
+              { name: "Royal Indigo", color: "#4338ca" },
+              { name: "Rich Crimson", color: "#991b1b" },
+              { name: "Sunset Amber", color: "#b45309" },
+              { name: "Charcoal Dark", color: "#1f2937" },
+            ].map((preset) => {
+              const isSelected = storefrontThemeColor.toLowerCase() === preset.color.toLowerCase();
+              return (
+                <button
+                  key={preset.color}
+                  type="button"
+                  onClick={() => setStorefrontThemeColor(preset.color)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "8px 10px",
+                    borderRadius: "8px",
+                    border: isSelected ? `2px solid ${preset.color}` : "1px solid var(--line, #e2e8f0)",
+                    background: isSelected ? "var(--sand-2, #f8fafc)" : "var(--card, #fff)",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: "18px",
+                      height: "18px",
+                      borderRadius: "50%",
+                      background: preset.color,
+                      flexShrink: 0,
+                      border: "1px solid rgba(0,0,0,0.1)",
+                    }}
+                  />
+                  <span style={{ fontSize: "12px", fontWeight: isSelected ? 700 : 500, color: "var(--ink)" }}>
+                    {preset.name}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "6px" }}>
+            <input
+              type="color"
+              value={storefrontThemeColor.startsWith("#") ? storefrontThemeColor : "#084a2f"}
+              onChange={(e) => setStorefrontThemeColor(e.target.value)}
+              style={{
+                width: "28px",
+                height: "28px",
+                padding: 0,
+                border: "1px solid var(--line, #cbd5e1)",
+                borderRadius: "6px",
+                cursor: "pointer",
+                background: "none",
+              }}
+              title="Pick a custom color"
+            />
+            <span style={{ fontSize: "12px", color: "var(--ink-2)" }}>
+              Or tap swatch to choose any custom color
+            </span>
+          </div>
+        </div>
         <Field label="Closing Statement" id="sf-closing" value={storefrontClosing} onChange={setStorefrontClosing} optional />
         <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
           <button type="button" className={styles.secondaryBtn} onClick={() => setShowStorefrontModal(false)}>

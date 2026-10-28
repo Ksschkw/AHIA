@@ -769,10 +769,12 @@ export async function uploadUserAvatar(uriOrBase64: string): Promise<UserProfile
     | { error?: { message?: string } }
     | null;
   if (!response.ok) {
-    throw new ApiError(
-      response.status,
-      (payload as { error?: { message?: string } })?.error?.message ?? "Could not upload avatar photo.",
-    );
+    const errorMsg =
+      (payload as any)?.error?.message ||
+      (typeof (payload as any)?.detail === "string" ? (payload as any).detail : null) ||
+      (Array.isArray((payload as any)?.detail) ? (payload as any).detail[0]?.msg : null) ||
+      `Upload failed (${response.status})`;
+    throw new ApiError(response.status, errorMsg);
   }
   return payload as UserProfile;
 }
@@ -810,10 +812,12 @@ export async function uploadTenantMedia(
     | { error?: { message?: string } }
     | null;
   if (!response.ok) {
-    throw new ApiError(
-      response.status,
-      (payload as { error?: { message?: string } })?.error?.message ?? "Could not upload image.",
-    );
+    const errorMsg =
+      (payload as any)?.error?.message ||
+      (typeof (payload as any)?.detail === "string" ? (payload as any).detail : null) ||
+      (Array.isArray((payload as any)?.detail) ? (payload as any).detail[0]?.msg : null) ||
+      `Upload failed (${response.status})`;
+    throw new ApiError(response.status, errorMsg);
   }
   return payload as { url: string; delivery_url: string };
 }

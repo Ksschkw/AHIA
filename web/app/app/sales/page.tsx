@@ -623,7 +623,9 @@ export default function Sales() {
               l.lines.some((line) => line.id === selectedSaleAudit.id)
           );
 
-          const authorName = [userProfile?.first_name, userProfile?.last_name].filter(Boolean).join(" ") || "Account Owner / Staff";
+          const isSelf = !selectedSaleAudit.seller_id || (userProfile && selectedSaleAudit.seller_id === userProfile.id);
+          const authorName = [userProfile?.first_name, userProfile?.last_name].filter(Boolean).join(" ") || "Account Owner";
+          const authorRole = isSelf ? "Stall Owner" : "Sales Representative";
           const authorPhone = userProfile?.phone || userProfile?.email || "Terminal Device";
 
           return (
@@ -673,7 +675,10 @@ export default function Sales() {
 
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border, #f3f4f6)", fontSize: "13px" }}>
                   <span style={{ color: "var(--ink-secondary, #6b7280)" }}>Recorded / Sold By</span>
-                  <span style={{ fontWeight: 700, color: "#1f6feb" }}>{authorName} ({authorPhone})</span>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontWeight: 700, color: "#1f6feb" }}>{authorName}</div>
+                    <div style={{ fontSize: "11px", color: "var(--ink-secondary, #6b7280)" }}>{authorRole} &bull; {authorPhone}</div>
+                  </div>
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border, #f3f4f6)", fontSize: "13px" }}>
