@@ -97,9 +97,7 @@ if [[ "${audit_verdict}" == "findings" ]]; then
   printf '[FAIL] dependency audit: vulnerabilities found\n' >&2
   printf '       fix by upgrading the package, or add a dated entry to\n' >&2
   printf '       %s with a reason and a remediation plan\n' "${IGNORE_FILE}" >&2
-  if [[ -s "${audit_stderr}" ]]; then
-    cat "${audit_stderr}" >&2
-  fi
+  printf '%s\n' "${audit_output}" | tail -40 >&2
   exit 1
 fi
 
