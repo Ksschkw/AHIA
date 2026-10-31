@@ -116,7 +116,7 @@ export default function Landing() {
             <a
               className={styles.androidCta}
               href="/download"
-              download="AHIA-latest.apk"
+              download="AHIA-v0.4.7-android.apk"
             >
               <AndroidIcon size={20} />
               <span>Install for Android</span>
