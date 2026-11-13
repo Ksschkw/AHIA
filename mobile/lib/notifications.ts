@@ -126,7 +126,12 @@ export async function registerForPushNotificationsAsync(
       return { success: false, error: "Notification permission not granted" };
     }
 
-    const tokenData = await notif.getExpoPushTokenAsync().catch(() => null);
+    const projectId =
+      (Constants?.expoConfig?.extra?.eas?.projectId as string | undefined) ??
+      (Constants?.easConfig?.projectId as string | undefined);
+    const tokenData = await notif
+      .getExpoPushTokenAsync(projectId ? { projectId } : undefined)
+      .catch(() => null);
     if (!tokenData?.data) {
       return { success: false, error: "Failed to generate push token" };
     }
