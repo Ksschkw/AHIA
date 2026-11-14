@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "446505875214",
+    "project_id": "ahia-71610",
+    "storage_bucket": "ahia-71610.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:446505875214:android:eb21b38772040db195895f",
+        "android_client_info": {
+          "package_name": "app.ahia.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCZsQVKuN-kYmEI-giYnjZKW_MYoYHGAL0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

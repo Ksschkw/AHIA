@@ -111,3 +111,10 @@ paths = [
   '''backend/\.env\.deploy$''',
   '''web/\.env\.local$''',
 ]
+
+[[allowlists]]
+name = "firebase-client-config"
+description = "Firebase Android client configuration (google-services.json) contains client package identifiers and public mobile app client keys designed to be bundled in the APK."
+paths = [
+  '''mobile/.*google-services\.json$''',
+]
