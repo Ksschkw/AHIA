@@ -943,6 +943,22 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     }
   }
 
+  const customHeadingsHere = useMemo(() => {
+    const currentScope = openGroup
+      ? groupTrail.length > 0
+        ? groupTrail.join(" > ")
+        : openGroup
+      : null;
+    return headings.filter((h) => {
+      if (currentScope === null) {
+        return !h.groupName && !h.underKey;
+      }
+      const hGroup = (h.groupName ?? "").toLowerCase();
+      const scopeLower = currentScope.toLowerCase();
+      return hGroup === scopeLower || hGroup.includes(scopeLower);
+    });
+  }, [headings, openGroup, groupTrail]);
+
   if (sent !== null) {
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     const listUrl = sent.listPath ? `${origin}${sent.listPath}` : `${origin}/list/${shop.tenant_slug}`;
@@ -1034,22 +1050,6 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
       </main>
     );
   }
-
-  const customHeadingsHere = useMemo(() => {
-    const currentScope = openGroup
-      ? groupTrail.length > 0
-        ? groupTrail.join(" > ")
-        : openGroup
-      : null;
-    return headings.filter((h) => {
-      if (currentScope === null) {
-        return !h.groupName && !h.underKey;
-      }
-      const hGroup = (h.groupName ?? "").toLowerCase();
-      const scopeLower = currentScope.toLowerCase();
-      return hGroup === scopeLower || hGroup.includes(scopeLower);
-    });
-  }, [headings, openGroup, groupTrail]);
 
   return (
     <main className={styles.page}>

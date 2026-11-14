@@ -71,6 +71,8 @@ import {
   registerForPushNotificationsAsync,
   addNotificationResponseListener,
   isPushNotificationSupported,
+  checkNotificationPermission,
+  triggerLocalNotification,
 } from "@/lib/notifications";
 import {
   ArrowLeftIcon,
@@ -1079,6 +1081,7 @@ export default function Home() {
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [activeSubView, setActiveSubView] = useState<"team" | null>(null);
   const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [hasNotifPermission, setHasNotifPermission] = useState(false);
 
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const theme = useMemo(() => getTheme(themeMode), [themeMode]);
@@ -1387,7 +1390,10 @@ export default function Home() {
           await loadData(initial.id);
 
           // Automatically request notification permissions and register push token across all shops
-          void registerForPushNotificationsAsync(found.map((b) => b.id));
+          void checkNotificationPermission().then((g) => setHasNotifPermission(g));
+          void registerForPushNotificationsAsync(found.map((b) => b.id)).then((res) => {
+            if (res.permissionGranted) setHasNotifPermission(true);
+          });
         } else {
           setLoading(false);
         }
@@ -1440,6 +1446,19 @@ export default function Home() {
           if (freshLists && Array.isArray(freshLists)) {
             const cachedLists = getCachedCustomerLists(activeBusiness.id);
             const cachedMap = new Map(cachedLists.map((l) => [l.id, l]));
+            if (cachedLists.length > 0) {
+              const incoming = freshLists.filter((fl) => !cachedMap.has(fl.id) && fl.status === "received");
+              if (incoming.length > 0) {
+                const newest = incoming[0];
+                const custName = newest.customer_name || newest.customer_phone || "A customer";
+                void triggerLocalNotification({
+                  title: "New Customer Order",
+                  body: `${custName} sent a new order list (${newest.lines?.length ?? 1} items).`,
+                  channelId: "orders",
+                });
+                void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              }
+            }
             const merged = freshLists.map((fl) => {
               const prev = cachedMap.get(fl.id);
               return mergePreservedListFields(fl, prev);
@@ -5334,24 +5353,31 @@ export default function Home() {
               <View style={styles.sectionHeaderRow}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                   <Text style={styles.moreCardTitle}>Push Notifications</Text>
-                  <View style={{ backgroundColor: getActivePushToken() ? theme.badgeBg : "#78350f", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: getActivePushToken() ? theme.accent : "#fbbf24" }}>
+                  <View style={{ backgroundColor: getActivePushToken() || hasNotifPermission ? theme.badgeBg : "#78350f", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: getActivePushToken() || hasNotifPermission ? theme.accent : "#fbbf24" }}>
                       {getActivePushToken()
-                        ? "ACTIVE"
-                        : !isPushNotificationSupported()
-                          ? "EXPO GO"
-                          : "NOT ENABLED"}
+                        ? "PUSH & LOCAL ACTIVE"
+                        : hasNotifPermission
+                          ? "DEVICE ALERTS ACTIVE"
+                          : !isPushNotificationSupported()
+                            ? "EXPO GO"
+                            : "NOT ENABLED"}
                     </Text>
                   </View>
                 </View>
-                {!getActivePushToken() && isPushNotificationSupported() && (
+                {!hasNotifPermission && !getActivePushToken() && isPushNotificationSupported() && (
                   <Pressable
                     style={styles.addStaffBtn}
                     onPress={async () => {
                       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                       const res = await registerForPushNotificationsAsync((businesses ?? []).map((b) => b.id));
+                      if (res.permissionGranted) {
+                        setHasNotifPermission(true);
+                      }
                       if (res.success) {
                         showToast("Push notifications successfully enabled!");
+                      } else if (res.permissionGranted) {
+                        showToast("Device alerts enabled! Categorized channels active.");
                       } else {
                         showToast(res.error || "Could not enable push notifications");
                       }
@@ -5364,17 +5390,28 @@ export default function Home() {
               <Text style={styles.moreCardDesc}>
                 {!isPushNotificationSupported()
                   ? "Push notifications require a standalone APK on Android. In-app alerts and real-time syncing remain active in Expo Go."
-                  : "Receive instant alerts whenever customers submit orders, upload payment receipts, or stock runs low."}
+                  : hasNotifPermission || getActivePushToken()
+                    ? "Categorized channels active (Orders, Payments, Stock). Audible alerts sound when new orders or payments arrive."
+                    : "Receive instant alerts whenever customers submit orders, upload payment receipts, or stock runs low."}
               </Text>
-              {getActivePushToken() ? (
+              {getActivePushToken() || hasNotifPermission ? (
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
                   <Pressable
                     style={[styles.themeToggleBtn, { paddingHorizontal: 12, paddingVertical: 8 }]}
                     onPress={async () => {
                       if (!activeBusiness) return;
                       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      const res = await sendMobileTestPush(activeBusiness.id, "brief");
-                      showToast(res.message);
+                      if (getActivePushToken()) {
+                        const res = await sendMobileTestPush(activeBusiness.id, "brief");
+                        showToast(res.message);
+                      } else {
+                        await triggerLocalNotification({
+                          title: "New Customer Order",
+                          body: "Chioma sent an order list for 5 items (#AH-921)",
+                          channelId: "orders",
+                        });
+                        showToast("Test order alert sent to device notification shade!");
+                      }
                     }}
                   >
                     <Text style={styles.themeToggleBtnText}>Test Order Alert</Text>
@@ -5384,8 +5421,17 @@ export default function Home() {
                     onPress={async () => {
                       if (!activeBusiness) return;
                       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      const res = await sendMobileTestPush(activeBusiness.id, "detailed");
-                      showToast(res.message);
+                      if (getActivePushToken()) {
+                        const res = await sendMobileTestPush(activeBusiness.id, "detailed");
+                        showToast(res.message);
+                      } else {
+                        await triggerLocalNotification({
+                          title: "Payment Received",
+                          body: "N45,000 transfer proof uploaded (#AH-921)",
+                          channelId: "payments",
+                        });
+                        showToast("Test payment alert sent to device notification shade!");
+                      }
                     }}
                   >
                     <Text style={styles.themeToggleBtnText}>Test Payment Alert</Text>
@@ -5395,8 +5441,17 @@ export default function Home() {
                     onPress={async () => {
                       if (!activeBusiness) return;
                       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      const res = await sendMobileTestPush(activeBusiness.id, "multimedia");
-                      showToast(res.message);
+                      if (getActivePushToken()) {
+                        const res = await sendMobileTestPush(activeBusiness.id, "multimedia");
+                        showToast(res.message);
+                      } else {
+                        await triggerLocalNotification({
+                          title: "Low Stock Alert",
+                          body: "Rechargeable Fan has only 2 units left in stock",
+                          channelId: "inventory",
+                        });
+                        showToast("Test restock alert sent to device notification shade!");
+                      }
                     }}
                   >
                     <Text style={styles.themeToggleBtnText}>Test Restock Alert</Text>
