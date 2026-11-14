@@ -98,7 +98,13 @@ export default function ListErrorBoundary({
         >
           <button
             type="button"
-            onClick={() => reset()}
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                window.location.reload();
+              } else {
+                reset();
+              }
+            }}
             style={{
               display: "inline-flex",
               alignItems: "center",

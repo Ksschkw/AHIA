@@ -91,10 +91,18 @@ android {
         applicationId 'app.ahia.mobile'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 7
-        versionName "0.4.2"
+        versionCode 14
+        versionName "0.4.9"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+    }
+    splits {
+        abi {
+            reset()
+            enable true
+            universalApk true
+            include "arm64-v8a", "armeabi-v7a"
+        }
     }
     signingConfigs {
         debug {

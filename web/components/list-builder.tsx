@@ -671,13 +671,24 @@ export function ListBuilder({ shop }: { shop: ListShop }) {
     if (shop.logo_url) {
       try {
         const logoImg = new window.Image();
-        logoImg.crossOrigin = "anonymous";
-        await new Promise<void>((resolve, reject) => {
-          logoImg.onload = () => resolve();
-          logoImg.onerror = () => reject();
+        if (!shop.logo_url.startsWith("data:")) {
+          logoImg.crossOrigin = "anonymous";
+        }
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, 1500);
+          logoImg.onload = () => {
+            clearTimeout(timer);
+            resolve();
+          };
+          logoImg.onerror = () => {
+            clearTimeout(timer);
+            resolve();
+          };
           logoImg.src = shop.logo_url!;
         });
-        context.drawImage(logoImg, width - 48 - 64, 48, 64, 64);
+        if (logoImg.naturalWidth > 0 && logoImg.naturalHeight > 0) {
+          context.drawImage(logoImg, width - 48 - 64, 48, 64, 64);
+        }
       } catch {
         // Fallback silently if remote logo fails to load
       }
