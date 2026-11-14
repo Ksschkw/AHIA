@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 const FALLBACK_DOWNLOAD_URL =
-  "https://github.com/Ksschkw/AHIA/releases/download/v0.4.9/AHIA-v0.4.9-android.apk";
+  "https://github.com/Ksschkw/AHIA/releases/download/v0.4.10/AHIA-v0.4.10-android.apk";
 
 export async function GET() {
   try {

@@ -3,7 +3,7 @@
     "name": "AHIA",
     "slug": "ahia",
     "scheme": "ahia",
-    "version": "0.4.9",
+    "version": "0.4.10",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -14,7 +14,7 @@
     },
     "android": {
       "package": "app.ahia.mobile",
-      "versionCode": 14,
+      "versionCode": 15,
       "googleServicesFile": "./google-services.json",
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
